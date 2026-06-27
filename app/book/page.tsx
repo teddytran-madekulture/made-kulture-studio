@@ -171,6 +171,7 @@ function BookingWizard() {
 
   const handleHourClick = (h: number) => {
     if (isHourBooked(h)) return
+    if (h % 1 !== 0) return  // only whole-hour bookings allowed
     if (selecting === 'start') {
       setBooking(b => ({ ...b, startHour: h, endHour: null }))
       setSelecting('end')
@@ -365,23 +366,25 @@ function BookingWizard() {
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
               {SLOTS.map(h => {
-                const booked   = isHourBooked(h)
-                const inRange  = isInRange(h)
-                const start    = isStart(h)
-                const end      = isEnd(h)
+                const booked    = isHourBooked(h)
+                const isHalf    = h % 1 !== 0  // :30 slots — display-only, not bookable
+                const inRange   = isInRange(h)
+                const start     = isStart(h)
+                const end       = isEnd(h)
                 const isPending = booking.startHour === h && booking.endHour === null
 
                 let bg = '#0d0d0d'
-                let color = 'rgba(255,255,255,0.6)'
-                if (booked)    { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
-                if (inRange)   { bg = 'rgba(255,255,255,0.12)'; color = '#fff' }
+                let color = isHalf ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
+                if (inRange)      { bg = 'rgba(255,255,255,0.12)'; color = '#fff' }
                 if (start || end) { bg = '#fff'; color = '#080808' }
-                if (isPending) { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
+                if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
-                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked}
+                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isHalf}
                     style={{
-                      background: bg, border: 'none', padding: '16px 8px', cursor: booked ? 'not-allowed' : 'pointer',
+                      background: bg, border: 'none', padding: '16px 8px',
+                      cursor: booked ? 'not-allowed' : isHalf ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
