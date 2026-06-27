@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
       end_time:     endISO,
       status:       'confirmed',
       total_amount: totalAmount,
+      base_amount:  totalAmount,
       source:       'manual',
       notes,
     })
