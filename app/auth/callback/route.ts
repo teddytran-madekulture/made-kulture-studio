@@ -26,7 +26,11 @@ export async function GET(request: NextRequest) {
       }
     )
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+    console.log('[auth/callback] code present, cookies:', request.cookies.getAll().map(c => c.name).join(', '))
+    console.log('[auth/callback] exchangeCodeForSession error:', error ? JSON.stringify(error) : 'none')
     if (!error) return redirectResponse
+  } else {
+    console.log('[auth/callback] no code param, searchParams:', searchParams.toString())
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`)
