@@ -5,6 +5,14 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/account'
+  const oauthError = searchParams.get('error')
+  const oauthErrorDesc = searchParams.get('error_description')
+
+  // Supabase sent back an OAuth error
+  if (oauthError) {
+    const msg = encodeURIComponent(`oauth_error: ${oauthError} - ${oauthErrorDesc ?? ''}`)
+    return NextResponse.redirect(`${origin}/login?error=auth&msg=${msg}`)
+  }
 
   if (code) {
     // Create the redirect response first so we can attach cookies to it
@@ -30,5 +38,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=auth&msg=${encodeURIComponent(error.message ?? error.code ?? 'unknown')}`)
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth&msg=no_code`)
+  // No code and no error — dump all params for debugging
+  const allParams = encodeURIComponent(request.url)
+  return NextResponse.redirect(`${origin}/login?error=auth&msg=no_code&url=${allParams}`)
 }
