@@ -68,6 +68,13 @@ export default function AvailabilityPage() {
       .catch(() => setLoading(false))
   }, [date])
 
+  const stepDate = (delta: number) => {
+    const d = new Date(date + 'T12:00:00')
+    d.setDate(d.getDate() + delta)
+    const next = d.toISOString().split('T')[0]
+    if (next >= min) setDate(next)
+  }
+
   const isBooked = (slug: string, hour: number) => {
     // Full studio buyout blocks every set
     if (fullStudioSlots.some(b => hour >= b.start && hour < b.end)) return true
@@ -150,19 +157,43 @@ export default function AvailabilityPage() {
             <label style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 8 }}>
               SELECT DATE
             </label>
-            <input
-              type="date"
-              value={date}
-              min={min}
-              onChange={e => setDate(e.target.value)}
-              style={{
-                background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 4, padding: '12px 16px',
-                fontFamily: 'Inter', fontSize: 14, color: '#fff',
-                outline: 'none', cursor: 'pointer',
-                colorScheme: 'dark',
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={() => stepDate(-1)}
+                disabled={date <= min}
+                style={{
+                  background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 4, width: 40, height: 44,
+                  color: date <= min ? 'rgba(255,255,255,0.2)' : '#fff',
+                  fontSize: 18, cursor: date <= min ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >‹</button>
+              <input
+                type="date"
+                value={date}
+                min={min}
+                onChange={e => setDate(e.target.value)}
+                style={{
+                  background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 4, padding: '12px 16px',
+                  fontFamily: 'Inter', fontSize: 14, color: '#fff',
+                  outline: 'none', cursor: 'pointer',
+                  colorScheme: 'dark',
+                }}
+              />
+              <button
+                onClick={() => stepDate(1)}
+                style={{
+                  background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 4, width: 40, height: 44,
+                  color: '#fff', fontSize: 18, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >›</button>
+            </div>
           </div>
           <div style={{ marginTop: 20 }}>
             <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.04em', color: '#fff' }}>
