@@ -34,6 +34,7 @@ const SETS = [
   { id: 'vintage',         name: 'Vintage',           price: 40,  desc: '12×16ft vintage aesthetic',                        minHours: 1 },
   { id: 'cottage',         name: 'Cottage',           price: 40,  desc: '12×16ft slate walls, faux wood flooring',          minHours: 1 },
   { id: 'watering-hole',   name: 'The Watering Hole', price: 75,  desc: '12×16×13 shallow black pool',                      minHours: 2 },
+  { id: 'the-tank',        name: 'The Tank',          price: 75,  desc: 'Pool set',                                         minHours: 2 },
   { id: 'studio-one',      name: 'Studio One',        price: 65,  desc: 'Large open warehouse aesthetic, up to 30 people',  minHours: 1 },
 ]
 

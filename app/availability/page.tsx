@@ -14,6 +14,7 @@ const SETS = [
   { slug: 'vintage',       name: 'Vintage',           price: 40  },
   { slug: 'cottage',       name: 'Cottage',           price: 40  },
   { slug: 'watering-hole', name: 'The Watering Hole', price: 75  },
+  { slug: 'the-tank',      name: 'The Tank',          price: 75  },
   { slug: 'studio-one',    name: 'Studio One',        price: 65  },
 ]
 

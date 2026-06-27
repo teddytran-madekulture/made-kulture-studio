@@ -15,6 +15,7 @@ const SLUG_TO_NAME: Record<string, string> = {
   'vintage':       'Vintage',
   'cottage':       'Cottage',
   'watering-hole': 'The Watering Hole',
+  'the-tank':      'The Tank',
   'studio-one':    'Studio One',
 }
 
@@ -27,6 +28,7 @@ const NAME_TO_SLUG: Record<string, string> = {
   'Vintage':           'vintage',
   'Cottage':           'cottage',
   'The Watering Hole': 'watering-hole',
+  'The Tank':          'the-tank',
   'Studio One':        'studio-one',
 }
 
