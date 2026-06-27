@@ -11,15 +11,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
-  const [authMsg, setAuthMsg]   = useState('')
   const supabase = createClient()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const n = params.get('next') ?? '/account'
     setNextUrl(n)
-    const msg = params.get('msg')
-    if (msg) setAuthMsg(decodeURIComponent(msg))
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) router.replace(n)
     })
@@ -63,12 +60,6 @@ export default function LoginPage() {
           New here?{' '}
           <Link href={`/signup?next=${nextUrl}`} style={{ color: '#fff', textDecoration: 'underline' }}>Create an account</Link>
         </p>
-
-        {authMsg && (
-          <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginBottom: 16, wordBreak: 'break-all' }}>
-            Auth error: {authMsg}
-          </div>
-        )}
 
         {/* Google */}
         <button onClick={signInGoogle} disabled={loading} style={{

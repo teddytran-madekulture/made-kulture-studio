@@ -35,10 +35,8 @@ export async function GET(request: NextRequest) {
     )
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) return redirectResponse
-    return NextResponse.redirect(`${origin}/login?error=auth&msg=${encodeURIComponent(error.message ?? error.code ?? 'unknown')}`)
+    return NextResponse.redirect(`${origin}/login?error=auth`)
   }
 
-  // No code and no error — dump all params for debugging
-  const allParams = encodeURIComponent(request.url)
-  return NextResponse.redirect(`${origin}/login?error=auth&msg=no_code&url=${allParams}`)
+  return NextResponse.redirect(`${origin}/login?error=auth`)
 }
