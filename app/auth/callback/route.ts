@@ -27,11 +27,7 @@ export async function GET(request: NextRequest) {
     )
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) return redirectResponse
-    // Encode the actual error in the redirect so we can see it in logs
-    const msg = encodeURIComponent(error.message ?? error.code ?? 'unknown')
-    const cookies = encodeURIComponent(request.cookies.getAll().map(c => c.name).join(','))
-    return NextResponse.redirect(`${origin}/login?error=auth&msg=${msg}&cookies=${cookies}`)
   }
 
-  return NextResponse.redirect(`${origin}/login?error=missing_code`)
+  return NextResponse.redirect(`${origin}/login?error=auth`)
 }
