@@ -32,6 +32,19 @@ const NAME_TO_SLUG: Record<string, string> = {
   'Studio One':        'studio-one',
 }
 
+// Extract hour in Houston local time (America/Chicago)
+function cdhHour(dateStr: string): number {
+  const h = parseInt(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      hour: 'numeric',
+      hour12: false,
+    }).format(new Date(dateStr)),
+    10
+  )
+  return h === 24 ? 0 : h
+}
+
 // GET /api/availability?date=YYYY-MM-DD            → all sets
 // GET /api/availability?set_id=uuid&date=YYYY-MM-DD → single set (existing)
 export async function GET(req: NextRequest) {
@@ -74,8 +87,8 @@ export async function GET(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const booked = (data || []).map(b => ({
-      start: new Date(b.start_time).getHours(),
-      end:   new Date(b.end_time).getHours(),
+      start: cdhHour(b.start_time),
+      end:   cdhHour(b.end_time),
     }))
     return NextResponse.json({ booked })
   }
@@ -115,8 +128,8 @@ export async function GET(req: NextRequest) {
 
   // Full-studio slots block every set
   const fullStudioSlots = (buyouts ?? []).map(b => ({
-    start: new Date(b.start_time).getHours(),
-    end:   new Date(b.end_time).getHours(),
+    start: cdhHour(b.start_time),
+    end:   cdhHour(b.end_time),
   }))
 
   // Group individual booked slots by set slug
@@ -127,8 +140,8 @@ export async function GET(req: NextRequest) {
     const slots = (bookings ?? [])
       .filter(b => b.set_id === set.id)
       .map(b => ({
-        start: new Date(b.start_time).getHours(),
-        end:   new Date(b.end_time).getHours(),
+        start: cdhHour(b.start_time),
+        end:   cdhHour(b.end_time),
       }))
     result[slug] = { name: set.name, bookedSlots: slots }
   }
