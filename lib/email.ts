@@ -30,7 +30,8 @@ function fillSubject(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? k)
 }
 
-const FROM_EMAIL = 'Made Kulture <bookings@madekulture.com>'
+const FROM_EMAIL  = 'Made Kulture <bookings@madekulture.com>'
+const REPLY_TO    = 'Teddy @ Made Kulture <teddytran@madekulture.com>'
 const OWNER_EMAIL = 'teddytran@madekulture.com'
 const BRAND_COLOR = '#1a1a1a'
 const ACCENT_COLOR = '#d4a843'
@@ -159,6 +160,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
 
   return getResend().emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO,
     to: customerEmail,
     subject,
     html: layout(body),
@@ -283,6 +285,7 @@ export async function sendCancellationEmail(data: CancellationData) {
 
   return getResend().emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO,
     to: customerEmail,
     subject,
     html: layout(body),
