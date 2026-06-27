@@ -91,17 +91,35 @@ export async function GET(req: NextRequest) {
 
   const setIds = (sets ?? []).map(s => s.id)
 
-  const { data: bookings, error: bookingsError } = await supabase
-    .from('bookings')
-    .select('start_time, end_time, set_id')
-    .in('set_id', setIds)
-    .neq('status', 'cancelled')
-    .gte('start_time', dayStart)
-    .lte('start_time', dayEnd)
+  // Fetch individual set bookings and full-studio buyouts in parallel
+  const [{ data: bookings, error: bookingsError }, { data: buyouts, error: buyoutsError }] =
+    await Promise.all([
+      supabase
+        .from('bookings')
+        .select('start_time, end_time, set_id')
+        .in('set_id', setIds)
+        .neq('status', 'cancelled')
+        .gte('start_time', dayStart)
+        .lte('start_time', dayEnd),
+      supabase
+        .from('bookings')
+        .select('start_time, end_time')
+        .is('set_id', null)
+        .neq('status', 'cancelled')
+        .gte('start_time', dayStart)
+        .lte('start_time', dayEnd),
+    ])
 
   if (bookingsError) return NextResponse.json({ error: bookingsError.message }, { status: 500 })
+  if (buyoutsError)  return NextResponse.json({ error: buyoutsError.message },  { status: 500 })
 
-  // Group booked slots by set slug
+  // Full-studio slots block every set
+  const fullStudioSlots = (buyouts ?? []).map(b => ({
+    start: new Date(b.start_time).getHours(),
+    end:   new Date(b.end_time).getHours(),
+  }))
+
+  // Group individual booked slots by set slug
   const result: Record<string, { name: string; bookedSlots: { start: number; end: number }[] }> = {}
 
   for (const set of (sets ?? [])) {
@@ -115,5 +133,5 @@ export async function GET(req: NextRequest) {
     result[slug] = { name: set.name, bookedSlots: slots }
   }
 
-  return NextResponse.json({ sets: result })
+  return NextResponse.json({ sets: result, fullStudioSlots })
 }

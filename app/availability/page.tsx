@@ -50,20 +50,27 @@ interface SetData {
 export default function AvailabilityPage() {
   const router  = useRouter()
   const min     = minDate()
-  const [date, setDate]     = useState(min)
-  const [sets, setSets]     = useState<Record<string, SetData>>({})
-  const [loading, setLoading] = useState(true)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [date, setDate]           = useState(min)
+  const [sets, setSets]           = useState<Record<string, SetData>>({})
+  const [fullStudioSlots, setFullStudioSlots] = useState<{ start: number; end: number }[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [menuOpen, setMenuOpen]   = useState(false)
 
   useEffect(() => {
     setLoading(true)
     fetch(`/api/availability?date=${date}`)
       .then(r => r.json())
-      .then(d => { setSets(d.sets ?? {}); setLoading(false) })
+      .then(d => {
+        setSets(d.sets ?? {})
+        setFullStudioSlots(d.fullStudioSlots ?? [])
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [date])
 
   const isBooked = (slug: string, hour: number) => {
+    // Full studio buyout blocks every set
+    if (fullStudioSlots.some(b => hour >= b.start && hour < b.end)) return true
     const setData = sets[slug]
     if (!setData) return false
     return setData.bookedSlots.some(b => hour >= b.start && hour < b.end)
@@ -174,6 +181,29 @@ export default function AvailabilityPage() {
             <div style={{ width: 16, height: 16, borderRadius: 3, background: 'rgba(255,80,80,0.15)', border: '1px solid rgba(255,80,80,0.2)' }} />
             <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em' }}>BOOKED</span>
           </div>
+        </div>
+
+        {/* Full Warehouse Banner */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20,
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 6, padding: '20px 28px', marginBottom: 32,
+        }}>
+          <div>
+            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff', marginBottom: 4 }}>
+              NEED THE WHOLE SPACE?
+            </div>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', maxWidth: 480 }}>
+              Book a full studio buyout for private productions, large crews, or events up to 30 people. All sets, all equipment, complete creative control.
+            </div>
+          </div>
+          <Link href="/book?type=studio" style={{
+            fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
+            color: '#000', background: '#fff', padding: '12px 24px',
+            borderRadius: 2, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            BOOK FULL WAREHOUSE ↗
+          </Link>
         </div>
 
         {/* Grid */}
