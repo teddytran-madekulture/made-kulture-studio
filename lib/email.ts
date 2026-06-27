@@ -1,7 +1,10 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy-initialize so the build doesn't fail when env var isn't available at compile time
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -154,7 +157,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM_EMAIL,
     to: customerEmail,
     subject,
@@ -221,7 +224,7 @@ export async function sendNewBookingAlert(data: NewBookingAlertData) {
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM_EMAIL,
     to: OWNER_EMAIL,
     subject,
@@ -278,7 +281,7 @@ export async function sendCancellationEmail(data: CancellationData) {
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM_EMAIL,
     to: customerEmail,
     subject,
