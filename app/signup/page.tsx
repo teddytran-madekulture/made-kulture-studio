@@ -1,14 +1,16 @@
 'use client'
-export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+
+function getNext() {
+  if (typeof window === 'undefined') return '/account'
+  return new URLSearchParams(window.location.search).get('next') ?? '/account'
+}
 
 export default function SignupPage() {
   const router = useRouter()
-  const params = useSearchParams()
-  const next   = params.get('next') ?? '/account'
   const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
@@ -26,7 +28,7 @@ export default function SignupPage() {
       password: form.password,
       options: {
         data: { full_name: form.full_name, phone: form.phone },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${next}`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${getNext()}`,
       },
     })
     if (error) { setError(error.message); setLoading(false) }
@@ -37,7 +39,7 @@ export default function SignupPage() {
     setLoading(true)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${next}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${getNext()}` },
     })
   }
 
@@ -71,7 +73,7 @@ export default function SignupPage() {
         </h1>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 32 }}>
           Already have one?{' '}
-          <Link href={`/login?next=${next}`} style={{ color: '#fff', textDecoration: 'underline' }}>Sign in</Link>
+          <Link href={`/login?next=${getNext()}`} style={{ color: '#fff', textDecoration: 'underline' }}>Sign in</Link>
         </p>
 
         {/* Google */}

@@ -1,14 +1,16 @@
 'use client'
-export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+
+function getNext() {
+  if (typeof window === 'undefined') return '/account'
+  return new URLSearchParams(window.location.search).get('next') ?? '/account'
+}
 
 export default function LoginPage() {
   const router = useRouter()
-  const params = useSearchParams()
-  const next = params.get('next') ?? '/account'
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -18,7 +20,7 @@ export default function LoginPage() {
   // If already logged in, redirect
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace(next)
+      if (user) router.replace(getNext())
     })
   }, [])
 
@@ -27,14 +29,14 @@ export default function LoginPage() {
     setLoading(true); setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false) }
-    else router.push(next)
+    else router.push(getNext())
   }
 
   const signInGoogle = async () => {
     setLoading(true)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${next}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${getNext()}` },
     })
   }
 
