@@ -16,7 +16,7 @@ interface Booking {
   square_payment_id: string | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string } | null
-  booking_addons: { equipment_name: string; price: number }[]
+  booking_addons?: { equipment_name: string; price: number }[]
 }
 
 interface CustomerResult {

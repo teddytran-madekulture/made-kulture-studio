@@ -20,8 +20,7 @@ export async function GET(req: NextRequest) {
       id, start_time, end_time, status, total_amount, notes, source, created_at,
       square_payment_id,
       sets ( name ),
-      customers ( name, email, phone ),
-      booking_addons ( equipment_name, price )
+      customers ( name, email, phone )
     `)
     .order('start_time', { ascending: false })
 
