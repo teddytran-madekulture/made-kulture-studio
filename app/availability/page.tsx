@@ -19,13 +19,16 @@ const SETS = [
   { slug: 'studio-one',    name: 'Studio One',        price: 65  },
 ]
 
-// 9AM–9PM start slots (studio closes 10PM so last bookable start = 9PM)
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 9)
+// 9:00AM–9:30PM in 30-min steps (studio closes 10PM so last bookable start = 9:30PM)
+const SLOTS = Array.from({ length: 26 }, (_, i) => 9 + i * 0.5)
 
 function fmt12(h: number) {
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12  = h % 12 === 0 ? 12 : h % 12
-  return `${h12}${ampm}`
+  const hour = Math.floor(h)
+  const half = h % 1 !== 0
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12  = hour % 12 === 0 ? 12 : hour % 12
+  // Whole hours show AM/PM; half hours show ":30" without AM/PM for compactness
+  return half ? `${h12}:30` : `${h12}${ampm}`
 }
 
 function minDate() {
@@ -76,28 +79,28 @@ export default function AvailabilityPage() {
     if (next >= min) setDate(next)
   }
 
-  const isBooked = (slug: string, hour: number) => {
-    // Full studio buyout blocks every set
-    if (fullStudioSlots.some(b => hour >= b.start && hour < b.end)) return true
+  const isBooked = (slug: string, slot: number) => {
+    // A 30-min slot is booked if any booking overlaps [slot, slot+0.5)
+    if (fullStudioSlots.some(b => slot < b.end && slot + 0.5 > b.start)) return true
     const setData = sets[slug]
     if (!setData) return false
-    return setData.bookedSlots.some(b => hour >= b.start && hour < b.end)
+    return setData.bookedSlots.some(b => slot < b.end && slot + 0.5 > b.start)
   }
 
-  const handleCell = (slug: string, hour: number) => {
-    if (isBooked(slug, hour)) return
-    router.push(`/book?type=set&set=${slug}&date=${date}&start=${hour}`)
+  const handleCell = (slug: string, slot: number) => {
+    if (isBooked(slug, slot)) return
+    router.push(`/book?type=set&set=${slug}&date=${date}&start=${slot}`)
   }
 
   // ── Styles ─────────────────────────────────────────────────────────────────
 
   const cellBase: React.CSSProperties = {
-    height: 44,
+    height: 30,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 4,
-    fontSize: 11,
+    borderRadius: 3,
+    fontSize: 10,
     fontWeight: 600,
     letterSpacing: '0.05em',
     transition: 'all 0.15s',
@@ -263,72 +266,78 @@ export default function AvailabilityPage() {
               ))}
             </div>
 
-            {/* Hour rows */}
+            {/* Time rows — 30-min slots */}
             {loading ? (
               <div style={{ textAlign: 'center', padding: '60px 0', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>
                 Loading availability...
               </div>
             ) : (
-              HOURS.map(hour => (
-                <div key={hour} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '72px repeat(10, 1fr)',
-                  gap: 4,
-                  marginBottom: 4,
-                }}>
-                  {/* Time label */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-                    paddingRight: 12,
-                    fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)',
-                    fontWeight: 500, letterSpacing: '0.05em',
+              SLOTS.map(slot => {
+                const isHalf = slot % 1 !== 0
+                return (
+                  <div key={slot} style={{
+                    display: 'grid',
+                    gridTemplateColumns: '72px repeat(10, 1fr)',
+                    gap: 3,
+                    marginBottom: 2,
                   }}>
-                    {fmt12(hour)}
-                  </div>
+                    {/* Time label — whole hours bold, :30 dim */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                      paddingRight: 10,
+                      fontFamily: 'Inter',
+                      fontSize: isHalf ? 9 : 11,
+                      color: isHalf ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.35)',
+                      fontWeight: isHalf ? 400 : 500,
+                      letterSpacing: '0.05em',
+                    }}>
+                      {fmt12(slot)}
+                    </div>
 
-                  {/* Set cells */}
-                  {SETS.map(set => {
-                    const booked = isBooked(set.slug, hour)
-                    return (
-                      <button
-                        key={set.slug}
-                        onClick={() => handleCell(set.slug, hour)}
-                        disabled={booked}
-                        title={booked ? 'Already booked' : `Book ${set.name} at ${fmt12(hour)}`}
-                        style={{
-                          ...cellBase,
-                          background: booked
-                            ? 'rgba(255,60,60,0.08)'
-                            : 'rgba(255,255,255,0.05)',
-                          border: booked
-                            ? '1px solid rgba(255,60,60,0.15)'
-                            : '1px solid rgba(255,255,255,0.08)',
-                          color: booked
-                            ? 'rgba(255,80,80,0.4)'
-                            : 'rgba(255,255,255,0.0)',
-                          cursor: booked ? 'default' : 'pointer',
-                        }}
-                        onMouseEnter={e => {
-                          if (!booked) {
-                            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)'
-                            ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.3)'
-                            ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.8)'
-                          }
-                        }}
-                        onMouseLeave={e => {
-                          if (!booked) {
-                            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)'
-                            ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.08)'
-                            ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.0)'
-                          }
-                        }}
-                      >
-                        {booked ? '✕' : 'BOOK'}
-                      </button>
-                    )
-                  })}
-                </div>
-              ))
+                    {/* Set cells */}
+                    {SETS.map(set => {
+                      const booked = isBooked(set.slug, slot)
+                      return (
+                        <button
+                          key={set.slug}
+                          onClick={() => handleCell(set.slug, slot)}
+                          disabled={booked}
+                          title={booked ? 'Already booked' : `Book ${set.name} at ${fmt12(slot)}`}
+                          style={{
+                            ...cellBase,
+                            background: booked
+                              ? 'rgba(255,60,60,0.08)'
+                              : 'rgba(255,255,255,0.05)',
+                            border: booked
+                              ? '1px solid rgba(255,60,60,0.15)'
+                              : `1px solid rgba(255,255,255,${isHalf ? '0.05' : '0.08'})`,
+                            color: booked
+                              ? 'rgba(255,80,80,0.4)'
+                              : 'rgba(255,255,255,0.0)',
+                            cursor: booked ? 'default' : 'pointer',
+                          }}
+                          onMouseEnter={e => {
+                            if (!booked) {
+                              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)'
+                              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.3)'
+                              ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.8)'
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (!booked) {
+                              ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)'
+                              ;(e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(255,255,255,${isHalf ? '0.05' : '0.08'})`
+                              ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.0)'
+                            }
+                          }}
+                        >
+                          {booked ? '✕' : ''}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })
             )}
 
           </div>

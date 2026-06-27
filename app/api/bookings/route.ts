@@ -102,9 +102,17 @@ function verifyTotal(body: BookingRequest): number {
 // ─── SMS helpers ──────────────────────────────────────────────────────────────
 
 function fmt12(h: number) {
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12  = h % 12 === 0 ? 12 : h % 12
-  return `${h12}:00${ampm}`
+  const hour = Math.floor(h)
+  const mins = h % 1 !== 0 ? '30' : '00'
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12  = hour % 12 === 0 ? 12 : hour % 12
+  return `${h12}:${mins}${ampm}`
+}
+
+function hoursToISO(date: string, h: number): string {
+  const hour = Math.floor(h)
+  const mins = h % 1 !== 0 ? '30' : '00'
+  return `${date}T${String(hour).padStart(2, '0')}:${mins}:00-05:00`
 }
 
 function normalizePhone(phone: string): string {
@@ -219,9 +227,9 @@ export async function POST(req: NextRequest) {
     const squarePaymentId = paymentResult.payment!.id!
 
     // 6. Build start/end timestamps in Houston time (UTC-5 CST / UTC-6 CDT)
-    //    We store in UTC; bookings are entered in Houston local time
-    const startISO = `${body.date}T${String(body.startHour).padStart(2, '0')}:00:00-05:00`
-    const endISO   = `${body.date}T${String(body.endHour).padStart(2,'0')}:00:00-05:00`
+    //    Supports decimal hours (e.g. 11.5 = 11:30)
+    const startISO = hoursToISO(body.date, body.startHour)
+    const endISO   = hoursToISO(body.date, body.endHour)
 
     // 7. Upsert customer in Supabase
     const { data: customerData } = await supabase

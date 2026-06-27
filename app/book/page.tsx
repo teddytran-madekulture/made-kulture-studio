@@ -56,14 +56,16 @@ const EQUIPMENT = [
   { id: 'eq-14', name: 'Canon EOS R5',                     price: 65 },
 ]
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 9) // 9–21 (9am–9pm start slots)
+const SLOTS = Array.from({ length: 26 }, (_, i) => 9 + i * 0.5) // 9:00–21:30 in 30-min steps
 const STUDIO_PRICE = 400 // placeholder buyout flat rate per hour discussion
 const CLOSE_HOUR = 22 // 10pm
 
 function fmt12(h: number) {
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12  = h % 12 === 0 ? 12 : h % 12
-  return `${h12}${ampm}`
+  const hour = Math.floor(h)
+  const half = h % 1 !== 0
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12  = hour % 12 === 0 ? 12 : hour % 12
+  return half ? `${h12}:30${ampm}` : `${h12}${ampm}`
 }
 
 function today() {
@@ -109,7 +111,7 @@ function BookingWizard() {
     type:      typeParam || null,
     setId:     setParam || null,
     date:      dateParam || today(),
-    startHour: startParam ? parseInt(startParam) : null,
+    startHour: startParam ? parseFloat(startParam) : null,
     endHour:   null,
     equipment: [],
     name: '', email: '', phone: '', notes: '', smsConsent: false,
@@ -192,7 +194,7 @@ function BookingWizard() {
     h >= booking.startHour && h < booking.endHour
 
   const isStart = (h: number) => h === booking.startHour
-  const isEnd   = (h: number) => booking.endHour !== null && h === booking.endHour - 1
+  const isEnd   = (h: number) => booking.endHour !== null && h === booking.endHour - 0.5
 
   // ── Steps ──────────────────────────────────────────────────────────────────
 
@@ -361,8 +363,8 @@ function BookingWizard() {
                 CHECKING AVAILABILITY...
               </p>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
-              {HOURS.map(h => {
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
+              {SLOTS.map(h => {
                 const booked   = isHourBooked(h)
                 const inRange  = isInRange(h)
                 const start    = isStart(h)
