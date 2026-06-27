@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import twilio from 'twilio'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+)
+
+function normalizePhone(phone: string): string {
+  const d = phone.replace(/\D/g, '')
+  if (d.length === 10) return `+1${d}`
+  if (d.length === 11 && d.startsWith('1')) return `+${d}`
+  return `+${d}`
+}
 
 function isAuthed(req: NextRequest) {
   return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
@@ -33,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { setSlug, date, startHour, endHour, name, email, phone, notes, totalAmount } = body
+  const { setSlug, date, startHour, endHour, name, email, phone, notes, totalAmount, sendSms } = body
 
   const SLUG_TO_NAME: Record<string, string> = {
     'set-a': 'Set A', 'set-b': 'Set B', 'set-c': 'Set C', 'set-d': 'Set D',
@@ -81,5 +94,28 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Send confirmation SMS if requested
+  if (sendSms && phone) {
+    const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    const startLabel = startHour >= 12 ? `${startHour === 12 ? 12 : startHour - 12}pm` : `${startHour}am`
+    const endLabel   = endHour   >= 12 ? `${endHour   === 12 ? 12 : endHour   - 12}pm` : `${endHour}am`
+    const msg = [
+      `Hi ${name}! Your Made Kulture booking is confirmed.`,
+      ``,
+      `📍 4825 Gulf Freeway, Houston TX 77023`,
+      `📅 ${dateLabel}`,
+      `🕐 ${startLabel} – ${endLabel}`,
+      ``,
+      `Questions? Text (832) 408-1631`,
+    ].join('\n')
+
+    await twilioClient.messages.create({
+      body: msg,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to:   normalizePhone(phone),
+    }).catch(e => console.error('Confirmation SMS error:', e))
+  }
+
   return NextResponse.json({ success: true, bookingId: booking?.id })
 }
