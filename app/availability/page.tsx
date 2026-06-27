@@ -84,13 +84,6 @@ export default function AvailabilityPage() {
     return setData.bookedSlots.some(b => hour >= b.start && hour < b.end)
   }
 
-  const stepDate = (delta: number) => {
-    const d = new Date(date + 'T12:00:00')
-    d.setDate(d.getDate() + delta)
-    const next = d.toISOString().split('T')[0]
-    if (next >= min) setDate(next)
-  }
-
   const handleCell = (slug: string, hour: number) => {
     if (isBooked(slug, hour)) return
     router.push(`/book?type=set&set=${slug}&date=${date}&start=${hour}`)
