@@ -77,15 +77,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // SMS confirmation
+    let smsError: string | null = null
     if (sendSms && phone) {
-      await twilioClient.messages.create({
-        body: `Made Kulture: Hi ${customerName}, we've charged $${Number(amount).toFixed(2)} to your card on file for your booking update. Questions? Text (832) 408-1631.`,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to:   normalizePhone(phone),
-      }).catch(e => console.error('SMS error:', e))
+      try {
+        await twilioClient.messages.create({
+          body: `Made Kulture: Hi ${customerName}, we've charged $${Number(amount).toFixed(2)} to your card on file for your booking update. Questions? Text (832) 408-1631.`,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to:   normalizePhone(phone),
+        })
+      } catch (e: any) {
+        console.error('SMS error:', e)
+        smsError = e?.message || 'SMS failed to send'
+      }
     }
 
-    return NextResponse.json({ success: true, squarePaymentId })
+    return NextResponse.json({ success: true, squarePaymentId, smsError })
   } catch (err: any) {
     console.error('Charge error:', err)
     const msg = err?.errors?.[0]?.detail || err.message || 'Charge failed'

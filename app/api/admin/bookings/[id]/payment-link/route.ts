@@ -49,6 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const url = result.paymentLink?.url
     if (!url) throw new Error('Square did not return a payment link URL')
 
+    let smsError: string | null = null
     if (sendSms && phone) {
       const msg = [
         `Hi ${customerName}! Your Made Kulture booking has been updated.`,
@@ -59,14 +60,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         `Questions? Text (832) 408-1631`,
       ].join('\n')
 
-      await twilioClient.messages.create({
-        body: msg,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to:   normalizePhone(phone),
-      }).catch(e => console.error('SMS error:', e))
+      try {
+        await twilioClient.messages.create({
+          body: msg,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to:   normalizePhone(phone),
+        })
+      } catch (e: any) {
+        console.error('SMS error:', e)
+        smsError = e?.message || 'SMS failed to send'
+      }
     }
 
-    return NextResponse.json({ success: true, url })
+    return NextResponse.json({ success: true, url, smsError })
   } catch (err: any) {
     console.error('Payment link error:', err)
     const msg = err?.errors?.[0]?.detail || err.message || 'Failed to create payment link'

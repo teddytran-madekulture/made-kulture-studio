@@ -219,10 +219,12 @@ export default function AdminDashboard() {
   const [editCards,   setEditCards]   = useState<SquareCard[]>([])
   const [editCard,    setEditCard]    = useState<SquareCard | null>(null)
   const [editSquareCustId, setEditSquareCustId] = useState<string | null>(null)
-  const [editAction,  setEditAction]  = useState<'save' | 'link' | 'charge' | null>(null)
-  const [editPayLink, setEditPayLink] = useState<string | null>(null)
-  const [editError,   setEditError]   = useState('')
-  const [editCopied,  setEditCopied]  = useState(false)
+  const [editAction,        setEditAction]        = useState<'save' | 'link' | 'charge' | null>(null)
+  const [editPayLink,       setEditPayLink]       = useState<string | null>(null)
+  const [editError,         setEditError]         = useState('')
+  const [editCopied,        setEditCopied]        = useState(false)
+  const [editSmsStatus,     setEditSmsStatus]     = useState<'sent' | string | null>(null)
+  const [editChargeSuccess, setEditChargeSuccess] = useState(false)
 
   const [manual, setManual] = useState({
     setSlug: 'set-a', date: tomorrow(), startHour: 10, endHour: 12,
@@ -334,6 +336,7 @@ export default function AdminDashboard() {
     })
     setEditCards([]); setEditCard(null); setEditSquareCustId(null)
     setEditPayLink(null); setEditError(''); setEditAction(null); setEditCopied(false)
+    setEditSmsStatus(null); setEditChargeSuccess(false)
 
     // Look up customer's Square cards
     if (b.customers?.email) {
@@ -400,7 +403,9 @@ export default function AdminDashboard() {
     })
     const linkData = await linkRes.json()
     if (!linkRes.ok) { setEditError(linkData.error || 'Failed to create payment link'); setEditAction(null); return }
-    setEditPayLink(linkData.url); setEditAction(null)
+    setEditPayLink(linkData.url)
+    if (editState.sendSms) setEditSmsStatus(linkData.smsError || 'sent')
+    setEditAction(null)
     fetchBookings()
   }
 
@@ -438,9 +443,11 @@ export default function AdminDashboard() {
     })
     const chargeData = await chargeRes.json()
     if (!chargeRes.ok) { setEditError(chargeData.error || 'Charge failed'); setEditAction(null); return }
-    setEditBooking(null); setEditAction(null)
+    if (editState.sendSms) setEditSmsStatus(chargeData.smsError || 'sent')
+    setEditChargeSuccess(true); setEditAction(null)
     fetchBookings()
     if (detailBooking?.id === editBooking.id) setDetailBooking(null)
+    setTimeout(() => { setEditBooking(null); setEditChargeSuccess(false); setEditSmsStatus(null) }, 2500)
   }
 
   const closeModal = () => { setShowManual(false); resetModal() }
@@ -851,6 +858,20 @@ export default function AdminDashboard() {
                 NOTIFY CUSTOMER VIA SMS
               </label>
             </div>
+
+            {editSmsStatus && (
+              <div style={{ fontSize: 11, marginTop: 6, marginLeft: 28, color: editSmsStatus === 'sent' ? '#4ade80' : '#fbbf24' }}>
+                {editSmsStatus === 'sent' ? '✓ SMS sent' : `SMS failed: ${editSmsStatus}`}
+              </div>
+            )}
+
+            {editChargeSuccess && (
+              <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', padding: '12px 16px', marginTop: 16, textAlign: 'center' }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 16, color: '#4ade80', letterSpacing: '0.05em' }}>
+                  PAYMENT CHARGED SUCCESSFULLY
+                </div>
+              </div>
+            )}
 
             {editPayLink && (
               <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', padding: '12px 16px', marginTop: 16 }}>
