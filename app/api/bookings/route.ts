@@ -3,6 +3,7 @@ import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { randomUUID } from 'crypto'
+import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -288,10 +289,42 @@ export async function POST(req: NextRequest) {
       await supabase.from('booking_addons').insert(addons)
     }
 
-    // 10. Send SMS confirmations (non-blocking — don't fail booking if SMS fails)
+    // 10. Send SMS + email confirmations (non-blocking)
     sendConfirmationSMS(body, setName, verifiedCents).catch(err =>
       console.error('SMS error (non-fatal):', err)
     )
+
+    if (bookingData?.id) {
+      const dateLabel  = formatDateLabel(body.date)
+      const startLabel = formatTimeLabel(body.startHour)
+      const endLabel   = formatTimeLabel(body.endHour)
+
+      sendBookingConfirmation({
+        customerName:  body.name,
+        customerEmail: body.email,
+        setName,
+        date:      dateLabel,
+        startTime: startLabel,
+        endTime:   endLabel,
+        totalAmount: verifiedCents / 100,
+        bookingId: bookingData.id,
+        notes: body.notes || undefined,
+      }).catch(err => console.error('Email confirmation error (non-fatal):', err))
+
+      sendNewBookingAlert({
+        customerName:  body.name,
+        customerEmail: body.email,
+        customerPhone: body.phone,
+        setName,
+        date:      dateLabel,
+        startTime: startLabel,
+        endTime:   endLabel,
+        totalAmount: verifiedCents / 100,
+        bookingId: bookingData.id,
+        source:    'website',
+        notes: body.notes || undefined,
+      }).catch(err => console.error('Email alert error (non-fatal):', err))
+    }
 
     return NextResponse.json({
       success: true,

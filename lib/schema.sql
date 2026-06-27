@@ -126,6 +126,14 @@ insert into equipment (name, rate, category) values
   ('Canon EOS R5',                                 65,  'camera')
 on conflict do nothing;
 
+-- EMAIL TEMPLATES (admin-editable settings)
+create table if not exists email_templates (
+  key         text primary key,
+  enabled     boolean not null default true,
+  subject     text,
+  updated_at  timestamptz default now()
+);
+
 -- ============================================
 -- ENABLE REALTIME
 -- ============================================

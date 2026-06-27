@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
+import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -115,6 +116,40 @@ export async function POST(req: NextRequest) {
       from: process.env.TWILIO_PHONE_NUMBER,
       to:   normalizePhone(phone),
     }).catch(e => console.error('Confirmation SMS error:', e))
+  }
+
+  // Send emails (non-blocking)
+  if (booking?.id && email) {
+    const setDisplayName = SLUG_TO_NAME[setSlug] ?? (setSlug === 'studio' ? 'Full Studio Takeover' : setSlug)
+    const dateLabel  = formatDateLabel(date)
+    const startLabel = formatTimeLabel(startHour)
+    const endLabel   = formatTimeLabel(endHour)
+
+    sendBookingConfirmation({
+      customerName:  name,
+      customerEmail: email,
+      setName:       setDisplayName,
+      date:          dateLabel,
+      startTime:     startLabel,
+      endTime:       endLabel,
+      totalAmount:   totalAmount,
+      bookingId:     booking.id,
+      notes:         notes || undefined,
+    }).catch(e => console.error('Email confirmation error:', e))
+
+    sendNewBookingAlert({
+      customerName:  name,
+      customerEmail: email,
+      customerPhone: phone,
+      setName:       setDisplayName,
+      date:          dateLabel,
+      startTime:     startLabel,
+      endTime:       endLabel,
+      totalAmount:   totalAmount,
+      bookingId:     booking.id,
+      source:        'manual',
+      notes:         notes || undefined,
+    }).catch(e => console.error('Email alert error:', e))
   }
 
   return NextResponse.json({ success: true, bookingId: booking?.id })

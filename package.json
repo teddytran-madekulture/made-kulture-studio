@@ -16,7 +16,8 @@
     "@supabase/ssr": "^0.5.2",
     "square": "^37.0.0",
     "twilio": "^5.2.3",
-    "date-fns": "^3.6.0"
+    "date-fns": "^3.6.0",
+    "resend": "^3.2.0"
   },
   "devDependencies": {
     "typescript": "^5",

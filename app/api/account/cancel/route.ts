@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { sendCancellationEmail, formatTimeLabel, formatDateLabel } from '@/lib/email'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -11,14 +12,15 @@ export async function POST(req: NextRequest) {
   // Fetch the booking — verify it belongs to this user
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('id, start_time, status, acuity_appointment_id, customer_email, auth_user_id')
+    .select('id, start_time, end_time, status, acuity_appointment_id, auth_user_id, customers(name, email), sets(name)')
     .eq('id', booking_id)
     .single()
 
   if (fetchError || !booking) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
 
   // Verify ownership
-  if (booking.auth_user_id !== user.id && booking.customer_email !== user.email) {
+  const customerEmail = (booking.customers as any)?.email
+  if (booking.auth_user_id !== user.id && customerEmail !== user.email) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -56,6 +58,21 @@ export async function POST(req: NextRequest) {
     .eq('id', booking_id)
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+
+  // Send cancellation email (non-blocking)
+  const startTime2 = new Date(booking.start_time)
+  const endTime2   = new Date(booking.end_time)
+  if (customerEmail) {
+    sendCancellationEmail({
+      customerName:  (booking.customers as any)?.name ?? 'there',
+      customerEmail,
+      setName:   (booking.sets as any)?.name ?? 'Studio',
+      date:      formatDateLabel(startTime2.toISOString().slice(0, 10)),
+      startTime: formatTimeLabel(startTime2.getHours()),
+      endTime:   formatTimeLabel(endTime2.getHours()),
+      refundAmount: hoursUntil >= 48 ? undefined : 0,
+    }).catch(e => console.error('Cancellation email error:', e))
+  }
 
   return NextResponse.json({ success: true })
 }

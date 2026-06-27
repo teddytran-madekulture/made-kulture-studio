@@ -19,6 +19,15 @@ interface Booking {
   booking_addons?: { equipment_name: string; price: number }[]
 }
 
+interface EmailSetting {
+  key: string
+  label: string
+  description: string
+  defaultSubject: string
+  enabled: boolean
+  subject: string | null
+}
+
 interface CustomerResult {
   id: string
   name: string
@@ -196,7 +205,7 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails'>('list')
   const [calDate,       setCalDate]       = useState(todayStr)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -233,6 +242,39 @@ export default function AdminDashboard() {
   const [submitting,   setSubmitting]   = useState(false)
   const [submitError,  setSubmitError]  = useState('')
   const [submitSuccess,setSubmitSuccess]= useState(false)
+
+  const [emailSettings,    setEmailSettings]    = useState<EmailSetting[]>([])
+  const [emailLoading,     setEmailLoading]     = useState(false)
+  const [emailSaving,      setEmailSaving]       = useState<string | null>(null)
+  const [emailEditKey,     setEmailEditKey]      = useState<string | null>(null)
+  const [emailDraft,       setEmailDraft]        = useState<Partial<EmailSetting>>({})
+  const [emailSaveMsg,     setEmailSaveMsg]      = useState<string | null>(null)
+  const [emailPreviewKey,  setEmailPreviewKey]   = useState<string | null>(null)
+
+  const fetchEmailSettings = useCallback(async () => {
+    setEmailLoading(true)
+    const res  = await fetch('/api/admin/email-settings')
+    const data = await res.json()
+    setEmailSettings(data.settings || [])
+    setEmailLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (view === 'emails') fetchEmailSettings()
+  }, [view, fetchEmailSettings])
+
+  async function saveEmailSetting(key: string, patch: Partial<EmailSetting>) {
+    setEmailSaving(key)
+    await fetch('/api/admin/email-settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key, ...patch }),
+    })
+    await fetchEmailSettings()
+    setEmailSaving(null)
+    setEmailSaveMsg('Saved')
+    setTimeout(() => setEmailSaveMsg(null), 2000)
+  }
 
   // Update current time line every minute
   useEffect(() => {
@@ -503,14 +545,15 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           {/* View toggle */}
           <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.15)', overflow: 'hidden' }}>
-            {(['list', 'calendar'] as const).map(v => (
+            {([['list', '≡ LIST'], ['calendar', '⊡ CALENDAR'], ['emails', '✉ EMAILS']] as const).map(([v, label]) => (
               <button key={v} onClick={() => setView(v)} style={{
                 background: view === v ? '#fff' : 'transparent', border: 'none',
+                borderLeft: v !== 'list' ? '1px solid rgba(255,255,255,0.15)' : 'none',
                 padding: '8px 18px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
                 fontSize: 11, fontWeight: 500, letterSpacing: '0.15em',
                 color: view === v ? '#080808' : 'rgba(255,255,255,0.4)',
               }}>
-                {v === 'list' ? '≡ LIST' : '⊡ CALENDAR'}
+                {label}
               </button>
             ))}
           </div>
@@ -713,6 +756,171 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* ── EMAILS VIEW ───────────────────────────────────────────────────── */}
+        {view === 'emails' && (
+          <div style={{ maxWidth: 760, paddingBottom: 80 }}>
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 8 }}>
+                EMAIL SETTINGS
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
+                Control which emails get sent and customize their subject lines.
+                Email bodies are branded templates — contact your developer to change the HTML layout.
+              </p>
+            </div>
+
+            {emailLoading ? (
+              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, padding: '40px 0' }}>Loading...</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {emailSettings.map(s => {
+                  const isEditing = emailEditKey === s.key
+                  const isSaving  = emailSaving === s.key
+
+                  return (
+                    <div key={s.key} style={{
+                      background: '#0d0d0d',
+                      border: isEditing ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      padding: '24px 28px',
+                      transition: 'border-color 0.15s',
+                    }}>
+                      {/* Header row */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                            {/* Enable/disable toggle */}
+                            <button
+                              onClick={() => saveEmailSetting(s.key, { enabled: !s.enabled, subject: s.subject })}
+                              disabled={isSaving}
+                              style={{
+                                width: 40, height: 22, borderRadius: 11,
+                                background: s.enabled ? '#4ade80' : 'rgba(255,255,255,0.12)',
+                                border: 'none', cursor: 'pointer', position: 'relative',
+                                transition: 'background 0.2s', flexShrink: 0,
+                              }}
+                            >
+                              <span style={{
+                                position: 'absolute', top: 3, width: 16, height: 16, borderRadius: '50%',
+                                background: '#fff',
+                                left: s.enabled ? 21 : 3,
+                                transition: 'left 0.2s',
+                              }} />
+                            </button>
+                            <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 16, letterSpacing: '0.05em', color: s.enabled ? '#fff' : 'rgba(255,255,255,0.4)' }}>
+                              {s.label}
+                            </span>
+                            {!s.enabled && (
+                              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em' }}>DISABLED</span>
+                            )}
+                          </div>
+                          <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>{s.description}</p>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            if (isEditing) {
+                              setEmailEditKey(null)
+                            } else {
+                              setEmailEditKey(s.key)
+                              setEmailDraft({ subject: s.subject ?? '' })
+                            }
+                          }}
+                          style={{
+                            background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+                            color: isEditing ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)',
+                            padding: '6px 16px', cursor: 'pointer',
+                            fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', flexShrink: 0,
+                          }}>
+                          {isEditing ? 'CLOSE' : 'EDIT'}
+                        </button>
+                      </div>
+
+                      {/* Subject preview (collapsed) */}
+                      {!isEditing && (
+                        <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderLeft: '2px solid rgba(255,255,255,0.1)' }}>
+                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 4 }}>SUBJECT</div>
+                          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', fontStyle: s.subject ? 'normal' : 'italic' }}>
+                            {s.subject || s.defaultSubject}
+                            {!s.subject && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginLeft: 8 }}>(default)</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Edit panel (expanded) */}
+                      {isEditing && (
+                        <div style={{ marginTop: 20, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                          <div>
+                            <label style={labelStyle}>SUBJECT LINE</label>
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="text"
+                                value={emailDraft.subject ?? s.subject ?? ''}
+                                onChange={e => setEmailDraft(d => ({ ...d, subject: e.target.value }))}
+                                placeholder={s.defaultSubject}
+                                style={{ ...inputStyle, paddingRight: 90 }}
+                              />
+                              {(emailDraft.subject || s.subject) && (
+                                <button
+                                  onClick={() => setEmailDraft(d => ({ ...d, subject: '' }))}
+                                  style={{
+                                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                                    background: 'transparent', border: 'none', cursor: 'pointer',
+                                    fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em',
+                                  }}>
+                                  RESET
+                                </button>
+                              )}
+                            </div>
+                            <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+                              Available variables: <code style={{ color: 'rgba(255,255,255,0.4)' }}>{'{customer}'}</code> <code style={{ color: 'rgba(255,255,255,0.4)' }}>{'{set}'}</code> <code style={{ color: 'rgba(255,255,255,0.4)' }}>{'{date}'}</code>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <button
+                              onClick={async () => {
+                                const subjectVal = emailDraft.subject?.trim() || null
+                                await saveEmailSetting(s.key, { enabled: s.enabled, subject: subjectVal })
+                                setEmailEditKey(null)
+                              }}
+                              disabled={isSaving}
+                              style={{
+                                background: '#fff', border: 'none', padding: '10px 24px', cursor: 'pointer',
+                                fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808',
+                              }}>
+                              {isSaving ? 'SAVING...' : 'SAVE'}
+                            </button>
+                            {emailSaveMsg && emailSaving === null && (
+                              <span style={{ fontSize: 12, color: '#4ade80' }}>✓ {emailSaveMsg}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Migration notice */}
+            <div style={{ marginTop: 32, padding: '16px 20px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 6 }}>SETUP REQUIRED</div>
+              <p style={{ margin: '0 0 8px', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+                Run this in your <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.55)' }}>Supabase SQL editor</a> to enable email setting storage:
+              </p>
+              <pre style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.5)', background: '#111', padding: '12px 16px', overflowX: 'auto', lineHeight: 1.6 }}>
+{`create table if not exists email_templates (
+  key         text primary key,
+  enabled     boolean default true,
+  subject     text,
+  updated_at  timestamptz default now()
+);`}
+              </pre>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* BOOKING DETAIL PANEL */}
