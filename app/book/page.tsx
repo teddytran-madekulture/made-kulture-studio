@@ -379,7 +379,7 @@ function BookingWizard() {
                 let bg = '#0d0d0d'
                 let color = isInvalidEnd ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
-                if (inRange)      { bg = 'rgba(255,255,255,0.12)'; color = '#fff' }
+                if (inRange)      { bg = '#fff'; color = '#080808' }
                 if (start || end) { bg = '#fff'; color = '#080808' }
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
