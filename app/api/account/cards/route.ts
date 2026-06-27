@@ -21,9 +21,11 @@ async function ensureSquareCustomer(userId: string, email: string, name: string 
 
   // Create Square customer
   const square = getSquare()
+  const nameParts = (name ?? '').trim().split(' ')
   const res = await square.customersApi.createCustomer({
     emailAddress: email,
-    displayName: name ?? email,
+    givenName: nameParts[0] || undefined,
+    familyName: nameParts.slice(1).join(' ') || undefined,
     idempotencyKey: `customer-${userId}`,
   })
   const customerId = res.result.customer?.id
