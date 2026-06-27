@@ -193,10 +193,10 @@ function BookingWizard() {
   const isInRange = (h: number) =>
     booking.startHour !== null &&
     booking.endHour !== null &&
-    h >= booking.startHour && h < booking.endHour
+    h > booking.startHour && h < booking.endHour
 
   const isStart = (h: number) => h === booking.startHour
-  const isEnd   = (h: number) => booking.endHour !== null && h === booking.endHour - 0.5
+  const isEnd   = (h: number) => booking.endHour !== null && h === booking.endHour
 
   // ── Steps ──────────────────────────────────────────────────────────────────
 
