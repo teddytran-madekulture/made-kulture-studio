@@ -903,21 +903,6 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* Migration notice */}
-            <div style={{ marginTop: 32, padding: '16px 20px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 6 }}>SETUP REQUIRED</div>
-              <p style={{ margin: '0 0 8px', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
-                Run this in your <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.55)' }}>Supabase SQL editor</a> to enable email setting storage:
-              </p>
-              <pre style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.5)', background: '#111', padding: '12px 16px', overflowX: 'auto', lineHeight: 1.6 }}>
-{`create table if not exists email_templates (
-  key         text primary key,
-  enabled     boolean default true,
-  subject     text,
-  updated_at  timestamptz default now()
-);`}
-              </pre>
-            </div>
           </div>
         )}
 
