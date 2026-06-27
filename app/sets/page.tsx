@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import NavAuthLink from '@/components/NavAuthLink'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -116,6 +117,7 @@ function Nav() {
             style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: item === 'SETS' ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none' }}
           >{item}</Link>
         ))}
+        <NavAuthLink />
         <Link href="/book" style={{
           fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em',
           color: '#080808', background: '#fff', padding: '10px 20px', textDecoration: 'none',

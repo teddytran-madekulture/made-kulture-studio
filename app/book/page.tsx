@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import NavAuthLink from '@/components/NavAuthLink'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -116,6 +117,23 @@ function BookingWizard() {
   const [bookedSlots, setBookedSlots] = useState<{ start: number; end: number }[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+
+  // Pre-fill contact info from logged-in profile
+  useEffect(() => {
+    fetch('/api/account/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.profile) {
+          setBooking(b => ({
+            ...b,
+            name:  d.profile.full_name  || b.name,
+            email: d.profile.email      || b.email,
+            phone: d.profile.phone      || b.phone,
+          }))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Fetch availability when set + date change
   useEffect(() => {

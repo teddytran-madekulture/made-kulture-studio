@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import NavAuthLink from '@/components/NavAuthLink'
 
 const SETS = [
   { num: '01', name: 'Set A',             price: '$40', desc: '12×15ft white cinderblock walls, large windows',      photo: '/images/sets/set-a.jpg',           gradient: 'linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)' },
@@ -51,6 +52,7 @@ export default function Home() {
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
             >{item}</Link>
           ))}
+          <NavAuthLink />
           <Link href="/book" className="btn" style={{ padding: '10px 20px', fontSize: 11 }}>
             BOOK NOW ↗
           </Link>

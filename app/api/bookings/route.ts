@@ -231,12 +231,26 @@ export async function POST(req: NextRequest) {
       .single()
     const supabaseCustomerId = customerData?.id
 
+    // Look up Supabase auth user by email to link booking to their account
+    const { data: authUsers } = await supabase.auth.admin.listUsers()
+    const authUser = authUsers?.users?.find(u => u.email === body.email)
+    const authUserId = authUser?.id ?? null
+
+    // Also update their customer_profile's square_customer_id if they have an account
+    if (authUserId) {
+      await supabase.from('customer_profiles')
+        .update({ square_customer_id: customerId })
+        .eq('id', authUserId)
+        .is('square_customer_id', null)
+    }
+
     // 8. Insert booking into Supabase
     const { data: bookingData, error: bookingError } = await supabase
       .from('bookings')
       .insert({
         set_id:            setId,
         customer_id:       supabaseCustomerId,
+        auth_user_id:      authUserId,
         start_time:        startISO,
         end_time:          endISO,
         status:            'confirmed',

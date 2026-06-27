@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import NavAuthLink from '@/components/NavAuthLink'
 
 const SECTIONS = [
   {
@@ -151,6 +152,7 @@ function Nav() {
             {item.label}
           </Link>
         ))}
+        <NavAuthLink />
         <Link href="/book" style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '10px 20px', textDecoration: 'none' }}>
           BOOK NOW
         </Link>
