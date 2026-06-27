@@ -26,12 +26,12 @@ export async function GET(request: NextRequest) {
       }
     )
     const { error } = await supabase.auth.exchangeCodeForSession(code)
-    console.log('[auth/callback] code present, cookies:', request.cookies.getAll().map(c => c.name).join(', '))
-    console.log('[auth/callback] exchangeCodeForSession error:', error ? JSON.stringify(error) : 'none')
     if (!error) return redirectResponse
-  } else {
-    console.log('[auth/callback] no code param, searchParams:', searchParams.toString())
+    // Encode the actual error in the redirect so we can see it in logs
+    const msg = encodeURIComponent(error.message ?? error.code ?? 'unknown')
+    const cookies = encodeURIComponent(request.cookies.getAll().map(c => c.name).join(','))
+    return NextResponse.redirect(`${origin}/login?error=auth&msg=${msg}&cookies=${cookies}`)
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth`)
+  return NextResponse.redirect(`${origin}/login?error=missing_code`)
 }
