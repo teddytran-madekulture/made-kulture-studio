@@ -49,6 +49,12 @@ const SETS = [
 ]
 
 const CAL_SETS   = ['Set A', 'Set B', 'Set C', 'Set D', 'Concrete', 'Vintage', 'Cottage', 'The Watering Hole', 'The Tank', 'Studio One']
+const TIME_SLOTS = Array.from({ length: 27 }, (_, i) => 9 + i * 0.5)  // 9:00 – 22:00 in 30-min steps
+const SET_RATES: Record<string, number> = {
+  'Set A': 40, 'Set B': 40, 'Set C': 40, 'Set D': 40,
+  'Concrete': 40, 'Vintage': 40, 'Cottage': 40,
+  'The Watering Hole': 75, 'Studio One': 65,
+}
 const SLOT_H     = 44    // px per 30-min slot → 88px/hr
 const CAL_START  = 9
 const CAL_END    = 22
@@ -120,6 +126,12 @@ function tomorrow() {
 
 function cardLabel(c: SquareCard) {
   return `${c.brand?.replace('_', ' ')} **** ${c.last4}  (exp ${c.expMonth}/${c.expYear})`
+}
+
+function hourToISO(date: string, hour: number): string {
+  const h = Math.floor(hour)
+  const m = hour % 1 !== 0 ? '30' : '00'
+  return `${date}T${String(h).padStart(2, '0')}:${m}:00-05:00`
 }
 
 function getNowHour(): number {
@@ -200,6 +212,17 @@ export default function AdminDashboard() {
   const [loadingCards,setLoadingCards]= useState(false)
   const [selectedCard,setSelectedCard]= useState<SquareCard | null>(null)
   const [chargeMode,  setChargeMode]  = useState<'card-on-file' | 'log-only'>('log-only')
+
+  // Edit booking modal
+  const [editBooking, setEditBooking] = useState<Booking | null>(null)
+  const [editState,   setEditState]   = useState({ setName: '', date: '', startHour: 9, endHour: 11, notes: '', sendSms: true })
+  const [editCards,   setEditCards]   = useState<SquareCard[]>([])
+  const [editCard,    setEditCard]    = useState<SquareCard | null>(null)
+  const [editSquareCustId, setEditSquareCustId] = useState<string | null>(null)
+  const [editAction,  setEditAction]  = useState<'save' | 'link' | 'charge' | null>(null)
+  const [editPayLink, setEditPayLink] = useState<string | null>(null)
+  const [editError,   setEditError]   = useState('')
+  const [editCopied,  setEditCopied]  = useState(false)
 
   const [manual, setManual] = useState({
     setSlug: 'set-a', date: tomorrow(), startHour: 10, endHour: 12,
@@ -299,6 +322,127 @@ export default function AdminDashboard() {
     if (detailBooking?.id === id) setDetailBooking(null)
   }
 
+  const openEdit = async (b: Booking) => {
+    setEditBooking(b)
+    setEditState({
+      setName:   b.sets?.name || '',
+      date:      localDateStr(b.start_time),
+      startHour: localHour(b.start_time),
+      endHour:   localHour(b.end_time),
+      notes:     b.notes || '',
+      sendSms:   true,
+    })
+    setEditCards([]); setEditCard(null); setEditSquareCustId(null)
+    setEditPayLink(null); setEditError(''); setEditAction(null); setEditCopied(false)
+
+    // Look up customer's Square cards
+    if (b.customers?.email) {
+      const res  = await fetch(`/api/admin/customers?q=${encodeURIComponent(b.customers.email)}`)
+      const data = await res.json()
+      const cust = (data.customers || []).find((c: CustomerResult) => c.email === b.customers?.email)
+      if (cust?.squareCustomerId) {
+        setEditSquareCustId(cust.squareCustomerId)
+        const cr   = await fetch(`/api/admin/square-cards?customerId=${cust.squareCustomerId}`)
+        const cd   = await cr.json()
+        const list = cd.cards || []
+        setEditCards(list); setEditCard(list[0] ?? null)
+      }
+    }
+  }
+
+  const handleEditSave = async () => {
+    if (!editBooking || editAction) return
+    setEditAction('save'); setEditError('')
+    const res  = await fetch(`/api/admin/bookings/${editBooking.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_time:   hourToISO(editState.date, editState.startHour),
+        end_time:     hourToISO(editState.date, editState.endHour),
+        setName:      editState.setName,
+        notes:        editState.notes,
+        total_amount: editNewTotal,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setEditError(data.error || 'Failed to save'); setEditAction(null); return }
+    setEditBooking(null); setEditAction(null)
+    fetchBookings()
+    if (detailBooking?.id === editBooking.id) setDetailBooking(null)
+  }
+
+  const handleEditLink = async () => {
+    if (!editBooking || editAction || editDiff <= 0) return
+    setEditAction('link'); setEditError('')
+    // Save booking first (without updating total — they haven't paid yet)
+    const saveRes = await fetch(`/api/admin/bookings/${editBooking.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_time: hourToISO(editState.date, editState.startHour),
+        end_time:   hourToISO(editState.date, editState.endHour),
+        setName:    editState.setName,
+        notes:      editState.notes,
+      }),
+    })
+    if (!saveRes.ok) {
+      const d = await saveRes.json()
+      setEditError(d.error || 'Failed to update booking'); setEditAction(null); return
+    }
+    // Create payment link
+    const linkRes = await fetch(`/api/admin/bookings/${editBooking.id}/payment-link`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount:       editDiff,
+        description:  `Made Kulture — ${editState.setName} Booking Extension`,
+        phone:        editBooking.customers?.phone || '',
+        customerName: editBooking.customers?.name || '',
+        sendSms:      editState.sendSms,
+      }),
+    })
+    const linkData = await linkRes.json()
+    if (!linkRes.ok) { setEditError(linkData.error || 'Failed to create payment link'); setEditAction(null); return }
+    setEditPayLink(linkData.url); setEditAction(null)
+    fetchBookings()
+  }
+
+  const handleEditCharge = async () => {
+    if (!editBooking || editAction || editDiff <= 0 || !editCard || !editSquareCustId) return
+    setEditAction('charge'); setEditError('')
+    // Save booking first
+    const saveRes = await fetch(`/api/admin/bookings/${editBooking.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_time: hourToISO(editState.date, editState.startHour),
+        end_time:   hourToISO(editState.date, editState.endHour),
+        setName:    editState.setName,
+        notes:      editState.notes,
+      }),
+    })
+    if (!saveRes.ok) {
+      const d = await saveRes.json()
+      setEditError(d.error || 'Failed to update booking'); setEditAction(null); return
+    }
+    // Charge card
+    const chargeRes = await fetch(`/api/admin/bookings/${editBooking.id}/charge`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        squareCardId:     editCard.id,
+        squareCustomerId: editSquareCustId,
+        amount:           editDiff,
+        description:      `Made Kulture — ${editState.setName} Booking Extension`,
+        phone:            editBooking.customers?.phone || '',
+        customerName:     editBooking.customers?.name || '',
+        email:            editBooking.customers?.email || '',
+        sendSms:          editState.sendSms,
+        newTotal:         editNewTotal,
+      }),
+    })
+    const chargeData = await chargeRes.json()
+    if (!chargeRes.ok) { setEditError(chargeData.error || 'Charge failed'); setEditAction(null); return }
+    setEditBooking(null); setEditAction(null)
+    fetchBookings()
+    if (detailBooking?.id === editBooking.id) setDetailBooking(null)
+  }
+
   const closeModal = () => { setShowManual(false); resetModal() }
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) closeModal()
@@ -323,6 +467,12 @@ export default function AdminDashboard() {
     : chargeMode === 'card-on-file' && selectedCard
       ? `CHARGE ${selectedCard.brand?.replace('_', ' ')} **** ${selectedCard.last4}`
       : 'ADD BOOKING'
+
+  // Edit modal derived values
+  const editDuration = editState.endHour - editState.startHour
+  const editRate     = SET_RATES[editState.setName] ?? 40
+  const editNewTotal = Math.max(editDuration * editRate, 0)
+  const editDiff     = editBooking ? editNewTotal - (editBooking.total_amount || 0) : 0
 
   // Calendar
   const isToday     = calDate === todayStr()
@@ -444,23 +594,19 @@ export default function AdminDashboard() {
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}
                             {b.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={b.square_payment_id} mono />}
-                            {b.booking_addons?.length > 0 && (
-                              <div>
-                                <div style={labelStyle}>EQUIPMENT</div>
-                                {b.booking_addons.map((a, i) => (
-                                  <div key={i} style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 2 }}>
-                                    {a.equipment_name} — ${a.price}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 8 }}>
                             {!isCancelled && (
-                              <button onClick={() => handleCancel(b.id)} disabled={cancelling === b.id}
-                                style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.4)', padding: '10px 20px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: '#ff6b6b' }}>
-                                {cancelling === b.id ? 'CANCELLING...' : 'CANCEL BOOKING'}
-                              </button>
+                              <>
+                                <button onClick={() => openEdit(b)}
+                                  style={{ background: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: '#080808', fontWeight: 600 }}>
+                                  EDIT
+                                </button>
+                                <button onClick={() => handleCancel(b.id)} disabled={cancelling === b.id}
+                                  style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.4)', padding: '10px 20px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: '#ff6b6b' }}>
+                                  {cancelling === b.id ? 'CANCELLING...' : 'CANCEL'}
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -473,159 +619,88 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* ── CALENDAR VIEW ─────────────────────────────────────────────────── */}
+        {/* CALENDAR VIEW */}
         {view === 'calendar' && (
-          <div style={{ paddingBottom: 40 }}>
-
-            {/* Date nav */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ paddingBottom: 60 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
               <button onClick={() => setCalDate(d => addDays(d, -1))}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 14px', cursor: 'pointer', fontSize: 14 }}>
-                ←
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+                &larr; PREV
               </button>
-              <button onClick={() => setCalDate(todayStr())}
-                style={{ background: isToday ? '#fff' : 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: isToday ? '#080808' : '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', fontWeight: 500 }}>
-                TODAY
-              </button>
-              <input type="date" value={calDate} onChange={e => setCalDate(e.target.value)}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 12px', fontSize: 13, fontFamily: 'Inter, sans-serif', cursor: 'pointer', outline: 'none', colorScheme: 'dark' }} />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 24, letterSpacing: '0.05em' }}>
+                  {fmtCalHeader(calDate)}
+                </div>
+                {isToday && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', marginTop: 4 }}>TODAY</div>}
+              </div>
               <button onClick={() => setCalDate(d => addDays(d, 1))}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 14px', cursor: 'pointer', fontSize: 14 }}>
-                →
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+                NEXT &rarr;
               </button>
-              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>
-                {fmtCalHeader(calDate)}
-              </div>
-              <div style={{ marginLeft: 'auto', fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em' }}>
-                {dayBookings.length} BOOKING{dayBookings.length !== 1 ? 'S' : ''}
-              </div>
             </div>
 
-            {/* Grid */}
-            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 }}>
-              <div style={{ minWidth: TIME_COL + CAL_SETS.length * SET_COL }}>
-
-                {/* Sticky header row */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: `${TIME_COL}px repeat(${CAL_SETS.length}, ${SET_COL}px)`,
-                  position: 'sticky', top: 0, background: '#111', zIndex: 10,
-                  borderBottom: '1px solid rgba(255,255,255,0.1)',
-                }}>
-                  <div style={{ padding: '10px 8px' }} />
+            <div style={{ overflowX: 'auto' }}>
+              <div style={{ minWidth: TIME_COL + CAL_SETS.length * SET_COL, position: 'relative' }}>
+                <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 12 }}>
+                  <div style={{ width: TIME_COL, flexShrink: 0 }} />
                   {CAL_SETS.map(s => (
-                    <div key={s} style={{
-                      padding: '10px 8px', fontFamily: 'Inter, sans-serif', fontSize: 10,
-                      fontWeight: 500, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)',
-                      borderLeft: '1px solid rgba(255,255,255,0.06)', textAlign: 'center',
-                    }}>
+                    <div key={s} style={{ width: SET_COL, flexShrink: 0, textAlign: 'center', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>
                       {s.toUpperCase()}
                     </div>
                   ))}
                 </div>
 
-                {/* Body */}
-                <div style={{ position: 'relative', height: SLOTS_N * SLOT_H }}>
+                <div style={{ display: 'flex', position: 'relative' }}>
+                  <div style={{ width: TIME_COL, flexShrink: 0 }}>
+                    {HOURS.map(h => (
+                      <div key={h} style={{ height: SLOT_H * 2, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'flex-start', paddingTop: 4 }}>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.05em' }}>
+                          {fmt12(h)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
 
-                  {/* Grid lines + time labels */}
-                  {Array.from({ length: SLOTS_N }, (_, i) => i).map(i => {
-                    const h      = CAL_START + i * 0.5
-                    const isHour = i % 2 === 0
+                  {CAL_SETS.map(setName => {
+                    const colBookings = dayBookings.filter(b => b.sets?.name === setName)
                     return (
-                      <div key={i} style={{ position: 'absolute', top: i * SLOT_H, left: 0, right: 0, display: 'flex', pointerEvents: 'none' }}>
-                        <div style={{ width: TIME_COL, flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: 10 }}>
-                          {isHour && (
-                            <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.25)', transform: 'translateY(-6px)', whiteSpace: 'nowrap' }}>
-                              {fmt12(h)}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ flex: 1, borderTop: isHour ? '1px solid rgba(255,255,255,0.08)' : '1px dashed rgba(255,255,255,0.03)' }} />
+                      <div key={setName} style={{ width: SET_COL, flexShrink: 0, position: 'relative', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+                        {HOURS.map(h => (
+                          <div key={h} style={{ height: SLOT_H * 2, borderTop: '1px solid rgba(255,255,255,0.06)' }} />
+                        ))}
+                        {colBookings.map(b => {
+                          const startH = localHour(b.start_time)
+                          const endH   = localHour(b.end_time)
+                          const top    = (startH - CAL_START) * SLOT_H * 2
+                          const height = (endH - startH) * SLOT_H * 2
+                          return (
+                            <div key={b.id} onClick={() => setDetailBooking(b)}
+                              style={{
+                                position: 'absolute', top, left: 4, right: 4, height: Math.max(height - 4, 20),
+                                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                                borderRadius: 2, padding: '4px 6px', cursor: 'pointer', overflow: 'hidden',
+                              }}>
+                              <div style={{ fontSize: 10, color: '#fff', fontWeight: 500, lineHeight: 1.3 }}>
+                                {b.customers?.name || '—'}
+                              </div>
+                              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                                {fmtTime(b.start_time)} – {fmtTime(b.end_time)}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )
                   })}
 
-                  {/* Vertical column dividers */}
-                  {CAL_SETS.map((_, i) => (
-                    <div key={i} style={{
-                      position: 'absolute', top: 0, bottom: 0,
-                      left: TIME_COL + i * SET_COL, width: 1,
-                      background: 'rgba(255,255,255,0.06)', pointerEvents: 'none',
-                    }} />
-                  ))}
-
-                  {/* Current time line */}
                   {isToday && nowHour >= CAL_START && nowHour <= CAL_END && (
                     <div style={{
-                      position: 'absolute', top: nowTop, left: TIME_COL, right: 0,
-                      height: 2, background: '#ef4444', zIndex: 5, pointerEvents: 'none',
+                      position: 'absolute', left: 0, right: 0, top: nowTop,
+                      height: 1, background: '#ff6b6b', pointerEvents: 'none', zIndex: 10,
                     }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', position: 'absolute', left: -4, top: -3 }} />
+                      <div style={{ position: 'absolute', left: 0, top: -3, width: 7, height: 7, borderRadius: '50%', background: '#ff6b6b' }} />
                     </div>
                   )}
-
-                  {/* Full-studio buyout banners (span all columns) */}
-                  {dayBookings.filter(b => b.sets === null).map(b => {
-                    const startH = Math.max(localHour(b.start_time), CAL_START)
-                    const endH   = Math.min(localHour(b.end_time), CAL_END)
-                    const top    = (startH - CAL_START) * SLOT_H * 2
-                    const height = Math.max((endH - startH) * SLOT_H * 2, SLOT_H)
-                    const sel    = detailBooking?.id === b.id
-                    return (
-                      <div key={b.id} onClick={() => setDetailBooking(sel ? null : b)}
-                        style={{
-                          position: 'absolute', top: top + 1, height: height - 2,
-                          left: TIME_COL + 2, right: 2,
-                          background: 'rgba(234,179,8,0.12)',
-                          border: `1px solid ${sel ? '#fbbf24' : 'rgba(234,179,8,0.35)'}`,
-                          cursor: 'pointer', borderRadius: 2,
-                          padding: '6px 12px', zIndex: 4,
-                          display: 'flex', alignItems: 'center', gap: 12,
-                        }}>
-                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, color: '#fbbf24', letterSpacing: '0.08em' }}>FULL STUDIO BUYOUT</span>
-                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(251,191,36,0.7)' }}>{b.customers?.name} · {fmtTime(b.start_time)}–{fmtTime(b.end_time)}</span>
-                      </div>
-                    )
-                  })}
-
-                  {/* Per-set booking blocks */}
-                  {CAL_SETS.map((setName, colIdx) => {
-                    const colBookings = dayBookings.filter(b => b.sets?.name === setName)
-                    return colBookings.map(b => {
-                      const startH  = Math.max(localHour(b.start_time), CAL_START)
-                      const endH    = Math.min(localHour(b.end_time), CAL_END)
-                      const top     = (startH - CAL_START) * SLOT_H * 2
-                      const height  = Math.max((endH - startH) * SLOT_H * 2, SLOT_H)
-                      const sel     = detailBooking?.id === b.id
-                      return (
-                        <div key={b.id} onClick={() => setDetailBooking(sel ? null : b)}
-                          style={{
-                            position: 'absolute',
-                            top: top + 2, height: height - 4,
-                            left: TIME_COL + colIdx * SET_COL + 3,
-                            width: SET_COL - 6,
-                            background: sel ? '#a3e635' : '#4ade80',
-                            cursor: 'pointer', borderRadius: 2,
-                            padding: '5px 8px', overflow: 'hidden', zIndex: 3,
-                            boxShadow: sel ? '0 0 0 2px #fff' : 'none',
-                            transition: 'background 0.1s',
-                          }}>
-                          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, color: '#052e16', lineHeight: 1.3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                            {b.customers?.name || '—'}
-                          </div>
-                          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, color: 'rgba(5,46,22,0.7)', marginTop: 2 }}>
-                            {fmtTime(b.start_time)}–{fmtTime(b.end_time)}
-                          </div>
-                          {height > 72 && b.total_amount > 0 && (
-                            <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, color: 'rgba(5,46,22,0.6)', marginTop: 2 }}>
-                              ${b.total_amount}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
-                  })}
-
                 </div>
               </div>
             </div>
@@ -633,223 +708,349 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* ── BOOKING DETAIL PANEL ──────────────────────────────────────────────── */}
+      {/* BOOKING DETAIL PANEL */}
       {detailBooking && (
-        <>
-          <div onClick={() => setDetailBooking(null)} style={{ position: 'fixed', inset: 0, zIndex: 49 }} />
-          <div style={{
-            position: 'fixed', right: 0, top: 0, bottom: 0, width: 380,
-            background: '#111', borderLeft: '1px solid rgba(255,255,255,0.1)',
-            zIndex: 60, overflowY: 'auto', boxShadow: '-8px 0 40px rgba(0,0,0,0.6)',
-          }}>
-            <div style={{ padding: 28 }}>
-
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-                <div>
-                  <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', lineHeight: 1 }}>
-                    {detailBooking.customers?.name || '—'}
-                  </div>
-                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
-                    {detailBooking.sets?.name || 'Full Studio Takeover'}
-                  </div>
-                </div>
-                <button onClick={() => setDetailBooking(null)}
-                  style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: 4 }}>
-                  ×
-                </button>
-              </div>
-
-              {/* Status */}
-              <div style={{ marginBottom: 24 }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 500, letterSpacing: '0.12em', padding: '4px 12px',
-                  color: detailBooking.status === 'cancelled' ? '#ff6b6b' : detailBooking.status === 'confirmed' ? '#4ade80' : 'rgba(255,255,255,0.4)',
-                  border: `1px solid ${detailBooking.status === 'cancelled' ? 'rgba(255,100,100,0.3)' : detailBooking.status === 'confirmed' ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.1)'}`,
-                }}>
-                  {detailBooking.status.toUpperCase()}
-                </span>
-              </div>
-
-              {/* Details grid */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20 }}>
-                <Detail label="DATE"     value={fmtDate(detailBooking.start_time)} />
-                <Detail label="TIME"     value={`${fmtTime(detailBooking.start_time)} – ${fmtTime(detailBooking.end_time)}`} />
-                <Detail label="DURATION" value={fmtDuration(detailBooking.start_time, detailBooking.end_time)} />
-                <Detail label="EMAIL"    value={detailBooking.customers?.email || '—'} />
-                <Detail label="PHONE"    value={detailBooking.customers?.phone || '—'} />
-                <Detail label="AMOUNT"   value={`$${(detailBooking.total_amount || 0).toLocaleString()}`} />
-                <Detail label="SOURCE"   value={detailBooking.source || '—'} />
-                {detailBooking.notes && <Detail label="NOTES" value={detailBooking.notes} />}
-                {detailBooking.square_payment_id && (
-                  <Detail label="SQUARE PAYMENT ID" value={detailBooking.square_payment_id} mono />
-                )}
-              </div>
-
-              {/* Equipment */}
-              {detailBooking.booking_addons?.length > 0 && (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 20, paddingTop: 20 }}>
-                  <div style={labelStyle}>EQUIPMENT</div>
-                  {detailBooking.booking_addons.map((a, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>
-                      <span>{a.equipment_name}</span>
-                      <span>${a.price}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Actions */}
-              {detailBooking.status !== 'cancelled' && (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 28, paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {detailBooking.customers?.phone && (
-                    <a href={`sms:${detailBooking.customers.phone}`}
-                      style={{ display: 'block', textAlign: 'center', padding: '12px', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
-                      TEXT CUSTOMER ↗
-                    </a>
-                  )}
-                  <button onClick={() => handleCancel(detailBooking.id)} disabled={cancelling === detailBooking.id}
-                    style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.4)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: '#ff6b6b', width: '100%' }}>
-                    {cancelling === detailBooking.id ? 'CANCELLING...' : 'CANCEL BOOKING'}
-                  </button>
-                </div>
-              )}
-
-            </div>
+        <div style={{
+          position: 'fixed', right: 0, top: 0, bottom: 0, width: 380,
+          background: '#0d0d0d', borderLeft: '1px solid rgba(255,255,255,0.08)',
+          overflowY: 'auto', zIndex: 100, padding: '32px 28px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em' }}>BOOKING DETAIL</div>
+            <button onClick={() => setDetailBooking(null)}
+              style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>
+              &#x2715;
+            </button>
           </div>
-        </>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <Detail label="CUSTOMER" value={detailBooking.customers?.name || '—'} />
+            <Detail label="EMAIL"    value={detailBooking.customers?.email || '—'} />
+            <Detail label="PHONE"    value={detailBooking.customers?.phone || '—'} />
+            <Detail label="SET"      value={detailBooking.sets?.name || 'Full Studio Takeover'} />
+            <Detail label="DATE"     value={fmtDate(detailBooking.start_time)} />
+            <Detail label="TIME"     value={`${fmtTime(detailBooking.start_time)} – ${fmtTime(detailBooking.end_time)}`} />
+            <Detail label="DURATION" value={fmtDuration(detailBooking.start_time, detailBooking.end_time)} />
+            <Detail label="TOTAL"    value={`$${detailBooking.total_amount?.toLocaleString()}`} />
+            <Detail label="STATUS"   value={detailBooking.status.toUpperCase()} />
+            <Detail label="SOURCE"   value={detailBooking.source || '—'} />
+            {detailBooking.notes && <Detail label="NOTES" value={detailBooking.notes} />}
+            {detailBooking.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={detailBooking.square_payment_id} mono />}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 32 }}>
+            {detailBooking.status !== 'cancelled' && (
+              <button onClick={() => openEdit(detailBooking)}
+                style={{ background: '#fff', border: 'none', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#080808', fontWeight: 600 }}>
+                EDIT BOOKING
+              </button>
+            )}
+            {detailBooking.customers?.phone && (
+              <button onClick={() => window.open(`sms:${detailBooking.customers?.phone}`, '_blank')}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
+                TEXT CUSTOMER
+              </button>
+            )}
+            {detailBooking.status !== 'cancelled' && (
+              <button onClick={() => handleCancel(detailBooking.id)} disabled={cancelling === detailBooking.id}
+                style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.3)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ff6b6b' }}>
+                {cancelling === detailBooking.id ? 'CANCELLING...' : 'CANCEL BOOKING'}
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* ── MANUAL BOOKING MODAL ──────────────────────────────────────────────── */}
-      {showManual && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24 }} onClick={handleBackdropClick}>
-          <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: 40, width: '100%', maxWidth: 560, maxHeight: '92vh', overflowY: 'auto' }}>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em' }}>MANUAL BOOKING</div>
-              <button onClick={closeModal} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20 }}>×</button>
+      {/* EDIT BOOKING MODAL */}
+      {editBooking && (
+        <div onClick={(e) => { if (e.target === e.currentTarget && !editAction) setEditBooking(null) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', padding: 36 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>EDIT BOOKING</div>
+              <button onClick={() => { if (!editAction) setEditBooking(null) }}
+                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20 }}>
+                &#x2715;
+              </button>
             </div>
 
-            <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <label style={labelStyle}>SEARCH EXISTING CUSTOMER</label>
-              <div style={{ position: 'relative' }}>
-                <input value={searchQuery}
-                  onChange={e => { setSearchQuery(e.target.value); if (!e.target.value) clearCustomer() }}
-                  placeholder="Name, email, or phone..."
-                  style={{ ...inputStyle, paddingRight: selectedCustomer ? 36 : 14 }} />
-                {selectedCustomer && (
-                  <button onClick={clearCustomer} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 16 }}>×</button>
-                )}
-                {searchResults.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)', zIndex: 50, maxHeight: 240, overflowY: 'auto' }}>
-                    {searchResults.map(c => (
-                      <div key={c.id} onClick={() => selectCustomer(c)}
-                        style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}>
-                        <div style={{ fontSize: 13, color: '#fff', marginBottom: 3 }}>{c.name}</div>
-                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{c.email}</span>
-                          {c.hasCardOnFile && <span style={{ fontSize: 10, letterSpacing: '0.1em', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)', padding: '1px 6px' }}>CARD ON FILE</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {searching && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px' }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em' }}>SEARCHING...</span>
-                  </div>
-                )}
-              </div>
-
-              {selectedCustomer?.hasCardOnFile && (
-                <div style={{ marginTop: 16 }}>
-                  {loadingCards ? (
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em' }}>LOADING CARDS...</div>
-                  ) : cards.length > 0 ? (
-                    <div>
-                      <label style={{ ...labelStyle, marginBottom: 10 }}>CARD ON FILE</label>
-                      {cards.map(card => (
-                        <label key={card.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', border: `1px solid ${selectedCard?.id === card.id ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'}`, marginBottom: 8, cursor: 'pointer' }}>
-                          <input type="radio" name="card" checked={selectedCard?.id === card.id} onChange={() => setSelectedCard(card)} style={{ accentColor: '#fff' }} />
-                          <span style={{ fontSize: 13, color: '#fff' }}>{cardLabel(card)}</span>
-                        </label>
-                      ))}
-                      <div style={{ display: 'flex', gap: 20, marginTop: 12 }}>
-                        {(['card-on-file', 'log-only'] as const).map(mode => (
-                          <label key={mode} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                            <input type="radio" name="chargeMode" checked={chargeMode === mode} onChange={() => setChargeMode(mode)} style={{ accentColor: '#fff' }} />
-                            <span style={{ fontSize: 12, color: chargeMode === mode ? '#fff' : 'rgba(255,255,255,0.4)' }}>
-                              {mode === 'card-on-file' ? 'Charge card on file' : 'Log only (no charge)'}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', marginTop: 8 }}>No active cards found in Square.</div>
-                  )}
-                </div>
-              )}
+            <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Detail label="CUSTOMER"       value={editBooking.customers?.name || '—'} />
+              <Detail label="EMAIL"          value={editBooking.customers?.email || '—'} />
+              <Detail label="PHONE"          value={editBooking.customers?.phone || '—'} />
+              <Detail label="ORIGINAL TOTAL" value={`$${editBooking.total_amount?.toLocaleString()}`} />
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               <Field label="SET">
-                <select value={manual.setSlug} onChange={e => setManual(m => ({ ...m, setSlug: e.target.value }))} style={inputStyle}>
-                  {SETS.map(s => <option key={s.id} value={s.id} style={{ background: '#111' }}>{s.name}</option>)}
+                <select value={editState.setName} onChange={e => setEditState(s => ({ ...s, setName: e.target.value }))}
+                  style={{ ...inputStyle, appearance: 'none' as const }}>
+                  {CAL_SETS.map(n => <option key={n} value={n} style={{ background: '#111' }}>{n}</option>)}
                 </select>
               </Field>
+
               <Field label="DATE">
-                <input type="date" value={manual.date} onChange={e => setManual(m => ({ ...m, date: e.target.value }))} style={inputStyle} required />
+                <input type="date" value={editState.date} onChange={e => setEditState(s => ({ ...s, date: e.target.value }))}
+                  style={{ ...inputStyle, colorScheme: 'dark' as const }} />
               </Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <Field label="START TIME">
-                  <select value={manual.startHour} onChange={e => setManual(m => ({ ...m, startHour: Number(e.target.value) }))} style={inputStyle}>
-                    {HOURS.slice(0, -1).map(h => <option key={h} value={h} style={{ background: '#111' }}>{fmt12(h)}</option>)}
+                  <select value={editState.startHour} onChange={e => setEditState(s => ({ ...s, startHour: Number(e.target.value) }))}
+                    style={{ ...inputStyle, appearance: 'none' as const }}>
+                    {TIME_SLOTS.map(h => <option key={h} value={h} style={{ background: '#111' }}>{fmt12(h)}</option>)}
                   </select>
                 </Field>
                 <Field label="END TIME">
-                  <select value={manual.endHour} onChange={e => setManual(m => ({ ...m, endHour: Number(e.target.value) }))} style={inputStyle}>
-                    {HOURS.filter(h => h > manual.startHour).map(h => (
+                  <select value={editState.endHour} onChange={e => setEditState(s => ({ ...s, endHour: Number(e.target.value) }))}
+                    style={{ ...inputStyle, appearance: 'none' as const }}>
+                    {TIME_SLOTS.filter(h => h > editState.startHour).map(h => (
                       <option key={h} value={h} style={{ background: '#111' }}>{fmt12(h)}</option>
                     ))}
                   </select>
                 </Field>
               </div>
-              <Field label="FULL NAME">
-                <input value={manual.name} onChange={e => setManual(m => ({ ...m, name: e.target.value }))} placeholder="Jane Smith" style={inputStyle} required />
+
+              <Field label="NOTES">
+                <textarea value={editState.notes} onChange={e => setEditState(s => ({ ...s, notes: e.target.value }))}
+                  rows={3} style={{ ...inputStyle, resize: 'none' as const }} />
               </Field>
-              <Field label="EMAIL">
-                <input type="email" value={manual.email} onChange={e => setManual(m => ({ ...m, email: e.target.value }))} placeholder="jane@studio.com" style={inputStyle} required />
-              </Field>
-              <Field label="PHONE">
-                <input value={manual.phone} onChange={e => setManual(m => ({ ...m, phone: e.target.value }))} placeholder="(832) 000-0000" style={inputStyle} />
-              </Field>
-              <Field label="TOTAL AMOUNT ($)">
-                <input type="number" min="0" step="0.01" value={manual.totalAmount} onChange={e => setManual(m => ({ ...m, totalAmount: Number(e.target.value) }))} style={inputStyle} />
-              </Field>
-              <Field label="NOTES (OPTIONAL)">
-                <textarea value={manual.notes} onChange={e => setManual(m => ({ ...m, notes: e.target.value }))} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-              </Field>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginTop: 4 }}>
-                <input type="checkbox" checked={manual.sendSms} onChange={e => setManual(m => ({ ...m, sendSms: e.target.checked }))} style={{ accentColor: '#fff', width: 16, height: 16 }} />
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Send SMS confirmation to customer</span>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.04)', padding: 16, marginTop: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                  {editState.setName} &times; {editDuration} hr{editDuration !== 1 ? 's' : ''} @ ${editRate}/hr
+                </span>
+                <span style={{ fontSize: 12, color: '#fff' }}>${editNewTotal}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>DIFFERENCE</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: editDiff > 0 ? '#4ade80' : editDiff < 0 ? '#ff6b6b' : 'rgba(255,255,255,0.4)' }}>
+                  {editDiff > 0 ? `+$${editDiff.toFixed(2)}` : editDiff < 0 ? `-$${Math.abs(editDiff).toFixed(2)}` : 'No change'}
+                </span>
+              </div>
+            </div>
+
+            {editCards.length > 0 && editDiff > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>CARD ON FILE</label>
+                <select value={editCard?.id || ''} onChange={e => setEditCard(editCards.find(c => c.id === e.target.value) || null)}
+                  style={{ ...inputStyle, appearance: 'none' as const }}>
+                  {editCards.map(c => (
+                    <option key={c.id} value={c.id} style={{ background: '#111' }}>{cardLabel(c)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+              <input type="checkbox" id="edit-sms" checked={editState.sendSms}
+                onChange={e => setEditState(s => ({ ...s, sendSms: e.target.checked }))} />
+              <label htmlFor="edit-sms" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>
+                NOTIFY CUSTOMER VIA SMS
               </label>
-              {submitError && <div style={{ fontSize: 12, color: '#ff6b6b', marginTop: 4 }}>{submitError}</div>}
-              <button type="submit" disabled={submitting || submitSuccess}
-                style={{
-                  background: submitSuccess ? '#4ade80' : '#fff', border: 'none', padding: '14px', marginTop: 8,
-                  cursor: submitting || submitSuccess ? 'default' : 'pointer',
-                  fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: '#080808',
-                }}>
-                {submitLabel}
+            </div>
+
+            {editPayLink && (
+              <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', padding: '12px 16px', marginTop: 16 }}>
+                <div style={{ fontSize: 11, color: '#4ade80', letterSpacing: '0.1em', marginBottom: 8 }}>PAYMENT LINK CREATED</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#fff', wordBreak: 'break-all', flex: 1 }}>{editPayLink}</span>
+                  <button onClick={() => { navigator.clipboard.writeText(editPayLink); setEditCopied(true); setTimeout(() => setEditCopied(false), 2000) }}
+                    style={{ background: '#4ade80', border: 'none', padding: '6px 12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: '#080808', flexShrink: 0 }}>
+                    {editCopied ? 'COPIED' : 'COPY'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {editError && (
+              <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 12 }}>{editError}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' as const }}>
+              <button onClick={handleEditSave} disabled={!!editAction}
+                style={{ flex: 1, minWidth: 120, background: editAction === 'save' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '12px', cursor: editAction ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
+                {editAction === 'save' ? 'SAVING...' : 'SAVE ONLY'}
               </button>
-            </form>
+              {editDiff > 0 && (
+                <>
+                  <button onClick={handleEditLink} disabled={!!editAction}
+                    style={{ flex: 1, minWidth: 160, background: editAction === 'link' ? 'rgba(255,255,255,0.5)' : '#fff', border: 'none', color: '#080808', padding: '12px', cursor: editAction ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', fontWeight: 600 }}>
+                    {editAction === 'link' ? 'CREATING...' : `SEND LINK +$${editDiff.toFixed(2)}`}
+                  </button>
+                  {editCards.length > 0 && editCard && (
+                    <button onClick={handleEditCharge} disabled={!!editAction}
+                      style={{ flex: 1, minWidth: 160, background: editAction === 'charge' ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', padding: '12px', cursor: editAction ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
+                      {editAction === 'charge' ? 'CHARGING...' : `CHARGE CARD +$${editDiff.toFixed(2)}`}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
 
+      {/* MANUAL BOOKING MODAL */}
+      {showManual && (
+        <div onClick={handleBackdropClick}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', padding: 36 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>MANUAL BOOKING</div>
+              <button onClick={closeModal}
+                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20 }}>
+                &#x2715;
+              </button>
+            </div>
+
+            {submitSuccess ? (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, color: '#4ade80', letterSpacing: '0.05em' }}>BOOKING ADDED</div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{ position: 'relative' }}>
+                  <label style={labelStyle}>SEARCH EXISTING CUSTOMER</label>
+                  {selectedCustomer ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
+                      <div>
+                        <div style={{ fontSize: 13, color: '#fff', marginBottom: 2 }}>{selectedCustomer.name}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{selectedCustomer.email}</div>
+                        {selectedCustomer.hasCardOnFile && <div style={{ fontSize: 10, color: '#4ade80', marginTop: 4 }}>Card on file</div>}
+                      </div>
+                      <button type="button" onClick={clearCustomer}
+                        style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 16 }}>
+                        &#x2715;
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search by name, email, or phone..."
+                        style={{ ...inputStyle, paddingRight: searching ? 36 : 14 }} />
+                      {searching && <div style={{ position: 'absolute', right: 10, top: 38, fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>...</div>}
+                      {searchResults.length > 0 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)', zIndex: 50, maxHeight: 200, overflowY: 'auto' }}>
+                          {searchResults.map(c => (
+                            <div key={c.id} onClick={() => selectCustomer(c)}
+                              style={{ padding: '12px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                              <div style={{ fontSize: 13, color: '#fff' }}>{c.name}</div>
+                              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{c.email} &middot; {c.phone}</div>
+                              {c.hasCardOnFile && <div style={{ fontSize: 10, color: '#4ade80', marginTop: 2 }}>Card on file</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <Field label="NAME">
+                    <input required value={manual.name} onChange={e => setManual(m => ({ ...m, name: e.target.value }))} style={inputStyle} />
+                  </Field>
+                  <Field label="PHONE">
+                    <input required value={manual.phone} onChange={e => setManual(m => ({ ...m, phone: e.target.value }))} style={inputStyle} />
+                  </Field>
+                </div>
+                <Field label="EMAIL">
+                  <input type="email" required value={manual.email} onChange={e => setManual(m => ({ ...m, email: e.target.value }))} style={inputStyle} />
+                </Field>
+
+                <Field label="SET">
+                  <select value={manual.setSlug} onChange={e => setManual(m => ({ ...m, setSlug: e.target.value }))}
+                    style={{ ...inputStyle, appearance: 'none' as const }}>
+                    {SETS.map(s => <option key={s.id} value={s.id} style={{ background: '#111' }}>{s.name}</option>)}
+                  </select>
+                </Field>
+
+                <Field label="DATE">
+                  <input type="date" value={manual.date} onChange={e => setManual(m => ({ ...m, date: e.target.value }))}
+                    style={{ ...inputStyle, colorScheme: 'dark' as const }} />
+                </Field>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <Field label="START HOUR (24h)">
+                    <input type="number" min={9} max={21} value={manual.startHour}
+                      onChange={e => setManual(m => ({ ...m, startHour: Number(e.target.value) }))} style={inputStyle} />
+                  </Field>
+                  <Field label="END HOUR (24h)">
+                    <input type="number" min={10} max={22} value={manual.endHour}
+                      onChange={e => setManual(m => ({ ...m, endHour: Number(e.target.value) }))} style={inputStyle} />
+                  </Field>
+                </div>
+
+                <Field label="TOTAL AMOUNT ($)">
+                  <input type="number" min={0} step={0.01} value={manual.totalAmount}
+                    onChange={e => setManual(m => ({ ...m, totalAmount: Number(e.target.value) }))} style={inputStyle} />
+                </Field>
+
+                <Field label="NOTES (optional)">
+                  <textarea value={manual.notes} onChange={e => setManual(m => ({ ...m, notes: e.target.value }))}
+                    rows={3} style={{ ...inputStyle, resize: 'none' as const }} />
+                </Field>
+
+                {selectedCustomer?.hasCardOnFile && (
+                  <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <label style={labelStyle}>PAYMENT METHOD</label>
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                        <input type="radio" name="chargeMode" checked={chargeMode === 'log-only'} onChange={() => setChargeMode('log-only')} />
+                        Log only (no charge)
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                        <input type="radio" name="chargeMode" checked={chargeMode === 'card-on-file'} onChange={() => setChargeMode('card-on-file')} />
+                        Charge card on file
+                      </label>
+                    </div>
+                    {chargeMode === 'card-on-file' && (
+                      loadingCards ? (
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>LOADING CARDS...</div>
+                      ) : cards.length > 0 ? (
+                        <select value={selectedCard?.id || ''} onChange={e => setSelectedCard(cards.find(c => c.id === e.target.value) || null)}
+                          style={{ ...inputStyle, appearance: 'none' as const }}>
+                          {cards.map(c => (
+                            <option key={c.id} value={c.id} style={{ background: '#111' }}>{cardLabel(c)}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>No cards found</div>
+                      )
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input type="checkbox" id="sendSms" checked={manual.sendSms}
+                    onChange={e => setManual(m => ({ ...m, sendSms: e.target.checked }))} />
+                  <label htmlFor="sendSms" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>
+                    SEND CONFIRMATION SMS
+                  </label>
+                </div>
+
+                {submitError && (
+                  <div style={{ color: '#ff6b6b', fontSize: 12 }}>{submitError}</div>
+                )}
+
+                <button type="submit" disabled={submitting || submitSuccess}
+                  style={{
+                    background: submitSuccess ? '#4ade80' : '#fff', border: 'none',
+                    padding: '14px', cursor: submitting ? 'wait' : 'pointer',
+                    fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 500,
+                    letterSpacing: '0.15em', color: '#080808',
+                  }}>
+                  {submitLabel}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

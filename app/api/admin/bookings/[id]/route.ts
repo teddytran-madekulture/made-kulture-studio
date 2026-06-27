@@ -13,13 +13,37 @@ function isAuthed(req: NextRequest) {
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { status } = await req.json()
+  const body = await req.json()
+  const updates: Record<string, any> = {}
+
+  if (body.status       !== undefined) updates.status       = body.status
+  if (body.start_time   !== undefined) updates.start_time   = body.start_time
+  if (body.end_time     !== undefined) updates.end_time     = body.end_time
+  if (body.notes        !== undefined) updates.notes        = body.notes
+  if (body.total_amount !== undefined) updates.total_amount = body.total_amount
+
+  // Resolve set name to set_id
+  if (body.setName !== undefined) {
+    if (!body.setName || body.setName === 'Full Studio Takeover') {
+      updates.set_id = null
+    } else {
+      const { data: setData } = await supabase
+        .from('sets').select('id').eq('name', body.setName).single()
+      updates.set_id = setData?.id ?? null
+    }
+  }
 
   const { error } = await supabase
-    .from('bookings')
-    .update({ status })
-    .eq('id', params.id)
+    .from('bookings').update(updates).eq('id', params.id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    const isConflict = error.code === '23P01'
+      || error.message?.includes('no_overlap')
+      || error.message?.includes('conflicts')
+    return NextResponse.json(
+      { error: isConflict ? 'This time slot conflicts with another booking.' : error.message },
+      { status: isConflict ? 409 : 500 }
+    )
+  }
   return NextResponse.json({ success: true })
 }
