@@ -1,21 +1,21 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-function getNext() {
-  if (typeof window === 'undefined') return '/account'
-  return new URLSearchParams(window.location.search).get('next') ?? '/account'
-}
-
 export default function SignupPage() {
   const router = useRouter()
+  const [nextUrl, setNextUrl]  = useState('/account')
   const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
   const supabase = createClient()
+
+  useEffect(() => {
+    setNextUrl(new URLSearchParams(window.location.search).get('next') ?? '/account')
+  }, [])
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -28,7 +28,7 @@ export default function SignupPage() {
       password: form.password,
       options: {
         data: { full_name: form.full_name, phone: form.phone },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${getNext()}`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
       },
     })
     if (error) { setError(error.message); setLoading(false) }
@@ -39,7 +39,7 @@ export default function SignupPage() {
     setLoading(true)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${getNext()}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}` },
     })
   }
 
@@ -73,7 +73,7 @@ export default function SignupPage() {
         </h1>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 32 }}>
           Already have one?{' '}
-          <Link href={`/login?next=${getNext()}`} style={{ color: '#fff', textDecoration: 'underline' }}>Sign in</Link>
+          <Link href={`/login?next=${nextUrl}`} style={{ color: '#fff', textDecoration: 'underline' }}>Sign in</Link>
         </p>
 
         {/* Google */}

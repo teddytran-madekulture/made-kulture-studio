@@ -4,23 +4,20 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-function getNext() {
-  if (typeof window === 'undefined') return '/account'
-  return new URLSearchParams(window.location.search).get('next') ?? '/account'
-}
-
 export default function LoginPage() {
   const router = useRouter()
+  const [nextUrl, setNextUrl]   = useState('/account')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const supabase = createClient()
 
-  // If already logged in, redirect
   useEffect(() => {
+    const n = new URLSearchParams(window.location.search).get('next') ?? '/account'
+    setNextUrl(n)
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace(getNext())
+      if (user) router.replace(n)
     })
   }, [])
 
@@ -29,14 +26,14 @@ export default function LoginPage() {
     setLoading(true); setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false) }
-    else router.push(getNext())
+    else router.push(nextUrl)
   }
 
   const signInGoogle = async () => {
     setLoading(true)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${getNext()}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}` },
     })
   }
 
@@ -60,7 +57,7 @@ export default function LoginPage() {
         </h1>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 32 }}>
           New here?{' '}
-          <Link href={`/signup?next=${next}`} style={{ color: '#fff', textDecoration: 'underline' }}>Create an account</Link>
+          <Link href={`/signup?next=${nextUrl}`} style={{ color: '#fff', textDecoration: 'underline' }}>Create an account</Link>
         </p>
 
         {/* Google */}
