@@ -171,7 +171,6 @@ function BookingWizard() {
 
   const handleHourClick = (h: number) => {
     if (isHourBooked(h)) return
-    if (h % 1 !== 0) return  // only whole-hour bookings allowed
     if (selecting === 'start') {
       setBooking(b => ({ ...b, startHour: h, endHour: null }))
       setSelecting('end')
@@ -180,6 +179,8 @@ function BookingWizard() {
         setBooking(b => ({ ...b, startHour: h, endHour: null }))
         return
       }
+      // End time must be a whole number of hours after start (no 30-min durations)
+      if ((h - (booking.startHour ?? 0)) % 1 !== 0) return
       // Check no booked slot in range
       const start = booking.startHour!
       const hasConflict = bookedSlots.some(b => b.start < h && b.end > start)
@@ -367,24 +368,26 @@ function BookingWizard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
               {SLOTS.map(h => {
                 const booked    = isHourBooked(h)
-                const isHalf    = h % 1 !== 0  // :30 slots — display-only, not bookable
+                // When picking end time, only allow slots that are whole hours after start
+                const isInvalidEnd = selecting === 'end' && booking.startHour !== null
+                                     && (h - booking.startHour) % 1 !== 0
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)
                 const isPending = booking.startHour === h && booking.endHour === null
 
                 let bg = '#0d0d0d'
-                let color = isHalf ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                let color = isInvalidEnd ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
                 if (inRange)      { bg = 'rgba(255,255,255,0.12)'; color = '#fff' }
                 if (start || end) { bg = '#fff'; color = '#080808' }
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
-                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isHalf}
+                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: booked ? 'not-allowed' : isHalf ? 'default' : 'pointer',
+                      cursor: booked ? 'not-allowed' : isInvalidEnd ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
