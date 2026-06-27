@@ -133,7 +133,7 @@ export default function AvailabilityPage() {
             CHECK WHAT'S OPEN
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 16, maxWidth: 500 }}>
-            Pick a date to see real-time availability across all 9 sets. Click any open slot to book it instantly.
+            Pick a date to see real-time availability across all 10 sets. Click any open slot to book it instantly.
           </p>
         </div>
 
@@ -183,7 +183,7 @@ export default function AvailabilityPage() {
             {/* Column headers */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '72px repeat(9, 1fr)',
+              gridTemplateColumns: '72px repeat(10, 1fr)',
               gap: 4,
               marginBottom: 4,
             }}>
@@ -209,7 +209,7 @@ export default function AvailabilityPage() {
               HOURS.map(hour => (
                 <div key={hour} style={{
                   display: 'grid',
-                  gridTemplateColumns: '72px repeat(9, 1fr)',
+                  gridTemplateColumns: '72px repeat(10, 1fr)',
                   gap: 4,
                   marginBottom: 4,
                 }}>
