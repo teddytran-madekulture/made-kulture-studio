@@ -68,16 +68,20 @@ export default function Home() {
         )}
       </nav>
 
-      {/* Mobile menu drawer */}
+      {/* Mobile menu — full-screen, bold */}
       {isMobile && menuOpen && (
-        <div style={{ position: 'fixed', top: 72, left: 0, right: 0, zIndex: 99, background: 'rgba(8,8,8,0.98)', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', padding: '12px 0' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99, background: '#080808', display: 'flex', flexDirection: 'column', padding: '104px 24px 40px' }}>
           {['HOME','SETS','GEAR','STUDIO RULES','AVAILABILITY','BOOK'].map(item => (
             <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase().replace(/ /g, '-')}`}
               onClick={() => setMenuOpen(false)}
-              style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 500, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '14px 24px' }}>
+              style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: '#fff', textDecoration: 'none', padding: '6px 0' }}>
               {item}
             </Link>
           ))}
+          <div style={{ marginTop: 'auto', paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="label" style={{ marginBottom: 6 }}>MADE KULTURE / HOUSTON</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>4825 Gulf Fwy, Houston TX · (832) 408-1631</div>
+          </div>
         </div>
       )}
 
@@ -114,9 +118,13 @@ export default function Home() {
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
             Madekulture is a multi-set creative studio built for photographers, videographers, brands, and creators. Bring your ideas to life.
           </p>
-          <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
-            <Link href="/book?type=set" className="btn">BOOK A SET ↗</Link>
-            <Link href="/book?type=studio" className="btn btn-ghost">BOOK THE STUDIO ↗</Link>
+          <div style={{ display:'flex', gap:16, flexWrap:'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
+            <Link href="/book?type=set" className="btn" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
+              <span>BOOK A SET</span><span>↗</span>
+            </Link>
+            <Link href="/book?type=studio" className="btn btn-ghost" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
+              <span>BOOK THE STUDIO</span><span>↗</span>
+            </Link>
           </div>
         </div>
       </section>
