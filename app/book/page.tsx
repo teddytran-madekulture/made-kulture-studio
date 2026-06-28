@@ -81,18 +81,26 @@ function today() {
 
 type BookingType = 'set' | 'studio'
 
+interface GearLine { id: string; name: string; rate: number; quantity: number }
+
 interface BookingState {
   type:        BookingType | null
   setId:       string | null
   date:        string
   startHour:   number | null
   endHour:     number | null   // exclusive — endHour=14 means session ends at 2pm
-  equipment:   string[]
+  equipment:   GearLine[]      // gear cart: DB equipment id + quantity
   name:        string
   email:       string
   phone:       string
   notes:       string
   smsConsent:  boolean
+}
+
+const GEAR_CART_KEY = 'mk_gear_cart'
+function loadGearCart(): GearLine[] {
+  if (typeof window === 'undefined') return []
+  try { return JSON.parse(localStorage.getItem(GEAR_CART_KEY) || '[]') } catch { return [] }
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -118,6 +126,23 @@ function BookingWizard() {
     equipment: [],
     name: '', email: '', phone: '', notes: '', smsConsent: false,
   })
+  // Pull any gear the customer added on the /gear page into this booking,
+  // and re-sync whenever they return to this tab (e.g. after adding on /gear).
+  useEffect(() => {
+    const sync = () => {
+      const cart = loadGearCart()
+      setBooking(b => ({ ...b, equipment: cart }))
+    }
+    sync()
+    window.addEventListener('focus', sync)
+    return () => window.removeEventListener('focus', sync)
+  }, [])
+
+  // Keep edits made here in step 5 mirrored to the shared gear cart.
+  const updateGear = (lines: GearLine[]) => {
+    setBooking(b => ({ ...b, equipment: lines }))
+    try { localStorage.setItem(GEAR_CART_KEY, JSON.stringify(lines)) } catch {}
+  }
   const [bookedSlots,      setBookedSlots]      = useState<{ start: number; end: number }[]>([])
   const [loadingSlots,     setLoadingSlots]     = useState(false)
   const [submitted,        setSubmitted]        = useState(false)
@@ -166,10 +191,7 @@ function BookingWizard() {
                         : standardSetRate
 
   const equipDiscount   = pricingOverrides?.equipment_discount_percent
-  const equipTotal      = booking.equipment.reduce((sum, id) => {
-    const eq = EQUIPMENT.find(e => e.id === id)
-    return sum + (eq?.price ?? 0)
-  }, 0)
+  const equipTotal      = booking.equipment.reduce((sum, l) => sum + l.rate * l.quantity, 0)
   const discountedEquipTotal = equipDiscount
     ? Math.round(equipTotal * (1 - Number(equipDiscount) / 100))
     : equipTotal
@@ -440,42 +462,47 @@ function BookingWizard() {
         {/* ── STEP 5: Add-ons ── */}
         {((step === 5 && booking.type === 'set') || (step === 4 && booking.type === 'studio')) && (
           <StepWrapper title="ADD EQUIPMENT">
-            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 32 }}>
-              All equipment is in-studio only. Your set already includes one Amaran 200x light. Add extras below.
+            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 24 }}>
+              All equipment is in-studio only. Your set already includes one Amaran 200x light. Browse the full catalog and build your kit — anything you add appears here.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
-              {EQUIPMENT.map(eq => {
-                const selected = booking.equipment.includes(eq.id)
-                return (
-                  <button key={eq.id}
-                    onClick={() => setBooking(b => ({
-                      ...b,
-                      equipment: selected
-                        ? b.equipment.filter(id => id !== eq.id)
-                        : [...b.equipment, eq.id],
-                    }))}
-                    style={{
-                      background: selected ? 'rgba(255,255,255,0.08)' : '#0d0d0d',
-                      border: 'none', padding: '20px 24px', cursor: 'pointer', textAlign: 'left',
-                      display: 'flex', alignItems: 'center', gap: 16, transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLButtonElement).style.background = '#111' }}
-                    onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLButtonElement).style.background = '#0d0d0d' }}
-                  >
-                    <div style={{
-                      width: 18, height: 18, border: `1px solid ${selected ? '#fff' : 'rgba(255,255,255,0.25)'}`,
-                      background: selected ? '#fff' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {selected && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
+
+            <a href="/gear" target="_blank" rel="noopener noreferrer" style={{
+              display: 'inline-block', background: 'transparent', border: '1px solid rgba(255,255,255,0.25)',
+              color: '#fff', padding: '11px 22px', textDecoration: 'none', marginBottom: 28,
+              fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
+            }}>
+              BROWSE GEAR CATALOG ↗
+            </a>
+
+            {booking.equipment.length === 0 ? (
+              <div style={{ background: '#0d0d0d', border: '1px dashed rgba(255,255,255,0.12)', padding: '28px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 32 }}>
+                No gear added yet. This step is optional — continue, or browse the catalog above to add equipment.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 32 }}>
+                {booking.equipment.map(l => (
+                  <div key={l.id} style={{ background: '#0d0d0d', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'Inter', fontSize: 13, marginBottom: 2 }}>{l.name}</div>
+                      <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>${l.rate} × {l.quantity} = ${l.rate * l.quantity}</div>
                     </div>
-                    <div>
-                      <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff', marginBottom: 2 }}>{eq.name}</div>
-                      <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.08em' }}>${eq.price}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button onClick={() => updateGear(booking.equipment.flatMap(x => x.id === l.id ? (x.quantity > 1 ? [{ ...x, quantity: x.quantity - 1 }] : []) : [x]))}
+                        style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 28, height: 28, cursor: 'pointer', fontSize: 16 }}>−</button>
+                      <span style={{ fontSize: 13, minWidth: 18, textAlign: 'center' }}>{l.quantity}</span>
+                      <button onClick={() => updateGear(booking.equipment.map(x => x.id === l.id ? { ...x, quantity: x.quantity + 1 } : x))}
+                        style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 28, height: 28, cursor: 'pointer', fontSize: 16 }}>+</button>
+                      <button onClick={() => updateGear(booking.equipment.filter(x => x.id !== l.id))}
+                        style={{ background: 'transparent', border: 'none', color: 'rgba(220,120,120,0.7)', width: 28, height: 28, cursor: 'pointer', fontSize: 16 }}>×</button>
                     </div>
-                  </button>
-                )
-              })}
-            </div>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: 'rgba(255,255,255,0.03)' }}>
+                  <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)' }}>GEAR SUBTOTAL</span>
+                  <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20 }}>${equipTotal}</span>
+                </div>
+              </div>
+            )}
             <NavRow onBack={back} onNext={next} canNext={true} nextLabel="CONTINUE" />
           </StepWrapper>
         )}
@@ -575,10 +602,9 @@ function BookingWizard() {
                 {booking.equipment.length > 0 && (
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 24, marginBottom: 24 }}>
                     <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>EQUIPMENT</div>
-                    {booking.equipment.map(id => {
-                      const eq = EQUIPMENT.find(e => e.id === id)
-                      return eq ? <Row key={id} label={eq.name} value={`$${eq.price}`} /> : null
-                    })}
+                    {booking.equipment.map(l => (
+                      <Row key={l.id} label={l.quantity > 1 ? `${l.name} × ${l.quantity}` : l.name} value={`$${l.rate * l.quantity}`} />
+                    ))}
                   </div>
                 )}
 
@@ -726,7 +752,7 @@ function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRa
           date:       booking.date,
           startHour:  booking.startHour,
           endHour:    booking.endHour,
-          equipment:  booking.equipment,
+          equipment:  booking.equipment.map(l => ({ equipment_id: l.id, quantity: l.quantity })),
           name:       booking.name,
           email:      booking.email,
           phone:      booking.phone,
@@ -740,6 +766,7 @@ function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRa
         setPaying(false)
         return
       }
+      try { localStorage.removeItem('mk_gear_cart') } catch {}
       onSuccess()
     } catch {
       setPayError('Something went wrong. Please try again.')

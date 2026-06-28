@@ -5,6 +5,7 @@ import twilio from 'twilio'
 import { randomUUID } from 'crypto'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged-customer'
+import { checkCartAvailability } from '@/lib/equipment-availability'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -38,8 +39,8 @@ interface BookingRequest {
   startHour:  number         // 9–21
   endHour:    number         // 10–22
 
-  // Equipment add-on IDs
-  equipment: string[]
+  // Equipment add-ons: DB equipment id + quantity
+  equipment: { equipment_id: string; quantity: number }[]
 
   // Customer
   name:  string
@@ -99,7 +100,7 @@ const EQUIPMENT_PRICES: Record<string, number> = {
   'eq-13': 150, 'eq-14': 65,
 }
 
-function verifyTotal(body: BookingRequest, pricingOverrides?: any): number {
+function verifyTotal(body: BookingRequest, equipRates: Record<string, number>, pricingOverrides?: any): number {
   const hours = body.endHour - body.startHour
 
   let setRate = body.type === 'studio' ? 400 : (SET_PRICES[body.setSlug ?? ''] ?? 0)
@@ -111,7 +112,8 @@ function verifyTotal(body: BookingRequest, pricingOverrides?: any): number {
   }
 
   const spaceTotal = setRate * hours
-  let equipTotal   = body.equipment.reduce((sum, id) => sum + (EQUIPMENT_PRICES[id] ?? 0), 0)
+  let equipTotal   = (body.equipment ?? []).reduce(
+    (sum, l) => sum + (equipRates[l.equipment_id] ?? 0) * (l.quantity ?? 1), 0)
   if (pricingOverrides?.equipment_discount_percent) {
     equipTotal = Math.round(equipTotal * (1 - Number(pricingOverrides.equipment_discount_percent) / 100))
   }
@@ -204,10 +206,35 @@ export async function POST(req: NextRequest) {
       customerPricingOverrides = custPricing?.pricing_overrides ?? null
     }
 
-    // 2. Verify price server-side (prevent tampering)
-    // Use custom pricing if available; also accept standard rate in case client showed standard price
-    const standardCents = verifyTotal(body)
-    const customCents   = customerPricingOverrides ? verifyTotal(body, customerPricingOverrides) : standardCents
+    // 2. Equipment: gather requested quantities + authoritative DB rates
+    const equipIds = (body.equipment ?? []).map(l => l.equipment_id)
+    const requested: Record<string, number> = {}
+    for (const l of body.equipment ?? []) {
+      requested[l.equipment_id] = (requested[l.equipment_id] ?? 0) + (l.quantity ?? 1)
+    }
+    const equipRates: Record<string, number> = {}
+    if (equipIds.length) {
+      const { data: equipRows } = await supabase.from('equipment').select('id, rate').in('id', equipIds)
+      for (const e of equipRows ?? []) equipRates[e.id] = Number(e.rate)
+    }
+
+    // 2a. Inventory guard — confirm the gear is free for this window
+    if (equipIds.length) {
+      const winStart = hoursToISO(body.date, body.startHour)
+      const winEnd   = hoursToISO(body.date, body.endHour)
+      const avail = await checkCartAvailability(supabase, winStart, winEnd, requested)
+      if (!avail.ok) {
+        const msg = avail.conflicts.map(c => `${c.name} (requested ${c.requested}, ${c.available} free)`).join('; ')
+        return NextResponse.json(
+          { error: `Some equipment isn't available for that time: ${msg}. Please adjust your kit.` },
+          { status: 409 }
+        )
+      }
+    }
+
+    // 2b. Verify price server-side (prevent tampering)
+    const standardCents = verifyTotal(body, equipRates)
+    const customCents   = customerPricingOverrides ? verifyTotal(body, equipRates, customerPricingOverrides) : standardCents
     const verifiedCents = customCents // charge the customer-specific rate
 
     if (body.totalCents !== standardCents && body.totalCents !== customCents) {
@@ -349,14 +376,16 @@ export async function POST(req: NextRequest) {
       // TODO: trigger reconciliation alert
     }
 
-    // 9. Insert equipment add-ons
-    if (bookingData?.id && body.equipment.length > 0) {
-      const addons = body.equipment.map(eqSlug => ({
-        booking_id:    bookingData.id,
-        equipment_name: eqSlug,
-        price:         EQUIPMENT_PRICES[eqSlug] ?? 0,
+    // 9. Insert equipment add-ons (persists which gear + qty is on this booking)
+    if (bookingData?.id && (body.equipment?.length ?? 0) > 0) {
+      const addons = body.equipment.map(l => ({
+        booking_id:   bookingData.id,
+        equipment_id: l.equipment_id,
+        quantity:     l.quantity,
+        rate:         equipRates[l.equipment_id] ?? 0,
       }))
-      await supabase.from('booking_addons').insert(addons)
+      const { error: addonErr } = await supabase.from('booking_add_ons').insert(addons)
+      if (addonErr) console.error('[bookings] add-on insert error:', addonErr)
     }
 
     // 10. Check for flagged customer + alert owner (non-blocking)
