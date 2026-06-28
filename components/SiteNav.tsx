@@ -50,24 +50,30 @@ export default function SiteNav({ active }: { active?: string }) {
             {menuOpen ? '✕' : '☰'}
           </button>
         ) : (
-          <div style={{ display: 'flex', gap: 36, alignItems: 'center' }}>
-            {LINKS.map(l => (
-              <Link key={l.label} href={l.href}
-                style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none', transition: 'color 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-                onMouseLeave={e => (e.currentTarget.style.color = isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)')}
-              >{l.label}</Link>
-            ))}
-            <NavAuthLink />
-            <Link href="/book" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 16,
-              background: '#fff', color: '#080808', padding: '10px 18px', textDecoration: 'none',
-              fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.2em',
-            }}>
-              BOOK NOW
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-            </Link>
-          </div>
+          <>
+            {/* Centered nav links */}
+            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', gap: 36, alignItems: 'center' }}>
+              {LINKS.map(l => (
+                <Link key={l.label} href={l.href}
+                  style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none', transition: 'color 0.2s' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                  onMouseLeave={e => (e.currentTarget.style.color = isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)')}
+                >{l.label}</Link>
+              ))}
+            </div>
+            {/* Right-side actions */}
+            <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+              <NavAuthLink />
+              <Link href="/book" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 16,
+                background: '#fff', color: '#080808', padding: '10px 18px', textDecoration: 'none',
+                fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.2em',
+              }}>
+                BOOK NOW
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+              </Link>
+            </div>
+          </>
         )}
       </nav>
 

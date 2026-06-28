@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import NavAuthLink from '@/components/NavAuthLink'
+import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
 const SETS = [
@@ -27,72 +27,13 @@ const FAQS = [
 
 export default function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const isMobile = useIsMobile()
-  const [scrolled, setScrolled] = useState(false)
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
 
       {/* NAV */}
-      <nav style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: isMobile ? '16px 20px' : '20px 40px',
-        background: (scrolled || (isMobile && menuOpen)) ? '#080808' : 'transparent',
-        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
-        transition: 'background 0.3s ease, border-color 0.3s ease, padding 0.3s ease',
-      }}>
-        <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
-            MADE<br />KULTURE
-          </div>
-        </Link>
-
-        {isMobile ? (
-          <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu"
-            style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, cursor: 'pointer', padding: 4 }}>
-            {menuOpen ? '✕' : '☰'}
-          </button>
-        ) : (
-          <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
-            {['HOME','SETS','STUDIO RULES','AVAILABILITY','BOOK'].map(item => (
-              <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase().replace(/ /g, '-')}`}
-                style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', transition: 'color 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
-              >{item}</Link>
-            ))}
-            <NavAuthLink />
-            <Link href="/book" className="btn" style={{ padding: '10px 20px', fontSize: 11 }}>
-              BOOK NOW ↗
-            </Link>
-          </div>
-        )}
-      </nav>
-
-      {/* Mobile menu — full-screen, bold */}
-      {isMobile && menuOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99, background: '#080808', display: 'flex', flexDirection: 'column', padding: '104px 24px 40px' }}>
-          {['HOME','SETS','GEAR','STUDIO RULES','AVAILABILITY','BOOK'].map(item => (
-            <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase().replace(/ /g, '-')}`}
-              onClick={() => setMenuOpen(false)}
-              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: '#fff', textDecoration: 'none', padding: '6px 0' }}>
-              {item}
-            </Link>
-          ))}
-          <div style={{ marginTop: 'auto', paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            <div className="label" style={{ marginBottom: 6 }}>MADE KULTURE / HOUSTON</div>
-            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>4825 Gulf Fwy, Houston TX · (832) 408-1631</div>
-          </div>
-        </div>
-      )}
+      <SiteNav active="home" />
 
       {/* HERO */}
       <section style={{
