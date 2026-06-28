@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
 // Google "G" logo SVG
@@ -24,13 +24,12 @@ export default function AdminLogin() {
   const [error,       setError]       = useState('')
   const [loading,     setLoading]     = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const router       = useRouter()
-  const searchParams = useSearchParams()
+  const router = useRouter()
 
   useEffect(() => {
-    const err = searchParams.get('error')
-    if (err) setError(err)
-  }, [searchParams])
+    const err = new URLSearchParams(window.location.search).get('error')
+    if (err) setError(decodeURIComponent(err))
+  }, [])
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
