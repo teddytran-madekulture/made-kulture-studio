@@ -182,8 +182,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
           <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Cancellation Policy</p>
           <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
             <li style="margin-bottom:6px;"><strong style="color:#ddd;">48+ hours before:</strong> Full refund.</li>
-            <li style="margin-bottom:6px;"><strong style="color:#ddd;">24–48 hours before:</strong> 50% refund (excluding fees).</li>
-            <li><strong style="color:#ddd;">Less than 24 hours:</strong> No refund.</li>
+            <li><strong style="color:#ddd;">Less than 48 hours:</strong> No refund.</li>
           </ul>
           <p style="margin:10px 0 0;font-size:12px;color:#666;">To cancel or reschedule, use the button above or text us at (832) 408-1631.</p>
         </td>
@@ -322,6 +321,100 @@ export async function sendCancellationEmail(data: CancellationData) {
   `
 
   const defaultSubject = `Booking Cancelled — ${setName} on ${date}`
+  const subject = customSubject
+    ? fillSubject(customSubject, { set: setName, date, customer: customerName })
+    : defaultSubject
+
+  return getResend().emails.send({
+    from: FROM_EMAIL,
+    replyTo: REPLY_TO,
+    to: customerEmail,
+    subject,
+    html: layout(body),
+  })
+}
+
+// ─── 24-hour reminder (to customer) ──────────────────────────────────────────
+interface BookingReminderData {
+  customerName: string
+  customerEmail: string
+  setName: string
+  date: string        // e.g. "Sat, Jul 12"
+  startTime: string   // e.g. "2pm"
+  endTime: string     // e.g. "5pm"
+  totalAmount: number
+  bookingId: string
+}
+
+export async function sendBookingReminder(data: BookingReminderData) {
+  const { enabled, subject: customSubject } = await getTemplateSettings('booking_reminder')
+  if (!enabled) return null
+
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId } = data
+
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;">Your Shoot is Tomorrow</h1>
+    <p style="margin:0 0 28px;font-size:14px;color:#999;">Hey ${customerName} — just a quick reminder about your session at Made Kulture.</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:28px;">
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
+          <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Studio Set</span><br/>
+          <span style="font-size:15px;color:#fff;font-weight:600;">${setName}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
+          <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Date</span><br/>
+          <span style="font-size:15px;color:#fff;font-weight:600;">${date}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
+          <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Time</span><br/>
+          <span style="font-size:15px;color:#fff;font-weight:600;">${startTime} – ${endTime}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;">
+          <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Total Charged</span><br/>
+          <span style="font-size:15px;color:#fff;font-weight:600;">$${totalAmount.toFixed(2)}</span>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Directions CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td align="center">
+          <a href="https://maps.google.com/?q=4825+Gulf+Freeway+Houston+TX+77023" style="display:inline-block;background:#fff;color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 32px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">Get Directions</a>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Arrival tips -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:16px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">A Few Things to Know</p>
+          <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
+            <li style="margin-bottom:6px;">You may arrive up to <strong style="color:#ddd;">15 minutes early</strong> — all setup and breakdown must happen within your booked time.</li>
+            <li style="margin-bottom:6px;">Drive to the <strong style="color:#ddd;">back of the building</strong> for entrance and street parking.</li>
+            <li style="margin-bottom:6px;">Return all props to their original spots before you leave.</li>
+            <li>Questions before you arrive? Text us at <a href="sms:+18324081631" style="color:${ACCENT_COLOR};text-decoration:none;">(832) 408-1631</a>.</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Manage booking -->
+    <p style="margin:16px 0 4px;font-size:13px;color:#666;">Need to cancel? Cancellations within 48 hours are non-refundable.</p>
+    <p style="margin:0 0 24px;font-size:13px;color:#666;">To manage your booking, visit <a href="https://madekulture.com/account" style="color:${ACCENT_COLOR};text-decoration:none;">madekulture.com/account</a>.</p>
+
+    <p style="margin:0;font-size:11px;color:#555;">Booking reference: #${bookingId.slice(0, 8).toUpperCase()}</p>
+  `
+
+  const defaultSubject = `See you tomorrow — ${setName} at ${startTime}`
   const subject = customSubject
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
