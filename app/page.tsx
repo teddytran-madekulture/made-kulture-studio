@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 const SETS = [
   { num: '01', name: 'Set A',             price: '$40', desc: '12×15ft white cinderblock walls, large windows',      photo: '/images/sets/set-a.jpg',           gradient: 'linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)' },
@@ -27,6 +28,7 @@ const FAQS = [
 export default function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const isMobile = useIsMobile()
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
@@ -44,25 +46,45 @@ export default function Home() {
           </div>
         </Link>
 
-        <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
-          {['HOME','SETS','STUDIO RULES','AVAILABILITY','BOOK'].map(item => (
-            <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase().replace(/ /g, '-')}`}
-              style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', transition: 'color 0.2s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
-            >{item}</Link>
-          ))}
-          <NavAuthLink />
-          <Link href="/book" className="btn" style={{ padding: '10px 20px', fontSize: 11 }}>
-            BOOK NOW ↗
-          </Link>
-        </div>
+        {isMobile ? (
+          <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu"
+            style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, cursor: 'pointer', padding: 4 }}>
+            {menuOpen ? '✕' : '☰'}
+          </button>
+        ) : (
+          <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
+            {['HOME','SETS','STUDIO RULES','AVAILABILITY','BOOK'].map(item => (
+              <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase().replace(/ /g, '-')}`}
+                style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
+              >{item}</Link>
+            ))}
+            <NavAuthLink />
+            <Link href="/book" className="btn" style={{ padding: '10px 20px', fontSize: 11 }}>
+              BOOK NOW ↗
+            </Link>
+          </div>
+        )}
       </nav>
+
+      {/* Mobile menu drawer */}
+      {isMobile && menuOpen && (
+        <div style={{ position: 'fixed', top: 72, left: 0, right: 0, zIndex: 99, background: 'rgba(8,8,8,0.98)', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', padding: '12px 0' }}>
+          {['HOME','SETS','GEAR','STUDIO RULES','AVAILABILITY','BOOK'].map(item => (
+            <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase().replace(/ /g, '-')}`}
+              onClick={() => setMenuOpen(false)}
+              style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 500, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '14px 24px' }}>
+              {item}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* HERO */}
       <section style={{
         position: 'relative', height: '100vh', display: 'flex', alignItems: 'flex-end',
-        padding: '0 40px 80px', border: 'none', overflow: 'hidden',
+        padding: isMobile ? '0 20px 60px' : '0 40px 80px', border: 'none', overflow: 'hidden',
       }}>
         {/* Background — replace src with real studio photo */}
         <div style={{
@@ -73,11 +95,13 @@ export default function Home() {
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(8,8,8,1) 0%, rgba(8,8,8,0.3) 60%, transparent 100%)' }} />
         </div>
 
-        {/* Coordinates */}
-        <div style={{ position:'absolute', top:100, right:40, textAlign:'right' }}>
-          <div className="label">HOUSTON / TX</div>
-          <div className="label" style={{ marginTop:4 }}>29.76°N · 95.36°W</div>
-        </div>
+        {/* Coordinates (hidden on mobile to avoid overlapping the headline) */}
+        {!isMobile && (
+          <div style={{ position:'absolute', top:100, right:40, textAlign:'right' }}>
+            <div className="label">HOUSTON / TX</div>
+            <div className="label" style={{ marginTop:4 }}>29.76°N · 95.36°W</div>
+          </div>
+        )}
 
         <div style={{ position:'relative', zIndex:1, maxWidth:700 }}>
           <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24 }}>
@@ -98,7 +122,7 @@ export default function Home() {
       </section>
 
       {/* FEATURES BAR */}
-      <section style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)' }}>
+      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(5,1fr)' }}>
         {[
           { icon:'⊞', title:'MULTIPLE SETS', desc:'Centrally located 4825 Gulf Fwy. Houston TX 77023' },
           { icon:'◎', title:'PRIVATE OR SHARED', desc:'Book a single set or take over the studio.' },
@@ -115,8 +139,8 @@ export default function Home() {
       </section>
 
       {/* SETS */}
-      <section style={{ padding:'100px 40px' }}>
-        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:64 }}>
+      <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom: isMobile ? 40 : 64, flexWrap:'wrap', gap:24 }}>
           <div>
             <div className="label" style={{ marginBottom:20 }}>EXPLORE OUR SETS</div>
             <h2 style={{ fontSize:'clamp(48px, 7vw, 90px)', color:'#fff', lineHeight:0.9 }}>
@@ -160,7 +184,7 @@ export default function Home() {
       </section>
 
       {/* BOOKING PATHS */}
-      <section style={{ display:'grid', gridTemplateColumns:'1fr 1fr' }}>
+      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
         <div style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24 }}>
           <div className="label">PATH A</div>
           <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color:'#fff' }}>BOOK INDIVIDUAL SET</h2>
@@ -190,12 +214,12 @@ export default function Home() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section style={{ padding:'100px 40px' }}>
+      <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
         <div style={{ marginBottom:80 }}>
           <div className="label" style={{ marginBottom:20 }}>HOW IT WORKS</div>
           <h2 style={{ fontSize:'clamp(48px, 8vw, 100px)', color:'#fff' }}>FROM IDEA<br />TO IN FRAME.</h2>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:1, background:'rgba(255,255,255,0.06)' }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap:1, background:'rgba(255,255,255,0.06)' }}>
           {[
             { n:'01', title:'CHOOSE YOUR SPACE', desc:'Pick a single set for a focused shoot, or take the whole studio for a full-day production.' },
             { n:'02', title:'PICK YOUR WINDOW', desc:'Reserve by the hour, any day of the week. Same-day windows when available.' },
@@ -212,7 +236,7 @@ export default function Home() {
       </section>
 
       {/* BUILT FOR THE OBSESSED */}
-      <section style={{ display:'grid', gridTemplateColumns:'1fr 1fr' }}>
+      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
         {/* Left: image placeholder */}
         <div style={{ background:'rgba(255,255,255,0.03)', minHeight:500, display:'flex', alignItems:'center', justifyContent:'center' }}>
           <span style={{ fontSize:11, color:'rgba(255,255,255,0.15)', letterSpacing:'0.1em' }}>STUDIO PHOTO</span>
@@ -224,7 +248,7 @@ export default function Home() {
           <p style={{ fontSize:15, color:'rgba(255,255,255,0.5)', lineHeight:1.8, maxWidth:440 }}>
             Photographers chasing the right window of light. Directors blocking a one-take scene. Brands shipping a season's campaign in a day. Madekulture is a quiet, considered space that gets out of your way.
           </p>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:1, background:'rgba(255,255,255,0.08)', marginTop:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:1, background:'rgba(255,255,255,0.08)', marginTop:16 }}>
             {[
               { title:'PHOTOGRAPHERS', subs:'EDITORIAL · PORTRAIT · E-COMMERCE' },
               { title:'VIDEOGRAPHERS',  subs:'FILM · MUSIC VIDEOS · COMMERCIAL' },
@@ -241,7 +265,7 @@ export default function Home() {
       </section>
 
       {/* FAQ */}
-      <section style={{ padding:'100px 40px' }}>
+      <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
         <div style={{ textAlign:'center', marginBottom:80 }}>
           <div className="label" style={{ marginBottom:20 }}>FREQUENTLY ASKED</div>
           <h2 style={{ fontSize:'clamp(48px, 8vw, 100px)', color:'#fff' }}>THE FINE PRINT.</h2>
@@ -269,7 +293,7 @@ export default function Home() {
       </section>
 
       {/* CTA */}
-      <section style={{ padding:'100px 40px' }}>
+      <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
         <div className="label" style={{ marginBottom:20 }}>MADEKULTURE / HOUSTON</div>
         <h2 style={{ fontSize:'clamp(64px, 12vw, 160px)', color:'#fff', marginBottom:60 }}>LET'S<br />MAKE IT.</h2>
         <Link href="/book" className="btn">BOOK THE STUDIO ↗</Link>
@@ -277,7 +301,7 @@ export default function Home() {
 
       {/* FOOTER */}
       <footer style={{ borderTop:'1px solid rgba(255,255,255,0.1)', padding:'60px 40px 40px' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', gap:40, marginBottom:60 }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '2fr 1fr 1fr 1fr', gap: isMobile ? 24 : 40, marginBottom:60 }}>
           <div>
             <div style={{ fontFamily:'Bebas Neue, sans-serif', fontSize:22, letterSpacing:'0.05em', color:'#fff', lineHeight:1, marginBottom:20 }}>MADE<br />KULTURE</div>
             <p style={{ fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.7, maxWidth:260 }}>A multi-set creative studio in Houston built for photographers, videographers, brands, and creators.</p>

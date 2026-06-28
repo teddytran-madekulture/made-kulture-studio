@@ -773,7 +773,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 16 }}>
       <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>{label}</span>
-      <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff', textAlign: 'right' }}>{value}</span>
+      <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff', textAlign: 'right', minWidth: 0, overflowWrap: 'anywhere' }}>{value}</span>
     </div>
   )
 }
@@ -813,6 +813,7 @@ interface SquarePaymentPanelProps {
 }
 
 function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRate, onBack, onSuccess }: SquarePaymentPanelProps) {
+  const isMobile = useIsMobile()
   const cardContainerRef    = useRef<HTMLDivElement>(null)
   const googlePayContainerRef = useRef<HTMLDivElement>(null)
   const cardRef             = useRef<any>(null)
@@ -931,7 +932,7 @@ function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRa
 
   return (
     <div>
-      <div style={{ border: '1px solid rgba(255,255,255,0.1)', padding: 32 }}>
+      <div style={{ border: '1px solid rgba(255,255,255,0.1)', padding: isMobile ? 18 : 32 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 24 }}>
           PAYMENT — SECURED BY SQUARE
         </div>
