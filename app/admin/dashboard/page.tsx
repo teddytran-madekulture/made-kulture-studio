@@ -778,10 +778,12 @@ export default function AdminDashboard() {
                   const isEditing = emailEditKey === s.key
                   const isSaving  = emailSaving === s.key
 
+                  const isPreviewing = emailPreviewKey === s.key
+
                   return (
                     <div key={s.key} style={{
                       background: '#0d0d0d',
-                      border: isEditing ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                      border: isEditing || isPreviewing ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.06)',
                       padding: '24px 28px',
                       transition: 'border-color 0.15s',
                     }}>
@@ -817,23 +819,40 @@ export default function AdminDashboard() {
                           <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>{s.description}</p>
                         </div>
 
-                        <button
-                          onClick={() => {
-                            if (isEditing) {
-                              setEmailEditKey(null)
-                            } else {
-                              setEmailEditKey(s.key)
-                              setEmailDraft({ subject: s.subject ?? '' })
-                            }
-                          }}
-                          style={{
-                            background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
-                            color: isEditing ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)',
-                            padding: '6px 16px', cursor: 'pointer',
-                            fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', flexShrink: 0,
-                          }}>
-                          {isEditing ? 'CLOSE' : 'EDIT'}
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                          <button
+                            onClick={() => {
+                              setEmailPreviewKey(isPreviewing ? null : s.key)
+                              if (!isPreviewing) setEmailEditKey(null)
+                            }}
+                            style={{
+                              background: isPreviewing ? 'rgba(212,168,67,0.15)' : 'transparent',
+                              border: isPreviewing ? '1px solid rgba(212,168,67,0.4)' : '1px solid rgba(255,255,255,0.15)',
+                              color: isPreviewing ? '#d4a843' : 'rgba(255,255,255,0.35)',
+                              padding: '6px 16px', cursor: 'pointer',
+                              fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em',
+                            }}>
+                            {isPreviewing ? 'CLOSE' : 'PREVIEW'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (isEditing) {
+                                setEmailEditKey(null)
+                              } else {
+                                setEmailEditKey(s.key)
+                                setEmailDraft({ subject: s.subject ?? '' })
+                                setEmailPreviewKey(null)
+                              }
+                            }}
+                            style={{
+                              background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+                              color: isEditing ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)',
+                              padding: '6px 16px', cursor: 'pointer',
+                              fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em',
+                            }}>
+                            {isEditing ? 'CLOSE' : 'EDIT'}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Subject preview (collapsed) */}
@@ -895,6 +914,24 @@ export default function AdminDashboard() {
                               <span style={{ fontSize: 12, color: '#4ade80' }}>✓ {emailSaveMsg}</span>
                             )}
                           </div>
+                        </div>
+                      )}
+
+                      {/* Preview panel */}
+                      {isPreviewing && (
+                        <div style={{ marginTop: 20, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20 }}>
+                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 12 }}>EMAIL PREVIEW — sample data</div>
+                          <iframe
+                            src={`/api/admin/email-preview/${s.key}`}
+                            style={{
+                              width: '100%',
+                              height: 700,
+                              border: 'none',
+                              borderRadius: 6,
+                              display: 'block',
+                            }}
+                            title={`Preview: ${s.label}`}
+                          />
                         </div>
                       )}
                     </div>
