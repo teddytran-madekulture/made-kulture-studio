@@ -205,7 +205,7 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile'>('list')
   const [calDate,       setCalDate]       = useState(todayStr)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -242,6 +242,17 @@ export default function AdminDashboard() {
   const [submitting,   setSubmitting]   = useState(false)
   const [submitError,  setSubmitError]  = useState('')
   const [submitSuccess,setSubmitSuccess]= useState(false)
+
+  // Profile
+  const [profileMagicSent,  setProfileMagicSent]  = useState(false)
+  const [profileMagicLoading, setProfileMagicLoading] = useState(false)
+  const [profilePwOld,      setProfilePwOld]      = useState('')
+  const [profilePwNew,      setProfilePwNew]      = useState('')
+  const [profilePwConfirm,  setProfilePwConfirm]  = useState('')
+  const [profilePwMsg,      setProfilePwMsg]      = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [profilePwLoading,  setProfilePwLoading]  = useState(false)
+  const [profileShowOld,    setProfileShowOld]    = useState(false)
+  const [profileShowNew,    setProfileShowNew]    = useState(false)
 
   const [emailSettings,    setEmailSettings]    = useState<EmailSetting[]>([])
   const [emailLoading,     setEmailLoading]     = useState(false)
@@ -545,7 +556,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           {/* View toggle */}
           <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.15)', overflow: 'hidden' }}>
-            {([['list', '≡ LIST'], ['calendar', '⊡ CALENDAR'], ['emails', '✉ EMAILS']] as const).map(([v, label]) => (
+            {([['list', '≡ LIST'], ['calendar', '⊡ CALENDAR'], ['emails', '✉ EMAILS'], ['profile', '⊙ PROFILE']] as const).map(([v, label]) => (
               <button key={v} onClick={() => setView(v)} style={{
                 background: view === v ? '#fff' : 'transparent', border: 'none',
                 borderLeft: v !== 'list' ? '1px solid rgba(255,255,255,0.15)' : 'none',
@@ -939,6 +950,199 @@ export default function AdminDashboard() {
                 })}
               </div>
             )}
+
+          </div>
+        )}
+
+        {/* ── PROFILE ───────────────────────────────────────────────────── */}
+        {view === 'profile' && (
+          <div style={{ maxWidth: 600, paddingBottom: 80 }}>
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 8 }}>
+                ACCOUNT
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
+                Manage your admin profile and authentication settings.
+              </p>
+            </div>
+
+            {/* ── Identity card ── */}
+            <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.08)', padding: '28px 32px', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 24 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#d4a843', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: '#000', letterSpacing: '0.05em' }}>TT</span>
+              </div>
+              <div>
+                <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 4 }}>Teddy Tran</div>
+                <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>teddytran@madekulture.com</div>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.12em', color: '#d4a843', background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.25)', padding: '3px 10px' }}>STUDIO OWNER</span>
+              </div>
+            </div>
+
+            {/* ── Auth methods ── */}
+            <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.08)', borderTop: 'none', padding: '24px 32px', marginBottom: 24 }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.35)', marginBottom: 16 }}>SIGN-IN METHODS</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff' }}>Google</div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>teddytran@madekulture.com</div>
+                  </div>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: '#4ade80', letterSpacing: '0.1em' }}>ACTIVE</span>
+                </div>
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                  </svg>
+                  <div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff' }}>Password</div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Admin password set via environment</div>
+                  </div>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: '#4ade80', letterSpacing: '0.1em' }}>ACTIVE</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Change password ── */}
+            <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.08)', padding: '24px 32px', marginBottom: 2 }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.35)', marginBottom: 20 }}>CHANGE PASSWORD</div>
+
+              {profilePwMsg && (
+                <div style={{
+                  marginBottom: 16, padding: '10px 14px', fontSize: 13, fontFamily: 'Inter, sans-serif',
+                  background: profilePwMsg.type === 'success' ? 'rgba(74,222,128,0.08)' : 'rgba(255,107,107,0.08)',
+                  border: `1px solid ${profilePwMsg.type === 'success' ? 'rgba(74,222,128,0.25)' : 'rgba(255,107,107,0.25)'}`,
+                  color: profilePwMsg.type === 'success' ? '#4ade80' : '#ff6b6b',
+                }}>
+                  {profilePwMsg.text}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Current password */}
+                <div>
+                  <label style={labelStyle}>CURRENT PASSWORD</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={profileShowOld ? 'text' : 'password'}
+                      value={profilePwOld}
+                      onChange={e => setProfilePwOld(e.target.value)}
+                      placeholder="Enter current password"
+                      style={{ ...inputStyle, paddingRight: 44 }}
+                    />
+                    <button type="button" onClick={() => setProfileShowOld(v => !v)} tabIndex={-1}
+                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: 4 }}>
+                      {profileShowOld
+                        ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+
+                {/* New password */}
+                <div>
+                  <label style={labelStyle}>NEW PASSWORD</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={profileShowNew ? 'text' : 'password'}
+                      value={profilePwNew}
+                      onChange={e => setProfilePwNew(e.target.value)}
+                      placeholder="Enter new password"
+                      style={{ ...inputStyle, paddingRight: 44 }}
+                    />
+                    <button type="button" onClick={() => setProfileShowNew(v => !v)} tabIndex={-1}
+                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', padding: 4 }}>
+                      {profileShowNew
+                        ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm */}
+                <div>
+                  <label style={labelStyle}>CONFIRM NEW PASSWORD</label>
+                  <input
+                    type="password"
+                    value={profilePwConfirm}
+                    onChange={e => setProfilePwConfirm(e.target.value)}
+                    placeholder="Repeat new password"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <button
+                  disabled={profilePwLoading || !profilePwOld || !profilePwNew || !profilePwConfirm}
+                  onClick={async () => {
+                    if (profilePwNew !== profilePwConfirm) {
+                      setProfilePwMsg({ type: 'error', text: 'New passwords do not match.' }); return
+                    }
+                    if (profilePwNew.length < 8) {
+                      setProfilePwMsg({ type: 'error', text: 'New password must be at least 8 characters.' }); return
+                    }
+                    setProfilePwLoading(true); setProfilePwMsg(null)
+                    const res = await fetch('/api/admin/auth/change-password', {
+                      method: 'POST',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({ currentPassword: profilePwOld, newPassword: profilePwNew }),
+                    })
+                    const data = await res.json()
+                    if (res.ok) {
+                      setProfilePwMsg({ type: 'success', text: 'Password updated successfully. You\'ll use the new password on next login.' })
+                      setProfilePwOld(''); setProfilePwNew(''); setProfilePwConfirm('')
+                    } else {
+                      setProfilePwMsg({ type: 'error', text: data.error || 'Failed to change password.' })
+                    }
+                    setProfilePwLoading(false)
+                  }}
+                  style={{
+                    background: profilePwOld && profilePwNew && profilePwConfirm ? '#fff' : 'rgba(255,255,255,0.08)',
+                    color: profilePwOld && profilePwNew && profilePwConfirm ? '#080808' : 'rgba(255,255,255,0.2)',
+                    border: 'none', padding: '12px 24px', cursor: profilePwLoading ? 'default' : 'pointer',
+                    fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
+                    alignSelf: 'flex-start',
+                  }}>
+                  {profilePwLoading ? 'UPDATING...' : 'UPDATE PASSWORD'}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Magic link / forgot ── */}
+            <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.08)', borderTop: 'none', padding: '20px 32px', marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff', marginBottom: 4 }}>Forgot your password?</div>
+                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Send a one-time sign-in link to teddytran@madekulture.com</div>
+                </div>
+                {profileMagicSent ? (
+                  <span style={{ fontSize: 12, color: '#4ade80', whiteSpace: 'nowrap' }}>✓ Email sent</span>
+                ) : (
+                  <button
+                    disabled={profileMagicLoading}
+                    onClick={async () => {
+                      setProfileMagicLoading(true)
+                      await fetch('/api/admin/auth/magic', { method: 'POST' })
+                      setProfileMagicSent(true)
+                      setProfileMagicLoading(false)
+                    }}
+                    style={{
+                      background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 18px',
+                      cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)',
+                      whiteSpace: 'nowrap', flexShrink: 0,
+                    }}>
+                    {profileMagicLoading ? 'SENDING...' : 'SEND LINK'}
+                  </button>
+                )}
+              </div>
+            </div>
 
           </div>
         )}

@@ -1,13 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
+import { createClient } from '@supabase/supabase-js'
+
+// ── Supabase (service role — for password overrides stored in admin_config) ────
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
+// Hashes a password with a fixed pepper for storage in Supabase
+function hashPassword(pw: string): string {
+  return createHmac('sha256', 'made-kulture-pw-v1').update(pw).digest('hex')
+}
+
+// ── Password verification (Supabase override → env var fallback) ───────────────
+export async function verifyAdminPassword(pw: string): Promise<boolean> {
+  try {
+    const { data } = await getSupabase()
+      .from('admin_config')
+      .select('value')
+      .eq('key', 'admin_password_hash')
+      .single()
+    if (data?.value) return hashPassword(pw) === data.value
+  } catch {}
+  // Fall back to plain env var comparison
+  return pw === process.env.ADMIN_PASSWORD
+}
+
+// ── Change password (writes hash to Supabase admin_config) ────────────────────
+export async function changeAdminPassword(
+  currentPw: string, newPw: string
+): Promise<{ success: boolean; error?: string }> {
+  const valid = await verifyAdminPassword(currentPw)
+  if (!valid) return { success: false, error: 'Current password is incorrect.' }
+  try {
+    const { error } = await getSupabase().from('admin_config').upsert({
+      key: 'admin_password_hash',
+      value: hashPassword(newPw),
+      updated_at: new Date().toISOString(),
+    })
+    if (error) throw error
+    return { success: true }
+  } catch {
+    return { success: false, error: 'Could not save new password — run the admin_config migration in Supabase first.' }
+  }
+}
 
 // ── Signing key ────────────────────────────────────────────────────────────────
-// Derives a stable signing secret from ADMIN_PASSWORD so we never store or
-// compare the raw password in cookies.
+// Uses SESSION_SECRET if set, otherwise falls back to ADMIN_PASSWORD.
+// Kept separate from the login password so changing the password doesn't
+// invalidate active sessions.
 function signingKey(): string {
-  const pw = process.env.ADMIN_PASSWORD
-  if (!pw) return 'dev-fallback'
-  return createHmac('sha256', pw).update('made-kulture-admin-cookie-v1').digest('hex')
+  const secret = process.env.SESSION_SECRET ?? process.env.ADMIN_PASSWORD
+  if (!secret) return 'dev-fallback'
+  return createHmac('sha256', secret).update('made-kulture-admin-cookie-v1').digest('hex')
 }
 
 // ── Session token (replaces storing the raw password in the cookie) ────────────

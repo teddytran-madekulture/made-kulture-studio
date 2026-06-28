@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkRateLimit, clearRateLimit, setAdminCookie } from '@/lib/admin-auth'
+import { checkRateLimit, clearRateLimit, setAdminCookie, verifyAdminPassword } from '@/lib/admin-auth'
 
 // POST /api/admin/auth — password login
 export async function POST(req: NextRequest) {
@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
   }
 
   const { password } = await req.json()
-  if (password !== process.env.ADMIN_PASSWORD) {
+  const valid = await verifyAdminPassword(password)
+  if (!valid) {
     const msg = remaining > 0
       ? `Incorrect password. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`
       : 'Incorrect password.'
