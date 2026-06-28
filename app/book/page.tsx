@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
+import DatePicker from '@/components/DatePicker'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -433,19 +434,12 @@ function BookingWizard() {
               <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 32 }}>
                 Bookings require at least 48 hours advance notice. Studio hours are Monday–Sunday, 9am–10pm.
               </p>
-              <input
-                type="date"
+              <DatePicker
                 value={booking.date}
                 min={today()}
-                onChange={e => {
-                  setBooking(b => ({ ...b, date: e.target.value, startHour: null, endHour: null }))
+                onChange={d => {
+                  setBooking(b => ({ ...b, date: d, startHour: null, endHour: null }))
                   setBookedSlots([])
-                }}
-                style={{
-                  background: 'transparent', border: '1px solid rgba(255,255,255,0.2)',
-                  color: '#fff', padding: '16px 20px', fontSize: 16,
-                  fontFamily: 'Inter', width: '100%', maxWidth: '100%', minWidth: 0, cursor: 'pointer',
-                  outline: 'none', colorScheme: 'dark', boxSizing: 'border-box',
                 }}
               />
             </div>
