@@ -319,6 +319,7 @@ export default function AdminDashboard() {
   const [dupPanelOpen,      setDupPanelOpen]       = useState(false)
   const [dupPrimaryMap,     setDupPrimaryMap]       = useState<Record<number, string>>({})  // groupIdx → primaryId
   const [dupMerging,        setDupMerging]          = useState<number | null>(null)
+  const [dupMergingAll,     setDupMergingAll]        = useState(false)
   const [dupMergeResult,    setDupMergeResult]      = useState<Record<number, string>>({})
   const custSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -1192,7 +1193,44 @@ export default function AdminDashboard() {
                   <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.5)' }}>
                     DUPLICATE CUSTOMERS {!dupLoading && `— ${dupGroups.length} group${dupGroups.length !== 1 ? 's' : ''} found`}
                   </div>
-                  <button onClick={() => setDupPanelOpen(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {!dupLoading && dupGroups.length > 0 && (
+                      <button
+                        disabled={dupMergingAll}
+                        onClick={async () => {
+                          if (!confirm(`Merge all ${dupGroups.length} duplicate groups? The oldest record in each group will be kept. This cannot be undone.`)) return
+                          setDupMergingAll(true)
+                          const results: Record<number, string> = {}
+                          for (let gi = 0; gi < dupGroups.length; gi++) {
+                            if (dupMergeResult[gi]) continue // already merged
+                            const group = dupGroups[gi]
+                            const primaryId    = dupPrimaryMap[gi] ?? group.members[0].id
+                            const duplicateIds = group.members.filter((m: any) => m.id !== primaryId).map((m: any) => m.id)
+                            const res = await fetch('/api/admin/customers/merge', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ primaryId, duplicateIds }),
+                            })
+                            const data = await res.json()
+                            results[gi] = data.success
+                              ? `Merged ${data.mergedCount} record${data.mergedCount !== 1 ? 's' : ''} into primary`
+                              : `Error: ${data.errors?.join(', ')}`
+                          }
+                          setDupMergeResult(r => ({ ...r, ...results }))
+                          setDupMergingAll(false)
+                          fetchCustomers(custSearch, custFilter, custPage)
+                        }}
+                        style={{
+                          background: dupMergingAll ? 'rgba(255,255,255,0.06)' : '#fff',
+                          border: 'none', padding: '7px 16px', cursor: dupMergingAll ? 'default' : 'pointer',
+                          fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em',
+                          color: dupMergingAll ? 'rgba(255,255,255,0.3)' : '#000',
+                        }}>
+                        {dupMergingAll ? 'MERGING ALL…' : `MERGE ALL (${dupGroups.length})`}
+                      </button>
+                    )}
+                    <button onClick={() => setDupPanelOpen(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+                  </div>
                 </div>
 
                 {dupLoading ? (
