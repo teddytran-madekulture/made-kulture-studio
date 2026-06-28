@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
+import { createAcuityBlocks } from '@/lib/acuity-sync'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -95,6 +96,24 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Two-way Acuity sync — block this time on Acuity (best-effort)
+  if (booking?.id) {
+    try {
+      const blockIds = await createAcuityBlocks({
+        type:         setSlug === 'studio' ? 'studio' : 'set',
+        setSlug:      setSlug === 'studio' ? null : setSlug,
+        startISO, endISO,
+        customerName: name,
+        setName:      SLUG_TO_NAME[setSlug] ?? 'Full Studio',
+      })
+      if (blockIds.length) {
+        await supabase.from('bookings').update({ acuity_block_ids: blockIds }).eq('id', booking.id)
+      }
+    } catch (e) {
+      console.error('[admin/bookings] Acuity block sync error:', e)
+    }
+  }
 
   // Check for flagged customer (non-blocking)
   if (customerData?.id) {
