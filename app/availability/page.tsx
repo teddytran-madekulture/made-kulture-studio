@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import NavAuthLink from '@/components/NavAuthLink'
@@ -33,6 +33,25 @@ function fmt12(h: number) {
   return half ? `${h12}:30` : `${h12}${ampm}`
 }
 
+// Full clock label for the mobile booking list, e.g. "10:00 AM", "10:30 AM"
+function fmtFull(h: number) {
+  const hour = Math.floor(h)
+  const mins = h % 1 !== 0 ? '30' : '00'
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12  = hour % 12 === 0 ? 12 : hour % 12
+  return `${h12}:${mins} ${ampm}`
+}
+
+// Short codes for the mobile overview heatmap columns
+const CODES: Record<string, string> = {
+  'set-a': 'A', 'set-b': 'B', 'set-c': 'C', 'set-d': 'D',
+  'concrete': 'CN', 'vintage': 'VN', 'cottage': 'CT',
+  'watering-hole': 'WH', 'the-tank': 'TK', 'studio-one': 'S1',
+}
+
+// Whole-hour rows for the compact overview (9AM–9PM)
+const HOURS = Array.from({ length: 13 }, (_, i) => 9 + i)
+
 function minDate() {
   const d = new Date()
   d.setDate(d.getDate() + 2) // 48hr advance booking
@@ -62,6 +81,7 @@ export default function AvailabilityPage() {
   const [fullStudioSlots, setFullStudioSlots] = useState<{ start: number; end: number }[]>([])
   const [loading, setLoading]     = useState(true)
   const [menuOpen, setMenuOpen]   = useState(false)
+  const [mobileSet, setMobileSet] = useState('set-a')
 
   useEffect(() => {
     setLoading(true)
@@ -183,7 +203,8 @@ export default function AvailabilityPage() {
           </div>
         </div>
 
-        {/* Legend */}
+        {/* Legend (desktop) */}
+        {!isMobile && (
         <div style={{ display: 'flex', gap: 24, marginBottom: 24, alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 16, height: 16, borderRadius: 3, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }} />
@@ -194,6 +215,7 @@ export default function AvailabilityPage() {
             <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em' }}>BOOKED</span>
           </div>
         </div>
+        )}
 
         {/* Full Warehouse Banner */}
         <div style={{
@@ -218,7 +240,101 @@ export default function AvailabilityPage() {
           </Link>
         </div>
 
-        {/* Grid */}
+        {/* ── Mobile view: overview heatmap + set picker + time list ───────── */}
+        {isMobile && (
+          <div style={{ marginBottom: 8 }}>
+
+            {/* Overview heatmap */}
+            <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.18em', color: '#fff', marginBottom: 10 }}>
+              STUDIO OVERVIEW
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: `28px repeat(${SETS.length}, 1fr)`, gap: 2, marginBottom: 10 }}>
+              <div />
+              {SETS.map(s => (
+                <div key={s.slug} style={{ textAlign: 'center', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 9, color: 'rgba(255,255,255,0.45)', paddingBottom: 4 }}>
+                  {CODES[s.slug]}
+                </div>
+              ))}
+              {HOURS.map(h => (
+                <Fragment key={h}>
+                  <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 8, color: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 4 }}>
+                    {fmt12(h)}
+                  </div>
+                  {SETS.map(s => {
+                    const booked = isBooked(s.slug, h) || isBooked(s.slug, h + 0.5)
+                    return (
+                      <div key={s.slug} style={{
+                        aspectRatio: '1', borderRadius: 2,
+                        background: booked ? 'rgba(255,80,80,0.20)' : 'rgba(255,255,255,0.05)',
+                        border: booked ? '1px solid rgba(255,80,80,0.28)' : '1px solid rgba(255,255,255,0.07)',
+                      }} />
+                    )
+                  })}
+                </Fragment>
+              ))}
+            </div>
+
+            {/* Heatmap legend */}
+            <div style={{ display: 'flex', gap: 18, marginBottom: 32, fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 11, height: 11, borderRadius: 2, background: 'rgba(255,80,80,0.20)', border: '1px solid rgba(255,80,80,0.28)' }} /> Booked
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 11, height: 11, borderRadius: 2, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)' }} /> Open
+              </span>
+            </div>
+
+            {/* Set picker */}
+            <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.18em', color: '#fff', marginBottom: 12 }}>
+              BOOK A SET
+            </div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 20, WebkitOverflowScrolling: 'touch' }}>
+              {SETS.map(s => {
+                const sel = mobileSet === s.slug
+                return (
+                  <button key={s.slug} onClick={() => setMobileSet(s.slug)} style={{
+                    flexShrink: 0, cursor: 'pointer',
+                    background: sel ? '#fff' : 'transparent',
+                    color: sel ? '#080808' : 'rgba(255,255,255,0.65)',
+                    border: sel ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                    padding: '9px 15px', borderRadius: 2,
+                    fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.08em', whiteSpace: 'nowrap',
+                  }}>
+                    {s.name.toUpperCase()}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Time list for selected set */}
+            {loading ? (
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.4)', padding: '24px 0' }}>Loading…</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {SLOTS.map(slot => {
+                  const booked = isBooked(mobileSet, slot)
+                  return (
+                    <button key={slot} onClick={() => handleCell(mobileSet, slot)} disabled={booked} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', boxSizing: 'border-box',
+                      padding: '15px 18px', textAlign: 'left',
+                      background: booked ? '#121212' : 'transparent',
+                      border: booked ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.16)',
+                      borderRadius: 3, cursor: booked ? 'default' : 'pointer', opacity: booked ? 0.55 : 1,
+                    }}>
+                      <span style={{ fontFamily: '"Inter Tight", Inter, sans-serif', fontSize: 15, color: '#fff' }}>{fmtFull(slot)}</span>
+                      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.12em', color: booked ? 'rgba(255,120,120,0.7)' : '#5dca8f' }}>
+                        {booked ? 'BOOKED' : 'AVAILABLE'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Grid (desktop) */}
+        {!isMobile && (
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <div style={{ minWidth: 900 }}>
 
@@ -318,6 +434,7 @@ export default function AvailabilityPage() {
 
           </div>
         </div>
+        )}
 
         {/* Footer note */}
         <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.25)', marginTop: 40 }}>
