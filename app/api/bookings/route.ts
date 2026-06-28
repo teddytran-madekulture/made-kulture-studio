@@ -221,10 +221,14 @@ export async function POST(req: NextRequest) {
         endTime:   endLabel,
       })
       if (banned) {
-        return NextResponse.json(
-          { error: 'We were unable to process your booking. Please contact the studio directly at (832) 408-1631.' },
-          { status: 403 }
-        )
+        const { data: setting } = await supabase
+          .from('studio_settings')
+          .select('value')
+          .eq('key', 'ban_message')
+          .maybeSingle()
+        const banMessage = setting?.value
+          ?? 'We were unable to process your booking. Please contact the studio directly at (832) 408-1631.'
+        return NextResponse.json({ error: banMessage }, { status: 403 })
       }
     }
 

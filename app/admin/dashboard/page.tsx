@@ -332,6 +332,9 @@ export default function AdminDashboard() {
   const [emailDraft,       setEmailDraft]        = useState<Partial<EmailSetting>>({})
   const [emailSaveMsg,     setEmailSaveMsg]      = useState<string | null>(null)
   const [emailPreviewKey,  setEmailPreviewKey]   = useState<string | null>(null)
+  const [banMessage,       setBanMessage]        = useState('We were unable to process your booking. Please contact the studio directly at (832) 408-1631.')
+  const [banMessageSaving, setBanMessageSaving]  = useState(false)
+  const [banMessageSaved,  setBanMessageSaved]   = useState(false)
 
   // ── Customer fetch helpers ───────────────────────────────────────────────
   const fetchCustomers = useCallback(async (search: string, filter: string, page: number) => {
@@ -380,7 +383,13 @@ export default function AdminDashboard() {
   }, [])
 
   useEffect(() => {
-    if (view === 'emails') fetchEmailSettings()
+    if (view === 'emails') {
+      fetchEmailSettings()
+      fetch('/api/admin/settings?key=ban_message')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.value) setBanMessage(d.value) })
+        .catch(() => {})
+    }
   }, [view, fetchEmailSettings])
 
   async function saveEmailSetting(key: string, patch: Partial<EmailSetting>) {
@@ -955,6 +964,43 @@ export default function AdminDashboard() {
                 Control which emails get sent and customize their subject lines.
                 Email bodies are branded templates — contact your developer to change the HTML layout.
               </p>
+            </div>
+
+            {/* Ban message */}
+            <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', padding: '20px 24px', marginBottom: 32 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(239,68,68,0.7)', marginBottom: 8 }}>⊘ BANNED CUSTOMER MESSAGE</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 14, lineHeight: 1.5 }}>
+                Shown on the booking page when a banned customer attempts to book. Keep it vague — don't mention the ban.
+              </div>
+              <textarea
+                value={banMessage}
+                onChange={e => { setBanMessage(e.target.value); setBanMessageSaved(false) }}
+                rows={3}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '10px 12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' as const, lineHeight: 1.6 }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                <button
+                  disabled={banMessageSaving}
+                  onClick={async () => {
+                    setBanMessageSaving(true)
+                    const res = await fetch('/api/admin/settings', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: 'ban_message', value: banMessage }),
+                    })
+                    if (res.ok) setBanMessageSaved(true)
+                    setBanMessageSaving(false)
+                  }}
+                  style={{ background: banMessageSaving ? 'rgba(255,255,255,0.1)' : '#fff', border: 'none', padding: '7px 18px', cursor: banMessageSaving ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000' }}>
+                  {banMessageSaving ? 'SAVING…' : 'SAVE'}
+                </button>
+                <button
+                  onClick={() => { setBanMessage('We were unable to process your booking. Please contact the studio directly at (832) 408-1631.'); setBanMessageSaved(false) }}
+                  style={{ background: 'transparent', border: 'none', padding: '7px 0', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em' }}>
+                  RESET TO DEFAULT
+                </button>
+                {banMessageSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+              </div>
             </div>
 
             {emailLoading ? (
