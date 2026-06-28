@@ -62,6 +62,7 @@ const SLUG_TO_NAME: Record<string, string> = {
   'vintage':       'Vintage',
   'cottage':       'Cottage',
   'watering-hole': 'The Watering Hole',
+  'the-tank':      'The Tank',
   'studio-one':    'Studio One',
 }
 
@@ -83,7 +84,12 @@ async function getSetId(slug: string): Promise<string | null> {
 const SET_PRICES: Record<string, number> = {
   'set-a': 40, 'set-b': 40, 'set-c': 40, 'set-d': 40,
   'concrete': 40, 'vintage': 40, 'cottage': 40,
-  'watering-hole': 75, 'studio-one': 65,
+  'watering-hole': 75, 'the-tank': 75, 'studio-one': 65,
+}
+
+// Minimum booking length per set (hours). Defaults to 1 when not listed.
+const SET_MIN_HOURS: Record<string, number> = {
+  'watering-hole': 2, 'the-tank': 2,
 }
 
 const EQUIPMENT_PRICES: Record<string, number> = {
@@ -174,6 +180,18 @@ async function sendConfirmationSMS(body: BookingRequest, setName: string, totalC
 export async function POST(req: NextRequest) {
   try {
     const body: BookingRequest = await req.json()
+
+    // 0. Enforce per-set minimum booking length (server-side guard)
+    if (body.type === 'set' && body.setSlug) {
+      const minH = SET_MIN_HOURS[body.setSlug] ?? 1
+      if ((body.endHour - body.startHour) < minH) {
+        const label = SLUG_TO_NAME[body.setSlug] ?? body.setSlug
+        return NextResponse.json(
+          { error: `${label} requires a minimum ${minH}-hour booking.` },
+          { status: 400 }
+        )
+      }
+    }
 
     // 1. Look up customer pricing overrides (do this before price verification)
     let customerPricingOverrides: any = null

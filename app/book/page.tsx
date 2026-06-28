@@ -197,6 +197,9 @@ function BookingWizard() {
       }
       // End time must be a whole number of hours after start (no 30-min durations)
       if ((h - (booking.startHour ?? 0)) % 1 !== 0) return
+      // Enforce this set's minimum booking length (e.g. The Watering Hole = 2hr)
+      const minH = selectedSet?.minHours ?? 1
+      if ((h - (booking.startHour ?? 0)) < minH) return
       // Check no booked slot in range
       const start = booking.startHour!
       const hasConflict = bookedSlots.some(b => b.start < h && b.end > start)
@@ -222,7 +225,8 @@ function BookingWizard() {
     1: booking.type !== null,
     2: booking.type === 'studio' ? true : booking.setId !== null,
     3: booking.date !== '',
-    4: booking.startHour !== null && booking.endHour !== null,
+    4: booking.startHour !== null && booking.endHour !== null
+       && (booking.endHour - booking.startHour) >= (selectedSet?.minHours ?? 1),
     5: true, // equipment optional
     6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent,
   }
@@ -370,9 +374,9 @@ function BookingWizard() {
           <StepWrapper title="SELECT YOUR TIME">
             <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 8 }}>
               {booking.startHour === null
-                ? 'Click your start time, then click your end time.'
+                ? `Click your start time, then click your end time.${(selectedSet?.minHours ?? 1) > 1 ? ` ${selectedSet!.name} has a ${selectedSet!.minHours}-hour minimum.` : ''}`
                 : booking.endHour === null
-                  ? `Start: ${fmt12(booking.startHour)} — now click your end time.`
+                  ? `Start: ${fmt12(booking.startHour)} — now click your end time.${(selectedSet?.minHours ?? 1) > 1 ? ` (${selectedSet!.minHours}-hour minimum)` : ''}`
                   : `${fmt12(booking.startHour)} – ${fmt12(booking.endHour)} · ${hourCount} hour${hourCount !== 1 ? 's' : ''}`
               }
             </p>
@@ -384,9 +388,12 @@ function BookingWizard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
               {SLOTS.map(h => {
                 const booked    = isHourBooked(h)
-                // When picking end time, only allow slots that are whole hours after start
+                // When picking end time, only allow whole-hour slots that meet the
+                // set's minimum length (e.g. The Watering Hole / The Tank = 2hr min)
+                const minH = selectedSet?.minHours ?? 1
                 const isInvalidEnd = selecting === 'end' && booking.startHour !== null
-                                     && (h - booking.startHour) % 1 !== 0
+                                     && ((h - booking.startHour) % 1 !== 0
+                                         || (h > booking.startHour && (h - booking.startHour) < minH))
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)

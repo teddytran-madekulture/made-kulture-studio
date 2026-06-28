@@ -12,7 +12,6 @@
 
 insert into sets (name, description, rate_per_hour, min_hours, capacity, features, is_active) values
   ('The Yard',              'Promotional / seasonal set', 40, 1, 5, '{"Promotional"}', false),
-  ('The Tank',              'Promotional / seasonal set', 40, 1, 5, '{"Promotional"}', false),
   ('The Patient',           'Promotional / seasonal set', 40, 1, 5, '{"Promotional"}', false),
   ('Winter Is Coming',      'Promotional / seasonal set', 40, 1, 5, '{"Promotional"}', false),
   ('Valentine Powder Room', 'Promotional / seasonal set', 40, 1, 5, '{"Promotional"}', false),
