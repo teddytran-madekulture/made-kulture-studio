@@ -254,6 +254,8 @@ export default function AdminDashboard() {
   const [profileShowOld,    setProfileShowOld]    = useState(false)
   const [profileShowNew,    setProfileShowNew]    = useState(false)
 
+  const [bookingsOpen,     setBookingsOpen]     = useState(true)
+
   const [emailSettings,    setEmailSettings]    = useState<EmailSetting[]>([])
   const [emailLoading,     setEmailLoading]     = useState(false)
   const [emailSaving,      setEmailSaving]       = useState<string | null>(null)
@@ -544,41 +546,87 @@ export default function AdminDashboard() {
   return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
 
-      {/* NAV */}
+      {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div style={{
-        borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '20px 40px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'sticky', top: 0, background: '#080808', zIndex: 50,
+        position: 'fixed', left: 0, top: 0, bottom: 0, width: 220,
+        background: '#080808', borderRight: '1px solid rgba(255,255,255,0.06)',
+        display: 'flex', flexDirection: 'column', zIndex: 50,
       }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>
-          MADE KULTURE <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 16 }}>/ ADMIN</span>
-        </div>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          {/* View toggle */}
-          <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.15)', overflow: 'hidden' }}>
-            {([['list', '≡ LIST'], ['calendar', '⊡ CALENDAR'], ['emails', '✉ EMAILS'], ['profile', '⊙ PROFILE']] as const).map(([v, label]) => (
-              <button key={v} onClick={() => setView(v)} style={{
-                background: view === v ? '#fff' : 'transparent', border: 'none',
-                borderLeft: v !== 'list' ? '1px solid rgba(255,255,255,0.15)' : 'none',
-                padding: '8px 18px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-                fontSize: 11, fontWeight: 500, letterSpacing: '0.15em',
-                color: view === v ? '#080808' : 'rgba(255,255,255,0.4)',
-              }}>
-                {label}
-              </button>
-            ))}
+        {/* Wordmark */}
+        <div style={{ padding: '28px 24px 24px' }}>
+          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
+            MADE KULTURE
           </div>
-          <button onClick={() => { resetModal(); setShowManual(true) }}
-            style={{ background: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808' }}>
-            + MANUAL BOOKING
+          <div style={{ fontSize: 10, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)', marginTop: 3 }}>/ ADMIN</div>
+          <div style={{ marginTop: 12, width: 24, height: 2, background: '#d4a843' }} />
+        </div>
+
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
+
+          {/* Bookings group */}
+          <button onClick={() => setBookingsOpen(o => !o)} style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: '6px 12px 6px 14px', color: 'rgba(255,255,255,0.25)',
+            fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em',
+          }}>
+            BOOKINGS <span style={{ fontSize: 8 }}>{bookingsOpen ? '▲' : '▼'}</span>
           </button>
-          <button onClick={handleLogout}
-            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '10px 20px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)' }}>
+
+          {bookingsOpen && (
+            <div>
+              {([['list', '≡', 'List View'], ['calendar', '⊡', 'Calendar']] as const).map(([v, icon, label]) => (
+                <button key={v} onClick={() => setView(v)} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
+                  borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
+                  padding: '9px 12px 9px 22px', cursor: 'pointer', textAlign: 'left' as const,
+                  fontFamily: 'Inter, sans-serif', fontSize: 13,
+                  color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
+                }}>
+                  <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
+
+          {([['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
+              borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
+              padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
+              fontFamily: 'Inter, sans-serif', fontSize: 13,
+              color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
+            }}>
+              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Bottom actions */}
+        <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button onClick={() => { resetModal(); setShowManual(true) }} style={{
+            background: '#fff', border: 'none', padding: '10px', cursor: 'pointer',
+            fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808',
+          }}>
+            + NEW BOOKING
+          </button>
+          <button onClick={handleLogout} style={{
+            background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px',
+            cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11,
+            letterSpacing: '0.12em', color: 'rgba(255,255,255,0.35)',
+          }}>
             LOG OUT
           </button>
         </div>
       </div>
 
+      {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
+      <div style={{ marginLeft: 220 }}>
       <div style={{ maxWidth: view === 'calendar' ? '100%' : 1200, margin: '0 auto', padding: '40px 40px 0' }}>
 
         {/* Stats */}
@@ -1148,6 +1196,7 @@ export default function AdminDashboard() {
         )}
 
       </div>
+      </div>{/* end main content */}
 
       {/* BOOKING DETAIL PANEL */}
       {detailBooking && (
