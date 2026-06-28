@@ -143,6 +143,48 @@ function BookingWizard() {
     setBooking(b => ({ ...b, equipment: lines }))
     try { localStorage.setItem(GEAR_CART_KEY, JSON.stringify(lines)) } catch {}
   }
+
+  // ── Inline gear catalog (added right in the booking flow) ───────────────────
+  const [gearCatalog, setGearCatalog] = useState<{ id: string; name: string; rate: number; category: string; description: string | null; quantity: number }[]>([])
+  const [gearSearch,  setGearSearch]  = useState('')
+  const [openCats,    setOpenCats]    = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    fetch('/api/equipment').then(r => r.json()).then(d => setGearCatalog(d.equipment ?? [])).catch(() => {})
+  }, [])
+
+  const gearQty = (id: string) => booking.equipment.find(l => l.id === id)?.quantity ?? 0
+  const addGearItem = (item: { id: string; name: string; rate: number; quantity: number }) => {
+    const existing = booking.equipment.find(l => l.id === item.id)
+    if (existing) {
+      updateGear(booking.equipment.map(l => l.id === item.id ? { ...l, quantity: Math.min(item.quantity || 99, l.quantity + 1) } : l))
+    } else {
+      updateGear([...booking.equipment, { id: item.id, name: item.name, rate: item.rate, quantity: 1 }])
+    }
+  }
+  const decGearItem = (id: string) =>
+    updateGear(booking.equipment.flatMap(l => l.id === id ? (l.quantity > 1 ? [{ ...l, quantity: l.quantity - 1 }] : []) : [l]))
+
+  const renderGearRow = (g: { id: string; name: string; rate: number; description: string | null; quantity: number }) => {
+    const qty = gearQty(g.id)
+    return (
+      <div key={g.id} style={{ background: '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>{g.name}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>${g.rate}</div>
+        </div>
+        {qty > 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => decGearItem(g.id)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 26, height: 26, cursor: 'pointer', fontSize: 15 }}>−</button>
+            <span style={{ fontSize: 13, minWidth: 16, textAlign: 'center' }}>{qty}</span>
+            <button onClick={() => addGearItem(g)} disabled={qty >= g.quantity} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 26, height: 26, cursor: qty >= g.quantity ? 'default' : 'pointer', fontSize: 15, opacity: qty >= g.quantity ? 0.3 : 1 }}>+</button>
+          </div>
+        ) : (
+          <button onClick={() => addGearItem(g)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em' }}>ADD</button>
+        )}
+      </div>
+    )
+  }
+
   const [bookedSlots,      setBookedSlots]      = useState<{ start: number; end: number }[]>([])
   const [loadingSlots,     setLoadingSlots]     = useState(false)
   const [submitted,        setSubmitted]        = useState(false)
@@ -465,47 +507,75 @@ function BookingWizard() {
         {/* ── STEP 5: Add-ons ── */}
         {((step === 5 && booking.type === 'set') || (step === 4 && booking.type === 'studio')) && (
           <StepWrapper title="ADD EQUIPMENT">
-            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 24 }}>
-              All equipment is in-studio only. Your set already includes one Amaran 200x light. Browse the full catalog and build your kit — anything you add appears here.
+            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 20 }}>
+              All equipment is in-studio only. Your set already includes one Amaran 200x light. This step is optional — search or browse by category to add extras.
             </p>
 
-            <a href="/gear" target="_blank" rel="noopener noreferrer" style={{
-              display: 'inline-block', background: 'transparent', border: '1px solid rgba(255,255,255,0.25)',
-              color: '#fff', padding: '11px 22px', textDecoration: 'none', marginBottom: 28,
-              fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
-            }}>
-              BROWSE GEAR CATALOG ↗
-            </a>
+            {/* Search */}
+            <input
+              value={gearSearch}
+              onChange={e => setGearSearch(e.target.value)}
+              placeholder="Search equipment…"
+              style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '12px 14px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box', marginBottom: 16 }}
+            />
 
-            {booking.equipment.length === 0 ? (
-              <div style={{ background: '#0d0d0d', border: '1px dashed rgba(255,255,255,0.12)', padding: '28px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 32 }}>
-                No gear added yet. This step is optional — continue, or browse the catalog above to add equipment.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 32 }}>
-                {booking.equipment.map(l => (
-                  <div key={l.id} style={{ background: '#0d0d0d', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'Inter', fontSize: 13, marginBottom: 2 }}>{l.name}</div>
-                      <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>${l.rate} × {l.quantity} = ${l.rate * l.quantity}</div>
+            {/* Picker */}
+            <div style={{ marginBottom: 28 }}>
+              {gearCatalog.length === 0 ? (
+                <div style={{ background: '#0d0d0d', border: '1px dashed rgba(255,255,255,0.12)', padding: 24, textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: 12, letterSpacing: '0.1em' }}>LOADING GEAR…</div>
+              ) : gearSearch.trim() ? (
+                (() => {
+                  const q = gearSearch.toLowerCase().trim()
+                  const matches = gearCatalog.filter(g => g.name.toLowerCase().includes(q))
+                  return matches.length
+                    ? <div style={{ border: '1px solid rgba(255,255,255,0.06)' }}>{matches.map(renderGearRow)}</div>
+                    : <div style={{ padding: 20, color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>No equipment matches “{gearSearch}”.</div>
+                })()
+              ) : (
+                ([['lighting', 'Lighting'], ['modifier', 'Modifiers'], ['special_effects', 'Special Effects'], ['camera', 'Camera']] as const).map(([key, label]) => {
+                  const items = gearCatalog.filter(g => g.category === key)
+                  if (!items.length) return null
+                  const open = !!openCats[key]
+                  return (
+                    <div key={key} style={{ marginBottom: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <button onClick={() => setOpenCats(c => ({ ...c, [key]: !c[key] }))}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0d0d0d', border: 'none', padding: '14px 16px', cursor: 'pointer', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, letterSpacing: '0.12em' }}>
+                        <span>{label.toUpperCase()} <span style={{ color: 'rgba(255,255,255,0.35)' }}>({items.length})</span></span>
+                        <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)' }}>{open ? '−' : '+'}</span>
+                      </button>
+                      {open && <div>{items.map(renderGearRow)}</div>}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button onClick={() => updateGear(booking.equipment.flatMap(x => x.id === l.id ? (x.quantity > 1 ? [{ ...x, quantity: x.quantity - 1 }] : []) : [x]))}
-                        style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 28, height: 28, cursor: 'pointer', fontSize: 16 }}>−</button>
-                      <span style={{ fontSize: 13, minWidth: 18, textAlign: 'center' }}>{l.quantity}</span>
-                      <button onClick={() => updateGear(booking.equipment.map(x => x.id === l.id ? { ...x, quantity: x.quantity + 1 } : x))}
-                        style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 28, height: 28, cursor: 'pointer', fontSize: 16 }}>+</button>
-                      <button onClick={() => updateGear(booking.equipment.filter(x => x.id !== l.id))}
-                        style={{ background: 'transparent', border: 'none', color: 'rgba(220,120,120,0.7)', width: 28, height: 28, cursor: 'pointer', fontSize: 16 }}>×</button>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Your kit */}
+            {booking.equipment.length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.18em', color: '#d4a843', marginBottom: 10 }}>YOUR KIT</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {booking.equipment.map(l => (
+                    <div key={l.id} style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1, minWidth: 0, fontFamily: 'Inter', fontSize: 13 }}>
+                        {l.name} <span style={{ color: 'rgba(255,255,255,0.35)' }}>· ${l.rate * l.quantity}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button onClick={() => decGearItem(l.id)} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 26, height: 26, cursor: 'pointer', fontSize: 15 }}>−</button>
+                        <span style={{ fontSize: 13, minWidth: 16, textAlign: 'center' }}>{l.quantity}</span>
+                        <button onClick={() => addGearItem({ id: l.id, name: l.name, rate: l.rate, quantity: gearCatalog.find(g => g.id === l.id)?.quantity ?? 99 })} style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', width: 26, height: 26, cursor: 'pointer', fontSize: 15 }}>+</button>
+                        <button onClick={() => updateGear(booking.equipment.filter(x => x.id !== l.id))} style={{ background: 'transparent', border: 'none', color: 'rgba(220,120,120,0.7)', width: 26, height: 26, cursor: 'pointer', fontSize: 16 }}>×</button>
+                      </div>
                     </div>
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,0.05)' }}>
+                    <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)' }}>GEAR SUBTOTAL</span>
+                    <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20 }}>${equipTotal}</span>
                   </div>
-                ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: 'rgba(255,255,255,0.03)' }}>
-                  <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)' }}>GEAR SUBTOTAL</span>
-                  <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20 }}>${equipTotal}</span>
                 </div>
               </div>
             )}
+
             <NavRow onBack={back} onNext={next} canNext={true} nextLabel="CONTINUE" />
           </StepWrapper>
         )}
