@@ -692,57 +692,23 @@ interface SquarePaymentPanelProps {
 }
 
 function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRate, onBack, onSuccess }: SquarePaymentPanelProps) {
-  const cardContainerRef = useRef<HTMLDivElement>(null)
-  const cardRef          = useRef<any>(null)
-  const [sdkReady,  setSdkReady]  = useState(false)
-  const [sdkError,  setSdkError]  = useState<string | null>(null)
-  const [paying,    setPaying]    = useState(false)
-  const [payError,  setPayError]  = useState<string | null>(null)
+  const cardContainerRef    = useRef<HTMLDivElement>(null)
+  const googlePayContainerRef = useRef<HTMLDivElement>(null)
+  const cardRef             = useRef<any>(null)
+  const grandTotalRef       = useRef(grandTotal) // stable ref for async callbacks
+  const [sdkReady,       setSdkReady]       = useState(false)
+  const [sdkError,       setSdkError]       = useState<string | null>(null)
+  const [googlePayReady, setGooglePayReady] = useState(false)
+  const [paying,         setPaying]         = useState(false)
+  const [payError,       setPayError]       = useState<string | null>(null)
 
-  // Load Square SDK and mount card element
-  useEffect(() => {
-    let mounted = true
-    loadSquareScript()
-      .then(async () => {
-        if (!mounted || !cardContainerRef.current) return
-        const appId     = process.env.NEXT_PUBLIC_SQUARE_APP_ID!
-        const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID!
+  useEffect(() => { grandTotalRef.current = grandTotal }, [grandTotal])
 
-        if (!appId || !locationId) {
-          setSdkError('Square credentials not configured. Add NEXT_PUBLIC_SQUARE_APP_ID and NEXT_PUBLIC_SQUARE_LOCATION_ID to .env.local')
-          return
-        }
-
-        const payments = window.Square.payments(appId, locationId)
-        const card = await payments.card()
-        await card.attach(cardContainerRef.current)
-        cardRef.current = card
-        if (mounted) setSdkReady(true)
-      })
-      .catch(err => {
-        if (mounted) setSdkError(err.message)
-      })
-
-    return () => { mounted = false }
-  }, [])
-
-  const handlePay = async () => {
-    if (!cardRef.current) return
+  // Shared booking submission used by both card and Google Pay
+  const submitBooking = async (sourceId: string) => {
     setPaying(true)
     setPayError(null)
-
     try {
-      // Tokenize card
-      const result = await cardRef.current.tokenize()
-      if (result.status !== 'OK') {
-        setPayError(result.errors?.[0]?.message || 'Card error. Please check your details.')
-        setPaying(false)
-        return
-      }
-
-      const sourceId = result.token
-
-      // POST to our booking API
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -758,20 +724,84 @@ function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRa
           email:      booking.email,
           phone:      booking.phone,
           notes:      booking.notes,
-          totalCents: grandTotal * 100,
+          totalCents: grandTotalRef.current * 100,
         }),
       })
-
       const data = await res.json()
-
       if (!res.ok) {
         setPayError(data.error || 'Payment failed. Please try again.')
         setPaying(false)
         return
       }
-
       onSuccess()
-    } catch (err: any) {
+    } catch {
+      setPayError('Something went wrong. Please try again.')
+      setPaying(false)
+    }
+  }
+
+  // Load Square SDK, mount card + Google Pay
+  useEffect(() => {
+    let mounted = true
+    loadSquareScript()
+      .then(async () => {
+        if (!mounted) return
+        const appId      = process.env.NEXT_PUBLIC_SQUARE_APP_ID!
+        const locationId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID!
+
+        if (!appId || !locationId) {
+          setSdkError('Square credentials not configured. Add NEXT_PUBLIC_SQUARE_APP_ID and NEXT_PUBLIC_SQUARE_LOCATION_ID to .env.local')
+          return
+        }
+
+        const payments = window.Square.payments(appId, locationId)
+
+        // Card
+        if (cardContainerRef.current) {
+          const card = await payments.card()
+          await card.attach(cardContainerRef.current)
+          cardRef.current = card
+        }
+
+        // Google Pay (silently skip if unsupported)
+        try {
+          const paymentRequest = payments.paymentRequest({
+            countryCode:  'US',
+            currencyCode: 'USD',
+            total: { amount: grandTotalRef.current.toFixed(2), label: 'Made Kulture Studio' },
+          })
+          const googlePay = await payments.googlePay(paymentRequest)
+          await googlePay.attach('#google-pay-button')
+          if (mounted) setGooglePayReady(true)
+          googlePay.addEventListener('ontokenization', (event: any) => {
+            const { tokenResult } = event.detail
+            if (tokenResult.status === 'OK') submitBooking(tokenResult.token)
+            else setPayError(tokenResult.errors?.[0]?.message || 'Google Pay failed')
+          })
+        } catch {
+          // Google Pay not available on this device/browser — card form is the fallback
+        }
+
+        if (mounted) setSdkReady(true)
+      })
+      .catch(err => { if (mounted) setSdkError(err.message) })
+
+    return () => { mounted = false }
+  }, []) // eslint-disable-line
+
+  const handlePay = async () => {
+    if (!cardRef.current) return
+    setPaying(true)
+    setPayError(null)
+    try {
+      const result = await cardRef.current.tokenize()
+      if (result.status !== 'OK') {
+        setPayError(result.errors?.[0]?.message || 'Card error. Please check your details.')
+        setPaying(false)
+        return
+      }
+      await submitBooking(result.token)
+    } catch {
       setPayError('Something went wrong. Please try again.')
       setPaying(false)
     }
@@ -790,6 +820,18 @@ function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRa
           </div>
         ) : (
           <>
+            {/* Google Pay button (auto-hides if unsupported) */}
+            <div ref={googlePayContainerRef} style={{ marginBottom: googlePayReady ? 16 : 0 }}>
+              <div id="google-pay-button" />
+            </div>
+            {googlePayReady && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+                <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em' }}>OR PAY WITH CARD</span>
+                <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+              </div>
+            )}
+
             {/* Square card fields mount here */}
             <div style={{ background: '#fff', padding: '4px 0', marginBottom: 24 }}>
               <div ref={cardContainerRef} style={{ minHeight: 89 }}>

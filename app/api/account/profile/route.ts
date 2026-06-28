@@ -1,5 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+
+// Service role client — needed to read the customers table (RLS restricts to service_role only)
+const serviceSupabase = createServiceClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function GET() {
   const supabase = createClient()
@@ -14,8 +21,8 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Also fetch custom pricing overrides from the customers table
-  const { data: custData } = await supabase
+  // Fetch custom pricing overrides using service role (customers table is service_role only)
+  const { data: custData } = await serviceSupabase
     .from('customers')
     .select('pricing_overrides')
     .eq('email', user.email!.toLowerCase())
