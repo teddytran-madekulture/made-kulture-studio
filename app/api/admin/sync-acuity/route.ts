@@ -20,9 +20,11 @@ const ACUITY_TYPE_TO_SET: Record<string, string | null> = {
   'the tank':          'The Tank',
   'tank':              'The Tank',
   'studio one':        'Studio One',
-  'full studio':       null,
-  'full buyout':       null,
-  'studio buyout':     null,
+  // Full warehouse buyout aliases → no specific set
+  'full studio':         null,
+  'full buyout':         null,
+  'studio buyout':       null,
+  'all warehouse access': null,
 }
 
 async function resolveSet(appointmentType: string): Promise<{ setId: string | null; setName: string }> {
@@ -49,7 +51,7 @@ async function resolveSet(appointmentType: string): Promise<{ setId: string | nu
   const { data } = await supabase
     .from('sets')
     .select('id, name')
-    .ilike('name', `%${appointmentType}%`)
+    .ilike('name', `%${appointmentType.trim()}%`)
     .limit(1)
     .single()
 

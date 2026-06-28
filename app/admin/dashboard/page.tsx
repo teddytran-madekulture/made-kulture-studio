@@ -4,6 +4,32 @@ import { useRouter } from 'next/navigation'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+interface StudioSet {
+  id: string
+  name: string
+  description: string | null
+  rate_per_hour: number
+  min_hours: number | null
+  capacity: number
+  features: string[]
+  is_active: boolean
+}
+
+interface SetDraft {
+  name: string
+  description: string
+  rate_per_hour: string
+  min_hours: string
+  capacity: string
+  features: string
+  is_active: boolean
+}
+
+const EMPTY_SET_DRAFT: SetDraft = {
+  name: '', description: '', rate_per_hour: '40', min_hours: '1',
+  capacity: '5', features: '', is_active: true,
+}
+
 interface Booking {
   id: string
   start_time: string
@@ -246,7 +272,7 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets'>('list')
   const [calDate,       setCalDate]       = useState(todayStr)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -336,6 +362,15 @@ export default function AdminDashboard() {
   const [banMessageSaving, setBanMessageSaving]  = useState(false)
   const [banMessageSaved,  setBanMessageSaved]   = useState(false)
 
+  // ── Sets Manager ───────────────────────────────────────────────────────────
+  const [setsList,     setSetsList]     = useState<StudioSet[]>([])
+  const [setsLoading,  setSetsLoading]  = useState(false)
+  const [setsError,    setSetsError]    = useState('')
+  const [setEditId,    setSetEditId]    = useState<string | null>(null)   // set id, or 'new', or null
+  const [setDraft,     setSetDraft]     = useState<SetDraft>(EMPTY_SET_DRAFT)
+  const [setsSaving,   setSetsSaving]   = useState(false)
+  const [setsBusyId,   setSetsBusyId]   = useState<string | null>(null)   // toggling/deleting row
+
   // ── Customer fetch helpers ───────────────────────────────────────────────
   const fetchCustomers = useCallback(async (search: string, filter: string, page: number) => {
     setCustLoading(true)
@@ -421,6 +456,103 @@ export default function AdminDashboard() {
   }, [router])
 
   useEffect(() => { fetchBookings() }, [fetchBookings])
+
+  // ── Sets Manager helpers ─────────────────────────────────────────────────────
+  const fetchSets = useCallback(async () => {
+    setSetsLoading(true); setSetsError('')
+    try {
+      const res  = await fetch('/api/admin/sets')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load sets')
+      setSetsList(data.sets ?? [])
+    } catch (e: any) {
+      setSetsError(e.message || 'Failed to load sets')
+    }
+    setSetsLoading(false)
+  }, [])
+
+  useEffect(() => { if (view === 'sets') fetchSets() }, [view, fetchSets])
+
+  const startNewSet = () => {
+    setSetEditId('new')
+    setSetDraft(EMPTY_SET_DRAFT)
+    setSetsError('')
+  }
+
+  const startEditSet = (s: StudioSet) => {
+    setSetEditId(s.id)
+    setSetsError('')
+    setSetDraft({
+      name:          s.name,
+      description:   s.description ?? '',
+      rate_per_hour: String(s.rate_per_hour),
+      min_hours:     s.min_hours == null ? '' : String(s.min_hours),
+      capacity:      String(s.capacity),
+      features:      (s.features ?? []).join(', '),
+      is_active:     s.is_active,
+    })
+  }
+
+  const cancelEditSet = () => { setSetEditId(null); setSetDraft(EMPTY_SET_DRAFT); setSetsError('') }
+
+  const saveSet = async () => {
+    if (!setDraft.name.trim()) { setSetsError('Set name is required'); return }
+    setSetsSaving(true); setSetsError('')
+    try {
+      const isNew = setEditId === 'new'
+      const res = await fetch(isNew ? '/api/admin/sets' : `/api/admin/sets/${setEditId}`, {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:          setDraft.name,
+          description:   setDraft.description,
+          rate_per_hour: setDraft.rate_per_hour,
+          min_hours:     setDraft.min_hours === '' ? null : setDraft.min_hours,
+          capacity:      setDraft.capacity,
+          features:      setDraft.features,
+          is_active:     setDraft.is_active,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not save set')
+      cancelEditSet()
+      await fetchSets()
+    } catch (e: any) {
+      setSetsError(e.message || 'Could not save set')
+    }
+    setSetsSaving(false)
+  }
+
+  const toggleSetActive = async (s: StudioSet) => {
+    setSetsBusyId(s.id); setSetsError('')
+    try {
+      const res = await fetch(`/api/admin/sets/${s.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !s.is_active }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not update set')
+      await fetchSets()
+    } catch (e: any) {
+      setSetsError(e.message || 'Could not update set')
+    }
+    setSetsBusyId(null)
+  }
+
+  const deleteSet = async (s: StudioSet) => {
+    if (!confirm(`Delete "${s.name}"? This can't be undone. (If it has bookings, deactivate it instead.)`)) return
+    setSetsBusyId(s.id); setSetsError('')
+    try {
+      const res = await fetch(`/api/admin/sets/${s.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not delete set')
+      await fetchSets()
+    } catch (e: any) {
+      setSetsError(e.message || 'Could not delete set')
+    }
+    setSetsBusyId(null)
+  }
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
@@ -709,7 +841,7 @@ export default function AdminDashboard() {
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
-          {([['customers', '👤', 'Customers'], ['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -1173,6 +1305,169 @@ export default function AdminDashboard() {
               </div>
             )}
 
+          </div>
+        )}
+
+        {/* ── SETS MANAGER ──────────────────────────────────────────────── */}
+        {view === 'sets' && (
+          <div style={{ paddingBottom: 80 }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+              <div>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 4 }}>SETS</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                  Manage studio sets. Inactive sets are hidden from booking &amp; availability but still recognized by the Acuity sync — use them for promotional / seasonal sets.
+                </div>
+              </div>
+              {setEditId === null && (
+                <button onClick={startNewSet} style={{
+                  background: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', flexShrink: 0,
+                  fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808',
+                }}>
+                  + NEW SET
+                </button>
+              )}
+            </div>
+
+            {setsError && (
+              <div style={{ background: 'rgba(220,80,80,0.12)', border: '1px solid rgba(220,80,80,0.35)', color: '#f0a0a0', padding: '12px 16px', marginBottom: 20, fontSize: 13, lineHeight: 1.5 }}>
+                {setsError}
+              </div>
+            )}
+
+            {/* Create / edit form */}
+            {setEditId !== null && (
+              <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: 28, marginBottom: 28 }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', marginBottom: 20 }}>
+                  {setEditId === 'new' ? 'NEW SET' : 'EDIT SET'}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>SET NAME</label>
+                    <input value={setDraft.name} onChange={e => setSetDraft(d => ({ ...d, name: e.target.value }))}
+                      placeholder="e.g. The Yard"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+                      For Acuity sync to match, this should read the same as the Acuity appointment type (casing doesn&apos;t matter).
+                    </div>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>DESCRIPTION</label>
+                    <input value={setDraft.description} onChange={e => setSetDraft(d => ({ ...d, description: e.target.value }))}
+                      placeholder="e.g. 12x15ft white cinderblock walls, large windows"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>RATE / HOUR ($)</label>
+                    <input type="number" value={setDraft.rate_per_hour} onChange={e => setSetDraft(d => ({ ...d, rate_per_hour: e.target.value }))}
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>MIN HOURS</label>
+                    <input type="number" value={setDraft.min_hours} onChange={e => setSetDraft(d => ({ ...d, min_hours: e.target.value }))}
+                      placeholder="1"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>CAPACITY</label>
+                    <input type="number" value={setDraft.capacity} onChange={e => setSetDraft(d => ({ ...d, capacity: e.target.value }))}
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
+                      <input type="checkbox" checked={setDraft.is_active} onChange={e => setSetDraft(d => ({ ...d, is_active: e.target.checked }))}
+                        style={{ width: 16, height: 16, accentColor: '#d4a843' }} />
+                      Active (bookable now)
+                    </label>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>FEATURES (comma-separated)</label>
+                    <input value={setDraft.features} onChange={e => setSetDraft(d => ({ ...d, features: e.target.value }))}
+                      placeholder="White cinderblock, Smooth walls, Large windows"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button onClick={saveSet} disabled={setsSaving} style={{
+                    background: '#fff', border: 'none', padding: '11px 24px', cursor: setsSaving ? 'default' : 'pointer', opacity: setsSaving ? 0.6 : 1,
+                    fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808',
+                  }}>
+                    {setsSaving ? 'SAVING…' : 'SAVE SET'}
+                  </button>
+                  <button onClick={cancelEditSet} disabled={setsSaving} style={{
+                    background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '11px 24px', cursor: 'pointer',
+                    fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)',
+                  }}>
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* List */}
+            {setsLoading ? (
+              <div style={{ ...labelStyle, textAlign: 'center', padding: 60 }}>LOADING…</div>
+            ) : setsList.length === 0 ? (
+              <div style={{ ...labelStyle, textAlign: 'center', padding: 60 }}>NO SETS YET</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {setsList.map(s => (
+                  <div key={s.id} style={{
+                    background: '#0d0d0d', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 20,
+                    opacity: s.is_active ? 1 : 0.55,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+                        <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.03em' }}>{s.name}</span>
+                        <span style={{
+                          fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', padding: '3px 8px',
+                          background: s.is_active ? 'rgba(120,200,120,0.15)' : 'rgba(255,255,255,0.08)',
+                          color: s.is_active ? '#8fd49a' : 'rgba(255,255,255,0.45)',
+                        }}>
+                          {s.is_active ? 'ACTIVE' : 'INACTIVE'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>
+                        ${s.rate_per_hour}/hr · {s.capacity} people{s.min_hours ? ` · ${s.min_hours}hr min` : ''}
+                      </div>
+                      {s.description && (
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>{s.description}</div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button onClick={() => toggleSetActive(s)} disabled={setsBusyId === s.id} style={{
+                        background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '7px 14px', cursor: 'pointer',
+                        fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em',
+                        color: s.is_active ? 'rgba(255,255,255,0.45)' : '#d4a843',
+                      }}>
+                        {setsBusyId === s.id ? '…' : s.is_active ? 'DEACTIVATE' : 'ACTIVATE'}
+                      </button>
+                      <button onClick={() => startEditSet(s)} style={{
+                        background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '7px 14px', cursor: 'pointer',
+                        fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)',
+                      }}>
+                        EDIT
+                      </button>
+                      <button onClick={() => deleteSet(s)} disabled={setsBusyId === s.id} style={{
+                        background: 'transparent', border: '1px solid rgba(220,80,80,0.3)', padding: '7px 14px', cursor: 'pointer',
+                        fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: 'rgba(220,120,120,0.7)',
+                      }}>
+                        DELETE
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

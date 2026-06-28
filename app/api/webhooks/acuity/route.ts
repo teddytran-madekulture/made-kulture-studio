@@ -22,9 +22,10 @@ const ACUITY_TYPE_TO_SET: Record<string, string | null> = {
   'the watering hole': 'The Watering Hole',
   'studio one':        'Studio One',
   // Full buyout — no specific set, set null
-  'full studio':       null,
-  'full buyout':       null,
-  'studio buyout':     null,
+  'full studio':          null,
+  'full buyout':          null,
+  'studio buyout':        null,
+  'all warehouse access': null,
 }
 
 async function resolveSet(
@@ -40,17 +41,28 @@ async function resolveSet(
     return { setId: data?.id ?? null, setName: name }
   }
 
-  // 2. Fuzzy fallback — search Supabase by partial name
+  // 2. Partial match against map keys — handles combo types like
+  //    "Studio One + PMI Smoke Ninja Pro..." → Studio One
+  for (const [mapKey, mapName] of Object.entries(ACUITY_TYPE_TO_SET)) {
+    if (key.includes(mapKey) || mapKey.includes(key)) {
+      if (!mapName) return { setId: null, setName: 'Full Studio Buyout' }
+      const { data } = await supabase.from('sets').select('id').eq('name', mapName).single()
+      return { setId: data?.id ?? null, setName: mapName }
+    }
+  }
+
+  // 3. Fuzzy fallback — search Supabase by partial name
+  //    (resolves promo/seasonal sets that exist as rows, e.g. "The Yard")
   const { data } = await supabase
     .from('sets')
     .select('id, name')
-    .ilike('name', `%${appointmentType}%`)
+    .ilike('name', `%${appointmentType.trim()}%`)
     .limit(1)
     .single()
 
   if (data) return { setId: data.id, setName: data.name }
 
-  // 3. Unrecognized type — store without a set
+  // 4. Unrecognized type — store without a set
   console.warn(`[Acuity webhook] Unrecognized appointment type: "${appointmentType}"`)
   return { setId: null, setName: appointmentType }
 }
