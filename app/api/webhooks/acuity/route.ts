@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -224,6 +225,23 @@ export async function POST(req: NextRequest) {
     if (upsertError) {
       console.error('[Acuity webhook] booking upsert error:', upsertError)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
+    }
+
+    // Alert owner if customer is flagged (non-blocking)
+    if (customerId && action === 'scheduled') {
+      const startDate = new Date(times.start)
+      const dateStr = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      const endDate = new Date(times.end)
+      const endStr  = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      checkAndAlertFlaggedCustomer(supabase, customerId, {
+        customerName:  fullName || email || 'Unknown',
+        customerEmail: email || '',
+        setName,
+        date:      dateStr,
+        startTime: timeStr,
+        endTime:   endStr,
+      }).catch(err => console.error('[Acuity webhook] flagged customer check error:', err))
     }
 
     console.log(`[Acuity webhook] ${action} — ${setName} at ${times.start}`)

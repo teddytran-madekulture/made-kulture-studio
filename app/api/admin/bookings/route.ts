@@ -3,6 +3,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
+import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
       id, start_time, end_time, status, total_amount, notes, source, created_at,
       square_payment_id,
       sets ( name ),
-      customers ( name, email, phone )
+      customers ( name, email, phone, status, banned )
     `)
     .order('start_time', { ascending: false })
 
@@ -93,6 +94,18 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Check for flagged customer (non-blocking)
+  if (customerData?.id) {
+    const setDisplayName = SLUG_TO_NAME[setSlug] ?? 'Full Studio Takeover'
+    const dateLabel  = formatDateLabel(date)
+    const startLabel = formatTimeLabel(startHour)
+    const endLabel   = formatTimeLabel(endHour)
+    checkAndAlertFlaggedCustomer(supabase, customerData.id, {
+      customerName: name, customerEmail: email, setName: setDisplayName,
+      date: dateLabel, startTime: startLabel, endTime: endLabel,
+    }).catch(e => console.error('Flagged customer check error:', e))
+  }
 
   // Send confirmation SMS if requested
   if (sendSms && phone) {

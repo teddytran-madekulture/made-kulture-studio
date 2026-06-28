@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { randomUUID } from 'crypto'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
+import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -289,7 +290,19 @@ export async function POST(req: NextRequest) {
       await supabase.from('booking_addons').insert(addons)
     }
 
-    // 10. Send SMS + email confirmations (non-blocking)
+    // 10. Check for flagged customer + alert owner (non-blocking)
+    if (supabaseCustomerId) {
+      checkAndAlertFlaggedCustomer(supabase, supabaseCustomerId, {
+        customerName:  body.name,
+        customerEmail: body.email,
+        setName,
+        date:      formatDateLabel(body.date),
+        startTime: formatTimeLabel(body.startHour),
+        endTime:   formatTimeLabel(body.endHour),
+      }).catch(err => console.error('Flagged customer check error:', err))
+    }
+
+    // 11. Send SMS + email confirmations (non-blocking)
     sendConfirmationSMS(body, setName, verifiedCents).catch(err =>
       console.error('SMS error (non-fatal):', err)
     )

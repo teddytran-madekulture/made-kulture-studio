@@ -15,7 +15,7 @@ interface Booking {
   created_at: string
   square_payment_id: string | null
   sets: { name: string } | null
-  customers: { name: string; email: string; phone: string } | null
+  customers: { name: string; email: string; phone: string; status?: string; banned?: boolean } | null
   booking_addons?: { equipment_name: string; price: number }[]
 }
 
@@ -753,7 +753,15 @@ export default function AdminDashboard() {
                       <div onClick={() => setExpanded(isOpen ? null : b.id)}
                         style={{ padding: '20px 24px', cursor: 'pointer', display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 1fr 100px', alignItems: 'center', gap: 16, opacity: isCancelled ? 0.4 : 1 }}>
                         <div>
-                          <div style={{ fontSize: 14, color: '#fff', fontWeight: 500, marginBottom: 4 }}>{b.customers?.name || '—'}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 14, color: '#fff', fontWeight: 500 }}>{b.customers?.name || '—'}</span>
+                            {b.customers?.banned && (
+                              <span title="BANNED" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', padding: '2px 6px' }}>BANNED</span>
+                            )}
+                            {!b.customers?.banned && b.customers?.status === 'warning' && (
+                              <span title="WARNING" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#f97316', background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.4)', padding: '2px 6px' }}>⚠ WARNING</span>
+                            )}
+                          </div>
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{b.customers?.email}</div>
                         </div>
                         <div>
@@ -864,11 +872,24 @@ export default function AdminDashboard() {
                             <div key={b.id} onClick={() => setDetailBooking(b)}
                               style={{
                                 position: 'absolute', top, left: 4, right: 4, height: Math.max(height - 4, 20),
-                                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                                background: b.customers?.banned
+                                  ? 'rgba(239,68,68,0.18)'
+                                  : b.customers?.status === 'warning'
+                                    ? 'rgba(249,115,22,0.18)'
+                                    : 'rgba(255,255,255,0.12)',
+                                border: b.customers?.banned
+                                  ? '1px solid rgba(239,68,68,0.6)'
+                                  : b.customers?.status === 'warning'
+                                    ? '1px solid rgba(249,115,22,0.6)'
+                                    : '1px solid rgba(255,255,255,0.2)',
                                 borderRadius: 2, padding: '4px 6px', cursor: 'pointer', overflow: 'hidden',
                               }}>
-                              <div style={{ fontSize: 10, color: '#fff', fontWeight: 500, lineHeight: 1.3 }}>
-                                {b.customers?.name || '—'}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {b.customers?.banned && <span style={{ fontSize: 8, lineHeight: 1 }}>🚫</span>}
+                                {!b.customers?.banned && b.customers?.status === 'warning' && <span style={{ fontSize: 8, lineHeight: 1 }}>⚠️</span>}
+                                <span style={{ fontSize: 10, color: '#fff', fontWeight: 500, lineHeight: 1.3 }}>
+                                  {b.customers?.name || '—'}
+                                </span>
                               </div>
                               <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
                                 {fmtTime(b.start_time)} – {fmtTime(b.end_time)}
