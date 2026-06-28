@@ -133,16 +133,45 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
       </tr>` : ''}
     </table>
 
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1e1a10;border:1px solid #3a3020;border-radius:6px;padding:16px 20px;margin-bottom:28px;">
+    <!-- When You Arrive -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:16px;">
       <tr>
         <td>
-          <p style="margin:0 0 6px;font-size:11px;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Important Reminders</p>
-          <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.7;">
-            <li>Arrive no earlier than 15 min before your booking</li>
-            <li>Setup and breakdown must happen within your booked time</li>
-            <li>Up to 5 people total per set (photographers, models, assistants, etc.)</li>
-            <li>All props must be returned to original locations before you leave</li>
+          <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">When You Arrive</p>
+          <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
+            <li style="margin-bottom:6px;">Drive to the <strong style="color:#ddd;">back of the building</strong> for entrance and street parking. If no spots are available, continue around the block to the front. Do not block neighbors' driveways.</li>
+            <li style="margin-bottom:6px;">The building looks old and dilapidated — that's intentional. Use the <strong style="color:#ddd;">small doorway entrances</strong> to enter. If you have large items and the garage is closed, DM us on Instagram <a href="https://instagram.com/madekulture" style="color:${ACCENT_COLOR};text-decoration:none;">@madekulture</a>.</li>
+            <li>If you know your set, go straight to it and get started. If you need help, check in and someone will show you to your spot.</li>
           </ul>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Before You Leave -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:16px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Before You Leave</p>
+          <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
+            <li style="margin-bottom:6px;">Return all props to approximately where you found them.</li>
+            <li style="margin-bottom:6px;">Leave your set in the same condition you arrived. <strong style="color:#ddd;">Excessive mess or trash may result in a cleaning fee.</strong></li>
+            <li>Setup and breakdown must happen within your booked time — overages past 15 min are charged an additional hour.</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Cancellation Policy -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:28px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Cancellation Policy</p>
+          <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
+            <li style="margin-bottom:6px;"><strong style="color:#ddd;">48+ hours before:</strong> Full refund.</li>
+            <li style="margin-bottom:6px;"><strong style="color:#ddd;">24–48 hours before:</strong> 50% refund (excluding fees).</li>
+            <li><strong style="color:#ddd;">Less than 24 hours:</strong> No refund.</li>
+          </ul>
+          <p style="margin:10px 0 0;font-size:12px;color:#666;">To cancel or reschedule, log in to your account at <a href="https://madekulture.com/account" style="color:${ACCENT_COLOR};text-decoration:none;">madekulture.com/account</a> or text us.</p>
         </td>
       </tr>
     </table>
