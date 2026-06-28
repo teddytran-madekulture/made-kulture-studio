@@ -7,8 +7,49 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Upsert a customer, never overwriting an existing phone/name with a blank.
+async function upsertCustomer(fields: {
+  email: string
+  name: string
+  phone: string
+  square_customer_id?: string
+  acuity_client_id?: string
+}) {
+  // Check if customer already exists
+  const { data: existing } = await supabase
+    .from('customers')
+    .select('id, name, phone')
+    .eq('email', fields.email)
+    .maybeSingle()
+
+  const patch: Record<string, any> = { email: fields.email }
+
+  // Only set name if incoming has one and existing doesn't (or existing is just email)
+  if (fields.name && fields.name !== fields.email) {
+    patch.name = existing?.name && existing.name !== fields.email ? existing.name : fields.name
+  } else {
+    patch.name = existing?.name || fields.name
+  }
+
+  // Only set phone if incoming has one; never blank out an existing number
+  if (fields.phone) {
+    patch.phone = fields.phone
+  } else if (existing?.phone) {
+    patch.phone = existing.phone   // keep what we have
+  }
+  // else: leave phone blank (both sources have nothing)
+
+  if (fields.square_customer_id) patch.square_customer_id = fields.square_customer_id
+  if (fields.acuity_client_id)   patch.acuity_client_id   = fields.acuity_client_id
+
+  const { error } = await supabase
+    .from('customers')
+    .upsert(patch, { onConflict: 'email' })
+
+  return error
+}
+
 // POST /api/admin/customers/import
-// Pulls all customers from Square + all clients from Acuity and upserts into Supabase.
 export async function POST(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -43,8 +84,7 @@ export async function POST(req: NextRequest) {
       }
 
       const body = await res.json()
-      const batch: any[] = body.customers ?? []
-      squareCustomers.push(...batch)
+      squareCustomers.push(...(body.customers ?? []))
       cursor = body.cursor
     } while (cursor)
 
@@ -54,26 +94,13 @@ export async function POST(req: NextRequest) {
       const email = c.email_address?.toLowerCase().trim()
       if (!email) continue
 
-      const name = [c.given_name, c.family_name].filter(Boolean).join(' ').trim() || email
-      const phone = c.phone_number?.replace(/\D/g, '') ?? ''
+      const name  = [c.given_name, c.family_name].filter(Boolean).join(' ').trim() || email
+      // Strip formatting but keep the number; empty string → no phone
+      const phone = c.phone_number?.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1') ?? ''
 
-      const { error } = await supabase
-        .from('customers')
-        .upsert(
-          {
-            email,
-            name,
-            phone,
-            square_customer_id: c.id,
-          },
-          { onConflict: 'email' }
-        )
-
-      if (error) {
-        results.square.errors.push(`${email}: ${error.message}`)
-      } else {
-        results.square.upserted++
-      }
+      const error = await upsertCustomer({ email, name, phone, square_customer_id: c.id })
+      if (error) results.square.errors.push(`${email}: ${error.message}`)
+      else results.square.upserted++
     }
   } catch (err: any) {
     results.square.errors.push(err.message)
@@ -100,26 +127,12 @@ export async function POST(req: NextRequest) {
         const email = c.email?.toLowerCase().trim()
         if (!email) continue
 
-        const name = [c.firstName, c.lastName].filter(Boolean).join(' ').trim() || email
-        const phone = c.phone?.replace(/\D/g, '') ?? ''
+        const name  = [c.firstName, c.lastName].filter(Boolean).join(' ').trim() || email
+        const phone = c.phone?.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1') ?? ''
 
-        const { error } = await supabase
-          .from('customers')
-          .upsert(
-            {
-              email,
-              name,
-              phone,
-              acuity_client_id: String(c.id),
-            },
-            { onConflict: 'email' }
-          )
-
-        if (error) {
-          results.acuity.errors.push(`${email}: ${error.message}`)
-        } else {
-          results.acuity.upserted++
-        }
+        const error = await upsertCustomer({ email, name, phone, acuity_client_id: String(c.id) })
+        if (error) results.acuity.errors.push(`${email}: ${error.message}`)
+        else results.acuity.upserted++
       }
     }
   } catch (err: any) {
