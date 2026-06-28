@@ -116,11 +116,12 @@ function BookingWizard() {
     equipment: [],
     name: '', email: '', phone: '', notes: '', smsConsent: false,
   })
-  const [bookedSlots, setBookedSlots] = useState<{ start: number; end: number }[]>([])
-  const [loadingSlots, setLoadingSlots] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+  const [bookedSlots,      setBookedSlots]      = useState<{ start: number; end: number }[]>([])
+  const [loadingSlots,     setLoadingSlots]     = useState(false)
+  const [submitted,        setSubmitted]        = useState(false)
+  const [pricingOverrides, setPricingOverrides] = useState<any>(null)
 
-  // Pre-fill contact info from logged-in profile
+  // Pre-fill contact info + fetch custom pricing from logged-in profile
   useEffect(() => {
     fetch('/api/account/profile')
       .then(r => r.ok ? r.json() : null)
@@ -133,6 +134,7 @@ function BookingWizard() {
             phone: d.profile.phone      || b.phone,
           }))
         }
+        if (d?.pricingOverrides) setPricingOverrides(d.pricingOverrides)
       })
       .catch(() => {})
   }, [])
@@ -152,15 +154,27 @@ function BookingWizard() {
   const selectedSet  = SETS.find(s => s.id === booking.setId)
   const hourCount    = booking.startHour !== null && booking.endHour !== null
                        ? booking.endHour - booking.startHour : 0
-  const setRate      = selectedSet?.price ?? 65
-  const equipTotal   = booking.equipment.reduce((sum, id) => {
+
+  // Apply custom pricing overrides if present
+  const standardSetRate = selectedSet?.price ?? 65
+  const perSetOverride  = booking.setId ? pricingOverrides?.sets?.[booking.setId] : undefined
+  const globalOverride  = pricingOverrides?.hourly_rate
+  const setRate         = perSetOverride != null ? Number(perSetOverride)
+                        : globalOverride != null ? Number(globalOverride)
+                        : standardSetRate
+
+  const equipDiscount   = pricingOverrides?.equipment_discount_percent
+  const equipTotal      = booking.equipment.reduce((sum, id) => {
     const eq = EQUIPMENT.find(e => e.id === id)
     return sum + (eq?.price ?? 0)
   }, 0)
+  const discountedEquipTotal = equipDiscount
+    ? Math.round(equipTotal * (1 - Number(equipDiscount) / 100))
+    : equipTotal
   const spaceTotal   = booking.type === 'studio'
                        ? (STUDIO_PRICE * hourCount)
                        : (setRate * hourCount)
-  const grandTotal   = spaceTotal + equipTotal
+  const grandTotal   = spaceTotal + discountedEquipTotal
 
   const isHourBooked = (h: number) =>
     bookedSlots.some(b => h >= b.start && h < b.end)
@@ -563,7 +577,11 @@ function BookingWizard() {
                   {hourCount > 0 && (
                     <Row label={`SPACE (${hourCount}hr × $${booking.type === 'studio' ? STUDIO_PRICE : setRate})`} value={`$${spaceTotal}`} />
                   )}
-                  {equipTotal > 0 && <Row label="EQUIPMENT" value={`$${equipTotal}`} />}
+                  {equipTotal > 0 && (
+                    equipDiscount
+                      ? <Row label={`EQUIPMENT (${equipDiscount}% off)`} value={`$${discountedEquipTotal}`} />
+                      : <Row label="EQUIPMENT" value={`$${equipTotal}`} />
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                     <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: '#fff', letterSpacing: '0.05em' }}>TOTAL</span>
                     <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: '#fff' }}>${grandTotal}</span>

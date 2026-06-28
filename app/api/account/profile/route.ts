@@ -13,7 +13,18 @@ export async function GET() {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ profile: { ...data, email: user.email } })
+
+  // Also fetch custom pricing overrides from the customers table
+  const { data: custData } = await supabase
+    .from('customers')
+    .select('pricing_overrides')
+    .eq('email', user.email!.toLowerCase())
+    .maybeSingle()
+
+  return NextResponse.json({
+    profile: { ...data, email: user.email },
+    pricingOverrides: custData?.pricing_overrides ?? null,
+  })
 }
 
 export async function PUT(req: NextRequest) {
