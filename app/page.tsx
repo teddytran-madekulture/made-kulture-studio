@@ -112,19 +112,25 @@ export default function Home() {
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
             <span className="label">A CREATIVE SPACE DESIGNED FOR VISIONARIES</span>
           </div>
-          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:32, lineHeight:0.84, letterSpacing:'0.005em', textTransform:'uppercase' }}>
+          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:32, lineHeight:0.9, letterSpacing:'0.005em', textTransform:'uppercase' }}>
             CREATE<br />WITHOUT<br />LIMITS
           </h1>
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
             Madekulture is a multi-set creative studio built for photographers, videographers, brands, and creators. Bring your ideas to life.
           </p>
-          <div style={{ display:'flex', gap:16, flexWrap:'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
-            <Link href="/book?type=set" className="btn" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
-              <span>BOOK A SET</span>
+          <div style={{ display:'flex', gap:12, flexDirection: isMobile ? 'column' : 'row' }}>
+            <Link href="/book?type=set" style={{
+              display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
+              background:'#fff', color:'#080808', padding:'16px 24px', textDecoration:'none',
+            }}>
+              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>Book a Set</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
-            <Link href="/book?type=studio" className="btn btn-ghost" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
-              <span>BOOK THE STUDIO</span>
+            <Link href="/book?type=studio" style={{
+              display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
+              background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.18)', padding:'16px 24px', textDecoration:'none',
+            }}>
+              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>Book the Studio</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
           </div>
