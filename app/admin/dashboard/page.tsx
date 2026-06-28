@@ -80,7 +80,7 @@ interface Booking {
   square_payment_id: string | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean } | null
-  booking_addons?: { equipment_name: string; price: number }[]
+  booking_add_ons?: { quantity: number; rate: number; equipment: { name: string } | null }[]
 }
 
 interface EmailSetting {
@@ -1096,6 +1096,9 @@ export default function AdminDashboard() {
                             <Detail label="PHONE"  value={b.customers?.phone || '—'} />
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}
+                            {(b.booking_add_ons?.length ?? 0) > 0 && (
+                              <Detail label="GEAR TO PREP" value={b.booking_add_ons!.map(a => `${a.equipment?.name ?? 'Item'}${a.quantity > 1 ? ` ×${a.quantity}` : ''}`).join(', ')} />
+                            )}
                             {b.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={b.square_payment_id} mono />}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 8 }}>

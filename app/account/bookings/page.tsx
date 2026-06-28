@@ -11,6 +11,14 @@ interface Booking {
   customer_name: string
   acuity_appointment_id: string | null
   sets: { name: string } | null
+  booking_add_ons?: { quantity: number; rate: number; equipment: { name: string } | null }[]
+}
+
+interface GearLine { id: string; name: string; rate: number; quantity: number }
+const GEAR_CART_KEY = 'mk_gear_cart'
+function loadGearCart(): GearLine[] {
+  if (typeof window === 'undefined') return []
+  try { return JSON.parse(localStorage.getItem(GEAR_CART_KEY) || '[]') } catch { return [] }
 }
 
 const fmt = (d: string) =>
@@ -25,12 +33,34 @@ export default function BookingsPage() {
   const [loading, setLoading]   = useState(true)
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [error, setError]       = useState('')
+  const [gearCart, setGearCart] = useState<GearLine[]>([])
+  const [addingTo, setAddingTo] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetch('/api/account/bookings')
-      .then(r => r.json())
-      .then(d => { setBookings(d.bookings ?? []); setLoading(false) })
-  }, [])
+  const refetch = () =>
+    fetch('/api/account/bookings').then(r => r.json()).then(d => { setBookings(d.bookings ?? []); setLoading(false) })
+
+  useEffect(() => { refetch(); setGearCart(loadGearCart()) }, [])
+
+  const cartTotal = gearCart.reduce((s, l) => s + l.rate * l.quantity, 0)
+
+  const addGear = async (bookingId: string) => {
+    setAddingTo(bookingId); setError('')
+    try {
+      const res = await fetch(`/api/account/bookings/${bookingId}/add-gear`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ equipment: gearCart.map(l => ({ equipment_id: l.id, quantity: l.quantity })) }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Could not add gear'); setAddingTo(null); return }
+      try { localStorage.removeItem(GEAR_CART_KEY) } catch {}
+      setGearCart([])
+      await refetch()
+      if (data.url) window.open(data.url, '_blank', 'noopener')
+    } catch {
+      setError('Something went wrong adding gear.')
+    }
+    setAddingTo(null)
+  }
 
   const cancel = async (id: string) => {
     if (!confirm('Cancel this booking? Refunds are only issued if cancelled 48+ hours in advance.')) return
@@ -73,6 +103,16 @@ export default function BookingsPage() {
             <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
               {b.total_price != null ? `$${b.total_price.toFixed(2)}` : ''}
             </div>
+            {(b.booking_add_ons?.length ?? 0) > 0 && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>GEAR</div>
+                {b.booking_add_ons!.map((a, i) => (
+                  <div key={i} style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
+                    {a.equipment?.name ?? 'Item'}{a.quantity > 1 ? ` × ${a.quantity}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
             <span style={{
@@ -95,6 +135,15 @@ export default function BookingsPage() {
             {isUpcoming && !canCancel && !isCancelled && (
               <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>Within 48hr window</span>
             )}
+            {isUpcoming && gearCart.length > 0 && (
+              <button
+                onClick={() => addGear(b.id)}
+                disabled={addingTo === b.id}
+                style={{ background: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: '#080808', cursor: 'pointer', opacity: addingTo === b.id ? 0.5 : 1 }}
+              >
+                {addingTo === b.id ? 'ADDING…' : `+ ADD GEAR ($${cartTotal})`}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -113,6 +162,12 @@ export default function BookingsPage() {
       {error && (
         <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b', marginBottom: 16 }}>
           {error}
+        </div>
+      )}
+
+      {gearCart.length > 0 && (
+        <div style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.3)', borderRadius: 4, padding: '14px 18px', fontFamily: 'Inter', fontSize: 13, color: '#e8c878', marginBottom: 20 }}>
+          You have {gearCart.reduce((s, l) => s + l.quantity, 0)} gear item(s) in your cart (${cartTotal}). Pick an upcoming booking below and tap <strong>+ Add Gear</strong> — you&apos;ll get a payment link to confirm.
         </div>
       )}
 

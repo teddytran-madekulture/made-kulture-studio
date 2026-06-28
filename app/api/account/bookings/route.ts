@@ -12,7 +12,8 @@ export async function GET() {
     .select(`
       id, set_id, start_time, end_time, status, total_price,
       customer_name, customer_email, customer_phone, acuity_appointment_id,
-      sets ( name )
+      sets ( name ),
+      booking_add_ons ( quantity, rate, equipment ( name ) )
     `)
     .or(`auth_user_id.eq.${user.id},customer_email.eq.${user.email}`)
     .order('start_time', { ascending: false })

@@ -33,7 +33,8 @@ export async function GET(req: NextRequest) {
       id, start_time, end_time, status, total_amount, notes, source, created_at,
       square_payment_id,
       sets ( name ),
-      customers ( name, email, phone, status, banned )
+      customers ( name, email, phone, status, banned ),
+      booking_add_ons ( quantity, rate, equipment ( name ) )
     `)
     .order('start_time', { ascending: false })
 
