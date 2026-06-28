@@ -57,21 +57,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: `Some gear isn't available for your booking time: ${msg}.` }, { status: 409 })
   }
 
-  // 5. Persist the add-ons (reserves inventory + shows on the booking for prep)
-  const addons = ids.map(id => ({
-    booking_id:   booking.id,
-    equipment_id: id,
-    quantity:     requested[id],
-    rate:         rateOf.get(id) ?? 0,
-  }))
-  const { error: insErr } = await admin.from('booking_add_ons').insert(addons)
-  if (insErr) {
-    console.error('[add-gear] insert error:', insErr)
-    return NextResponse.json({ error: 'Could not add gear. Please try again.' }, { status: 500 })
-  }
-
-  // 6. Total + Square payment link
+  // 5. Total + Square payment link (create first so we can store its order id)
   const total = ids.reduce((s, id) => s + (rateOf.get(id) ?? 0) * requested[id], 0)
+  let url: string | undefined
+  let orderId: string | undefined
   try {
     const { result } = await square.checkoutApi.createPaymentLink({
       idempotencyKey: randomUUID(),
@@ -81,13 +70,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         locationId: process.env.SQUARE_LOCATION_ID!,
       },
     })
-    const url = result.paymentLink?.url
+    url     = result.paymentLink?.url
+    orderId = result.paymentLink?.orderId
     if (!url) throw new Error('No payment link returned')
-    return NextResponse.json({ success: true, url, total })
   } catch (err: any) {
-    // Roll back the reservation if we couldn't create the payment link
-    await admin.from('booking_add_ons').delete().eq('booking_id', booking.id).in('equipment_id', ids)
     console.error('[add-gear] payment link error:', err)
     return NextResponse.json({ error: 'Could not create payment link. Please try again.' }, { status: 500 })
   }
+
+  // 6. Persist the add-ons (reserves inventory + shows on the booking for prep).
+  //    paid = false until the Square webhook confirms payment for this order id.
+  const addons = ids.map(id => ({
+    booking_id:      booking.id,
+    equipment_id:    id,
+    quantity:        requested[id],
+    rate:            rateOf.get(id) ?? 0,
+    paid:            false,
+    square_order_id: orderId ?? null,
+  }))
+  const { error: insErr } = await admin.from('booking_add_ons').insert(addons)
+  if (insErr) {
+    console.error('[add-gear] insert error:', insErr)
+    return NextResponse.json({ error: 'Could not add gear. Please try again.' }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true, url, total })
 }

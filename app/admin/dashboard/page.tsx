@@ -80,7 +80,7 @@ interface Booking {
   square_payment_id: string | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean } | null
-  booking_add_ons?: { quantity: number; rate: number; equipment: { name: string } | null }[]
+  booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
 }
 
 interface EmailSetting {
@@ -1097,7 +1097,7 @@ export default function AdminDashboard() {
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}
                             {(b.booking_add_ons?.length ?? 0) > 0 && (
-                              <Detail label="GEAR TO PREP" value={b.booking_add_ons!.map(a => `${a.equipment?.name ?? 'Item'}${a.quantity > 1 ? ` ×${a.quantity}` : ''}`).join(', ')} />
+                              <Detail label="GEAR TO PREP" value={b.booking_add_ons!.map(a => `${a.equipment?.name ?? 'Item'}${a.quantity > 1 ? ` ×${a.quantity}` : ''}${a.paid === false ? ' (UNPAID)' : ''}`).join(', ')} />
                             )}
                             {b.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={b.square_payment_id} mono />}
                           </div>

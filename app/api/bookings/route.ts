@@ -383,6 +383,7 @@ export async function POST(req: NextRequest) {
         equipment_id: l.equipment_id,
         quantity:     l.quantity,
         rate:         equipRates[l.equipment_id] ?? 0,
+        paid:         true, // paid as part of this booking's payment
       }))
       const { error: addonErr } = await supabase.from('booking_add_ons').insert(addons)
       if (addonErr) console.error('[bookings] add-on insert error:', addonErr)

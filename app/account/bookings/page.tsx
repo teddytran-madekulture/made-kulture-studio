@@ -11,7 +11,7 @@ interface Booking {
   customer_name: string
   acuity_appointment_id: string | null
   sets: { name: string } | null
-  booking_add_ons?: { quantity: number; rate: number; equipment: { name: string } | null }[]
+  booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
 }
 
 interface GearLine { id: string; name: string; rate: number; quantity: number }
@@ -109,6 +109,7 @@ export default function BookingsPage() {
                 {b.booking_add_ons!.map((a, i) => (
                   <div key={i} style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
                     {a.equipment?.name ?? 'Item'}{a.quantity > 1 ? ` × ${a.quantity}` : ''}
+                    {a.paid === false && <span style={{ color: '#e8c878', marginLeft: 6 }}>· payment pending</span>}
                   </div>
                 ))}
               </div>

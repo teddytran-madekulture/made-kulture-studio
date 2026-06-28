@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       square_payment_id,
       sets ( name ),
       customers ( name, email, phone, status, banned ),
-      booking_add_ons ( quantity, rate, equipment ( name ) )
+      booking_add_ons ( quantity, rate, paid, equipment ( name ) )
     `)
     .order('start_time', { ascending: false })
 
