@@ -58,6 +58,12 @@ interface CustomerNote {
   created_at: string
 }
 
+interface PricingOverrides {
+  hourly_rate?: number | null
+  equipment_discount_percent?: number | null
+  sets?: Record<string, number | null>
+}
+
 interface CustomerDetailData {
   id: string
   name: string
@@ -65,6 +71,7 @@ interface CustomerDetailData {
   phone: string
   status: string
   banned: boolean
+  pricingOverrides: PricingOverrides | null
   createdAt: string
   squareCustomerId: string | null
   acuityClientId: string | null
@@ -305,6 +312,8 @@ export default function AdminDashboard() {
   const [custNoteText,     setCustNoteText]     = useState('')
   const [custNoteTag,      setCustNoteTag]      = useState('general')
   const [custNoteAdding,   setCustNoteAdding]   = useState(false)
+  const [custPricingDraft, setCustPricingDraft] = useState<{ hourly_rate: string; equipment_discount_percent: string; sets: Record<string, string> }>({ hourly_rate: '', equipment_discount_percent: '', sets: {} })
+  const [custPricingSaving,setCustPricingSaving]= useState(false)
   const custSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [bookingsOpen,     setBookingsOpen]     = useState(true)
@@ -338,7 +347,20 @@ export default function AdminDashboard() {
     setCustDetailLoading(true)
     const res = await fetch(`/api/admin/customers/${id}`)
     const data = await res.json()
-    setCustDetail(data.customer ?? null)
+    const cust = data.customer ?? null
+    setCustDetail(cust)
+    if (cust?.pricingOverrides) {
+      const po = cust.pricingOverrides
+      setCustPricingDraft({
+        hourly_rate: po.hourly_rate != null ? String(po.hourly_rate) : '',
+        equipment_discount_percent: po.equipment_discount_percent != null ? String(po.equipment_discount_percent) : '',
+        sets: Object.fromEntries(
+          Object.entries(po.sets ?? {}).map(([k, v]) => [k, v != null ? String(v) : ''])
+        ),
+      })
+    } else {
+      setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {} })
+    }
     setCustDetailLoading(false)
   }, [])
 
@@ -1534,6 +1556,111 @@ export default function AdminDashboard() {
                   {custDetail.banned ? '⊘ UNBAN CUSTOMER' : '⊘ BAN CUSTOMER'}
                 </button>
               </div>
+
+              {/* Custom Pricing */}
+              {(() => {
+                const ALL_SETS: { slug: string; label: string; standard: number }[] = [
+                  { slug: 'set-a',         label: 'Set A',            standard: 40 },
+                  { slug: 'set-b',         label: 'Set B',            standard: 40 },
+                  { slug: 'set-c',         label: 'Set C',            standard: 40 },
+                  { slug: 'set-d',         label: 'Set D',            standard: 40 },
+                  { slug: 'concrete',      label: 'Concrete',         standard: 40 },
+                  { slug: 'vintage',       label: 'Vintage',          standard: 40 },
+                  { slug: 'cottage',       label: 'Cottage',          standard: 40 },
+                  { slug: 'watering-hole', label: 'Watering Hole',    standard: 75 },
+                  { slug: 'studio-one',    label: 'Studio One',       standard: 65 },
+                ]
+                const hasPricing = custDetail!.pricingOverrides != null
+                const smallInput = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '6px 8px', width: '70px', outline: 'none' } as const
+                return (
+                  <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>CUSTOM PRICING</div>
+                      {hasPricing && (
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#d4a843', background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.3)', padding: '2px 8px' }}>ACTIVE</span>
+                      )}
+                    </div>
+
+                    {/* Global rate */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', width: 130, flexShrink: 0 }}>Global rate (all sets)</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>$</span>
+                        <input type="number" min="0" placeholder="—" value={custPricingDraft.hourly_rate}
+                          onChange={e => setCustPricingDraft(d => ({ ...d, hourly_rate: e.target.value }))}
+                          style={smallInput} />
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>/hr</span>
+                      </div>
+                    </div>
+
+                    {/* Equipment discount */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', width: 130, flexShrink: 0 }}>Equipment discount</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input type="number" min="0" max="100" placeholder="0" value={custPricingDraft.equipment_discount_percent}
+                          onChange={e => setCustPricingDraft(d => ({ ...d, equipment_discount_percent: e.target.value }))}
+                          style={smallInput} />
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>% off</span>
+                      </div>
+                    </div>
+
+                    {/* Per-set overrides */}
+                    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.2)', marginBottom: 8 }}>PER-SET OVERRIDE (overrides global)</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: 14 }}>
+                      {ALL_SETS.map(s => (
+                        <div key={s.slug} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', width: 80, flexShrink: 0 }}>{s.label}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>$</span>
+                            <input type="number" min="0"
+                              placeholder={String(s.standard)}
+                              value={custPricingDraft.sets[s.slug] ?? ''}
+                              onChange={e => setCustPricingDraft(d => ({ ...d, sets: { ...d.sets, [s.slug]: e.target.value } }))}
+                              style={{ ...smallInput, width: '54px' }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button disabled={custPricingSaving} onClick={async () => {
+                        setCustPricingSaving(true)
+                        const overrides: PricingOverrides = {}
+                        if (custPricingDraft.hourly_rate !== '') overrides.hourly_rate = Number(custPricingDraft.hourly_rate)
+                        if (custPricingDraft.equipment_discount_percent !== '') overrides.equipment_discount_percent = Number(custPricingDraft.equipment_discount_percent)
+                        const sets: Record<string, number> = {}
+                        Object.entries(custPricingDraft.sets).forEach(([k, v]) => { if (v !== '') sets[k] = Number(v) })
+                        if (Object.keys(sets).length > 0) overrides.sets = sets
+                        const payload = Object.keys(overrides).length > 0 ? overrides : null
+                        const res = await fetch(`/api/admin/customers/${custDetail!.id}`, {
+                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ pricingOverrides: payload }),
+                        })
+                        if (res.ok) setCustDetail(d => d ? { ...d, pricingOverrides: payload } : d)
+                        setCustPricingSaving(false)
+                      }} style={{ background: '#d4a843', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000', opacity: custPricingSaving ? 0.6 : 1 }}>
+                        {custPricingSaving ? 'SAVING…' : 'SAVE PRICING'}
+                      </button>
+                      {hasPricing && (
+                        <button disabled={custPricingSaving} onClick={async () => {
+                          setCustPricingSaving(true)
+                          const res = await fetch(`/api/admin/customers/${custDetail!.id}`, {
+                            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ pricingOverrides: null }),
+                          })
+                          if (res.ok) {
+                            setCustDetail(d => d ? { ...d, pricingOverrides: null } : d)
+                            setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {} })
+                          }
+                          setCustPricingSaving(false)
+                        }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', padding: '7px 14px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>
+                          CLEAR
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Notes */}
               <div style={{ marginBottom: 16 }}>

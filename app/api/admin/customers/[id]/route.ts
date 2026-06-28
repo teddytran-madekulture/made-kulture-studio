@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const { data: customer, error } = await supabase
     .from('customers')
     .select(`
-      id, name, email, phone, status, banned, created_at,
+      id, name, email, phone, status, banned, pricing_overrides, created_at,
       square_customer_id, acuity_client_id,
       bookings (
         id, start_time, end_time, status, total_amount, source, created_at,
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       createdAt:        customer.created_at,
       squareCustomerId: customer.square_customer_id,
       acuityClientId:   customer.acuity_client_id,
+      pricingOverrides: customer.pricing_overrides ?? null,
       bookings,
       notes,
     }
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PATCH /api/admin/customers/[id]
-// Body: { name?, email?, phone?, status?, banned? }
+// Body: { name?, email?, phone?, status?, banned?, pricingOverrides? }
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -66,6 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.phone !== undefined) patch.phone  = body.phone
   if (body.status !== undefined) patch.status = body.status
   if (body.banned !== undefined) patch.banned = body.banned
+  if (body.pricingOverrides !== undefined) patch.pricing_overrides = body.pricingOverrides
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

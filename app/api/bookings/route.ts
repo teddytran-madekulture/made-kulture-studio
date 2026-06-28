@@ -93,12 +93,24 @@ const EQUIPMENT_PRICES: Record<string, number> = {
   'eq-13': 150, 'eq-14': 65,
 }
 
-function verifyTotal(body: BookingRequest): number {
-  const hours      = body.endHour - body.startHour
-  const setRate    = body.type === 'studio' ? 400 : (SET_PRICES[body.setSlug ?? ''] ?? 0)
+function verifyTotal(body: BookingRequest, pricingOverrides?: any): number {
+  const hours = body.endHour - body.startHour
+
+  let setRate = body.type === 'studio' ? 400 : (SET_PRICES[body.setSlug ?? ''] ?? 0)
+  if (pricingOverrides) {
+    const perSet = body.setSlug ? pricingOverrides.sets?.[body.setSlug] : undefined
+    const global = pricingOverrides.hourly_rate
+    if (perSet != null)  setRate = Number(perSet)
+    else if (global != null) setRate = Number(global)
+  }
+
   const spaceTotal = setRate * hours
-  const equipTotal = body.equipment.reduce((sum, id) => sum + (EQUIPMENT_PRICES[id] ?? 0), 0)
-  return (spaceTotal + equipTotal) * 100 // return cents
+  let equipTotal   = body.equipment.reduce((sum, id) => sum + (EQUIPMENT_PRICES[id] ?? 0), 0)
+  if (pricingOverrides?.equipment_discount_percent) {
+    equipTotal = Math.round(equipTotal * (1 - Number(pricingOverrides.equipment_discount_percent) / 100))
+  }
+
+  return (spaceTotal + equipTotal) * 100 // cents
 }
 
 // ─── SMS helpers ──────────────────────────────────────────────────────────────
@@ -163,9 +175,24 @@ export async function POST(req: NextRequest) {
   try {
     const body: BookingRequest = await req.json()
 
-    // 1. Verify price server-side (prevent tampering)
-    const verifiedCents = verifyTotal(body)
-    if (verifiedCents !== body.totalCents) {
+    // 1. Look up customer pricing overrides (do this before price verification)
+    let customerPricingOverrides: any = null
+    if (body.email) {
+      const { data: custPricing } = await supabase
+        .from('customers')
+        .select('pricing_overrides')
+        .eq('email', body.email.toLowerCase().trim())
+        .maybeSingle()
+      customerPricingOverrides = custPricing?.pricing_overrides ?? null
+    }
+
+    // 2. Verify price server-side (prevent tampering)
+    // Use custom pricing if available; also accept standard rate in case client showed standard price
+    const standardCents = verifyTotal(body)
+    const customCents   = customerPricingOverrides ? verifyTotal(body, customerPricingOverrides) : standardCents
+    const verifiedCents = customCents // charge the customer-specific rate
+
+    if (body.totalCents !== standardCents && body.totalCents !== customCents) {
       return NextResponse.json(
         { error: `Price mismatch. Expected $${verifiedCents / 100}, received $${body.totalCents / 100}.` },
         { status: 400 }
