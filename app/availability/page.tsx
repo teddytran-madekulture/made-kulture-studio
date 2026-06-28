@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import NavAuthLink from '@/components/NavAuthLink'
+import SiteNav from '@/components/SiteNav'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,7 @@ interface SetData {
 
 export default function AvailabilityPage() {
   const router  = useRouter()
+  const isMobile = useIsMobile()
   const min     = minDate()
   const [date, setDate]           = useState(min)
   const [sets, setSets]           = useState<Record<string, SetData>>({})
@@ -111,37 +114,10 @@ export default function AvailabilityPage() {
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
 
       {/* NAV */}
-      <nav style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '24px 40px',
-        background: 'linear-gradient(to bottom, rgba(8,8,8,0.98) 0%, transparent 100%)',
-      }}>
-        <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
-            MADE<br />KULTURE
-          </div>
-        </Link>
-        <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
-          {[['HOME', '/'], ['SETS', '/sets'], ['STUDIO RULES', '/studio-rules'], ['AVAILABILITY', '/availability'], ['BOOK', '/book']].map(([label, href]) => (
-            <Link key={label} href={href}
-              style={{
-                fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em',
-                color: label === 'AVAILABILITY' ? '#fff' : 'rgba(255,255,255,0.7)',
-                textDecoration: 'none',
-              }}
-            >{label}</Link>
-          ))}
-          <NavAuthLink />
-          <Link href="/book" style={{
-            fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
-            color: '#000', background: '#fff', padding: '10px 20px', borderRadius: 2, textDecoration: 'none',
-          }}>BOOK NOW ↗</Link>
-        </div>
-      </nav>
+      <SiteNav active="availability" />
 
       {/* PAGE */}
-      <div style={{ paddingTop: 120, paddingBottom: 80, paddingLeft: 40, paddingRight: 40, maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ paddingTop: isMobile ? 104 : 120, paddingBottom: 80, paddingLeft: isMobile ? 16 : 40, paddingRight: isMobile ? 16 : 40, maxWidth: 1400, margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 48 }}>

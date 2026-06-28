@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
+import SiteNav from '@/components/SiteNav'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 const SECTIONS = [
   {
@@ -133,32 +135,7 @@ const SECTIONS = [
 ]
 
 function Nav() {
-  return (
-    <nav style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '24px 40px',
-      background: 'linear-gradient(to bottom, rgba(8,8,8,0.95) 0%, transparent 100%)',
-    }}>
-      <Link href="/" style={{ textDecoration: 'none' }}>
-        <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
-          MADE<br />KULTURE
-        </div>
-      </Link>
-      <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
-        {[{ label: 'HOME', href: '/' }, { label: 'SETS', href: '/sets' }, { label: 'STUDIO RULES', href: '/studio-rules' }].map(item => (
-          <Link key={item.label} href={item.href}
-            style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: item.label === 'STUDIO RULES' ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
-            {item.label}
-          </Link>
-        ))}
-        <NavAuthLink />
-        <Link href="/book" style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '10px 20px', textDecoration: 'none' }}>
-          BOOK NOW
-        </Link>
-      </div>
-    </nav>
-  )
+  return <SiteNav active="studio rules" />
 }
 
 function AccordionItem({ q, a }: { q: string; a: string }) {
@@ -185,11 +162,12 @@ function AccordionItem({ q, a }: { q: string; a: string }) {
 }
 
 export default function StudioRulesPage() {
+  const isMobile = useIsMobile()
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
       <Nav />
 
-      <section style={{ paddingTop: 160, paddingBottom: 80, paddingLeft: 40, paddingRight: 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <section style={{ paddingTop: isMobile ? 104 : 160, paddingBottom: isMobile ? 52 : 80, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             <div style={{ width: 40, height: 1, background: 'rgba(255,255,255,0.4)' }} />
@@ -204,8 +182,8 @@ export default function StudioRulesPage() {
         </div>
       </section>
 
-      <section style={{ padding: '80px 40px 120px' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 72 }}>
+      <section style={{ padding: isMobile ? '52px 20px 80px' : '80px 40px 120px' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: isMobile ? 48 : 72 }}>
           {SECTIONS.map(section => (
             <div key={section.title}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 8 }}>
