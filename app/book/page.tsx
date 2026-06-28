@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ function loadGearCart(): GearLine[] {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 function BookingWizard() {
+  const isMobile = useIsMobile()
   const searchParams = useSearchParams()
   const typeParam  = searchParams.get('type') as BookingType | null
   const setParam   = searchParams.get('set')   // e.g. "set-a" (from availability chart)
@@ -344,7 +346,7 @@ function BookingWizard() {
         </div>
       </nav>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '120px 40px 80px' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: isMobile ? '92px 16px 56px' : '120px 40px 80px' }}>
 
         {/* Progress bar */}
         <div style={{ marginBottom: 60 }}>
@@ -364,7 +366,7 @@ function BookingWizard() {
         {/* ── STEP 1: Type ── */}
         {step === 1 && (
           <StepWrapper title="HOW WOULD YOU LIKE TO BOOK?">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
               {[
                 { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: 'Reserve one set by the hour. Up to 5 people. $40–$75/hr.', price: 'FROM $40/HR' },
                 { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private. Up to 30 people.', price: 'CONTACT FOR RATE' },
@@ -668,7 +670,7 @@ function BookingWizard() {
         {/* ── STEP 7 / FINAL: Confirm ── */}
         {((step === 7 && booking.type === 'set') || (step === 6 && booking.type === 'studio')) && (
           <StepWrapper title="CONFIRM & PAY">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 28 : 40 }}>
 
               {/* Summary */}
               <div>
