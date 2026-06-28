@@ -38,6 +38,40 @@ interface CustomerResult {
   hasCardOnFile: boolean
 }
 
+interface CustomerListItem {
+  id: string
+  name: string
+  email: string
+  phone: string
+  status: string
+  banned: boolean
+  createdAt: string
+  totalBookings: number
+  confirmedBookings: number
+  totalSpend: number
+}
+
+interface CustomerNote {
+  id: string
+  note: string
+  tag: string
+  created_at: string
+}
+
+interface CustomerDetailData {
+  id: string
+  name: string
+  email: string
+  phone: string
+  status: string
+  banned: boolean
+  createdAt: string
+  squareCustomerId: string | null
+  acuityClientId: string | null
+  bookings: any[]
+  notes: CustomerNote[]
+}
+
 interface SquareCard {
   id: string
   brand: string
@@ -205,7 +239,7 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers'>('list')
   const [calDate,       setCalDate]       = useState(todayStr)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -254,6 +288,25 @@ export default function AdminDashboard() {
   const [profileShowOld,    setProfileShowOld]    = useState(false)
   const [profileShowNew,    setProfileShowNew]    = useState(false)
 
+  // Customers view
+  const [custList,         setCustList]         = useState<CustomerListItem[]>([])
+  const [custTotal,        setCustTotal]        = useState(0)
+  const [custPage,         setCustPage]         = useState(1)
+  const [custSearch,       setCustSearch]       = useState('')
+  const [custFilter,       setCustFilter]       = useState('all')
+  const [custLoading,      setCustLoading]      = useState(false)
+  const [custImporting,    setCustImporting]    = useState(false)
+  const [custImportResult, setCustImportResult] = useState<{ totalUpserted: number } | null>(null)
+  const [custDetail,       setCustDetail]       = useState<CustomerDetailData | null>(null)
+  const [custDetailLoading,setCustDetailLoading]= useState(false)
+  const [custEditMode,     setCustEditMode]     = useState(false)
+  const [custEditDraft,    setCustEditDraft]    = useState({ name: '', email: '', phone: '' })
+  const [custEditSaving,   setCustEditSaving]   = useState(false)
+  const [custNoteText,     setCustNoteText]     = useState('')
+  const [custNoteTag,      setCustNoteTag]      = useState('general')
+  const [custNoteAdding,   setCustNoteAdding]   = useState(false)
+  const custSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const [bookingsOpen,     setBookingsOpen]     = useState(true)
 
   const [emailSettings,    setEmailSettings]    = useState<EmailSetting[]>([])
@@ -263,6 +316,31 @@ export default function AdminDashboard() {
   const [emailDraft,       setEmailDraft]        = useState<Partial<EmailSetting>>({})
   const [emailSaveMsg,     setEmailSaveMsg]      = useState<string | null>(null)
   const [emailPreviewKey,  setEmailPreviewKey]   = useState<string | null>(null)
+
+  // ── Customer fetch helpers ───────────────────────────────────────────────
+  const fetchCustomers = useCallback(async (search: string, filter: string, page: number) => {
+    setCustLoading(true)
+    const params = new URLSearchParams({ page: String(page), limit: '50' })
+    if (search.trim().length >= 2) params.set('q', search.trim())
+    if (filter !== 'all') params.set('status', filter)
+    const res = await fetch(`/api/admin/customers?${params}`, { headers: { 'x-admin-password': document.cookie.match(/admin_token=([^;]+)/)?.[1] ?? '' } })
+    const data = await res.json()
+    setCustList(data.customers ?? [])
+    setCustTotal(data.total ?? 0)
+    setCustLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (view === 'customers') fetchCustomers(custSearch, custFilter, custPage)
+  }, [view, custPage, custFilter]) // eslint-disable-line
+
+  const fetchCustomerDetail = useCallback(async (id: string) => {
+    setCustDetailLoading(true)
+    const res = await fetch(`/api/admin/customers/${id}`)
+    const data = await res.json()
+    setCustDetail(data.customer ?? null)
+    setCustDetailLoading(false)
+  }, [])
 
   const fetchEmailSettings = useCallback(async () => {
     setEmailLoading(true)
@@ -593,7 +671,7 @@ export default function AdminDashboard() {
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
-          {([['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+          {([['customers', '👤', 'Customers'], ['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -602,7 +680,7 @@ export default function AdminDashboard() {
               fontFamily: 'Inter, sans-serif', fontSize: 13,
               color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
             }}>
-              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
+              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: v === 'customers' ? 12 : undefined }}>{icon}</span>{label}
             </button>
           ))}
         </nav>
@@ -1002,6 +1080,139 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* ── CUSTOMERS ─────────────────────────────────────────────────── */}
+        {view === 'customers' && (
+          <div style={{ paddingBottom: 80 }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+              <div>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 4 }}>CUSTOMERS</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                  {custTotal > 0 ? `${custTotal} total` : 'No customers yet'}
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  setCustImporting(true)
+                  setCustImportResult(null)
+                  const res = await fetch('/api/admin/customers/import', { method: 'POST' })
+                  const data = await res.json()
+                  setCustImportResult(data)
+                  setCustImporting(false)
+                  fetchCustomers(custSearch, custFilter, custPage)
+                }}
+                disabled={custImporting}
+                style={{
+                  background: custImporting ? 'rgba(255,255,255,0.08)' : '#d4a843',
+                  border: 'none', padding: '10px 20px', cursor: custImporting ? 'default' : 'pointer',
+                  fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
+                  color: custImporting ? 'rgba(255,255,255,0.3)' : '#000',
+                }}>
+                {custImporting ? 'IMPORTING...' : '↓ IMPORT FROM SQUARE + ACUITY'}
+              </button>
+            </div>
+
+            {custImportResult && (
+              <div style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#4ade80', fontFamily: 'Inter, sans-serif' }}>
+                ✓ Imported {custImportResult.totalUpserted} customers — Square + Acuity merged by email
+              </div>
+            )}
+
+            {/* Search + filter */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+              <input
+                placeholder="Search name, email, phone…"
+                value={custSearch}
+                onChange={e => {
+                  setCustSearch(e.target.value)
+                  if (custSearchTimer.current) clearTimeout(custSearchTimer.current)
+                  custSearchTimer.current = setTimeout(() => {
+                    setCustPage(1)
+                    fetchCustomers(e.target.value, custFilter, 1)
+                  }, 350)
+                }}
+                style={{ ...inputStyle, maxWidth: 320, padding: '9px 14px' }}
+              />
+              <div style={{ display: 'flex', gap: 4 }}>
+                {(['all', 'vip', 'warning', 'banned'] as const).map(f => (
+                  <button key={f} onClick={() => { setCustFilter(f); setCustPage(1); fetchCustomers(custSearch, f, 1) }}
+                    style={{
+                      padding: '7px 14px', border: 'none', cursor: 'pointer',
+                      fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', fontWeight: 500,
+                      background: custFilter === f ? '#fff' : 'rgba(255,255,255,0.06)',
+                      color: custFilter === f ? '#000' : 'rgba(255,255,255,0.45)',
+                    }}>
+                    {f.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Table */}
+            <div style={{ border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 80px 80px 100px', background: 'rgba(255,255,255,0.03)', padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                {['NAME', 'EMAIL', 'PHONE', 'BOOKINGS', 'SPEND', 'STATUS'].map(h => (
+                  <div key={h} style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>{h}</div>
+                ))}
+              </div>
+
+              {custLoading ? (
+                <div style={{ padding: '40px 16px', textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>Loading…</div>
+              ) : custList.length === 0 ? (
+                <div style={{ padding: '40px 16px', textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>No customers found</div>
+              ) : custList.map(c => {
+                const statusColor: Record<string, string> = { vip: '#d4a843', warning: '#f97316', banned: '#ef4444', regular: 'rgba(255,255,255,0.25)' }
+                const statusBg:    Record<string, string> = { vip: 'rgba(212,168,67,0.1)', warning: 'rgba(249,115,22,0.1)', banned: 'rgba(239,68,68,0.1)', regular: 'rgba(255,255,255,0.04)' }
+                const s = c.banned ? 'banned' : (c.status ?? 'regular')
+                return (
+                  <div key={c.id}
+                    onClick={() => { setCustDetail(null); fetchCustomerDetail(c.id) }}
+                    style={{
+                      display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 80px 80px 100px',
+                      padding: '13px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      cursor: 'pointer', alignItems: 'center',
+                      background: custDetail?.id === c.id ? 'rgba(255,255,255,0.05)' : 'transparent',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = custDetail?.id === c.id ? 'rgba(255,255,255,0.05)' : 'transparent')}
+                  >
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff', fontWeight: 500 }}>{c.name || '—'}</div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{c.phone || '—'}</div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>{c.totalBookings}</div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>${c.totalSpend.toLocaleString()}</div>
+                    <div>
+                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', padding: '3px 8px', background: statusBg[s] ?? statusBg.regular, color: statusColor[s] ?? statusColor.regular, border: `1px solid ${statusColor[s] ?? statusColor.regular}30` }}>
+                        {s.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Pagination */}
+            {custTotal > 50 && (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 24 }}>
+                <button onClick={() => { setCustPage(p => Math.max(1, p - 1)); fetchCustomers(custSearch, custFilter, Math.max(1, custPage - 1)) }}
+                  disabled={custPage === 1}
+                  style={{ padding: '7px 16px', background: 'rgba(255,255,255,0.06)', border: 'none', color: custPage === 1 ? 'rgba(255,255,255,0.2)' : '#fff', cursor: custPage === 1 ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12 }}>
+                  ← Prev
+                </button>
+                <span style={{ padding: '7px 12px', fontSize: 12, color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter, sans-serif' }}>
+                  Page {custPage} of {Math.ceil(custTotal / 50)}
+                </span>
+                <button onClick={() => { setCustPage(p => p + 1); fetchCustomers(custSearch, custFilter, custPage + 1) }}
+                  disabled={custPage >= Math.ceil(custTotal / 50)}
+                  style={{ padding: '7px 16px', background: 'rgba(255,255,255,0.06)', border: 'none', color: custPage >= Math.ceil(custTotal / 50) ? 'rgba(255,255,255,0.2)' : '#fff', cursor: custPage >= Math.ceil(custTotal / 50) ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12 }}>
+                  Next →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── PROFILE ───────────────────────────────────────────────────── */}
         {view === 'profile' && (
           <div style={{ maxWidth: 600, paddingBottom: 80 }}>
@@ -1197,6 +1408,204 @@ export default function AdminDashboard() {
 
       </div>
       </div>{/* end main content */}
+
+      {/* CUSTOMER DETAIL PANEL */}
+      {custDetail && view === 'customers' && (
+        <div style={{
+          position: 'fixed', right: 0, top: 0, bottom: 0, width: 420,
+          background: '#0d0d0d', borderLeft: '1px solid rgba(255,255,255,0.08)',
+          overflowY: 'auto', zIndex: 100, padding: '28px 28px 40px',
+          fontFamily: 'Inter, sans-serif',
+        }}>
+          {custDetailLoading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Loading…</div>
+          ) : (
+            <>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+                <div>
+                  <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em' }}>
+                    {custDetail.name || custDetail.email}
+                  </div>
+                  {(() => {
+                    const statusColor: Record<string, string> = { vip: '#d4a843', warning: '#f97316', banned: '#ef4444', regular: 'rgba(255,255,255,0.25)' }
+                    const s = custDetail.banned ? 'banned' : custDetail.status
+                    return (
+                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', padding: '2px 8px', background: `${statusColor[s] ?? statusColor.regular}18`, color: statusColor[s] ?? statusColor.regular, border: `1px solid ${statusColor[s] ?? statusColor.regular}40`, marginTop: 4, display: 'inline-block' }}>
+                        {s.toUpperCase()}
+                      </span>
+                    )
+                  })()}
+                </div>
+                <button onClick={() => setCustDetail(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&#x2715;</button>
+              </div>
+
+              {/* Info + Edit */}
+              {custEditMode ? (
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '16px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {(['name', 'email', 'phone'] as const).map(field => (
+                    <div key={field}>
+                      <label style={labelStyle}>{field.toUpperCase()}</label>
+                      <input value={custEditDraft[field]} onChange={e => setCustEditDraft(d => ({ ...d, [field]: e.target.value }))}
+                        style={{ ...inputStyle, fontSize: 13, padding: '8px 12px' }} />
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button onClick={async () => {
+                      setCustEditSaving(true)
+                      const res = await fetch(`/api/admin/customers/${custDetail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(custEditDraft) })
+                      if (res.ok) {
+                        const data = await res.json()
+                        setCustDetail(d => d ? { ...d, ...data.customer } : d)
+                        setCustList(list => list.map(c => c.id === custDetail.id ? { ...c, name: data.customer.name, email: data.customer.email, phone: data.customer.phone } : c))
+                        setCustEditMode(false)
+                      }
+                      setCustEditSaving(false)
+                    }} style={{ background: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000' }}>
+                      {custEditSaving ? 'SAVING…' : 'SAVE'}
+                    </button>
+                    <button onClick={() => setCustEditMode(false)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>CANCEL</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Detail label="EMAIL" value={custDetail.email} />
+                  <Detail label="PHONE" value={custDetail.phone || '—'} />
+                  <Detail label="MEMBER SINCE" value={new Date(custDetail.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} />
+                  <button onClick={() => { setCustEditDraft({ name: custDetail.name, email: custDetail.email, phone: custDetail.phone }); setCustEditMode(true) }}
+                    style={{ marginTop: 4, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '7px 14px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)', alignSelf: 'flex-start' }}>
+                    EDIT INFO
+                  </button>
+                </div>
+              )}
+
+              {/* Status + Ban */}
+              <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>STATUS</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {(['regular', 'vip', 'warning'] as const).map(s => (
+                    <button key={s} onClick={async () => {
+                      const res = await fetch(`/api/admin/customers/${custDetail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s }) })
+                      if (res.ok) {
+                        setCustDetail(d => d ? { ...d, status: s } : d)
+                        setCustList(list => list.map(c => c.id === custDetail.id ? { ...c, status: s } : c))
+                      }
+                    }} style={{
+                      padding: '5px 12px', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
+                      background: custDetail.status === s && !custDetail.banned ? '#fff' : 'rgba(255,255,255,0.06)',
+                      color: custDetail.status === s && !custDetail.banned ? '#000' : 'rgba(255,255,255,0.5)',
+                    }}>{s.toUpperCase()}</button>
+                  ))}
+                </div>
+                <button onClick={async () => {
+                  const newBanned = !custDetail.banned
+                  const res = await fetch(`/api/admin/customers/${custDetail.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ banned: newBanned }) })
+                  if (res.ok) {
+                    setCustDetail(d => d ? { ...d, banned: newBanned } : d)
+                    setCustList(list => list.map(c => c.id === custDetail.id ? { ...c, banned: newBanned } : c))
+                  }
+                }} style={{
+                  width: '100%', padding: '9px', border: custDetail.banned ? 'none' : '1px solid rgba(239,68,68,0.4)', cursor: 'pointer',
+                  fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
+                  background: custDetail.banned ? '#ef4444' : 'transparent',
+                  color: custDetail.banned ? '#fff' : '#ef4444',
+                }}>
+                  {custDetail.banned ? '⊘ UNBAN CUSTOMER' : '⊘ BAN CUSTOMER'}
+                </button>
+              </div>
+
+              {/* Notes */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>NOTES</div>
+
+                {/* Add note */}
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '12px 14px', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    {(['general', 'vip', 'warning', 'ban'] as const).map(t => (
+                      <button key={t} onClick={() => setCustNoteTag(t)} style={{
+                        padding: '4px 10px', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
+                        background: custNoteTag === t ? '#fff' : 'rgba(255,255,255,0.06)',
+                        color: custNoteTag === t ? '#000' : 'rgba(255,255,255,0.4)',
+                      }}>{t.toUpperCase()}</button>
+                    ))}
+                  </div>
+                  <textarea
+                    placeholder="Add a note…"
+                    value={custNoteText}
+                    onChange={e => setCustNoteText(e.target.value)}
+                    rows={2}
+                    style={{ ...inputStyle, fontSize: 13, resize: 'none', marginBottom: 8 }}
+                  />
+                  <button onClick={async () => {
+                    if (!custNoteText.trim()) return
+                    setCustNoteAdding(true)
+                    const res = await fetch(`/api/admin/customers/${custDetail.id}/notes`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ note: custNoteText, tag: custNoteTag }),
+                    })
+                    if (res.ok) {
+                      const data = await res.json()
+                      setCustDetail(d => d ? { ...d, notes: [data.note, ...d.notes] } : d)
+                      setCustNoteText('')
+                    }
+                    setCustNoteAdding(false)
+                  }} style={{ background: '#fff', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000' }}>
+                    {custNoteAdding ? 'ADDING…' : 'ADD NOTE'}
+                  </button>
+                </div>
+
+                {/* Note list */}
+                {custDetail.notes.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', padding: '8px 0' }}>No notes yet</div>
+                ) : custDetail.notes.map(n => {
+                  const tagColor: Record<string, string> = { vip: '#d4a843', warning: '#f97316', ban: '#ef4444', general: 'rgba(255,255,255,0.3)' }
+                  return (
+                    <div key={n.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '10px 12px', marginBottom: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: tagColor[n.tag] ?? tagColor.general }}>{n.tag.toUpperCase()}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+                            {new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                          <button onClick={async () => {
+                            const res = await fetch(`/api/admin/customers/${custDetail.id}/notes/${n.id}`, { method: 'DELETE' })
+                            if (res.ok) setCustDetail(d => d ? { ...d, notes: d.notes.filter(x => x.id !== n.id) } : d)
+                          }} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.25)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>&#x2715;</button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{n.note}</div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Booking history */}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>
+                  BOOKING HISTORY ({custDetail.bookings.length})
+                </div>
+                {custDetail.bookings.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>No bookings</div>
+                ) : custDetail.bookings.slice(0, 10).map((b: any) => (
+                  <div key={b.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 13, color: '#fff', marginBottom: 2 }}>{b.sets?.name || 'Full Studio'}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{fmtDate(b.start_time)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' as const }}>
+                      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 2 }}>${(b.total_amount ?? 0).toLocaleString()}</div>
+                      <span style={{ fontSize: 10, color: b.status === 'confirmed' ? '#4ade80' : b.status === 'cancelled' ? '#ef4444' : 'rgba(255,255,255,0.35)', letterSpacing: '0.08em' }}>
+                        {b.status.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* BOOKING DETAIL PANEL */}
       {detailBooking && (

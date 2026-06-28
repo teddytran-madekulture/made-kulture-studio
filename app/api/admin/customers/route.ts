@@ -7,42 +7,58 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-
-// GET /api/admin/customers?q=jane
+// GET /api/admin/customers?q=jane&page=1&limit=50&status=banned
 export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const q = req.nextUrl.searchParams.get('q')?.trim()
-  if (!q || q.length < 2) return NextResponse.json({ customers: [] })
+  const { searchParams } = req.nextUrl
+  const q      = searchParams.get('q')?.trim()
+  const status = searchParams.get('status')   // 'banned' | 'vip' | 'warning' | 'regular' | null
+  const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
+  const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '50'))
+  const offset = (page - 1) * limit
 
-  // Search by name, email, or phone
-  const { data, error } = await supabase
+  let query = supabase
     .from('customers')
     .select(`
-      id, name, email, phone,
-      bookings ( square_customer_id, square_card_id, created_at )
-    `)
-    .or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
-    .limit(8)
+      id, name, email, phone, status, banned, created_at,
+      square_customer_id, acuity_client_id,
+      bookings ( id, status, total_amount )
+    `, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (q && q.length >= 2) {
+    query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
+  }
+
+  if (status === 'banned') {
+    query = query.eq('banned', true)
+  } else if (status && status !== 'all') {
+    query = query.eq('status', status)
+  }
+
+  const { data, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Pull the most recent square_customer_id from their bookings
-  const enriched = (data || []).map(c => {
-    const sorted = (c.bookings as any[])
-      .filter(b => b.square_customer_id)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
+  const customers = (data ?? []).map(c => {
+    const bkgs = (c.bookings as any[]) ?? []
     return {
       id:               c.id,
       name:             c.name,
       email:            c.email,
       phone:            c.phone,
-      squareCustomerId: sorted[0]?.square_customer_id ?? null,
-      squareCardId:     sorted[0]?.square_card_id ?? null,
-      hasCardOnFile:    !!sorted[0]?.square_customer_id,
+      status:           c.status ?? 'regular',
+      banned:           c.banned ?? false,
+      createdAt:        c.created_at,
+      squareCustomerId: c.square_customer_id,
+      acuityClientId:   c.acuity_client_id,
+      totalBookings:    bkgs.length,
+      confirmedBookings: bkgs.filter(b => b.status === 'confirmed').length,
+      totalSpend:       bkgs.reduce((sum: number, b: any) => sum + (b.total_amount ?? 0), 0),
     }
   })
 
-  return NextResponse.json({ customers: enriched })
+  return NextResponse.json({ customers, total: count ?? 0, page, limit })
 }
