@@ -41,7 +41,7 @@ export default function Home() {
         background: 'linear-gradient(to bottom, rgba(8,8,8,0.95) 0%, transparent 100%)',
       }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
             MADE<br />KULTURE
           </div>
         </Link>
@@ -74,7 +74,7 @@ export default function Home() {
           {['HOME','SETS','GEAR','STUDIO RULES','AVAILABILITY','BOOK'].map(item => (
             <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase().replace(/ /g, '-')}`}
               onClick={() => setMenuOpen(false)}
-              style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: '#fff', textDecoration: 'none', padding: '6px 0' }}>
+              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: '#fff', textDecoration: 'none', padding: '6px 0' }}>
               {item}
             </Link>
           ))}
@@ -121,11 +121,11 @@ export default function Home() {
           <div style={{ display:'flex', gap:16, flexWrap:'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
             <Link href="/book?type=set" className="btn" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
               <span>BOOK A SET</span>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><path d="M7 17 17 7M9 7h8v8"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
             <Link href="/book?type=studio" className="btn btn-ghost" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
               <span>BOOK THE STUDIO</span>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><path d="M7 17 17 7M9 7h8v8"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
           </div>
         </div>
@@ -177,13 +177,13 @@ export default function Home() {
                   style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                 />
-                <div style={{ position:'absolute', bottom:12, left:14, fontFamily:'Bebas Neue, sans-serif', fontSize:13, letterSpacing:'0.12em', color:'rgba(255,255,255,0.18)' }}>{set.name.toUpperCase()}</div>
+                <div style={{ position:'absolute', bottom:12, left:14, fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:13, letterSpacing:'0.12em', color:'rgba(255,255,255,0.18)' }}>{set.name.toUpperCase()}</div>
               </div>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <span className="label" style={{ color:'rgba(255,255,255,0.3)' }}>{set.num}</span>
                 <span style={{ fontSize:11, fontFamily:'Inter', fontWeight:500, letterSpacing:'0.1em', color:'rgba(255,255,255,0.5)' }}>{set.price} / HR</span>
               </div>
-              <div style={{ fontFamily:'Bebas Neue, sans-serif', fontSize: isMobile ? 19 : 28, color:'#fff', letterSpacing:'0.02em' }}>{set.name.toUpperCase()}</div>
+              <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 19 : 28, color:'#fff', letterSpacing:'0.02em' }}>{set.name.toUpperCase()}</div>
               <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', lineHeight:1.6 }}>{set.desc}</p>
               <div style={{ marginTop:'auto', paddingTop:16 }}>
                 <span style={{ fontSize:11, fontFamily:'Inter', fontWeight:500, letterSpacing:'0.15em', color:'rgba(255,255,255,0.4)' }}>BOOK THIS SET ↗</span>
@@ -313,7 +313,7 @@ export default function Home() {
       <footer style={{ borderTop:'1px solid rgba(255,255,255,0.1)', padding:'60px 40px 40px' }}>
         <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '2fr 1fr 1fr 1fr', gap: isMobile ? 24 : 40, marginBottom:60 }}>
           <div>
-            <div style={{ fontFamily:'Bebas Neue, sans-serif', fontSize:22, letterSpacing:'0.05em', color:'#fff', lineHeight:1, marginBottom:20 }}>MADE<br />KULTURE</div>
+            <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:22, letterSpacing:'0.05em', color:'#fff', lineHeight:1, marginBottom:20 }}>MADE<br />KULTURE</div>
             <p style={{ fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.7, maxWidth:260 }}>A multi-set creative studio in Houston built for photographers, videographers, brands, and creators.</p>
           </div>
           <div>
