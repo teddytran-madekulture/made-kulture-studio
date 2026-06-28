@@ -178,8 +178,9 @@ function BookingWizard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>{g.name}</span>
             <a href={`/gear#${g.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-              style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.35)', textDecoration: 'none', flexShrink: 0 }}>
-              details ↗
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.35)', textDecoration: 'none', flexShrink: 0 }}>
+              details
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </a>
           </div>
           <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>${g.rate}</div>
@@ -443,7 +444,7 @@ function BookingWizard() {
                 style={{
                   background: 'transparent', border: '1px solid rgba(255,255,255,0.2)',
                   color: '#fff', padding: '16px 20px', fontSize: 16,
-                  fontFamily: 'Inter', width: '100%', cursor: 'pointer',
+                  fontFamily: 'Inter', width: '100%', maxWidth: '100%', minWidth: 0, cursor: 'pointer',
                   outline: 'none', colorScheme: 'dark', boxSizing: 'border-box',
                 }}
               />
@@ -795,8 +796,9 @@ function SuccessScreen({ booking, selectedSet }: { booking: BookingState; select
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6, marginBottom: 48 }}>
           Questions? Text us at <strong style={{ color: '#fff' }}>(832) 408-1631</strong>
         </p>
-        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 28px', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', textDecoration: 'none', fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em' }}>
-          BACK TO HOME ↗
+        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 28px', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', textDecoration: 'none', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em' }}>
+          BACK TO HOME
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
         </Link>
       </div>
     </div>
