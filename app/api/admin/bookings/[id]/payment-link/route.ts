@@ -73,4 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: true, url, smsError })
   } catch (err: any) {
     console.error('Payment link error:', err)
-    c
+    const msg = err?.errors?.[0]?.detail || err.message || 'Failed to create payment link'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}

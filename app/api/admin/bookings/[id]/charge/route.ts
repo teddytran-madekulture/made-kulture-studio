@@ -91,4 +91,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     return NextResponse.json({ success: true, squarePaymentId, smsError })
   } catch (err: any) {
-    console.error('Charge err
+    console.error('Charge error:', err)
+    const msg = (err as any)?.errors?.[0]?.detail || (err as any)?.message || 'Payment failed'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}

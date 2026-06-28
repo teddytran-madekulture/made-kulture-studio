@@ -77,4 +77,78 @@ export async function POST(req: NextRequest) {
   const endISO   = `${date}T${String(endHour).padStart(2, '0')}:00:00-05:00`
 
   const { data: booking, error } = await supabase
-    .from('bo
+    .from('bookings')
+    .insert({
+      set_id:       setId,
+      customer_id:  customerData?.id,
+      start_time:   startISO,
+      end_time:     endISO,
+      status:       'confirmed',
+      total_amount: totalAmount,
+      base_amount:  totalAmount,
+      source:       'manual',
+      notes,
+    })
+    .select('id')
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Send confirmation SMS if requested
+  if (sendSms && phone) {
+    const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    const startLabel = startHour >= 12 ? `${startHour === 12 ? 12 : startHour - 12}pm` : `${startHour}am`
+    const endLabel   = endHour   >= 12 ? `${endHour   === 12 ? 12 : endHour   - 12}pm` : `${endHour}am`
+    const msg = [
+      `Hi ${name}! Your Made Kulture booking is confirmed.`,
+      ``,
+      `📍 4825 Gulf Freeway, Houston TX 77023`,
+      `📅 ${dateLabel}`,
+      `🕐 ${startLabel} – ${endLabel}`,
+      ``,
+      `Questions? Text (832) 408-1631`,
+    ].join('\n')
+
+    await twilioClient.messages.create({
+      body: msg,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to:   normalizePhone(phone),
+    }).catch(e => console.error('Confirmation SMS error:', e))
+  }
+
+  // Send emails (non-blocking)
+  if (booking?.id && email) {
+    const setDisplayName = SLUG_TO_NAME[setSlug] ?? (setSlug === 'studio' ? 'Full Studio Takeover' : setSlug)
+    const dateLabel  = formatDateLabel(date)
+    const startLabel = formatTimeLabel(startHour)
+    const endLabel   = formatTimeLabel(endHour)
+
+    sendBookingConfirmation({
+      customerName:  name,
+      customerEmail: email,
+      setName:       setDisplayName,
+      date:          dateLabel,
+      startTime:     startLabel,
+      endTime:       endLabel,
+      totalAmount:   totalAmount,
+      bookingId:     booking.id,
+      notes:         notes || undefined,
+    }).catch(e => console.error('Email confirmation error:', e))
+
+    sendNewBookingAlert({
+      customerName:  name,
+      customerEmail: email,
+      customerPhone: phone,
+      setName:       setDisplayName,
+      date:          dateLabel,
+      startTime:     startLabel,
+      endTime:       endLabel,
+      totalAmount:   totalAmount,
+      bookingId:     booking.id,
+      source:        'manual',
+      notes:         notes || undefined,
+    }).catch(e => console.error('Email alert error:', e))
+  }
+
+  return NextResponse.json({ success: true, bookingId: booking?.id })
+}
