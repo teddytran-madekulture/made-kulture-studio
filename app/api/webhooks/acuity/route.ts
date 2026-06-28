@@ -131,77 +131,98 @@ function parseTimes(
   }
 }
 
+// ─── Fetch full appointment from the Acuity API ───────────────────────────────
+// Acuity webhooks only POST { action, id, calendarID, appointmentTypeID } — NOT
+// the appointment details. So we call back to the API with the id to get the
+// full record (datetime, type, customer, price, etc.).
+async function fetchAcuityAppointment(id: string): Promise<any | null> {
+  const userId = process.env.ACUITY_USER_ID
+  const apiKey = process.env.ACUITY_API_KEY
+  if (!userId || !apiKey) {
+    console.error('[Acuity webhook] Missing ACUITY_USER_ID / ACUITY_API_KEY env vars')
+    return null
+  }
+  const credentials = Buffer.from(`${userId}:${apiKey}`).toString('base64')
+  try {
+    const res = await fetch(`https://acuityscheduling.com/api/v1/appointments/${id}`, {
+      headers: { Authorization: `Basic ${credentials}` },
+    })
+    if (!res.ok) {
+      console.error(`[Acuity webhook] appointment fetch failed: ${res.status}`)
+      return null
+    }
+    return await res.json()
+  } catch (err) {
+    console.error('[Acuity webhook] appointment fetch error:', err)
+    return null
+  }
+}
+
 // ─── POST /api/webhooks/acuity ────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
     const payload = await parsePayload(req)
-
-    // Log raw payload on first run — useful for confirming field names
     console.log('[Acuity webhook] received:', JSON.stringify(payload))
 
-    const {
-      id: acuityId,
-      action,
-      type: appointmentType,
-      firstName,
-      lastName,
-      email,
-      phone,
-      datetime,
-      date,
-      endTime,
-      duration,
-      notes,
-      price,
-      paid,
-    } = payload
+    const acuityId  = payload.id
+    const rawAction = (payload.action ?? '').toLowerCase()
 
-    if (!acuityId || !action) {
+    if (!acuityId || !rawAction) {
       return NextResponse.json({ error: 'Missing id or action' }, { status: 400 })
     }
 
-    // ── Optional verification (uncomment to enable) ──────────────────────────
-    // const valid = await verifyAcuityAppointment(acuityId)
-    // if (!valid) return NextResponse.json({ error: 'Appointment not found in Acuity' }, { status: 401 })
-
     // ── Cancellation ─────────────────────────────────────────────────────────
-    if (action === 'cancelled') {
+    // Acuity sends "canceled" (one l); accept both spellings to be safe.
+    if (rawAction.includes('cancel')) {
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })
-        .eq('acuity_appointment_id', acuityId)
-
+        .eq('acuity_appointment_id', String(acuityId))
       if (error) console.error('[Acuity webhook] cancel error:', error)
       return NextResponse.json({ ok: true, action: 'cancelled' })
     }
 
-    // ── Ignore unknown actions ────────────────────────────────────────────────
-    if (!['scheduled', 'rescheduled', 'changed'].includes(action)) {
+    // ── Ignore actions we don't sync ──────────────────────────────────────────
+    if (!['scheduled', 'rescheduled', 'changed'].includes(rawAction)) {
       return NextResponse.json({ ok: true, action: 'ignored' })
     }
 
+    // ── Fetch full appointment details from Acuity ────────────────────────────
+    const apt = await fetchAcuityAppointment(acuityId)
+    if (!apt || !apt.id) {
+      console.error('[Acuity webhook] could not fetch appointment', acuityId)
+      // Return 200 so Acuity doesn't spam retries; the error is logged for review.
+      return NextResponse.json({ ok: false, reason: 'appointment-fetch-failed' })
+    }
+
+    // Appointment may have been canceled between the hook and our fetch.
+    if (apt.canceled) {
+      await supabase.from('bookings').update({ status: 'cancelled' }).eq('acuity_appointment_id', String(acuityId))
+      return NextResponse.json({ ok: true, action: 'cancelled' })
+    }
+
     // ── Resolve set ───────────────────────────────────────────────────────────
-    const { setId, setName } = await resolveSet(appointmentType ?? '')
+    const { setId, setName } = await resolveSet(apt.type ?? '')
 
     // ── Parse times ───────────────────────────────────────────────────────────
-    const durationMins = duration ? parseInt(duration) : undefined
-    const times = datetime ? parseTimes(datetime, endTime, date, durationMins) : null
+    const durationMins = apt.duration ? parseInt(apt.duration) : undefined
+    const times = apt.datetime ? parseTimes(apt.datetime, apt.endTime, apt.date, durationMins) : null
 
     if (!times) {
-      console.error('[Acuity webhook] Could not parse datetime:', { datetime, endTime, date })
+      console.error('[Acuity webhook] Could not parse datetime:', { datetime: apt.datetime, endTime: apt.endTime, date: apt.date })
       return NextResponse.json({ error: 'Could not parse appointment time' }, { status: 422 })
     }
 
     // ── Upsert customer ───────────────────────────────────────────────────────
-    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+    const fullName = [apt.firstName, apt.lastName].filter(Boolean).join(' ').trim()
     let customerId: string | undefined
 
-    if (email) {
+    if (apt.email) {
       const { data: customer } = await supabase
         .from('customers')
         .upsert(
-          { email, name: fullName, phone: phone ?? '' },
+          { email: apt.email, name: fullName, phone: apt.phone ?? '' },
           { onConflict: 'email' }
         )
         .select('id')
@@ -210,23 +231,21 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Upsert booking ────────────────────────────────────────────────────────
-    const totalAmount   = price ? parseFloat(price) : 0
-    const hours         = durationMins ? durationMins / 60 : 0
-    const baseAmount    = hours > 0 ? totalAmount : 0 // all amount is base for Acuity bookings
+    const totalAmount = apt.price ? parseFloat(apt.price) : 0
 
     const bookingRow = {
-      acuity_appointment_id: acuityId,
+      acuity_appointment_id: String(acuityId),
       set_id:                setId,
       customer_id:           customerId ?? null,
       start_time:            times.start,
       end_time:              times.end,
       status:                'confirmed' as const,
-      payment_status:        paid === 'yes' ? 'paid' as const : 'unpaid' as const,
-      base_amount:           baseAmount,
+      payment_status:        apt.paid === 'yes' ? 'paid' as const : 'unpaid' as const,
+      base_amount:           totalAmount,
       extras_amount:         0,
       total_amount:          totalAmount,
       source:                'acuity' as const,
-      notes:                 notes ?? null,
+      notes:                 apt.notes ?? null,
       guest_count:           1,
     }
 
@@ -240,15 +259,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Alert owner if customer is flagged (non-blocking)
-    if (customerId && action === 'scheduled') {
+    if (customerId && rawAction === 'scheduled') {
       const startDate = new Date(times.start)
       const dateStr = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
       const timeStr = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
       const endDate = new Date(times.end)
       const endStr  = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
       checkAndAlertFlaggedCustomer(supabase, customerId, {
-        customerName:  fullName || email || 'Unknown',
-        customerEmail: email || '',
+        customerName:  fullName || apt.email || 'Unknown',
+        customerEmail: apt.email || '',
         setName,
         date:      dateStr,
         startTime: timeStr,
@@ -256,8 +275,8 @@ export async function POST(req: NextRequest) {
       }).catch(err => console.error('[Acuity webhook] flagged customer check error:', err))
     }
 
-    console.log(`[Acuity webhook] ${action} — ${setName} at ${times.start}`)
-    return NextResponse.json({ ok: true, action, setName })
+    console.log(`[Acuity webhook] ${rawAction} — ${setName} at ${times.start}`)
+    return NextResponse.json({ ok: true, action: rawAction, setName })
 
   } catch (err) {
     console.error('[Acuity webhook] unexpected error:', err)
