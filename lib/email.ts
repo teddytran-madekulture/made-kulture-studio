@@ -133,6 +133,20 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
       </tr>` : ''}
     </table>
 
+    <!-- Manage Booking CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td align="center">
+          <a href="https://madekulture.com/account" style="display:inline-block;background:#fff;color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 32px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;margin-right:8px;">Change / Cancel Booking</a>
+        </td>
+      </tr>
+      <tr>
+        <td align="center" style="padding-top:10px;">
+          <p style="margin:0;font-size:12px;color:#666;">Log in with your email to manage your booking</p>
+        </td>
+      </tr>
+    </table>
+
     <!-- When You Arrive -->
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:16px;">
       <tr>
@@ -171,7 +185,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
             <li style="margin-bottom:6px;"><strong style="color:#ddd;">24–48 hours before:</strong> 50% refund (excluding fees).</li>
             <li><strong style="color:#ddd;">Less than 24 hours:</strong> No refund.</li>
           </ul>
-          <p style="margin:10px 0 0;font-size:12px;color:#666;">To cancel or reschedule, log in to your account at <a href="https://madekulture.com/account" style="color:${ACCENT_COLOR};text-decoration:none;">madekulture.com/account</a> or text us.</p>
+          <p style="margin:10px 0 0;font-size:12px;color:#666;">To cancel or reschedule, use the button above or text us at (832) 408-1631.</p>
         </td>
       </tr>
     </table>
