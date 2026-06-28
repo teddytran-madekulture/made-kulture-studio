@@ -182,6 +182,11 @@ function BookingWizard() {
   const hourCount    = booking.startHour !== null && booking.endHour !== null
                        ? booking.endHour - booking.startHour : 0
 
+  // Minimum booking length: full warehouse buyout = 4hr, otherwise the set's own min
+  const STUDIO_MIN_HOURS = 4
+  const minHours     = booking.type === 'studio' ? STUDIO_MIN_HOURS : (selectedSet?.minHours ?? 1)
+  const minLabel     = booking.type === 'studio' ? 'Full Studio Takeover' : selectedSet?.name
+
   // Apply custom pricing overrides if present
   const standardSetRate = selectedSet?.price ?? 65
   const perSetOverride  = booking.setId ? pricingOverrides?.sets?.[booking.setId] : undefined
@@ -219,9 +224,8 @@ function BookingWizard() {
       }
       // End time must be a whole number of hours after start (no 30-min durations)
       if ((h - (booking.startHour ?? 0)) % 1 !== 0) return
-      // Enforce this set's minimum booking length (e.g. The Watering Hole = 2hr)
-      const minH = selectedSet?.minHours ?? 1
-      if ((h - (booking.startHour ?? 0)) < minH) return
+      // Enforce minimum booking length (Watering Hole/Tank = 2hr, full warehouse = 4hr)
+      if ((h - (booking.startHour ?? 0)) < minHours) return
       // Check no booked slot in range
       const start = booking.startHour!
       const hasConflict = bookedSlots.some(b => b.start < h && b.end > start)
@@ -248,7 +252,7 @@ function BookingWizard() {
     2: booking.type === 'studio' ? true : booking.setId !== null,
     3: booking.date !== '',
     4: booking.startHour !== null && booking.endHour !== null
-       && (booking.endHour - booking.startHour) >= (selectedSet?.minHours ?? 1),
+       && (booking.endHour - booking.startHour) >= minHours,
     5: true, // equipment optional
     6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent,
   }
@@ -396,9 +400,9 @@ function BookingWizard() {
           <StepWrapper title="SELECT YOUR TIME">
             <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 8 }}>
               {booking.startHour === null
-                ? `Click your start time, then click your end time.${(selectedSet?.minHours ?? 1) > 1 ? ` ${selectedSet!.name} has a ${selectedSet!.minHours}-hour minimum.` : ''}`
+                ? `Click your start time, then click your end time.${minHours > 1 ? ` ${minLabel} has a ${minHours}-hour minimum.` : ''}`
                 : booking.endHour === null
-                  ? `Start: ${fmt12(booking.startHour)} — now click your end time.${(selectedSet?.minHours ?? 1) > 1 ? ` (${selectedSet!.minHours}-hour minimum)` : ''}`
+                  ? `Start: ${fmt12(booking.startHour)} — now click your end time.${minHours > 1 ? ` (${minHours}-hour minimum)` : ''}`
                   : `${fmt12(booking.startHour)} – ${fmt12(booking.endHour)} · ${hourCount} hour${hourCount !== 1 ? 's' : ''}`
               }
             </p>
@@ -412,10 +416,9 @@ function BookingWizard() {
                 const booked    = isHourBooked(h)
                 // When picking end time, only allow whole-hour slots that meet the
                 // set's minimum length (e.g. The Watering Hole / The Tank = 2hr min)
-                const minH = selectedSet?.minHours ?? 1
                 const isInvalidEnd = selecting === 'end' && booking.startHour !== null
                                      && ((h - booking.startHour) % 1 !== 0
-                                         || (h > booking.startHour && (h - booking.startHour) < minH))
+                                         || (h > booking.startHour && (h - booking.startHour) < minHours))
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)

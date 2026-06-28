@@ -183,11 +183,16 @@ export async function POST(req: NextRequest) {
   try {
     const body: BookingRequest = await req.json()
 
-    // 0. Enforce per-set minimum booking length (server-side guard)
-    if (body.type === 'set' && body.setSlug) {
-      const minH = SET_MIN_HOURS[body.setSlug] ?? 1
+    // 0. Enforce minimum booking length (server-side guard)
+    //    Full warehouse buyout = 4hr; individual sets per SET_MIN_HOURS (default 1)
+    {
+      const minH = body.type === 'studio'
+        ? 4
+        : (body.setSlug ? (SET_MIN_HOURS[body.setSlug] ?? 1) : 1)
       if ((body.endHour - body.startHour) < minH) {
-        const label = SLUG_TO_NAME[body.setSlug] ?? body.setSlug
+        const label = body.type === 'studio'
+          ? 'The full studio buyout'
+          : (SLUG_TO_NAME[body.setSlug ?? ''] ?? 'This set')
         return NextResponse.json(
           { error: `${label} requires a minimum ${minH}-hour booking.` },
           { status: 400 }
