@@ -444,7 +444,7 @@ function BookingWizard() {
                   background: 'transparent', border: '1px solid rgba(255,255,255,0.2)',
                   color: '#fff', padding: '16px 20px', fontSize: 16,
                   fontFamily: 'Inter', width: '100%', cursor: 'pointer',
-                  outline: 'none', colorScheme: 'dark',
+                  outline: 'none', colorScheme: 'dark', boxSizing: 'border-box',
                 }}
               />
             </div>
@@ -747,10 +747,11 @@ function StepWrapper({ title, children }: { title: string; children: React.React
 function NavRow({ onBack, onNext, canNext, nextLabel = 'CONTINUE' }: {
   onBack: () => void; onNext: () => void; canNext: boolean; nextLabel?: string
 }) {
+  const isMobile = useIsMobile()
   return (
-    <div style={{ display: 'flex', gap: 16, marginTop: 40 }}>
+    <div style={{ display: 'flex', gap: 12, marginTop: 40, width: isMobile ? '100%' : 'auto' }}>
       <button onClick={onBack}
-        style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '14px 28px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.5)', transition: 'all 0.2s' }}
+        style={{ flex: '0 0 auto', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '15px 24px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.5)', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.6)'; (e.currentTarget as HTMLButtonElement).style.color = '#fff' }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.2)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)' }}
       >
@@ -758,12 +759,14 @@ function NavRow({ onBack, onNext, canNext, nextLabel = 'CONTINUE' }: {
       </button>
       <button onClick={onNext} disabled={!canNext}
         style={{
+          flex: isMobile ? 1 : '0 0 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
           background: canNext ? '#fff' : 'rgba(255,255,255,0.1)', border: 'none',
-          padding: '14px 32px', cursor: canNext ? 'pointer' : 'not-allowed',
-          fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em',
-          color: canNext ? '#080808' : 'rgba(255,255,255,0.2)', transition: 'opacity 0.2s',
+          padding: '15px 24px', cursor: canNext ? 'pointer' : 'not-allowed',
+          fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em',
+          color: canNext ? '#080808' : 'rgba(255,255,255,0.2)', transition: 'opacity 0.2s', whiteSpace: 'nowrap',
         }}>
-        {nextLabel} ↗
+        {nextLabel}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
       </button>
     </div>
   )
