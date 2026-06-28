@@ -13,9 +13,11 @@ declare global {
 function loadSquareScript(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.Square) { resolve(); return }
-    const src = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production'
-      ? 'https://web.squarecdn.com/v1/square.js'
-      : 'https://sandbox.web.squarecdn.com/v1/square.js'
+    // Auto-detect environment from the app ID (sandbox IDs start with "sandbox-")
+    const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID ?? ''
+    const src = appId.startsWith('sandbox-')
+      ? 'https://sandbox.web.squarecdn.com/v1/square.js'
+      : 'https://web.squarecdn.com/v1/square.js'
     const script = document.createElement('script')
     script.src = src
     script.onload = () => resolve()
