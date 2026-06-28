@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
@@ -29,6 +29,13 @@ export default function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const isMobile = useIsMobile()
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
@@ -37,8 +44,10 @@ export default function Home() {
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '24px 40px',
-        background: 'linear-gradient(to bottom, rgba(8,8,8,0.95) 0%, transparent 100%)',
+        padding: isMobile ? '16px 20px' : '20px 40px',
+        background: (scrolled || (isMobile && menuOpen)) ? '#080808' : 'transparent',
+        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
+        transition: 'background 0.3s ease, border-color 0.3s ease, padding 0.3s ease',
       }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
