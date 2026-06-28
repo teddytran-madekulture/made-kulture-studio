@@ -148,6 +148,7 @@ function BookingWizard() {
   const [gearCatalog, setGearCatalog] = useState<{ id: string; name: string; rate: number; category: string; description: string | null; quantity: number }[]>([])
   const [gearSearch,  setGearSearch]  = useState('')
   const [openCats,    setOpenCats]    = useState<Record<string, boolean>>({})
+  const [hoverGear,   setHoverGear]   = useState<string | null>(null)
   useEffect(() => {
     fetch('/api/equipment').then(r => r.json()).then(d => setGearCatalog(d.equipment ?? [])).catch(() => {})
   }, [])
@@ -166,11 +167,23 @@ function BookingWizard() {
 
   const renderGearRow = (g: { id: string; name: string; rate: number; description: string | null; quantity: number }) => {
     const qty = gearQty(g.id)
+    const hovered = hoverGear === g.id
     return (
-      <div key={g.id} style={{ background: '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+      <div key={g.id}
+        onMouseEnter={() => setHoverGear(g.id)} onMouseLeave={() => setHoverGear(null)}
+        style={{ background: hovered ? '#161616' : '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderTop: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.12s' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>{g.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>{g.name}</span>
+            <a href={`/gear#${g.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+              style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.35)', textDecoration: 'none', flexShrink: 0 }}>
+              details ↗
+            </a>
+          </div>
           <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>${g.rate}</div>
+          {hovered && g.description && (
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 6, lineHeight: 1.45, maxWidth: 520 }}>{g.description}</div>
+          )}
         </div>
         {qty > 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

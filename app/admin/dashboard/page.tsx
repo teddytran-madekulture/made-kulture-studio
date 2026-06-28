@@ -52,13 +52,14 @@ interface EquipDraft {
   rate: string
   quantity: string
   description: string
+  image_url: string
   is_available: boolean
   allow_offsite: boolean
 }
 
 const EMPTY_EQUIP_DRAFT: EquipDraft = {
   name: '', category: 'lighting', rate: '', quantity: '1',
-  description: '', is_available: true, allow_offsite: false,
+  description: '', image_url: '', is_available: true, allow_offsite: false,
 }
 
 const EQUIP_CATEGORIES: { value: string; label: string }[] = [
@@ -627,6 +628,7 @@ export default function AdminDashboard() {
       rate:          String(e.rate),
       quantity:      String(e.quantity),
       description:   e.description ?? '',
+      image_url:     e.image_url ?? '',
       is_available:  e.is_available,
       allow_offsite: e.allow_offsite,
     })
@@ -648,6 +650,7 @@ export default function AdminDashboard() {
           rate:          equipDraft.rate,
           quantity:      equipDraft.quantity,
           description:   equipDraft.description,
+          image_url:     equipDraft.image_url,
           is_available:  equipDraft.is_available,
           allow_offsite: equipDraft.allow_offsite,
         }),
@@ -1690,8 +1693,19 @@ export default function AdminDashboard() {
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>DESCRIPTION (shown to customers)</label>
                     <input value={equipDraft.description} onChange={e => setEquipDraft(d => ({ ...d, description: e.target.value }))}
-                      placeholder="Optional short blurb"
+                      placeholder="What it is + key specs"
                       style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>PHOTO URL (shown on the gear catalog)</label>
+                    <input value={equipDraft.image_url} onChange={e => setEquipDraft(d => ({ ...d, image_url: e.target.value }))}
+                      placeholder="https://…/your-photo.jpg  (or upload to public/images/equipment and use /images/equipment/name.jpg)"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                    {equipDraft.image_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={equipDraft.image_url} alt="" style={{ marginTop: 10, maxHeight: 90, borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }} />
+                    )}
                   </div>
                 </div>
 
