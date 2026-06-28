@@ -312,8 +312,14 @@ export default function AdminDashboard() {
   const [custNoteText,     setCustNoteText]     = useState('')
   const [custNoteTag,      setCustNoteTag]      = useState('general')
   const [custNoteAdding,   setCustNoteAdding]   = useState(false)
-  const [custPricingDraft, setCustPricingDraft] = useState<{ hourly_rate: string; equipment_discount_percent: string; sets: Record<string, string> }>({ hourly_rate: '', equipment_discount_percent: '', sets: {} })
-  const [custPricingSaving,setCustPricingSaving]= useState(false)
+  const [custPricingDraft,  setCustPricingDraft]  = useState<{ hourly_rate: string; equipment_discount_percent: string; sets: Record<string, string> }>({ hourly_rate: '', equipment_discount_percent: '', sets: {} })
+  const [custPricingSaving, setCustPricingSaving] = useState(false)
+  const [dupGroups,         setDupGroups]         = useState<any[]>([])
+  const [dupLoading,        setDupLoading]         = useState(false)
+  const [dupPanelOpen,      setDupPanelOpen]       = useState(false)
+  const [dupPrimaryMap,     setDupPrimaryMap]       = useState<Record<number, string>>({})  // groupIdx → primaryId
+  const [dupMerging,        setDupMerging]          = useState<number | null>(null)
+  const [dupMergeResult,    setDupMergeResult]      = useState<Record<number, string>>({})
   const custSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [bookingsOpen,     setBookingsOpen]     = useState(true)
@@ -1135,26 +1141,137 @@ export default function AdminDashboard() {
                   {custTotal > 0 ? `${custTotal} total` : 'No customers yet'}
                 </div>
               </div>
-              <button
-                onClick={async () => {
-                  setCustImporting(true)
-                  setCustImportResult(null)
-                  const res = await fetch('/api/admin/customers/import', { method: 'POST' })
-                  const data = await res.json()
-                  setCustImportResult(data)
-                  setCustImporting(false)
-                  fetchCustomers(custSearch, custFilter, custPage)
-                }}
-                disabled={custImporting}
-                style={{
-                  background: custImporting ? 'rgba(255,255,255,0.08)' : '#d4a843',
-                  border: 'none', padding: '10px 20px', cursor: custImporting ? 'default' : 'pointer',
-                  fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
-                  color: custImporting ? 'rgba(255,255,255,0.3)' : '#000',
-                }}>
-                {custImporting ? 'IMPORTING...' : '↓ IMPORT FROM SQUARE + ACUITY'}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={async () => {
+                    setDupLoading(true)
+                    setDupPanelOpen(true)
+                    setDupMergeResult({})
+                    const res = await fetch('/api/admin/customers/duplicates')
+                    const data = await res.json()
+                    setDupGroups(data.groups ?? [])
+                    // Default: oldest record is primary for each group
+                    const defaults: Record<number, string> = {}
+                    ;(data.groups ?? []).forEach((g: any, i: number) => { defaults[i] = g.members[0].id })
+                    setDupPrimaryMap(defaults)
+                    setDupLoading(false)
+                  }}
+                  style={{
+                    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                    padding: '10px 18px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                    fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)',
+                  }}>
+                  ⊞ FIND DUPLICATES
+                </button>
+                <button
+                  onClick={async () => {
+                    setCustImporting(true)
+                    setCustImportResult(null)
+                    const res = await fetch('/api/admin/customers/import', { method: 'POST' })
+                    const data = await res.json()
+                    setCustImportResult(data)
+                    setCustImporting(false)
+                    fetchCustomers(custSearch, custFilter, custPage)
+                  }}
+                  disabled={custImporting}
+                  style={{
+                    background: custImporting ? 'rgba(255,255,255,0.08)' : '#d4a843',
+                    border: 'none', padding: '10px 20px', cursor: custImporting ? 'default' : 'pointer',
+                    fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
+                    color: custImporting ? 'rgba(255,255,255,0.3)' : '#000',
+                  }}>
+                  {custImporting ? 'IMPORTING...' : '↓ IMPORT FROM SQUARE + ACUITY'}
+                </button>
+              </div>
             </div>
+
+            {/* Duplicate consolidation panel */}
+            {dupPanelOpen && (
+              <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.5)' }}>
+                    DUPLICATE CUSTOMERS {!dupLoading && `— ${dupGroups.length} group${dupGroups.length !== 1 ? 's' : ''} found`}
+                  </div>
+                  <button onClick={() => setDupPanelOpen(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+                </div>
+
+                {dupLoading ? (
+                  <div style={{ padding: '32px 20px', fontSize: 12, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em' }}>SCANNING…</div>
+                ) : dupGroups.length === 0 ? (
+                  <div style={{ padding: '32px 20px', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No duplicates found.</div>
+                ) : dupGroups.map((group, gi) => {
+                  const merged = dupMergeResult[gi]
+                  return (
+                    <div key={gi} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '16px 20px', opacity: merged ? 0.4 : 1 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.25)', marginBottom: 10 }}>
+                        MATCHED BY {group.reason.toUpperCase()} — {group.members.length} RECORDS
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, marginBottom: 12 }}>
+                        {group.members.map((m: any) => {
+                          const isPrimary = dupPrimaryMap[gi] === m.id
+                          return (
+                            <div key={m.id} onClick={() => setDupPrimaryMap(p => ({ ...p, [gi]: m.id }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer',
+                                background: isPrimary ? 'rgba(212,168,67,0.08)' : 'rgba(255,255,255,0.03)',
+                                border: `1px solid ${isPrimary ? 'rgba(212,168,67,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                              }}>
+                              <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${isPrimary ? '#d4a843' : 'rgba(255,255,255,0.2)'}`, background: isPrimary ? '#d4a843' : 'transparent', flexShrink: 0 }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                  <span style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{m.name}</span>
+                                  {isPrimary && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#d4a843', background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.3)', padding: '1px 6px' }}>KEEP</span>}
+                                </div>
+                                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{m.email} {m.phone ? `· ${m.phone}` : ''}</div>
+                              </div>
+                              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'right' as const, flexShrink: 0 }}>
+                                {m.bookingCount} booking{m.bookingCount !== 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {merged ? (
+                          <span style={{ fontSize: 11, color: '#4ade80' }}>✓ {merged}</span>
+                        ) : (
+                          <button
+                            disabled={dupMerging === gi}
+                            onClick={async () => {
+                              setDupMerging(gi)
+                              const primaryId  = dupPrimaryMap[gi]
+                              const duplicateIds = group.members.filter((m: any) => m.id !== primaryId).map((m: any) => m.id)
+                              const res = await fetch('/api/admin/customers/merge', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ primaryId, duplicateIds }),
+                              })
+                              const data = await res.json()
+                              if (data.success) {
+                                setDupMergeResult(r => ({ ...r, [gi]: `Merged ${data.mergedCount} record${data.mergedCount !== 1 ? 's' : ''} into primary` }))
+                                fetchCustomers(custSearch, custFilter, custPage)
+                              } else {
+                                setDupMergeResult(r => ({ ...r, [gi]: `Error: ${data.errors?.join(', ')}` }))
+                              }
+                              setDupMerging(null)
+                            }}
+                            style={{
+                              background: '#fff', border: 'none', padding: '7px 18px', cursor: dupMerging === gi ? 'default' : 'pointer',
+                              fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#000',
+                              opacity: dupMerging === gi ? 0.5 : 1,
+                            }}>
+                            {dupMerging === gi ? 'MERGING…' : 'MERGE →'}
+                          </button>
+                        )}
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+                          Click a record to set it as the one to keep · All bookings + notes will be consolidated
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {custImportResult && (
               <div style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#4ade80', fontFamily: 'Inter, sans-serif' }}>
