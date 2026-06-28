@@ -112,7 +112,7 @@ export default function Home() {
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
             <span className="label">A CREATIVE SPACE DESIGNED FOR VISIONARIES</span>
           </div>
-          <h1 style={{ fontSize:'clamp(80px, 14vw, 160px)', color:'#fff', marginBottom:32 }}>
+          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:32, lineHeight:0.84, letterSpacing:'0.005em', textTransform:'uppercase' }}>
             CREATE<br />WITHOUT<br />LIMITS
           </h1>
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
@@ -120,10 +120,12 @@ export default function Home() {
           </p>
           <div style={{ display:'flex', gap:16, flexWrap:'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
             <Link href="/book?type=set" className="btn" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
-              <span>BOOK A SET</span><span>↗</span>
+              <span>BOOK A SET</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><path d="M7 17 17 7M9 7h8v8"/></svg>
             </Link>
             <Link href="/book?type=studio" className="btn btn-ghost" style={ isMobile ? { width:'100%', justifyContent:'space-between' } : undefined }>
-              <span>BOOK THE STUDIO</span><span>↗</span>
+              <span>BOOK THE STUDIO</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><path d="M7 17 17 7M9 7h8v8"/></svg>
             </Link>
           </div>
         </div>
@@ -158,10 +160,10 @@ export default function Home() {
           <Link href="/sets" className="btn">VIEW ALL SETS ↗</Link>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:1, background:'rgba(255,255,255,0.06)' }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(260px, 1fr))', gap:1, background:'rgba(255,255,255,0.06)' }}>
           {SETS.map((set, i) => (
             <div key={i} style={{
-              background:'#080808', padding:'32px 28px', cursor:'pointer',
+              background:'#080808', padding: isMobile ? '16px 14px' : '32px 28px', cursor:'pointer',
               transition:'background 0.2s',
               display:'flex', flexDirection:'column', gap:12,
             }}
@@ -181,7 +183,7 @@ export default function Home() {
                 <span className="label" style={{ color:'rgba(255,255,255,0.3)' }}>{set.num}</span>
                 <span style={{ fontSize:11, fontFamily:'Inter', fontWeight:500, letterSpacing:'0.1em', color:'rgba(255,255,255,0.5)' }}>{set.price} / HR</span>
               </div>
-              <div style={{ fontFamily:'Bebas Neue, sans-serif', fontSize:28, color:'#fff', letterSpacing:'0.02em' }}>{set.name.toUpperCase()}</div>
+              <div style={{ fontFamily:'Bebas Neue, sans-serif', fontSize: isMobile ? 19 : 28, color:'#fff', letterSpacing:'0.02em' }}>{set.name.toUpperCase()}</div>
               <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', lineHeight:1.6 }}>{set.desc}</p>
               <div style={{ marginTop:'auto', paddingTop:16 }}>
                 <span style={{ fontSize:11, fontFamily:'Inter', fontWeight:500, letterSpacing:'0.15em', color:'rgba(255,255,255,0.4)' }}>BOOK THIS SET ↗</span>
