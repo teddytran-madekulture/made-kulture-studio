@@ -30,6 +30,44 @@ const EMPTY_SET_DRAFT: SetDraft = {
   capacity: '5', features: '', is_active: true,
 }
 
+interface EquipmentItem {
+  id: string
+  name: string
+  rate: number
+  category: 'lighting' | 'modifier' | 'special_effects' | 'camera'
+  quantity: number
+  description: string | null
+  image_url: string | null
+  sort_order: number | null
+  is_available: boolean
+  allow_offsite: boolean
+  deposit: number
+  in_use_now: number
+  available_now: number
+}
+
+interface EquipDraft {
+  name: string
+  category: string
+  rate: string
+  quantity: string
+  description: string
+  is_available: boolean
+  allow_offsite: boolean
+}
+
+const EMPTY_EQUIP_DRAFT: EquipDraft = {
+  name: '', category: 'lighting', rate: '', quantity: '1',
+  description: '', is_available: true, allow_offsite: false,
+}
+
+const EQUIP_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'lighting',        label: 'Lighting' },
+  { value: 'modifier',        label: 'Modifiers' },
+  { value: 'special_effects', label: 'Special Effects' },
+  { value: 'camera',          label: 'Camera' },
+]
+
 interface Booking {
   id: string
   start_time: string
@@ -272,7 +310,7 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'equipment'>('list')
   const [calDate,       setCalDate]       = useState(todayStr)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -370,6 +408,15 @@ export default function AdminDashboard() {
   const [setDraft,     setSetDraft]     = useState<SetDraft>(EMPTY_SET_DRAFT)
   const [setsSaving,   setSetsSaving]   = useState(false)
   const [setsBusyId,   setSetsBusyId]   = useState<string | null>(null)   // toggling/deleting row
+
+  // ── Equipment Manager ────────────────────────────────────────────────────────
+  const [equipList,    setEquipList]    = useState<EquipmentItem[]>([])
+  const [equipLoading, setEquipLoading] = useState(false)
+  const [equipError,   setEquipError]   = useState('')
+  const [equipEditId,  setEquipEditId]  = useState<string | null>(null)   // id, 'new', or null
+  const [equipDraft,   setEquipDraft]   = useState<EquipDraft>(EMPTY_EQUIP_DRAFT)
+  const [equipSaving,  setEquipSaving]  = useState(false)
+  const [equipBusyId,  setEquipBusyId]  = useState<string | null>(null)
 
   // ── Customer fetch helpers ───────────────────────────────────────────────
   const fetchCustomers = useCallback(async (search: string, filter: string, page: number) => {
@@ -552,6 +599,97 @@ export default function AdminDashboard() {
       setSetsError(e.message || 'Could not delete set')
     }
     setSetsBusyId(null)
+  }
+
+  // ── Equipment Manager helpers ─────────────────────────────────────────────────
+  const fetchEquipment = useCallback(async () => {
+    setEquipLoading(true); setEquipError('')
+    try {
+      const res  = await fetch('/api/admin/equipment')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load equipment')
+      setEquipList(data.equipment ?? [])
+    } catch (e: any) {
+      setEquipError(e.message || 'Failed to load equipment')
+    }
+    setEquipLoading(false)
+  }, [])
+
+  useEffect(() => { if (view === 'equipment') fetchEquipment() }, [view, fetchEquipment])
+
+  const startNewEquip = () => { setEquipEditId('new'); setEquipDraft(EMPTY_EQUIP_DRAFT); setEquipError('') }
+
+  const startEditEquip = (e: EquipmentItem) => {
+    setEquipEditId(e.id); setEquipError('')
+    setEquipDraft({
+      name:          e.name,
+      category:      e.category,
+      rate:          String(e.rate),
+      quantity:      String(e.quantity),
+      description:   e.description ?? '',
+      is_available:  e.is_available,
+      allow_offsite: e.allow_offsite,
+    })
+  }
+
+  const cancelEditEquip = () => { setEquipEditId(null); setEquipDraft(EMPTY_EQUIP_DRAFT); setEquipError('') }
+
+  const saveEquip = async () => {
+    if (!equipDraft.name.trim()) { setEquipError('Equipment name is required'); return }
+    setEquipSaving(true); setEquipError('')
+    try {
+      const isNew = equipEditId === 'new'
+      const res = await fetch(isNew ? '/api/admin/equipment' : `/api/admin/equipment/${equipEditId}`, {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:          equipDraft.name,
+          category:      equipDraft.category,
+          rate:          equipDraft.rate,
+          quantity:      equipDraft.quantity,
+          description:   equipDraft.description,
+          is_available:  equipDraft.is_available,
+          allow_offsite: equipDraft.allow_offsite,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not save equipment')
+      cancelEditEquip()
+      await fetchEquipment()
+    } catch (e: any) {
+      setEquipError(e.message || 'Could not save equipment')
+    }
+    setEquipSaving(false)
+  }
+
+  const toggleEquipAvailable = async (e: EquipmentItem) => {
+    setEquipBusyId(e.id); setEquipError('')
+    try {
+      const res = await fetch(`/api/admin/equipment/${e.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_available: !e.is_available }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not update equipment')
+      await fetchEquipment()
+    } catch (err: any) {
+      setEquipError(err.message || 'Could not update equipment')
+    }
+    setEquipBusyId(null)
+  }
+
+  const deleteEquip = async (e: EquipmentItem) => {
+    if (!confirm(`Delete "${e.name}"? This can't be undone. (If it's on bookings, set it unavailable instead.)`)) return
+    setEquipBusyId(e.id); setEquipError('')
+    try {
+      const res = await fetch(`/api/admin/equipment/${e.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not delete equipment')
+      await fetchEquipment()
+    } catch (err: any) {
+      setEquipError(err.message || 'Could not delete equipment')
+    }
+    setEquipBusyId(null)
   }
 
   useEffect(() => {
@@ -841,7 +979,7 @@ export default function AdminDashboard() {
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
-          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -1467,6 +1605,169 @@ export default function AdminDashboard() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── EQUIPMENT MANAGER ─────────────────────────────────────────── */}
+        {view === 'equipment' && (
+          <div style={{ paddingBottom: 80 }}>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+              <div>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 4 }}>EQUIPMENT</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                  Manage your gear inventory. &quot;In use&quot; shows units on a booking happening right now. Unavailable items are hidden from customer rentals.
+                </div>
+              </div>
+              {equipEditId === null && (
+                <button onClick={startNewEquip} style={{
+                  background: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', flexShrink: 0,
+                  fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808',
+                }}>
+                  + NEW ITEM
+                </button>
+              )}
+            </div>
+
+            {equipError && (
+              <div style={{ background: 'rgba(220,80,80,0.12)', border: '1px solid rgba(220,80,80,0.35)', color: '#f0a0a0', padding: '12px 16px', marginBottom: 20, fontSize: 13, lineHeight: 1.5 }}>
+                {equipError}
+              </div>
+            )}
+
+            {/* Create / edit form */}
+            {equipEditId !== null && (
+              <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: 28, marginBottom: 28 }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', marginBottom: 20 }}>
+                  {equipEditId === 'new' ? 'NEW ITEM' : 'EDIT ITEM'}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>NAME</label>
+                    <input value={equipDraft.name} onChange={e => setEquipDraft(d => ({ ...d, name: e.target.value }))}
+                      placeholder="e.g. Aputure LS 600d Daylight LED Monolight"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>CATEGORY</label>
+                    <select value={equipDraft.category} onChange={e => setEquipDraft(d => ({ ...d, category: e.target.value }))}
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box', appearance: 'none' as const }}>
+                      {EQUIP_CATEGORIES.map(c => <option key={c.value} value={c.value} style={{ background: '#111' }}>{c.label}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>RATE ($ / booking)</label>
+                    <input type="number" value={equipDraft.rate} onChange={e => setEquipDraft(d => ({ ...d, rate: e.target.value }))}
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>QUANTITY OWNED</label>
+                    <input type="number" min={0} value={equipDraft.quantity} onChange={e => setEquipDraft(d => ({ ...d, quantity: e.target.value }))}
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
+                      <input type="checkbox" checked={equipDraft.is_available} onChange={e => setEquipDraft(d => ({ ...d, is_available: e.target.checked }))}
+                        style={{ width: 16, height: 16, accentColor: '#d4a843' }} />
+                      Available
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+                      <input type="checkbox" checked={equipDraft.allow_offsite} onChange={e => setEquipDraft(d => ({ ...d, allow_offsite: e.target.checked }))}
+                        style={{ width: 16, height: 16, accentColor: '#d4a843' }} />
+                      Off-site OK
+                    </label>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>DESCRIPTION (shown to customers)</label>
+                    <input value={equipDraft.description} onChange={e => setEquipDraft(d => ({ ...d, description: e.target.value }))}
+                      placeholder="Optional short blurb"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button onClick={saveEquip} disabled={equipSaving} style={{
+                    background: '#fff', border: 'none', padding: '11px 24px', cursor: equipSaving ? 'default' : 'pointer', opacity: equipSaving ? 0.6 : 1,
+                    fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808',
+                  }}>
+                    {equipSaving ? 'SAVING…' : 'SAVE ITEM'}
+                  </button>
+                  <button onClick={cancelEditEquip} disabled={equipSaving} style={{
+                    background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '11px 24px', cursor: 'pointer',
+                    fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)',
+                  }}>
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* List grouped by category */}
+            {equipLoading ? (
+              <div style={{ ...labelStyle, textAlign: 'center', padding: 60 }}>LOADING…</div>
+            ) : equipList.length === 0 ? (
+              <div style={{ ...labelStyle, textAlign: 'center', padding: 60 }}>NO EQUIPMENT YET</div>
+            ) : (
+              EQUIP_CATEGORIES.map(cat => {
+                const items = equipList.filter(e => e.category === cat.value)
+                if (items.length === 0) return null
+                return (
+                  <div key={cat.value} style={{ marginBottom: 32 }}>
+                    <div style={{ ...labelStyle, marginBottom: 12, color: 'rgba(255,255,255,0.5)' }}>{cat.label.toUpperCase()}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {items.map(e => (
+                        <div key={e.id} style={{
+                          background: '#0d0d0d', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 20,
+                          opacity: e.is_available ? 1 : 0.5,
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500 }}>{e.name}</span>
+                              {!e.is_available && (
+                                <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', padding: '3px 8px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.45)' }}>UNAVAILABLE</span>
+                              )}
+                              {e.allow_offsite && (
+                                <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', padding: '3px 8px', background: 'rgba(212,168,67,0.15)', color: '#d4a843' }}>OFF-SITE</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                              ${e.rate} · {e.quantity} owned · <span style={{ color: e.in_use_now > 0 ? '#d4a843' : 'rgba(255,255,255,0.4)' }}>{e.in_use_now} in use now</span> · {e.available_now} free
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                            <button onClick={() => toggleEquipAvailable(e)} disabled={equipBusyId === e.id} style={{
+                              background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '7px 14px', cursor: 'pointer',
+                              fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em',
+                              color: e.is_available ? 'rgba(255,255,255,0.45)' : '#d4a843',
+                            }}>
+                              {equipBusyId === e.id ? '…' : e.is_available ? 'DISABLE' : 'ENABLE'}
+                            </button>
+                            <button onClick={() => startEditEquip(e)} style={{
+                              background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '7px 14px', cursor: 'pointer',
+                              fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)',
+                            }}>
+                              EDIT
+                            </button>
+                            <button onClick={() => deleteEquip(e)} disabled={equipBusyId === e.id} style={{
+                              background: 'transparent', border: '1px solid rgba(220,80,80,0.3)', padding: '7px 14px', cursor: 'pointer',
+                              fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: 'rgba(220,120,120,0.7)',
+                            }}>
+                              DELETE
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })
             )}
           </div>
         )}
