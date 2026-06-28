@@ -1,12 +1,95 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 
-// Shared helper — call after any booking is created.
-// Looks up the customer's flag status and fires SMS + email alerts to the studio owner
-// if they're banned, have a warning status, or have ban/warning notes on file.
-
 const OWNER_PHONE = '+18324081631'
 const OWNER_EMAIL = 'teddytran@madekulture.com'
+
+// ─── Pre-booking ban check ────────────────────────────────────────────────────
+// Call this BEFORE charging the customer. Returns { banned: true } if they
+// should be blocked. Also fires an alert so you know they tried.
+
+interface AttemptContext {
+  customerEmail: string
+  setName:       string
+  date:          string
+  startTime:     string
+  endTime:       string
+}
+
+export async function checkBannedAndAlert(
+  supabase: SupabaseClient,
+  email: string,
+  attempt: AttemptContext
+): Promise<{ banned: boolean; customerId?: string }> {
+  const { data: customer } = await supabase
+    .from('customers')
+    .select('id, name, banned')
+    .eq('email', email.toLowerCase().trim())
+    .maybeSingle()
+
+  if (!customer || !customer.banned) {
+    return { banned: false, customerId: customer?.id }
+  }
+
+  // Fire alert (non-blocking from caller's perspective — we await here but
+  // the caller doesn't need to wait for this before returning the error)
+  try {
+    const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    await twilioClient.messages.create({
+      body: [
+        `⛔ BANNED CUSTOMER ATTEMPTED TO BOOK`,
+        ``,
+        `${customer.name || email} (${email})`,
+        `📍 ${attempt.setName}`,
+        `📅 ${attempt.date} · ${attempt.startTime}–${attempt.endTime}`,
+        ``,
+        `Booking was BLOCKED before payment.`,
+      ].join('\n'),
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to:   OWNER_PHONE,
+    })
+  } catch (err) {
+    console.error('Ban attempt SMS error:', err)
+  }
+
+  try {
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    await resend.emails.send({
+      from:    'Made Kulture <bookings@madekulture.com>',
+      replyTo: OWNER_EMAIL,
+      to:      OWNER_EMAIL,
+      subject: `⛔ Banned customer attempted to book: ${customer.name || email}`,
+      html: `
+        <div style="font-family:Inter,sans-serif;background:#0a0a0a;color:#fff;padding:32px;max-width:600px;margin:0 auto;">
+          <div style="background:#7f1d1d;border:1px solid #ef4444;padding:16px 20px;margin-bottom:24px;">
+            <div style="font-size:18px;font-weight:700;color:#ef4444;margin-bottom:4px;">⛔ BANNED CUSTOMER — BOOKING BLOCKED</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.7);">Payment was NOT charged. Booking was rejected.</div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+            <tr><td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.1em;width:120px;">CUSTOMER</td>
+                <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);font-size:14px;">${customer.name || '—'}</td></tr>
+            <tr><td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.1em;">EMAIL</td>
+                <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);font-size:14px;">${email}</td></tr>
+            <tr><td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.1em;">SET</td>
+                <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);font-size:14px;">${attempt.setName}</td></tr>
+            <tr><td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.1em;">DATE</td>
+                <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08);font-size:14px;">${attempt.date}</td></tr>
+            <tr><td style="padding:10px 0;color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.1em;">TIME</td>
+                <td style="padding:10px 0;font-size:14px;">${attempt.startTime} – ${attempt.endTime}</td></tr>
+          </table>
+          <a href="https://made-kulture-studio.vercel.app/admin" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 28px;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.1em;">VIEW IN ADMIN →</a>
+        </div>
+      `,
+    })
+  } catch (err) {
+    console.error('Ban attempt email error:', err)
+  }
+
+  return { banned: true, customerId: customer.id }
+}
+
+// ─── Post-booking flagged customer alert ──────────────────────────────────────
 
 interface BookingContext {
   customerName:  string

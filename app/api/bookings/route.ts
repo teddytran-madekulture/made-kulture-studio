@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { randomUUID } from 'crypto'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
-import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
+import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged-customer'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 2. Get set UUID from Supabase
+    // 3. Get set name (needed for ban alert message)
     let setId: string | null = null
     let setName = 'Full Studio Takeover'
     if (body.type === 'set' && body.setSlug) {
@@ -208,7 +208,27 @@ export async function POST(req: NextRequest) {
       setName = SLUG_TO_NAME[body.setSlug] ?? body.setSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     }
 
-    // 3. Create or find Square customer
+    // 4. Ban check — reject before touching Square if customer is banned
+    if (body.email) {
+      const dateLabel  = formatDateLabel(body.date)
+      const startLabel = formatTimeLabel(body.startHour)
+      const endLabel   = formatTimeLabel(body.endHour)
+      const { banned } = await checkBannedAndAlert(supabase, body.email, {
+        customerEmail: body.email,
+        setName,
+        date:      dateLabel,
+        startTime: startLabel,
+        endTime:   endLabel,
+      })
+      if (banned) {
+        return NextResponse.json(
+          { error: 'We were unable to process your booking. Please contact the studio directly at (832) 408-1631.' },
+          { status: 403 }
+        )
+      }
+    }
+
+    // 5. Create or find Square customer
     const { result: searchResult } = await square.customersApi.searchCustomers({
       query: { filter: { emailAddress: { exact: body.email } } },
     })
