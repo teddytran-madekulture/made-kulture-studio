@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
@@ -20,13 +21,10 @@ function normalizePhone(phone: string): string {
   return `+${d}`
 }
 
-function isAuthed(req: NextRequest) {
-  return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
-}
 
 // ─── GET /api/admin/bookings ──────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data, error } = await supabase
     .from('bookings')
@@ -44,7 +42,7 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/admin/bookings — manual booking ────────────────────────────────
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
   const { setSlug, date, startHour, endHour, name, email, phone, notes, totalAmount, sendSms } = body
@@ -79,78 +77,4 @@ export async function POST(req: NextRequest) {
   const endISO   = `${date}T${String(endHour).padStart(2, '0')}:00:00-05:00`
 
   const { data: booking, error } = await supabase
-    .from('bookings')
-    .insert({
-      set_id:       setId,
-      customer_id:  customerData?.id,
-      start_time:   startISO,
-      end_time:     endISO,
-      status:       'confirmed',
-      total_amount: totalAmount,
-      base_amount:  totalAmount,
-      source:       'manual',
-      notes,
-    })
-    .select('id')
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  // Send confirmation SMS if requested
-  if (sendSms && phone) {
-    const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    const startLabel = startHour >= 12 ? `${startHour === 12 ? 12 : startHour - 12}pm` : `${startHour}am`
-    const endLabel   = endHour   >= 12 ? `${endHour   === 12 ? 12 : endHour   - 12}pm` : `${endHour}am`
-    const msg = [
-      `Hi ${name}! Your Made Kulture booking is confirmed.`,
-      ``,
-      `📍 4825 Gulf Freeway, Houston TX 77023`,
-      `📅 ${dateLabel}`,
-      `🕐 ${startLabel} – ${endLabel}`,
-      ``,
-      `Questions? Text (832) 408-1631`,
-    ].join('\n')
-
-    await twilioClient.messages.create({
-      body: msg,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to:   normalizePhone(phone),
-    }).catch(e => console.error('Confirmation SMS error:', e))
-  }
-
-  // Send emails (non-blocking)
-  if (booking?.id && email) {
-    const setDisplayName = SLUG_TO_NAME[setSlug] ?? (setSlug === 'studio' ? 'Full Studio Takeover' : setSlug)
-    const dateLabel  = formatDateLabel(date)
-    const startLabel = formatTimeLabel(startHour)
-    const endLabel   = formatTimeLabel(endHour)
-
-    sendBookingConfirmation({
-      customerName:  name,
-      customerEmail: email,
-      setName:       setDisplayName,
-      date:          dateLabel,
-      startTime:     startLabel,
-      endTime:       endLabel,
-      totalAmount:   totalAmount,
-      bookingId:     booking.id,
-      notes:         notes || undefined,
-    }).catch(e => console.error('Email confirmation error:', e))
-
-    sendNewBookingAlert({
-      customerName:  name,
-      customerEmail: email,
-      customerPhone: phone,
-      setName:       setDisplayName,
-      date:          dateLabel,
-      startTime:     startLabel,
-      endTime:       endLabel,
-      totalAmount:   totalAmount,
-      bookingId:     booking.id,
-      source:        'manual',
-      notes:         notes || undefined,
-    }).catch(e => console.error('Email alert error:', e))
-  }
-
-  return NextResponse.json({ success: true, bookingId: booking?.id })
-}
+    .from('bo

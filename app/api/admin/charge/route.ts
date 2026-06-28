@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
@@ -21,9 +22,6 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 )
 
-function isAuthed(req: NextRequest) {
-  return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
-}
 
 function fmt12(h: number) {
   const ampm = h >= 12 ? 'PM' : 'AM'
@@ -47,7 +45,7 @@ const SLUG_TO_NAME: Record<string, string> = {
 
 // POST /api/admin/charge
 export async function POST(req: NextRequest) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const {
     squareCardId,

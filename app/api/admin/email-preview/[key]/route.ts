@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-function isAuthed(req: NextRequest) {
-  return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
-}
+import { isAdminAuthed } from '@/lib/admin-auth'
 
 const ACCENT_COLOR = '#d4a843'
 
@@ -186,7 +183,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { key: string } }
 ) {
-  if (!isAuthed(req)) {
+  if (!isAdminAuthed(req)) {
     return new NextResponse('Unauthorized', { status: 401 })
   }
 

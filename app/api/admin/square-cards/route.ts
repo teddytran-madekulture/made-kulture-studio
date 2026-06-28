@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 
 const square = new Client({
@@ -8,13 +9,10 @@ const square = new Client({
     : Environment.Sandbox,
 })
 
-function isAuthed(req: NextRequest) {
-  return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
-}
 
 // GET /api/admin/square-cards?customerId=CXXXXXXX
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const customerId = req.nextUrl.searchParams.get('customerId')
   if (!customerId) return NextResponse.json({ cards: [] })

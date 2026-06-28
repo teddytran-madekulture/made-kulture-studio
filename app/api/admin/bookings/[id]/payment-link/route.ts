@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import twilio from 'twilio'
 import { randomUUID } from 'crypto'
@@ -14,9 +15,6 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 )
 
-function isAuthed(req: NextRequest) {
-  return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
-}
 
 function normalizePhone(phone: string): string {
   const d = phone.replace(/\D/g, '')
@@ -28,7 +26,7 @@ function normalizePhone(phone: string): string {
 // POST /api/admin/bookings/[id]/payment-link
 // Creates a Square payment link for the booking difference and optionally SMS it
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { amount, description, phone, customerName, sendSms } = await req.json()
 
@@ -75,7 +73,4 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: true, url, smsError })
   } catch (err: any) {
     console.error('Payment link error:', err)
-    const msg = err?.errors?.[0]?.detail || err.message || 'Failed to create payment link'
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+    c

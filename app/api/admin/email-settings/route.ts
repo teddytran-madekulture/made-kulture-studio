@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -6,9 +7,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-function isAuthed(req: NextRequest) {
-  return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
-}
 
 // Default settings — returned if the DB row doesn't exist yet
 const DEFAULTS: Record<string, { label: string; description: string; defaultSubject: string }> = {
@@ -31,7 +29,7 @@ const DEFAULTS: Record<string, { label: string; description: string; defaultSubj
 
 // GET /api/admin/email-settings
 export async function GET(req: NextRequest) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data, error } = await supabase
     .from('email_templates')
@@ -61,7 +59,7 @@ export async function GET(req: NextRequest) {
 // PATCH /api/admin/email-settings
 // Body: { key: string, enabled?: boolean, subject?: string | null }
 export async function PATCH(req: NextRequest) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { key, enabled, subject } = await req.json()
 

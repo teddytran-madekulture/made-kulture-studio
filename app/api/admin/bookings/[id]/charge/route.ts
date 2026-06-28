@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
@@ -20,9 +21,6 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 )
 
-function isAuthed(req: NextRequest) {
-  return req.cookies.get('admin_auth')?.value === process.env.ADMIN_PASSWORD
-}
 
 function normalizePhone(phone: string): string {
   const d = phone.replace(/\D/g, '')
@@ -34,7 +32,7 @@ function normalizePhone(phone: string): string {
 // POST /api/admin/bookings/[id]/charge
 // Charges a saved Square card for the booking difference and updates the total
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const {
     squareCardId,
@@ -93,8 +91,4 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     return NextResponse.json({ success: true, squarePaymentId, smsError })
   } catch (err: any) {
-    console.error('Charge error:', err)
-    const msg = err?.errors?.[0]?.detail || err.message || 'Charge failed'
-    return NextResponse.json({ error: msg }, { status: 402 })
-  }
-}
+    console.error('Charge err
