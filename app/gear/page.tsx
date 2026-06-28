@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import SiteNav from '@/components/SiteNav'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 interface Gear {
   id: string
@@ -24,6 +26,7 @@ const CATEGORY_ORDER = ['lighting', 'modifier', 'special_effects', 'camera']
 export default function GearPage() {
   const [gear, setGear]       = useState<Gear[]>([])
   const [loading, setLoading] = useState(true)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     fetch('/api/equipment')
@@ -36,22 +39,11 @@ export default function GearPage() {
   return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
       {/* Nav */}
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 40px', position: 'sticky', top: 0, background: 'rgba(8,8,8,0.95)', zIndex: 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>MADE<br />KULTURE</div>
-        </Link>
-        <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
-          {(['HOME', 'SETS', 'GEAR', 'BOOK'] as const).map(item => (
-            <Link key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase()}`}
-              style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: item === 'GEAR' ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>{item}</Link>
-          ))}
-          <Link href="/book" style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '10px 20px', textDecoration: 'none' }}>BOOK NOW ↗</Link>
-        </div>
-      </nav>
+      <SiteNav active="gear" />
 
       {/* Header */}
-      <div style={{ padding: '64px 40px 32px', maxWidth: 1200, margin: '0 auto' }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 56, letterSpacing: '0.03em', lineHeight: 1 }}>EQUIPMENT</div>
+      <div style={{ padding: isMobile ? '110px 20px 28px' : '128px 40px 40px', maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 44 : 64, letterSpacing: '0.02em', lineHeight: 1 }}>EQUIPMENT</div>
         <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', maxWidth: 640, marginTop: 16, lineHeight: 1.6 }}>
           Everything available to rent in-studio, with pricing. Add any of it to your session during booking — no need to reserve gear here.
         </p>
@@ -61,7 +53,7 @@ export default function GearPage() {
       </div>
 
       {/* Catalog */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 40px 120px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '0 20px 80px' : '0 40px 120px' }}>
         {loading ? (
           <div style={{ padding: 80, textAlign: 'center', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.15em', fontSize: 12 }}>LOADING GEAR…</div>
         ) : gear.length === 0 ? (
@@ -83,7 +75,7 @@ export default function GearPage() {
                         {g.image_url
                           // eslint-disable-next-line @next/next/no-img-element
                           ? <img src={g.image_url} alt={g.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 16, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.18)' }}>MADE KULTURE</span>}
+                          : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 16, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.18)' }}>MADE KULTURE</span>}
                       </div>
                       <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
@@ -92,7 +84,7 @@ export default function GearPage() {
                         </div>
                         {g.description && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.55, marginBottom: 16 }}>{g.description}</p>}
                         <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                          <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 30, letterSpacing: '0.02em' }}>${g.rate}</span>
+                          <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 30, letterSpacing: '0.02em' }}>${g.rate}</span>
                           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>/ booking</span>
                         </div>
                       </div>

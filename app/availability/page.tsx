@@ -118,7 +118,7 @@ export default function AvailabilityPage() {
         background: 'linear-gradient(to bottom, rgba(8,8,8,0.98) 0%, transparent 100%)',
       }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
             MADE<br />KULTURE
           </div>
         </Link>
@@ -148,7 +148,7 @@ export default function AvailabilityPage() {
           <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', marginBottom: 12 }}>
             STUDIO AVAILABILITY
           </div>
-          <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 56, letterSpacing: '0.02em', margin: 0, lineHeight: 1 }}>
+          <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 56, letterSpacing: '0.02em', margin: 0, lineHeight: 1 }}>
             CHECK WHAT'S OPEN
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 16, maxWidth: 500 }}>
@@ -201,7 +201,7 @@ export default function AvailabilityPage() {
             </div>
           </div>
           <div style={{ marginTop: 20 }}>
-            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.04em', color: '#fff' }}>
+            <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, letterSpacing: '0.04em', color: '#fff' }}>
               {formatDateLabel(date)}
             </div>
           </div>
@@ -226,7 +226,7 @@ export default function AvailabilityPage() {
           borderRadius: 6, padding: '20px 28px', marginBottom: 32,
         }}>
           <div>
-            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff', marginBottom: 4 }}>
+            <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff', marginBottom: 4 }}>
               NEED THE WHOLE SPACE?
             </div>
             <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', maxWidth: 480 }}>

@@ -23,7 +23,7 @@ export default async function AccountDashboard() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 40, letterSpacing: '0.02em', margin: '0 0 4px' }}>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, letterSpacing: '0.02em', margin: '0 0 4px' }}>
         HEY {firstName?.toUpperCase()}
       </h1>
       <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', margin: '0 0 40px' }}>
@@ -33,7 +33,7 @@ export default async function AccountDashboard() {
       {/* Quick stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 40 }}>
         <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '20px 24px' }}>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, lineHeight: 1 }}>{upcoming?.length ?? 0}</div>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, lineHeight: 1 }}>{upcoming?.length ?? 0}</div>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Upcoming bookings</div>
         </div>
       </div>

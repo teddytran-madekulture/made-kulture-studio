@@ -94,7 +94,7 @@ export default function BookingsPage() {
       <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '20px 24px', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.03em', marginBottom: 4 }}>
+            <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.03em', marginBottom: 4 }}>
               {b.sets?.name ?? 'Studio'}
             </div>
             <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>
@@ -155,7 +155,7 @@ export default function BookingsPage() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, margin: '0 0 8px' }}>MY BOOKINGS</h1>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>MY BOOKINGS</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 32 }}>
         Cancellations must be made 48+ hours before the session for a full refund.
       </p>

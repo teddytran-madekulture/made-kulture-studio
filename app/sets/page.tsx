@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
+import SiteNav from '@/components/SiteNav'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -98,33 +100,7 @@ const STUDIO = {
 // ─── Nav (shared) ─────────────────────────────────────────────────────────────
 
 function Nav() {
-  return (
-    <nav style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '24px 40px',
-      background: 'linear-gradient(to bottom, rgba(8,8,8,0.95) 0%, transparent 100%)',
-    }}>
-      <Link href="/" style={{ textDecoration: 'none' }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
-          MADE<br />KULTURE
-        </div>
-      </Link>
-      <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
-        {(['HOME', 'SETS', 'BOOK'] as const).map(item => (
-          <Link key={item}
-            href={item === 'HOME' ? '/' : `/${item.toLowerCase()}`}
-            style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: item === 'SETS' ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none' }}
-          >{item}</Link>
-        ))}
-        <NavAuthLink />
-        <Link href="/book" style={{
-          fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em',
-          color: '#080808', background: '#fff', padding: '10px 20px', textDecoration: 'none',
-        }}>BOOK NOW ↗</Link>
-      </div>
-    </nav>
-  )
+  return <SiteNav active="sets" />
 }
 
 // ─── Set Card ─────────────────────────────────────────────────────────────────
@@ -154,11 +130,11 @@ function SetCard({ set, large = false }: { set: typeof SETS[0]; large?: boolean 
         {/* Gradient overlay */}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,10,1) 0%, rgba(10,10,10,0.1) 60%, transparent 100%)' }} />
         {/* Set number */}
-        <div style={{ position: 'absolute', top: 20, left: 24, fontFamily: 'Bebas Neue, sans-serif', fontSize: 13, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)' }}>
+        <div style={{ position: 'absolute', top: 20, left: 24, fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 13, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)' }}>
           {set.num}
         </div>
         {/* Price */}
-        <div style={{ position: 'absolute', top: 20, right: 24, fontFamily: 'Bebas Neue, sans-serif', fontSize: 18, color: '#fff' }}>
+        <div style={{ position: 'absolute', top: 20, right: 24, fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: '#fff' }}>
           ${set.price}<span style={{ fontSize: 11, fontFamily: 'Inter', fontWeight: 400, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)', marginLeft: 3 }}>/HR</span>
         </div>
       </div>
@@ -166,7 +142,7 @@ function SetCard({ set, large = false }: { set: typeof SETS[0]; large?: boolean 
       {/* Info */}
       <div style={{ padding: large ? '32px 36px 36px' : '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: large ? 36 : 28, letterSpacing: '0.03em', color: '#fff', lineHeight: 1, marginBottom: 6 }}>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: large ? 36 : 28, letterSpacing: '0.03em', color: '#fff', lineHeight: 1, marginBottom: 6 }}>
             {set.name.toUpperCase()}
           </div>
           <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>
@@ -207,19 +183,20 @@ function SetCard({ set, large = false }: { set: typeof SETS[0]; large?: boolean 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SetsPage() {
+  const isMobile = useIsMobile()
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
       <Nav />
 
       {/* Hero */}
-      <section style={{ paddingTop: 160, paddingBottom: 80, paddingLeft: 40, paddingRight: 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <section style={{ paddingTop: isMobile ? 104 : 160, paddingBottom: isMobile ? 52 : 80, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
               <div style={{ width: 40, height: 1, background: 'rgba(255,255,255,0.4)' }} />
               <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)' }}>4825 GULF FREEWAY · HOUSTON TX</span>
             </div>
-            <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 'clamp(64px, 10vw, 120px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em', margin: 0 }}>
+            <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(64px, 10vw, 120px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em', margin: 0 }}>
               SETS &<br />SPACES
             </h1>
           </div>
@@ -240,26 +217,26 @@ export default function SetsPage() {
       </section>
 
       {/* Stats bar */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         {[
           { value: '9', label: 'DISTINCT SETS' },
           { value: '$40', label: 'STARTING / HR' },
           { value: '10K+', label: 'SQ FT TOTAL' },
           { value: '9AM–10PM', label: 'DAILY HOURS' },
         ].map((s, i) => (
-          <div key={i} style={{ padding: '32px 40px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 40, color: '#fff', letterSpacing: '0.02em', lineHeight: 1 }}>{s.value}</div>
+          <div key={i} style={{ padding: isMobile ? '22px 20px' : '32px 40px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+            <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, color: '#fff', letterSpacing: '0.02em', lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>{s.label}</div>
           </div>
         ))}
       </section>
 
       {/* Standard sets grid */}
-      <section style={{ padding: '80px 40px' }}>
+      <section style={{ padding: isMobile ? '52px 20px' : '80px 40px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ marginBottom: 48 }}>
             <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>SHARED STUDIO — $40/HR EACH</div>
-            <h2 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 'clamp(36px, 5vw, 60px)', color: '#fff', letterSpacing: '0.02em', margin: 0 }}>INDIVIDUAL SETS</h2>
+            <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(36px, 5vw, 60px)', color: '#fff', letterSpacing: '0.02em', margin: 0 }}>INDIVIDUAL SETS</h2>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2, background: 'rgba(255,255,255,0.04)' }}>
@@ -276,12 +253,12 @@ export default function SetsPage() {
 
       {/* The Watering Hole — featured */}
       {PREMIUM.map(set => (
-        <section key={set.id} style={{ padding: '0 40px 80px' }}>
+        <section key={set.id} style={{ padding: isMobile ? '0 20px 52px' : '0 40px 80px' }}>
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>PREMIUM SET — ${set.price}/HR · {set.note}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, background: 'rgba(255,255,255,0.04)', minHeight: 480 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 2, background: 'rgba(255,255,255,0.04)', minHeight: isMobile ? 0 : 480 }}>
               {/* Photo side */}
               <div style={{ position: 'relative', background: set.gradient, overflow: 'hidden', minHeight: 400 }}>
                 <img src={set.photo} alt={set.name}
@@ -289,11 +266,11 @@ export default function SetsPage() {
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                 />
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, transparent 60%, rgba(10,10,10,0.6) 100%)' }} />
-                <div style={{ position: 'absolute', top: 24, left: 28, fontFamily: 'Bebas Neue, sans-serif', fontSize: 13, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>{set.num}</div>
+                <div style={{ position: 'absolute', top: 24, left: 28, fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 13, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>{set.num}</div>
               </div>
               {/* Info side */}
               <div style={{ background: '#0a0a0a', padding: '48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
-                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 48, color: '#fff', letterSpacing: '0.02em', lineHeight: 0.95 }}>
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, color: '#fff', letterSpacing: '0.02em', lineHeight: 0.95 }}>
                   {set.name.toUpperCase()}
                 </div>
                 <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)' }}>{set.dims}</div>
@@ -304,7 +281,7 @@ export default function SetsPage() {
                   ))}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-                  <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 40, color: '#fff' }}>${set.price}</span>
+                  <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, color: '#fff' }}>${set.price}</span>
                   <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)' }}>/HR · 2 HR MIN</span>
                 </div>
                 <Link href={`/book?type=set&set=${set.id}`}
@@ -318,7 +295,7 @@ export default function SetsPage() {
       ))}
 
       {/* Full Studio Takeover */}
-      <section style={{ padding: '0 40px 100px' }}>
+      <section style={{ padding: isMobile ? '0 20px 64px' : '0 40px 100px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>FULL WAREHOUSE — $400 FLAT RATE</div>
@@ -330,9 +307,9 @@ export default function SetsPage() {
             />
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(8,8,8,0.98) 0%, rgba(8,8,8,0.5) 50%, rgba(8,8,8,0.2) 100%)' }} />
 
-            <div style={{ position: 'relative', zIndex: 1, padding: '64px 56px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'end', minHeight: 520 }}>
+            <div style={{ position: 'relative', zIndex: 1, padding: isMobile ? '40px 24px' : '64px 56px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 28 : 60, alignItems: 'end', minHeight: isMobile ? 0 : 520 }}>
               <div>
-                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 'clamp(48px, 7vw, 88px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em' }}>
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(48px, 7vw, 88px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em' }}>
                   FULL STUDIO<br />TAKEOVER
                 </div>
               </div>

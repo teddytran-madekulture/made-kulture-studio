@@ -337,7 +337,7 @@ function BookingWizard() {
         backdropFilter: 'blur(12px)',
       }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
             MADE<br />KULTURE
           </div>
         </Link>
@@ -380,7 +380,7 @@ function BookingWizard() {
                   onMouseEnter={e => { if (booking.type !== opt.type) (e.currentTarget as HTMLButtonElement).style.background = '#111' }}
                   onMouseLeave={e => { if (booking.type !== opt.type) (e.currentTarget as HTMLButtonElement).style.background = '#0d0d0d' }}
                 >
-                  <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, color: booking.type === opt.type ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 12 }}>
+                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, color: booking.type === opt.type ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 12 }}>
                     {opt.label}
                   </div>
                   <p style={{ fontFamily: 'Inter', fontSize: 13, color: booking.type === opt.type ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 24 }}>
@@ -412,7 +412,7 @@ function BookingWizard() {
                   <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: booking.setId === s.id ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', marginBottom: 10 }}>
                     ${s.price}/HR {s.minHours > 1 ? `· ${s.minHours}HR MIN` : ''}
                   </div>
-                  <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 26, color: booking.setId === s.id ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 6 }}>
+                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, color: booking.setId === s.id ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 6 }}>
                     {s.name.toUpperCase()}
                   </div>
                   <p style={{ fontFamily: 'Inter', fontSize: 12, color: booking.setId === s.id ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
@@ -585,7 +585,7 @@ function BookingWizard() {
                   ))}
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,0.05)' }}>
                     <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)' }}>GEAR SUBTOTAL</span>
-                    <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20 }}>${equipTotal}</span>
+                    <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20 }}>${equipTotal}</span>
                   </div>
                 </div>
               </div>
@@ -706,8 +706,8 @@ function BookingWizard() {
                       : <Row label="EQUIPMENT" value={`$${equipTotal}`} />
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
-                    <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: '#fff', letterSpacing: '0.05em' }}>TOTAL</span>
-                    <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: '#fff' }}>${grandTotal}</span>
+                    <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', letterSpacing: '0.05em' }}>TOTAL</span>
+                    <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff' }}>${grandTotal}</span>
                   </div>
                 </div>
               </div>
@@ -736,7 +736,7 @@ function BookingWizard() {
 function StepWrapper({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 'clamp(36px, 6vw, 72px)', color: '#fff', letterSpacing: '0.02em', marginBottom: 40, lineHeight: 0.9 }}>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(36px, 6vw, 72px)', color: '#fff', letterSpacing: '0.02em', marginBottom: 40, lineHeight: 0.9 }}>
         {title}
       </h1>
       {children}
@@ -783,7 +783,7 @@ function SuccessScreen({ booking, selectedSet }: { booking: BookingState; select
     <div style={{ background: '#080808', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
       <div style={{ maxWidth: 480, textAlign: 'center' }}>
         <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.3)', marginBottom: 24 }}>BOOKING RECEIVED</div>
-        <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 72, color: '#fff', lineHeight: 0.9, marginBottom: 24 }}>
+        <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 72, color: '#fff', lineHeight: 0.9, marginBottom: 24 }}>
           YOU&apos;RE<br />LOCKED IN.
         </h1>
         <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, marginBottom: 40 }}>

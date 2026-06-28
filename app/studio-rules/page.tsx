@@ -141,7 +141,7 @@ function Nav() {
       background: 'linear-gradient(to bottom, rgba(8,8,8,0.95) 0%, transparent 100%)',
     }}>
       <Link href="/" style={{ textDecoration: 'none' }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
+        <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>
           MADE<br />KULTURE
         </div>
       </Link>
@@ -173,7 +173,7 @@ function AccordionItem({ q, a }: { q: string; a: string }) {
         }}
       >
         <span style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 500, color: '#fff', textAlign: 'left', lineHeight: 1.4 }}>{q}</span>
-        <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: 'rgba(255,255,255,0.3)', flexShrink: 0, transition: 'transform 0.2s', transform: open ? 'rotate(45deg)' : 'rotate(0deg)' }}>+</span>
+        <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: 'rgba(255,255,255,0.3)', flexShrink: 0, transition: 'transform 0.2s', transform: open ? 'rotate(45deg)' : 'rotate(0deg)' }}>+</span>
       </button>
       {open && (
         <div style={{ paddingBottom: 24, paddingRight: 48 }}>
@@ -195,7 +195,7 @@ export default function StudioRulesPage() {
             <div style={{ width: 40, height: 1, background: 'rgba(255,255,255,0.4)' }} />
             <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)' }}>POLICIES & FAQ</span>
           </div>
-          <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 'clamp(64px, 10vw, 110px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em', margin: '0 0 32px' }}>
+          <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(64px, 10vw, 110px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em', margin: '0 0 32px' }}>
             STUDIO<br />RULES
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: 15, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, maxWidth: 520, margin: 0 }}>
@@ -222,7 +222,7 @@ export default function StudioRulesPage() {
 
       <section style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '60px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 32, color: '#fff', letterSpacing: '0.02em', marginBottom: 8 }}>READY TO BOOK?</div>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 32, color: '#fff', letterSpacing: '0.02em', marginBottom: 8 }}>READY TO BOOK?</div>
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
             Questions? Text us at (832) 408-1631 — we respond to text only.
           </div>

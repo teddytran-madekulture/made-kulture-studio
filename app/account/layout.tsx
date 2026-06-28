@@ -13,7 +13,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '0 24px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <Link href="/" style={{ textDecoration: 'none' }}>
-            <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff' }}>
+            <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff' }}>
               MADE KULTURE
             </span>
           </Link>
