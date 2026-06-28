@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
+import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,6 +16,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const updates: Record<string, any> = {}
 
   if (body.status       !== undefined) updates.status       = body.status
+
+  // If cancelling, remove any Acuity blocks this website booking created
+  if (body.status === 'cancelled') {
+    const { data: existing } = await supabase
+      .from('bookings').select('acuity_block_ids').eq('id', params.id).single()
+    const blockIds = Array.isArray(existing?.acuity_block_ids) ? existing!.acuity_block_ids : []
+    if (blockIds.length) {
+      await deleteAcuityBlocks(blockIds)
+      updates.acuity_block_ids = []
+    }
+  }
   if (body.start_time   !== undefined) updates.start_time   = body.start_time
   if (body.end_time     !== undefined) updates.end_time     = body.end_time
   if (body.notes        !== undefined) updates.notes        = body.notes

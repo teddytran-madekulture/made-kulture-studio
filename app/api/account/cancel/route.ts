@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendCancellationEmail, formatTimeLabel, formatDateLabel } from '@/lib/email'
+import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   // Fetch the booking — verify it belongs to this user
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, status, acuity_appointment_id, auth_user_id, customers(name, email), sets(name)')
+    .select('id, start_time, end_time, status, acuity_appointment_id, acuity_block_ids, auth_user_id, customers(name, email), sets(name)')
     .eq('id', booking_id)
     .single()
 
@@ -51,10 +52,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Remove any Acuity blocks we created for a website booking (frees the slot on the legacy site)
+  const blockIds = Array.isArray((booking as any).acuity_block_ids) ? (booking as any).acuity_block_ids : []
+  if (blockIds.length) await deleteAcuityBlocks(blockIds)
+
   // Update Supabase booking status
   const { error: updateError } = await supabase
     .from('bookings')
-    .update({ status: 'cancelled' })
+    .update({ status: 'cancelled', acuity_block_ids: [] })
     .eq('id', booking_id)
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })

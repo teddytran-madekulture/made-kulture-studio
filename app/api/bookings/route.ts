@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
+import { createAcuityBlocks } from '@/lib/acuity-sync'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -392,6 +393,26 @@ export async function POST(req: NextRequest) {
       }))
       const { error: addonErr } = await supabase.from('booking_add_ons').insert(addons)
       if (addonErr) console.error('[bookings] add-on insert error:', addonErr)
+    }
+
+    // 9b. Two-way Acuity sync — block this time on Acuity so the legacy site
+    //     can't double-book it. Best-effort; never fail the booking over it.
+    if (bookingData?.id) {
+      try {
+        const blockIds = await createAcuityBlocks({
+          type:         body.type,
+          setSlug:      body.setSlug,
+          startISO,
+          endISO,
+          customerName: body.name,
+          setName,
+        })
+        if (blockIds.length) {
+          await supabase.from('bookings').update({ acuity_block_ids: blockIds }).eq('id', bookingData.id)
+        }
+      } catch (err) {
+        console.error('[bookings] Acuity block sync error:', err)
+      }
     }
 
     // 10. Check for flagged customer + alert owner (non-blocking)
