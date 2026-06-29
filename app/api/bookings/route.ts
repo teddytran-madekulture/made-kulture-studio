@@ -330,39 +330,58 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 9. Square: customer + card + ONE payment for the whole order ────────
-    const { result: searchResult } = await square.customersApi.searchCustomers({
-      query: { filter: { emailAddress: { exact: body.email } } },
-    })
-    let customerId: string
-    if (searchResult.customers && searchResult.customers.length > 0) {
-      customerId = searchResult.customers[0].id!
-    } else {
-      const nameParts = body.name.trim().split(' ')
-      const { result: createResult } = await square.customersApi.createCustomer({
-        givenName: nameParts[0], familyName: nameParts.slice(1).join(' ') || '',
-        emailAddress: body.email, phoneNumber: body.phone, idempotencyKey: randomUUID(),
-      })
-      customerId = createResult.customer!.id!
+    //     Comp ($0) customers flagged "no card required" skip Square entirely.
+    //     Security: a $0 total with no card is only allowed for comp customers,
+    //     and any total > 0 always requires a card token.
+    const compNoCard = !!customerPricingOverrides?.comp_no_card
+    const isFree = verifiedCents === 0
+
+    if (!isFree && !body.sourceId) {
+      return NextResponse.json({ error: 'Payment information is required.' }, { status: 400 })
+    }
+    if (isFree && !body.sourceId && !compNoCard) {
+      return NextResponse.json({ error: 'A card is required to hold this booking.' }, { status: 400 })
     }
 
-    const { result: cardResult } = await square.cardsApi.createCard({
-      idempotencyKey: randomUUID(),
-      sourceId: body.sourceId,
-      card: { customerId, referenceId: `made-kulture-${primary.date}` },
-    })
-    const savedCardId = cardResult.card!.id!
+    let customerId: string | null = null
+    let savedCardId: string | null = null
+    let squarePaymentId: string | null = null
 
-    const payNote = lines.length > 1
-      ? `Made Kulture — ${lines.length} sets — ${body.name}`
-      : `Made Kulture — ${primary.setName} — ${primary.date} ${fmt12(primary.startHour)}–${fmt12(primary.endHour)}`
+    if (body.sourceId) {
+      const { result: searchResult } = await square.customersApi.searchCustomers({
+        query: { filter: { emailAddress: { exact: body.email } } },
+      })
+      if (searchResult.customers && searchResult.customers.length > 0) {
+        customerId = searchResult.customers[0].id!
+      } else {
+        const nameParts = body.name.trim().split(' ')
+        const { result: createResult } = await square.customersApi.createCustomer({
+          givenName: nameParts[0], familyName: nameParts.slice(1).join(' ') || '',
+          emailAddress: body.email, phoneNumber: body.phone, idempotencyKey: randomUUID(),
+        })
+        customerId = createResult.customer!.id!
+      }
 
-    const { result: paymentResult } = await square.paymentsApi.createPayment({
-      sourceId: savedCardId, idempotencyKey: randomUUID(),
-      amountMoney: { amount: BigInt(verifiedCents), currency: 'USD' },
-      customerId, locationId: process.env.SQUARE_LOCATION_ID!,
-      note: payNote, buyerEmailAddress: body.email,
-    })
-    const squarePaymentId = paymentResult.payment!.id!
+      const { result: cardResult } = await square.cardsApi.createCard({
+        idempotencyKey: randomUUID(),
+        sourceId: body.sourceId,
+        card: { customerId: customerId!, referenceId: `made-kulture-${primary.date}` },
+      })
+      savedCardId = cardResult.card!.id!
+
+      if (!isFree) {
+        const payNote = lines.length > 1
+          ? `Made Kulture — ${lines.length} sets — ${body.name}`
+          : `Made Kulture — ${primary.setName} — ${primary.date} ${fmt12(primary.startHour)}–${fmt12(primary.endHour)}`
+        const { result: paymentResult } = await square.paymentsApi.createPayment({
+          sourceId: savedCardId, idempotencyKey: randomUUID(),
+          amountMoney: { amount: BigInt(verifiedCents), currency: 'USD' },
+          customerId: customerId!, locationId: process.env.SQUARE_LOCATION_ID!,
+          note: payNote, buyerEmailAddress: body.email,
+        })
+        squarePaymentId = paymentResult.payment!.id!
+      }
+    }
 
     // ── 10. Upsert customer + link auth user ───────────────────────────────
     const { data: customerData } = await supabase
@@ -374,7 +393,7 @@ export async function POST(req: NextRequest) {
     const { data: authUsers } = await supabase.auth.admin.listUsers()
     const authUser = authUsers?.users?.find(u => u.email === body.email)
     const authUserId = authUser?.id ?? null
-    if (authUserId) {
+    if (authUserId && customerId) {
       await supabase.from('customer_profiles')
         .update({ square_customer_id: customerId })
         .eq('id', authUserId).is('square_customer_id', null)
@@ -406,6 +425,7 @@ export async function POST(req: NextRequest) {
           order_group:        orderGroup,
           source:             'website',
           notes:              body.notes,
+          ...(isFree ? { payment_status: 'paid' } : {}),
         })
         .select('id').single()
 

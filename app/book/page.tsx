@@ -286,6 +286,9 @@ function BookingWizard() {
                        : cartSpaceTotal
   const grandTotal   = spaceTotal + discountedEquipTotal
 
+  // Comp customers flagged "no card required" skip the card form when total is $0.
+  const compNoCard   = !!pricingOverrides?.comp_no_card
+
   // Is the in-progress set selection complete and valid?
   const currentComplete =
     booking.type === 'set' &&
@@ -799,17 +802,26 @@ function BookingWizard() {
                 </div>
               </div>
 
-              {/* Square Payment Panel */}
-              <SquarePaymentPanel
-                grandTotal={grandTotal}
-                booking={booking}
-                setCart={setCart}
-                selectedSet={selectedSet}
-                hourCount={hourCount}
-                setRate={setRate}
-                onBack={back}
-                onSuccess={() => setSubmitted(true)}
-              />
+              {/* Payment — or comp confirm when $0 and card-exempt */}
+              {grandTotal === 0 && compNoCard ? (
+                <CompConfirmPanel
+                  booking={booking}
+                  setCart={setCart}
+                  onBack={back}
+                  onSuccess={() => setSubmitted(true)}
+                />
+              ) : (
+                <SquarePaymentPanel
+                  grandTotal={grandTotal}
+                  booking={booking}
+                  setCart={setCart}
+                  selectedSet={selectedSet}
+                  hourCount={hourCount}
+                  setRate={setRate}
+                  onBack={back}
+                  onSuccess={() => setSubmitted(true)}
+                />
+              )}
             </div>
           </StepWrapper>
         )}
@@ -903,6 +915,66 @@ function SuccessScreen({ booking, setCart }: { booking: BookingState; setCart: S
 }
 
 // ─── Square Payment Panel ─────────────────────────────────────────────────────
+
+// Comp ($0, card-exempt) checkout — confirms the booking with no card.
+function CompConfirmPanel({ booking, setCart, onBack, onSuccess }: {
+  booking: BookingState; setCart: SetCartItem[]; onBack: () => void; onSuccess: () => void
+}) {
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    setSubmitting(true); setError(null)
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type:      booking.type,
+          sets:      booking.type === 'set'
+                       ? setCart.map(it => ({ setSlug: it.setId, date: it.date, startHour: it.startHour, endHour: it.endHour }))
+                       : undefined,
+          setSlug:   booking.setId,
+          date:      booking.date,
+          startHour: booking.startHour,
+          endHour:   booking.endHour,
+          equipment: booking.equipment.map(l => ({ equipment_id: l.id, quantity: l.quantity })),
+          name:      booking.name,
+          email:     booking.email,
+          phone:     booking.phone,
+          notes:     booking.notes,
+          totalCents: 0,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Could not confirm booking.'); setSubmitting(false); return }
+      onSuccess()
+    } catch {
+      setError('Could not confirm booking. Please try again.'); setSubmitting(false)
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.3)', padding: '18px 20px', marginBottom: 20 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff', marginBottom: 4 }}>No payment due</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
+          This booking is comped — your total is $0 and no card is required.
+        </div>
+      </div>
+      {error && <div style={{ color: '#f0a0a0', fontSize: 13, marginBottom: 16 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button onClick={onBack} disabled={submitting}
+          style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '15px 24px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.18em' }}>
+          ← BACK
+        </button>
+        <button onClick={submit} disabled={submitting}
+          style={{ flex: 1, background: '#fff', border: 'none', color: '#080808', padding: '15px 24px', cursor: submitting ? 'default' : 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', opacity: submitting ? 0.6 : 1 }}>
+          {submitting ? 'CONFIRMING…' : 'CONFIRM BOOKING'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 interface SquarePaymentPanelProps {
   grandTotal:  number
