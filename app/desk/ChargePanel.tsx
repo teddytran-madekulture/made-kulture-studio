@@ -17,10 +17,15 @@ export default function ChargePanel() {
   const [hasDevice, setHasDevice] = useState<boolean | null>(null)
   const poll = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Re-check the paired Register whenever the panel opens (not just on first load),
+  // so pairing done after the page loaded is picked up.
   useEffect(() => {
-    fetch('/api/desk/terminal/device', { cache: 'no-store' }).then(r => r.json()).then(d => setHasDevice(!!d.device)).catch(() => setHasDevice(false))
-    return () => { if (poll.current) clearInterval(poll.current) }
-  }, [])
+    if (!open) return
+    fetch('/api/desk/terminal/device', { cache: 'no-store' })
+      .then(r => r.json()).then(d => setHasDevice(!!d.device)).catch(() => setHasDevice(null))
+  }, [open])
+
+  useEffect(() => () => { if (poll.current) clearInterval(poll.current) }, [])
 
   const reset = () => { setStatus('idle'); setMsg(''); setCheckoutId(null); setAmount(''); setNote(''); if (poll.current) clearInterval(poll.current) }
 
@@ -36,7 +41,7 @@ export default function ChargePanel() {
       const s = await fetch(`/api/desk/terminal/charge/${d.checkoutId}`, { cache: 'no-store' }).then(x => x.json()).catch(() => null)
       if (!s) return
       if (s.status === 'COMPLETED') { setStatus('paid'); if (poll.current) clearInterval(poll.current) }
-      else if (s.status === 'CANCELED') { setStatus('canceled'); if (poll.current) clearInterval(poll.current) }
+      else if (s.status === 'CANCELED' || s.status === 'CANCEL_REQUESTED') { setStatus('canceled'); if (poll.current) clearInterval(poll.current) }
     }, 2000)
   }
 
@@ -60,7 +65,7 @@ export default function ChargePanel() {
         <button onClick={() => { reset(); setOpen(false) }} style={{ background: 'none', border: 'none', color: C.dim, cursor: 'pointer', fontSize: 18 }}>✕</button>
       </div>
 
-      {hasDevice === false && <p style={{ color: C.accent, fontSize: 13 }}>No Register is paired yet — an owner can pair it from the staff console.</p>}
+      {hasDevice === false && <p style={{ color: C.accent, fontSize: 13 }}>No Register is paired yet — an owner can pair it from the staff console. (You can still try; the charge will tell you if it can’t reach a Register.)</p>}
 
       {(status === 'idle' || status === 'starting' || status === 'error') && (
         <>
@@ -71,7 +76,7 @@ export default function ChargePanel() {
               style={{ flex: '2 1 200px', padding: '10px 12px', background: C.input, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text, fontSize: 15 }} />
           </div>
           {status === 'error' && <p style={{ color: C.accent, fontSize: 13 }}>{msg}</p>}
-          <button onClick={start} disabled={status === 'starting' || hasDevice === false} style={{ ...btn(C.accent), marginTop: 12 }}>
+          <button onClick={start} disabled={status === 'starting'} style={{ ...btn(C.accent), marginTop: 12, opacity: status === 'starting' ? 0.6 : 1 }}>
             {status === 'starting' ? 'Starting…' : 'Send to Register →'}
           </button>
         </>
