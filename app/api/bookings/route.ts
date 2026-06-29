@@ -419,12 +419,11 @@ export async function POST(req: NextRequest) {
           base_amount:        l.spaceDollars,
           extras_amount:      i === 0 ? equipDollars : 0,
           total_amount:       rowTotal,
-          square_payment_id:  squarePaymentId,
-          square_customer_id: customerId,
-          square_card_id:     savedCardId,
-          order_group:        orderGroup,
-          source:             'website',
-          notes:              body.notes,
+          square_payment_id:      squarePaymentId,
+          square_card_on_file_id: savedCardId,
+          order_group:            orderGroup,
+          source:                 'website',
+          notes:                  body.notes,
           ...(isFree ? { payment_status: 'paid' } : {}),
         })
         .select('id').single()
@@ -462,6 +461,16 @@ export async function POST(req: NextRequest) {
     }
 
     const firstBookingId = bookingIds[0]
+
+    // If nothing saved, do NOT report success — surface the failure so it can be
+    // reconciled (a charge may have gone through without a booking row).
+    if (!firstBookingId) {
+      console.error('[bookings] CRITICAL: no booking rows inserted', { email: body.email, squarePaymentId })
+      return NextResponse.json(
+        { error: 'Your payment may have processed but we could not save the booking. Please text (832) 408-1631 right away so we can sort it out.' },
+        { status: 500 }
+      )
+    }
 
     // ── 12. Flagged customer alert (non-blocking) ──────────────────────────
     if (supabaseCustomerId) {
