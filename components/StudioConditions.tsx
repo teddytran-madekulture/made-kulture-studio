@@ -21,7 +21,8 @@ interface Conditions {
   outdoorTemp: number | string | null
 }
 
-const GOLD = '#d8a04c'
+// Muted white to match the monochrome industrial palette (no gold accent).
+const ICON_COLOR = 'rgba(255,255,255,0.5)'
 
 // Live studio conditions from the Nest thermostat (via /api/studio-temp).
 // Renders nothing if the feed is unavailable, so it never shows a broken bar.
@@ -58,7 +59,7 @@ export default function StudioConditions({ align = 'center' }: { align?: 'center
     label: string,
   ) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ color: GOLD, display: 'flex', alignItems: 'center' }}>{icon}</span>
+      <span style={{ color: ICON_COLOR, display: 'flex', alignItems: 'center' }}>{icon}</span>
       <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 18, fontWeight: 300, color: '#fff', lineHeight: 1 }}>
         {value ?? '--'}<span style={{ opacity: 0.6 }}>{unit}</span>
       </span>

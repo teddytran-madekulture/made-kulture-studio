@@ -5,6 +5,7 @@ import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import DatePicker from '@/components/DatePicker'
+import StudioConditions from '@/components/StudioConditions'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -443,6 +444,11 @@ function BookingWizard() {
           </div>
           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }}>
             <div style={{ height: '100%', background: '#fff', width: `${(step / totalSteps) * 100}%`, transition: 'width 0.4s ease' }} />
+          </div>
+
+          {/* Live studio conditions — climate affects the booking (no central A/C) */}
+          <div style={{ marginTop: 18, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14 }}>
+            <StudioConditions />
           </div>
         </div>
 
