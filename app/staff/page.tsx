@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { ROLE_LABELS, STAFF_ROLES, type StaffRole } from '@/lib/staff-permissions'
+import TerminalPairing from './TerminalPairing'
 
 type Me = {
   staff: { id: string; name: string; role: StaffRole } | null
@@ -137,11 +138,12 @@ function Console({ me, onSignedOut }: { me: Me; onSignedOut: () => void }) {
 
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 24 }}>
         <p style={{ margin: 0, color: C.dim, fontSize: 14 }}>
-          You’re signed in. The full front-desk workflow (customer lookup, check-in, bookings, add-ons, terminal charges) arrives in <strong style={{ color: C.text }}>Phase 2</strong> at <code style={{ color: C.accent }}>/desk</code>. Phase 1 sets up staff accounts and the audit trail.
+          The full front-desk workflow lives at <a href="/desk" style={{ color: C.accent }}>/desk</a> — search, check-in, and card charges. This console manages staff and settings.
         </p>
       </div>
 
       {isOwner && <StaffManager />}
+      {isOwner && <TerminalPairing />}
       {isOwner && <AuditLog />}
     </Shell>
   )
@@ -241,7 +243,7 @@ function AuditLog() {
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' }}>
         {entries.length === 0 && <p style={{ color: C.dim, padding: 18, margin: 0 }}>No activity yet.</p>}
         {entries.map(e => (
-          <div key={e.id} style={{ display: 'flex', gap: 12, padding: '10px 16px', borderTop: `1px solid ${C.line}`, fontSize: 13 }}>
+          <div key={e.id} style={{ display: 'flex', gap: 12, padding: '10px 16px', borderTop: `1px solid ${C.line}`, fontSize: 13, flexWrap: 'wrap' }}>
             <span style={{ color: C.dim, minWidth: 120 }}>{fmtDate(e.created_at)}</span>
             <span style={{ minWidth: 130, fontWeight: 600 }}>{e.staff_name}</span>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', color: C.accent }}>{e.action}</span>

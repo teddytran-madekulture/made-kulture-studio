@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { ROLE_LABELS, type StaffRole } from '@/lib/staff-permissions'
+import ChargePanel from './ChargePanel'
 
 type Booking = {
   id: string; start_time: string; end_time: string; status: string
@@ -24,7 +25,7 @@ const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-US', { week
 const setNameOf = (b: Booking) => b.sets?.name ?? 'Full Studio Takeover'
 
 const btn = (kind: 'solid' | 'ghost' | 'danger' = 'solid'): React.CSSProperties => ({
-  padding: '8px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600,
+  padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontWeight: 600,
   fontSize: 13, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '.03em',
   background: kind === 'solid' ? C.accent : 'transparent',
   color: kind === 'solid' ? '#fff' : kind === 'danger' ? C.accent : C.dim,
@@ -91,6 +92,8 @@ export default function Desk() {
         </div>
         <button style={btn('ghost')} onClick={signOut}>Lock</button>
       </div>
+
+      {!!me.permissions?.['payment.terminal'] && <ChargePanel />}
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
         <input
