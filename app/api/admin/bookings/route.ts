@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, start_time, end_time, status, total_amount, notes, source, created_at,
       square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount, customer_id,
+      checked_in_at, checked_out_at, arrived_guest_count,
       sets ( name ),
       customers ( name, email, phone, status, banned, square_customer_id ),
       booking_add_ons ( quantity, rate, paid, equipment ( name ) )

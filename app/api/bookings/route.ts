@@ -161,12 +161,14 @@ interface OrderLine {
 }
 
 async function sendConfirmationSMS(
-  body: BookingRequest, lines: OrderLine[], totalCents: number
+  body: BookingRequest, lines: OrderLine[], totalCents: number, checkInToken?: string | null
 ) {
   const dollars = (totalCents / 100).toFixed(2)
   const sched = lines.map(l =>
     `📍 ${l.setName} — ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join('\n')
   const guestLine = body.guests ? `👥 ${body.guests} guests — this is your booked limit` : null
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
+  const checkInLine = checkInToken ? `📲 Check in when you arrive: ${appUrl}/checkin/${checkInToken}` : null
 
   const message = [
     `✅ Made Kulture — Booking Confirmed!`,
@@ -175,6 +177,7 @@ async function sendConfirmationSMS(
     sched,
     ...(guestLine ? [guestLine] : []),
     `💳 $${dollars} charged`,
+    ...(checkInLine ? [``, checkInLine] : []),
     ``,
     `4825 Gulf Freeway, Houston TX 77023`,
     `Questions? Reply to this message.`,
@@ -446,6 +449,7 @@ export async function POST(req: NextRequest) {
     const orderGroup = lines.length > 1 ? randomUUID() : null
     const equipDollars = equipCustom
     const bookingIds: string[] = []
+    let checkInToken: string | null = null
 
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
@@ -471,7 +475,7 @@ export async function POST(req: NextRequest) {
           notes:                  body.notes,
           ...(isFree ? { payment_status: 'paid' } : {}),
         })
-        .select('id').single()
+        .select('id, check_in_token').single()
 
       if (bookingError) {
         console.error('Supabase booking error:', bookingError)
@@ -479,6 +483,7 @@ export async function POST(req: NextRequest) {
       }
       if (bookingData?.id) {
         bookingIds.push(bookingData.id)
+        if (i === 0) checkInToken = (bookingData as any).check_in_token ?? null
 
         // Equipment add-ons attach to the first row (charged once).
         if (i === 0 && (body.equipment?.length ?? 0) > 0) {
@@ -529,7 +534,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 13. Confirmations (SMS + email), non-blocking ──────────────────────
-    sendConfirmationSMS(body, lines, verifiedCents).catch(err =>
+    sendConfirmationSMS(body, lines, verifiedCents, checkInToken).catch(err =>
       console.error('SMS error (non-fatal):', err))
 
     if (firstBookingId) {

@@ -96,6 +96,9 @@ interface Booking {
   guest_count: number | null
   guest_fee_amount: number | null
   customer_id: string | null
+  checked_in_at: string | null
+  checked_out_at: string | null
+  arrived_guest_count: number | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
   booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
@@ -1194,6 +1197,11 @@ export default function AdminDashboard() {
                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                             <Detail label="PARTY"  value={b.guest_count != null ? `${b.guest_count} ${b.guest_count === 1 ? 'person' : 'people'}${b.guest_fee_amount ? ` (+$${Number(b.guest_fee_amount).toFixed(0)} guest fee)` : ''}` : '—'} />
+                            <Detail label="CHECK-IN" value={
+                              b.checked_out_at && b.checked_in_at ? `Arrived ${fmtTime(b.checked_in_at)} · Left ${fmtTime(b.checked_out_at)}`
+                              : b.checked_in_at ? `Arrived ${fmtTime(b.checked_in_at)}${b.arrived_guest_count ? ` · ${b.arrived_guest_count} here${b.guest_count && b.arrived_guest_count > b.guest_count ? ' ⚠️ over' : ''}` : ''}`
+                              : 'Not checked in'
+                            } />
                             <Detail label="PHONE"  value={b.customers?.phone || '—'} />
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}
