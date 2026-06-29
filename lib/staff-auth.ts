@@ -125,8 +125,15 @@ export async function findActiveStaffByEmail(email: string) {
 }
 
 export async function countStaff(): Promise<number> {
-  const { count } = await supabaseAdmin()
-    .from('staff_users')
-    .select('id', { count: 'exact', head: true })
-  return count ?? 0
+  // Use a plain select (same pattern the staff list uses, proven to work via the
+  // service role) instead of a head+count query — the latter was returning null
+  // on this stack, making the app think there were zero staff and showing the
+  // first-run setup screen after logout. On error, fail SAFE: assume accounts
+  // exist so the bootstrap form is never wrongly offered.
+  const { data, error } = await supabaseAdmin().from('staff_users').select('id')
+  if (error) {
+    console.error('[countStaff] failed', error)
+    return 1
+  }
+  return data?.length ?? 0
 }
