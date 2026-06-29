@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
+import StudioConditions from '@/components/StudioConditions'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
 const SETS = [
@@ -85,6 +86,11 @@ export default function Home() {
             </Link>
           </div>
         </div>
+      </section>
+
+      {/* LIVE STUDIO CONDITIONS — from the Nest thermostat */}
+      <section style={{ borderTop:'1px solid rgba(255,255,255,0.06)', borderBottom:'1px solid rgba(255,255,255,0.06)', padding: isMobile ? '14px 20px' : '16px 40px' }}>
+        <StudioConditions />
       </section>
 
       {/* FEATURES BAR */}
