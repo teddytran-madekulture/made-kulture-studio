@@ -237,7 +237,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
 
   return sendEmail('booking_confirmation', {
     from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    reply_to: REPLY_TO,
     to: customerEmail,
     subject,
     html: layout(body),
@@ -368,7 +368,7 @@ export async function sendCancellationEmail(data: CancellationData) {
 
   return sendEmail('cancellation', {
     from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    reply_to: REPLY_TO,
     to: customerEmail,
     subject,
     html: layout(body),
@@ -462,7 +462,7 @@ export async function sendBookingReminder(data: BookingReminderData) {
 
   return sendEmail('reminder', {
     from: FROM_EMAIL,
-    replyTo: REPLY_TO,
+    reply_to: REPLY_TO,
     to: customerEmail,
     subject,
     html: layout(body),

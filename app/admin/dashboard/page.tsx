@@ -92,8 +92,12 @@ interface Booking {
   source: string
   created_at: string
   square_payment_id: string | null
+  square_card_on_file_id: string | null
+  guest_count: number | null
+  guest_fee_amount: number | null
+  customer_id: string | null
   sets: { name: string } | null
-  customers: { name: string; email: string; phone: string; status?: string; banned?: boolean } | null
+  customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
   booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
 }
 
@@ -322,6 +326,12 @@ export default function AdminDashboard() {
 
   const [bookings,  setBookings]  = useState<Booking[]>([])
   const [loading,   setLoading]   = useState(true)
+  // Guest overage charging (per-row)
+  const [guestPenalty,  setGuestPenalty]  = useState(50)
+  const [overageFor,    setOverageFor]    = useState<string | null>(null)
+  const [overageCount,  setOverageCount]  = useState(1)
+  const [overageBusy,   setOverageBusy]   = useState(false)
+  const [overageMsg,    setOverageMsg]    = useState<string | null>(null)
   const [tab,       setTab]       = useState<'upcoming' | 'past' | 'all'>('upcoming')
   const [expanded,  setExpanded]  = useState<string | null>(null)
   const [cancelling,setCancelling]= useState<string | null>(null)
@@ -523,8 +533,30 @@ export default function AdminDashboard() {
     if (res.status === 401) { router.push('/admin'); return }
     const data = await res.json()
     setBookings(data.bookings || [])
+    if (data.guestPenaltyPerHead) setGuestPenalty(Number(data.guestPenaltyPerHead))
     setLoading(false)
   }, [router])
+
+  // Charge a guest overage to the card on file (penalty × extra guests).
+  const chargeOverage = async (b: Booking) => {
+    if (overageBusy) return
+    if (!confirm(`Charge ${b.customers?.name || 'this customer'} $${(overageCount * guestPenalty).toFixed(2)} for ${overageCount} extra guest(s)?`)) return
+    setOverageBusy(true); setOverageMsg(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${b.id}/charge-overage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extraGuests: overageCount, sendSms: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setOverageMsg(data.error || 'Charge failed'); setOverageBusy(false); return }
+      setOverageMsg(`Charged $${Number(data.amount).toFixed(2)} · note logged`)
+      setOverageBusy(false)
+      setTimeout(() => { setOverageFor(null); setOverageMsg(null); setOverageCount(1) }, 2500)
+    } catch {
+      setOverageMsg('Charge failed'); setOverageBusy(false)
+    }
+  }
 
   useEffect(() => { fetchBookings() }, [fetchBookings])
 
@@ -1161,6 +1193,7 @@ export default function AdminDashboard() {
                       {isOpen && (
                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <Detail label="PARTY"  value={b.guest_count != null ? `${b.guest_count} ${b.guest_count === 1 ? 'person' : 'people'}${b.guest_fee_amount ? ` (+$${Number(b.guest_fee_amount).toFixed(0)} guest fee)` : ''}` : '—'} />
                             <Detail label="PHONE"  value={b.customers?.phone || '—'} />
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}
@@ -1169,9 +1202,9 @@ export default function AdminDashboard() {
                             )}
                             {b.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={b.square_payment_id} mono />}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 8 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
                             {!isCancelled && (
-                              <>
+                              <div style={{ display: 'flex', gap: 8 }}>
                                 <button onClick={() => openEdit(b)}
                                   style={{ background: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: '#080808', fontWeight: 600 }}>
                                   EDIT
@@ -1180,7 +1213,41 @@ export default function AdminDashboard() {
                                   style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.4)', padding: '10px 20px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: '#ff6b6b' }}>
                                   {cancelling === b.id ? 'CANCELLING...' : 'CANCEL'}
                                 </button>
-                              </>
+                              </div>
+                            )}
+
+                            {/* Guest overage — charge the card on file for extra guests on the day */}
+                            {!isCancelled && (
+                              overageFor === b.id ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.25)', padding: '10px 12px' }}>
+                                  {!b.square_card_on_file_id ? (
+                                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>No card on file — can’t auto-charge.</div>
+                                  ) : (
+                                    <>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>GUESTS OVER LIMIT</span>
+                                        <input type="number" min={1} value={overageCount}
+                                          onChange={e => setOverageCount(Math.max(1, parseInt(e.target.value) || 1))}
+                                          style={{ width: 56, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '6px 8px', fontFamily: 'Inter, sans-serif', fontSize: 12 }} />
+                                      </div>
+                                      <button onClick={() => chargeOverage(b)} disabled={overageBusy}
+                                        style={{ background: 'rgba(249,115,22,0.85)', border: 'none', padding: '8px 16px', cursor: overageBusy ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', color: '#080808', fontWeight: 600 }}>
+                                        {overageBusy ? 'CHARGING…' : `CHARGE $${(overageCount * guestPenalty).toFixed(0)} + FLAG`}
+                                      </button>
+                                    </>
+                                  )}
+                                  {overageMsg && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: overageMsg.startsWith('Charged') ? '#4ade80' : '#ff6b6b' }}>{overageMsg}</div>}
+                                  <button onClick={() => { setOverageFor(null); setOverageMsg(null); setOverageCount(1) }}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)' }}>
+                                    CLOSE
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => { setOverageFor(b.id); setOverageCount(1); setOverageMsg(null) }}
+                                  style={{ background: 'transparent', border: '1px solid rgba(249,115,22,0.4)', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', color: '#f97316' }}>
+                                  CHARGE GUEST OVERAGE
+                                </button>
+                              )
                             )}
                           </div>
                         </div>

@@ -66,9 +66,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Don't duplicate the primary's own current values in the alt lists.
-  const mergedAltEmails = [...altEmails].filter(e => norm(e) !== norm(primary.email))
-  const mergedAltPhones = [...altPhones].filter(p => norm(p) !== norm(mergedPhone))
-  const mergedAltNames  = [...altNames].filter(n => norm(n) !== norm(mergedName))
+  const mergedAltEmails = Array.from(altEmails).filter(e => norm(e) !== norm(primary.email))
+  const mergedAltPhones = Array.from(altPhones).filter(p => norm(p) !== norm(mergedPhone))
+  const mergedAltNames  = Array.from(altNames).filter(n => norm(n) !== norm(mergedName))
 
   const errors: string[] = []
 

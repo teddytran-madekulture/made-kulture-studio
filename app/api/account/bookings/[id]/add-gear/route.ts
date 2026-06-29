@@ -54,7 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // 4. Availability for this booking's window (excluding gear already on it)
   const avail = await checkCartAvailability(admin, booking.start_time, booking.end_time, requested, booking.id)
   if (!avail.ok) {
-    const msg = avail.conflicts.map(c => `${c.name} (requested ${c.requested}, ${c.available} free)`).join('; ')
+    const conflicts = 'conflicts' in avail ? avail.conflicts : []
+    const msg = conflicts.map(c => `${c.name} (requested ${c.requested}, ${c.available} free)`).join('; ')
     return NextResponse.json({ error: `Some gear isn't available for your booking time: ${msg}.` }, { status: 409 })
   }
 

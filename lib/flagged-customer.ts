@@ -57,7 +57,7 @@ export async function checkBannedAndAlert(
     const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({
       from:    'Made Kulture <bookings@madekulture.com>',
-      replyTo: OWNER_EMAIL,
+      reply_to: OWNER_EMAIL,
       to:      OWNER_EMAIL,
       subject: `⛔ Banned customer attempted to book: ${customer.name || email}`,
       html: `
@@ -178,7 +178,7 @@ export async function checkAndAlertFlaggedCustomer(
 
     await resend.emails.send({
       from:    'Made Kulture <bookings@madekulture.com>',
-      replyTo: OWNER_EMAIL,
+      reply_to: OWNER_EMAIL,
       to:      OWNER_EMAIL,
       subject: `${label}: ${booking.customerName} just booked ${booking.setName}`,
       html: `

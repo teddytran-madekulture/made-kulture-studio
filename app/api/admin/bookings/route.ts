@@ -32,15 +32,20 @@ export async function GET(req: NextRequest) {
     .from('bookings')
     .select(`
       id, start_time, end_time, status, total_amount, notes, source, created_at,
-      square_payment_id,
+      square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount, customer_id,
       sets ( name ),
-      customers ( name, email, phone, status, banned ),
+      customers ( name, email, phone, status, banned, square_customer_id ),
       booking_add_ons ( quantity, rate, paid, equipment ( name ) )
     `)
     .order('start_time', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ bookings: data })
+
+  const { data: penaltySetting } = await supabase
+    .from('studio_settings').select('value').eq('key', 'guest_penalty_per_head').maybeSingle()
+  const guestPenaltyPerHead = Number(penaltySetting?.value) || 50
+
+  return NextResponse.json({ bookings: data, guestPenaltyPerHead })
 }
 
 // ─── POST /api/admin/bookings — manual booking ────────────────────────────────

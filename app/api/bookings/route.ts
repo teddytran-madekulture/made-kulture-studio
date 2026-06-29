@@ -318,7 +318,8 @@ export async function POST(req: NextRequest) {
       for (const l of lines) {
         const avail = await checkCartAvailability(supabase, l.startISO, l.endISO, requested)
         if (!avail.ok) {
-          const msg = avail.conflicts.map(c => `${c.name} (requested ${c.requested}, ${c.available} free)`).join('; ')
+          const conflicts = 'conflicts' in avail ? avail.conflicts : []
+          const msg = conflicts.map(c => `${c.name} (requested ${c.requested}, ${c.available} free)`).join('; ')
           return NextResponse.json(
             { error: `Some equipment isn't available for ${l.setName} on ${l.date}: ${msg}.` },
             { status: 409 }
@@ -433,7 +434,7 @@ export async function POST(req: NextRequest) {
     const supabaseCustomerId = customerData?.id
 
     const { data: authUsers } = await supabase.auth.admin.listUsers()
-    const authUser = authUsers?.users?.find(u => u.email === body.email)
+    const authUser = authUsers?.users?.find((u: any) => u.email === body.email)
     const authUserId = authUser?.id ?? null
     if (authUserId && customerId) {
       await supabase.from('customer_profiles')
