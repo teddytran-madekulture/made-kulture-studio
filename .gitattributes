@@ -1,0 +1,34 @@
+# Normalize line endings to LF in the repo to stop phantom CRLF diffs
+# when the working tree is edited across Windows and the Linux sandbox.
+* text=auto eol=lf
+
+# Explicitly treat common source/text files as text (LF in repo)
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.scss  text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.svg   text eol=lf
+*.env   text eol=lf
+
+# Treat these as binary (never line-ending converted, never diffed as text)
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.mp4   binary
+*.mov   binary
