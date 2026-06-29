@@ -101,10 +101,10 @@ const EQUIPMENT_PRICES: Record<string, number> = {
   'eq-13': 150, 'eq-14': 65,
 }
 
-function verifyTotal(body: BookingRequest, equipRates: Record<string, number>, pricingOverrides?: any): number {
+function verifyTotal(body: BookingRequest, equipRates: Record<string, number>, pricingOverrides?: any, buyoutRate = 400): number {
   const hours = body.endHour - body.startHour
 
-  let setRate = body.type === 'studio' ? 400 : (SET_PRICES[body.setSlug ?? ''] ?? 0)
+  let setRate = body.type === 'studio' ? buyoutRate : (SET_PRICES[body.setSlug ?? ''] ?? 0)
   if (pricingOverrides) {
     const perSet = body.setSlug ? pricingOverrides.sets?.[body.setSlug] : undefined
     const global = pricingOverrides.hourly_rate
@@ -239,8 +239,16 @@ export async function POST(req: NextRequest) {
     }
 
     // 2b. Verify price server-side (prevent tampering)
-    const standardCents = verifyTotal(body, equipRates)
-    const customCents   = customerPricingOverrides ? verifyTotal(body, equipRates, customerPricingOverrides) : standardCents
+    //     Full-warehouse buyout rate is admin-editable (studio_settings.buyout_rate).
+    const { data: buyoutSetting } = await supabase
+      .from('studio_settings')
+      .select('value')
+      .eq('key', 'buyout_rate')
+      .maybeSingle()
+    const buyoutRate = Number(buyoutSetting?.value) || 400
+
+    const standardCents = verifyTotal(body, equipRates, undefined, buyoutRate)
+    const customCents   = customerPricingOverrides ? verifyTotal(body, equipRates, customerPricingOverrides, buyoutRate) : standardCents
     const verifiedCents = customCents // charge the customer-specific rate
 
     if (body.totalCents !== standardCents && body.totalCents !== customCents) {

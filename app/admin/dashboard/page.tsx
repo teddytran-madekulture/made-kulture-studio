@@ -413,6 +413,9 @@ export default function AdminDashboard() {
   const [banMessage,       setBanMessage]        = useState('We were unable to process your booking. Please contact the studio directly at (832) 408-1631.')
   const [banMessageSaving, setBanMessageSaving]  = useState(false)
   const [banMessageSaved,  setBanMessageSaved]   = useState(false)
+  const [buyoutRate,       setBuyoutRate]        = useState('400')
+  const [buyoutSaving,     setBuyoutSaving]      = useState(false)
+  const [buyoutSaved,      setBuyoutSaved]       = useState(false)
 
   // ── Sets Manager ───────────────────────────────────────────────────────────
   const [setsList,     setSetsList]     = useState<StudioSet[]>([])
@@ -484,6 +487,10 @@ export default function AdminDashboard() {
       fetch('/api/admin/settings?key=ban_message')
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.value) setBanMessage(d.value) })
+        .catch(() => {})
+      fetch('/api/admin/settings?key=buyout_rate')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.value) setBuyoutRate(String(d.value)) })
         .catch(() => {})
     }
   }, [view, fetchEmailSettings])
@@ -1301,6 +1308,42 @@ export default function AdminDashboard() {
                   RESET TO DEFAULT
                 </button>
                 {banMessageSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+              </div>
+            </div>
+
+            {/* Full-warehouse buyout rate */}
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '20px 24px', marginBottom: 32 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>$ FULL STUDIO BUYOUT RATE</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 14, lineHeight: 1.5 }}>
+                Flat hourly rate charged for a full-warehouse takeover. Updates the /sets and booking pages instantly.
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 16, color: 'rgba(255,255,255,0.6)' }}>$</span>
+                <input
+                  type="number"
+                  value={buyoutRate}
+                  onChange={e => { setBuyoutRate(e.target.value); setBuyoutSaved(false) }}
+                  style={{ width: 120, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, padding: '10px 12px', outline: 'none', boxSizing: 'border-box' as const }}
+                />
+                <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>/ hour</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+                <button
+                  disabled={buyoutSaving}
+                  onClick={async () => {
+                    setBuyoutSaving(true)
+                    const res = await fetch('/api/admin/settings', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: 'buyout_rate', value: String(parseInt(buyoutRate, 10) || 0) }),
+                    })
+                    if (res.ok) setBuyoutSaved(true)
+                    setBuyoutSaving(false)
+                  }}
+                  style={{ background: buyoutSaving ? 'rgba(255,255,255,0.1)' : '#fff', border: 'none', padding: '7px 18px', cursor: buyoutSaving ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000' }}>
+                  {buyoutSaving ? 'SAVING…' : 'SAVE'}
+                </button>
+                {buyoutSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
               </div>
             </div>
 

@@ -52,7 +52,7 @@ const EQUIPMENT = [
 ]
 
 const SLOTS = Array.from({ length: 26 }, (_, i) => 9 + i * 0.5) // 9:00–21:30 in 30-min steps
-const STUDIO_PRICE = 400 // placeholder buyout flat rate per hour discussion
+const STUDIO_PRICE = 400 // default buyout rate; overridden by DB (studio_settings.buyout_rate)
 const CLOSE_HOUR = 22 // 10pm
 
 function fmt12(h: number) {
@@ -147,18 +147,22 @@ function BookingWizard() {
     fetch('/api/equipment').then(r => r.json()).then(d => setGearCatalog(d.equipment ?? [])).catch(() => {})
   }, [])
 
-  // Sets catalog (DB-driven) for the set picker, pricing, and minimums.
+  // Sets catalog + buyout rate (DB-driven) for the picker, pricing, and minimums.
   const [sets, setSets] = useState<BookSet[]>([])
+  const [buyoutRate, setBuyoutRate] = useState(STUDIO_PRICE)
   useEffect(() => {
-    fetch('/api/sets').then(r => r.json()).then(d => setSets(
-      (d.sets ?? []).map((s: any) => ({
-        id: s.slug,
-        name: s.name,
-        price: Number(s.rate_per_hour),
-        desc: s.description ?? '',
-        minHours: s.min_hours ?? 1,
-      }))
-    )).catch(() => {})
+    fetch('/api/sets').then(r => r.json()).then(d => {
+      setSets(
+        (d.sets ?? []).map((s: any) => ({
+          id: s.slug,
+          name: s.name,
+          price: Number(s.rate_per_hour),
+          desc: s.description ?? '',
+          minHours: s.min_hours ?? 1,
+        }))
+      )
+      if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
+    }).catch(() => {})
   }, [])
 
   const gearQty = (id: string) => booking.equipment.find(l => l.id === id)?.quantity ?? 0
@@ -265,7 +269,7 @@ function BookingWizard() {
     ? Math.round(equipTotal * (1 - Number(equipDiscount) / 100))
     : equipTotal
   const spaceTotal   = booking.type === 'studio'
-                       ? (STUDIO_PRICE * hourCount)
+                       ? (buyoutRate * hourCount)
                        : (setRate * hourCount)
   const grandTotal   = spaceTotal + discountedEquipTotal
 
@@ -703,7 +707,7 @@ function BookingWizard() {
 
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 24 }}>
                   {hourCount > 0 && (
-                    <Row label={`SPACE (${hourCount}hr × $${booking.type === 'studio' ? STUDIO_PRICE : setRate})`} value={`$${spaceTotal}`} />
+                    <Row label={`SPACE (${hourCount}hr × $${booking.type === 'studio' ? buyoutRate : setRate})`} value={`$${spaceTotal}`} />
                   )}
                   {equipTotal > 0 && (
                     equipDiscount

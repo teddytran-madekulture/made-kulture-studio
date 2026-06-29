@@ -13,7 +13,8 @@ const PUBLIC_COLUMNS =
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/sets — active sets only, ordered for display
+// GET /api/sets — active sets only, ordered for display, plus the
+// admin-editable full-warehouse buyout flat rate.
 export async function GET() {
   const { data, error } = await supabase
     .from('sets')
@@ -23,5 +24,13 @@ export async function GET() {
     .order('name', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ sets: data ?? [] })
+
+  const { data: buyoutSetting } = await supabase
+    .from('studio_settings')
+    .select('value')
+    .eq('key', 'buyout_rate')
+    .maybeSingle()
+  const buyoutRate = Number(buyoutSetting?.value) || 400
+
+  return NextResponse.json({ sets: data ?? [], buyoutRate })
 }

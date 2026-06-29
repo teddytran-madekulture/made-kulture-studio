@@ -168,12 +168,13 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
 export default function SetsPage() {
   const isMobile = useIsMobile()
   const [sets, setSets] = useState<ApiSet[]>([])
+  const [buyoutRate, setBuyoutRate] = useState(400)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch('/api/sets')
       .then(r => r.json())
-      .then(d => { setSets(d.sets ?? []); setLoading(false) })
+      .then(d => { setSets(d.sets ?? []); if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate)); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 
@@ -268,7 +269,7 @@ export default function SetsPage() {
       <section style={{ padding: isMobile ? '0 20px 64px' : '0 40px 100px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>FULL WAREHOUSE — $400 FLAT RATE</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>FULL WAREHOUSE — ${buyoutRate} FLAT RATE</div>
           </div>
           <div style={{ position: 'relative', background: STUDIO.gradient, overflow: 'hidden', minHeight: 520 }}>
             <img src={STUDIO.photo} alt="Full Studio"
@@ -293,7 +294,7 @@ export default function SetsPage() {
                     { label: 'CAPACITY', value: STUDIO.capacity },
                     { label: 'SPACE', value: STUDIO.sqft },
                     { label: 'INCLUDES', value: 'All sets + Studio One' },
-                    { label: 'RATE', value: '$400 flat' },
+                    { label: 'RATE', value: `$${buyoutRate} flat` },
                   ].map(d => (
                     <div key={d.label}>
                       <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>{d.label}</div>
