@@ -328,7 +328,9 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'equipment'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'equipment' | 'usage'>('list')
+  const [usage,         setUsage]         = useState<any | null>(null)
+  const [usageLoading,  setUsageLoading]  = useState(false)
   const [calDate,       setCalDate]       = useState(todayStr)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -671,6 +673,15 @@ export default function AdminDashboard() {
   }, [])
 
   useEffect(() => { if (view === 'equipment') fetchEquipment() }, [view, fetchEquipment])
+
+  useEffect(() => {
+    if (view !== 'usage') return
+    setUsageLoading(true)
+    fetch('/api/admin/usage')
+      .then(r => r.json())
+      .then(d => { setUsage(d); setUsageLoading(false) })
+      .catch(() => setUsageLoading(false))
+  }, [view])
 
   const startNewEquip = () => { setEquipEditId('new'); setEquipDraft(EMPTY_EQUIP_DRAFT); setEquipError('') }
 
@@ -1036,7 +1047,7 @@ export default function AdminDashboard() {
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
-          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['emails', '✉', 'Emails'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['emails', '✉', 'Emails'], ['usage', '📊', 'Usage'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -1286,6 +1297,49 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── USAGE VIEW ────────────────────────────────────────────────────── */}
+        {view === 'usage' && (
+          <div style={{ maxWidth: 720, paddingBottom: 80 }}>
+            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 8 }}>USAGE & LIMITS</div>
+            <p style={{ margin: '0 0 24px', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
+              Where you stand against each service&apos;s free-tier limit. Email and text counts are estimated from booking volume. Vercel bandwidth isn&apos;t shown here — check it in your Vercel dashboard.
+            </p>
+            {usageLoading ? (
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>Loading…</div>
+            ) : !usage?.metrics ? (
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>Couldn&apos;t load usage.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {usage.metrics.map((m: any) => {
+                  const fmt = (v: number) => m.unit === 'bytes'
+                    ? (v >= 1073741824 ? (v / 1073741824).toFixed(2) + ' GB' : (v / 1048576).toFixed(1) + ' MB')
+                    : Number(v).toLocaleString()
+                  const pct = m.limit ? Math.min(100, Math.round((m.value / m.limit) * 100)) : null
+                  const color = pct == null ? 'rgba(255,255,255,0.3)' : pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#4ade80'
+                  return (
+                    <div key={m.key} style={{ background: '#0f0f0f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '16px 18px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: pct != null ? 8 : 4, gap: 12 }}>
+                        <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, color: '#fff' }}>
+                          {m.label}<span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}> · {m.service}</span>
+                        </div>
+                        <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff', whiteSpace: 'nowrap' }}>
+                          {fmt(m.value)}{m.limit != null ? <span style={{ color: 'rgba(255,255,255,0.35)' }}>{' / ' + fmt(m.limit) + (pct != null ? ` (${pct}%)` : '')}</span> : null}
+                        </div>
+                      </div>
+                      {m.limit != null && (
+                        <div style={{ height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: color }} />
+                        </div>
+                      )}
+                      <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>{m.note}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
