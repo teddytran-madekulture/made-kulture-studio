@@ -13,6 +13,7 @@ export default function SignupPage() {
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
   const [showPw, setShowPw]   = useState(false)
+  const [password2, setPassword2] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function SignupPage() {
 
   const signUpEmail = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (form.password !== password2) { setError('Passwords do not match'); return }
     setLoading(true); setError('')
     const { error } = await supabase.auth.signUp({
       email: form.email,
@@ -140,6 +142,7 @@ export default function SignupPage() {
               }
             </button>
           </div>
+          <input type={showPw ? 'text' : 'password'} placeholder="Confirm password" value={password2} onChange={e => setPassword2(e.target.value)} required minLength={6} style={inputStyle} />
           <button type="submit" disabled={loading} style={{
             width: '100%', background: '#fff', color: '#000', border: 'none',
             borderRadius: 4, padding: '14px', fontFamily: 'Inter', fontSize: 13,
