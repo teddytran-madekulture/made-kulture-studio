@@ -11,6 +11,13 @@
 
 html { background: var(--black); color: var(--white); scroll-behavior: smooth; }
 
+/* Scale the whole site to 1.25x on desktop for readability — mirrors viewing
+   at 125% browser zoom. Mobile (<=768px) is left at 1x since its layout is
+   already tuned for small screens and scaling up would overflow. */
+@media (min-width: 769px) {
+  body { zoom: 1.25; }
+}
+
 body {
   font-family: 'Inter Tight', 'Inter', sans-serif;
   font-weight: 300;

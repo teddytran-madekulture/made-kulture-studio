@@ -43,14 +43,47 @@ export default function ProfilePage() {
       .then(d => { if (d.profile) setForm({ ...d.profile, roles: d.profile.roles ?? [], directory_opt_in: !!d.profile.directory_opt_in, avatar_url: d.profile.avatar_url ?? null }); setLoading(false) })
   }, [])
 
+  // Downscale + compress in the browser before upload. Avatars only ever show
+  // at ~44–72px, so capping the longest side at 512px and re-encoding as JPEG
+  // keeps each file ~30–80 KB instead of multi-MB — saving storage and speeding
+  // up the directory. Returns a JPEG Blob.
+  const resizeImage = (file: File, max = 512, quality = 0.85): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { reject(new Error('no canvas')); return }
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(
+          b => b ? resolve(b) : reject(new Error('encode failed')),
+          'image/jpeg',
+          quality
+        )
+      }
+      img.onerror = () => reject(new Error('load failed'))
+      img.src = URL.createObjectURL(file)
+    })
+
   const uploadAvatar = async (file: File) => {
     setError(''); setUploading(true)
     try {
+      // Guard against absurdly large originals before we even decode them.
+      if (file.size > 25 * 1024 * 1024) { setError('That image is too large (max 25 MB).'); setUploading(false); return }
+      if (!file.type.startsWith('image/')) { setError('Please choose an image file.'); setUploading(false); return }
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setError('Please sign in again.'); setUploading(false); return }
-      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase()
-      const path = `${user.id}/avatar.${ext}`
-      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+
+      let upload: Blob = file
+      try { upload = await resizeImage(file) } catch { /* fall back to original if resize fails */ }
+
+      const path = `${user.id}/avatar.jpg`
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, upload, { upsert: true, contentType: 'image/jpeg' })
       if (upErr) { setError(upErr.message); setUploading(false); return }
       const { data } = supabase.storage.from('avatars').getPublicUrl(path)
       // cache-bust so the new image shows immediately
