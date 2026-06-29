@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { ROLE_LABELS, type StaffRole } from '@/lib/staff-permissions'
 import ChargePanel from './ChargePanel'
+import GearPanel from './GearPanel'
 
 type Booking = {
   id: string; start_time: string; end_time: string; status: string
@@ -39,6 +40,7 @@ export default function Desk() {
   const [q, setQ] = useState('')
   const [scope, setScope] = useState<'today' | 'upcoming'>('today')
   const [busy, setBusy] = useState<string | null>(null)
+  const [gearFor, setGearFor] = useState<Booking | null>(null)
 
   useEffect(() => {
     fetch('/api/staff/me', { cache: 'no-store' }).then(r => r.json()).then((m: Me) => { setMe(m); setLoading(false) })
@@ -105,7 +107,7 @@ export default function Desk() {
   )
 
   const canCancel = !!me.permissions?.['booking.cancel']
-  const canAddTime = !!me.permissions?.['addon.add']
+  const canAddOn = !!me.permissions?.['addon.add']
 
   return (
     <Shell>
@@ -161,13 +163,23 @@ export default function Desk() {
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                 {!b.checked_in_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkIn(b)}>Check in</button>}
                 {b.checked_in_at && !b.checked_out_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkOut(b)}>Check out</button>}
-                {canAddTime && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => addTime(b)}>+ Add time</button>}
+                {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => addTime(b)}>+ Add time</button>}
+                {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => setGearFor(b)}>+ Add gear</button>}
                 {canCancel && <button disabled={busy === b.id} style={btn('danger')} onClick={() => cancel(b)}>Cancel</button>}
               </div>
             </div>
           )
         })}
       </div>
+
+      {gearFor && (
+        <GearPanel
+          bookingId={gearFor.id}
+          label={`${gearFor.customers?.name ?? 'Guest'} · ${setNameOf(gearFor)} · ${fmtTime(gearFor.start_time)}–${fmtTime(gearFor.end_time)}`}
+          onClose={() => setGearFor(null)}
+          onDone={load}
+        />
+      )}
     </Shell>
   )
 }
