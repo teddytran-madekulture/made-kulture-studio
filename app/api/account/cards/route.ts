@@ -57,45 +57,53 @@ export async function GET() {
       id: c.id,
       last_4: c.last4,
       card_brand: c.cardBrand,
-      exp_month: c.expMonth,
-      exp_year: c.expYear,
+      exp_month: c.expMonth != null ? Number(c.expMonth) : null,
+      exp_year: c.expYear != null ? Number(c.expYear) : null,
     }))
 
   return NextResponse.json({ cards })
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { source_id } = await req.json()
+    const { source_id } = await req.json()
+    if (!source_id) return NextResponse.json({ error: 'Missing card token.' }, { status: 400 })
 
-  const { data: profile } = await supabase
-    .from('customer_profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .single()
+    const { data: profile } = await supabase
+      .from('customer_profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single()
 
-  const squareCustomerId = await ensureSquareCustomer(user.id, user.email!, profile?.full_name ?? null, supabase)
+    const squareCustomerId = await ensureSquareCustomer(user.id, user.email!, profile?.full_name ?? null, supabase)
 
-  const square = getSquare()
-  const res = await square.cardsApi.createCard({
-    idempotencyKey: `card-${user.id}-${Date.now()}`,
-    sourceId: source_id,
-    card: { customerId: squareCustomerId },
-  })
+    const square = getSquare()
+    const res = await square.cardsApi.createCard({
+      idempotencyKey: `card-${user.id}-${Date.now()}`,
+      sourceId: source_id,
+      card: { customerId: squareCustomerId },
+    })
 
-  const card = res.result.card
-  return NextResponse.json({
-    card: {
-      id: card?.id,
-      last_4: card?.last4,
-      card_brand: card?.cardBrand,
-      exp_month: card?.expMonth,
-      exp_year: card?.expYear,
-    }
-  })
+    const card = res.result.card
+    // Square returns expMonth/expYear as BigInt — convert before JSON serialization.
+    return NextResponse.json({
+      card: {
+        id: card?.id,
+        last_4: card?.last4,
+        card_brand: card?.cardBrand,
+        exp_month: card?.expMonth != null ? Number(card.expMonth) : null,
+        exp_year: card?.expYear != null ? Number(card.expYear) : null,
+      }
+    })
+  } catch (err: any) {
+    const detail = err?.errors?.[0]?.detail || err?.message || 'Could not save card.'
+    console.error('[account/cards] POST error:', err)
+    return NextResponse.json({ error: detail }, { status: 400 })
+  }
 }
 
 export async function DELETE(req: NextRequest) {
