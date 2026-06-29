@@ -31,6 +31,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.end_time     !== undefined) updates.end_time     = body.end_time
   if (body.notes        !== undefined) updates.notes        = body.notes
   if (body.total_amount !== undefined) updates.total_amount = body.total_amount
+  // Manual check-in / check-out (admin override). Pass ISO string or null.
+  if (body.checked_in_at  !== undefined) updates.checked_in_at  = body.checked_in_at
+  if (body.checked_out_at !== undefined) updates.checked_out_at = body.checked_out_at
 
   // Resolve set name to set_id
   if (body.setName !== undefined) {

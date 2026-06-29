@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface CheckinData {
   name: string | null
@@ -26,6 +27,20 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   const [err, setErr]         = useState<string | null>(null)
   const [checkedIn, setCheckedIn]   = useState(false)
   const [checkedOut, setCheckedOut] = useState(false)
+  const [justActed, setJustActed]   = useState(false)
+  const [kiosk, setKiosk]           = useState(false)
+  const router = useRouter()
+
+  useEffect(() => {
+    setKiosk(new URLSearchParams(window.location.search).get('kiosk') === '1')
+  }, [])
+
+  // On a shared kiosk, return to the lookup screen for the next guest.
+  const scheduleReset = () => {
+    if (new URLSearchParams(window.location.search).get('kiosk') === '1') {
+      setTimeout(() => router.push('/checkin?kiosk=1'), 6000)
+    }
+  }
 
   const load = () => {
     fetch(`/api/checkin/${params.token}`, { cache: 'no-store' })
@@ -51,7 +66,9 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
       if (!res.ok) { setErr(d.error || 'Something went wrong.'); setBusy(false); return }
       if (action === 'check_in') setCheckedIn(true)
       else setCheckedOut(true)
+      setJustActed(true)
       setBusy(false)
+      scheduleReset()
     } catch {
       setErr('Something went wrong. Please try again.'); setBusy(false)
     }
@@ -71,6 +88,10 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
     cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1,
   } as const)
 
+  const doneButton = kiosk ? (
+    <button onClick={() => router.push('/checkin?kiosk=1')} style={{ ...bigBtn('transparent', '#fff'), border: '1px solid rgba(255,255,255,0.3)', marginTop: 20 }}>DONE — NEXT GUEST</button>
+  ) : null
+
   if (notFound) return wrap(<p style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter' }}>We couldn’t find that booking. Text us at (832) 408-1631.</p>)
   if (!data) return wrap(<p style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter' }}>Loading…</p>)
 
@@ -86,12 +107,21 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   if (checkedOut) return wrap(<>
     <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, lineHeight: 0.95, marginBottom: 16 }}>SEE YOU<br />NEXT TIME.</h1>
     <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>You’re checked out. Thanks for keeping the space clean.</p>
+    {doneButton}
   </>)
 
-  // ── Checked in → cleanup + check out ──
+  // ── Kiosk: just checked in → confirm + auto-return (no check-out here yet) ──
+  if (checkedIn && justActed && kiosk) return wrap(<>
+    <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, lineHeight: 0.95, marginBottom: 16 }}>YOU’RE IN.</h1>
+    <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.55)', marginBottom: 24 }}>{data.name ? `Welcome, ${data.name.split(' ')[0]}. ` : ''}The owner’s been notified. Come back to this screen and look up your number to check out when you leave.</p>
+    {summary}
+    {doneButton}
+  </>)
+
+  // ── Checked in → enjoy session, then check out at the end ──
   if (checkedIn) return wrap(<>
     <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>YOU’RE IN.</h1>
-    <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.55)', marginBottom: 28 }}>{data.name ? `Welcome, ${data.name.split(' ')[0]}. ` : ''}The owner has been notified.</p>
+    <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.55)', marginBottom: 28 }}>{data.name ? `Enjoy your session, ${data.name.split(' ')[0]}. ` : 'Enjoy your session. '}When you’re done and packed up, check out below.</p>
     {summary}
     <div style={{ ...label, marginBottom: 10, textAlign: 'left' }}>BEFORE YOU CHECK OUT</div>
     <ul style={{ textAlign: 'left', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.8, margin: '0 0 28px', paddingLeft: 18 }}>
@@ -101,7 +131,7 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
     </ul>
     {err && <p style={{ color: '#f0a0a0', fontFamily: 'Inter', fontSize: 13, marginBottom: 12 }}>{err}</p>}
     <button onClick={() => act('check_out')} disabled={busy} style={{ ...bigBtn('transparent', '#fff'), border: '1px solid rgba(255,255,255,0.3)' }}>
-      {busy ? 'SAVING…' : 'CHECK OUT'}
+      {busy ? 'SAVING…' : 'CHECK OUT — I’M LEAVING'}
     </button>
   </>)
 

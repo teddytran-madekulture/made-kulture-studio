@@ -561,6 +561,15 @@ export default function AdminDashboard() {
     }
   }
 
+  // Manual check-in / check-out override (no-show, forgotten check-out, etc.)
+  const setCheckStatus = async (b: Booking, patch: { checked_in_at?: string | null; checked_out_at?: string | null }) => {
+    await fetch(`/api/admin/bookings/${b.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).catch(() => {})
+    fetchBookings(true)
+  }
+
   useEffect(() => { fetchBookings() }, [fetchBookings])
 
   // Auto-refresh bookings whenever the admin returns to this tab/window, so a
@@ -1202,6 +1211,22 @@ export default function AdminDashboard() {
                               : b.checked_in_at ? `Arrived ${fmtTime(b.checked_in_at)}${b.arrived_guest_count ? ` · ${b.arrived_guest_count} here${b.guest_count && b.arrived_guest_count > b.guest_count ? ' ⚠️ over' : ''}` : ''}`
                               : 'Not checked in'
                             } />
+                            {!isCancelled && (
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                {!b.checked_in_at && (
+                                  <button onClick={() => setCheckStatus(b, { checked_in_at: new Date().toISOString() })}
+                                    style={{ background: 'transparent', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80', padding: '5px 12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em' }}>MARK ARRIVED</button>
+                                )}
+                                {b.checked_in_at && !b.checked_out_at && (
+                                  <button onClick={() => setCheckStatus(b, { checked_out_at: new Date().toISOString() })}
+                                    style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.7)', padding: '5px 12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em' }}>MARK LEFT</button>
+                                )}
+                                {(b.checked_in_at || b.checked_out_at) && (
+                                  <button onClick={() => setCheckStatus(b, { checked_in_at: null, checked_out_at: null })}
+                                    style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', padding: '5px 6px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em' }}>RESET</button>
+                                )}
+                              </div>
+                            )}
                             <Detail label="PHONE"  value={b.customers?.phone || '—'} />
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}

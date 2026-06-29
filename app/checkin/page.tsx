@@ -7,6 +7,7 @@ export default function CheckinKioskPage() {
   const [phone, setPhone] = useState('')
   const [busy, setBusy]   = useState(false)
   const [err, setErr]     = useState<string | null>(null)
+  const kiosk = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('kiosk') === '1'
 
   const find = async () => {
     setBusy(true); setErr(null)
@@ -17,7 +18,7 @@ export default function CheckinKioskPage() {
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'No booking found.'); setBusy(false); return }
-      router.push(`/checkin/${d.token}`)
+      router.push(`/checkin/${d.token}${kiosk ? '?kiosk=1' : ''}`)
     } catch {
       setErr('Something went wrong. Please try again.'); setBusy(false)
     }
