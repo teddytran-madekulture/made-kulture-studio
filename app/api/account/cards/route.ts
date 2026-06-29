@@ -109,50 +109,59 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { card_id } = await req.json()
+    const { card_id } = await req.json()
+    if (!card_id) return NextResponse.json({ error: 'Missing card id.' }, { status: 400 })
 
-  // Verify the card belongs to this user's Square customer
-  const { data: profile } = await supabase
-    .from('customer_profiles')
-    .select('square_customer_id')
-    .eq('id', user.id)
-    .single()
+    const { data: profile } = await supabase
+      .from('customer_profiles')
+      .select('square_customer_id')
+      .eq('id', user.id)
+      .single()
 
-  if (!profile?.square_customer_id) return NextResponse.json({ error: 'No customer found' }, { status: 400 })
+    if (!profile?.square_customer_id) return NextResponse.json({ error: 'No customer found' }, { status: 400 })
 
-  const square = getSquare()
-  const cardRes = await square.cardsApi.retrieveCard(card_id)
-  if (cardRes.result.card?.customerId !== profile.square_customer_id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+    // Verify ownership by confirming the card is in this customer's card list —
+    // more reliable than retrieveCard, whose customerId field can come back empty.
+    const square = getSquare()
+    const listRes = await square.cardsApi.listCards(undefined, profile.square_customer_id)
+    const ownsCard = (listRes.result.cards ?? []).some(c => c.id === card_id)
+    if (!ownsCard) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
-  // Don't allow removing a card that's attached to an upcoming or recent booking
-  // — it's the card a guest-overage would be charged to. 7-day grace after the
-  // session end gives the studio time to settle any overage first.
-  const admin = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: activeBookings } = await admin
-    .from('bookings')
-    .select('id')
-    .eq('square_card_on_file_id', card_id)
-    .neq('status', 'cancelled')
-    .gte('end_time', cutoff)
-    .limit(1)
-
-  if (activeBookings && activeBookings.length > 0) {
-    return NextResponse.json(
-      { error: 'This card is linked to an upcoming or recent booking and can’t be removed yet. You can remove it once that session is complete.' },
-      { status: 400 }
+    // Don't allow removing a card that's attached to an upcoming or recent booking
+    // — it's the card a guest-overage would be charged to. 7-day grace after the
+    // session end gives the studio time to settle any overage first.
+    const admin = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
-  }
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: activeBookings } = await admin
+      .from('bookings')
+      .select('id')
+      .eq('square_card_on_file_id', card_id)
+      .neq('status', 'cancelled')
+      .gte('end_time', cutoff)
+      .limit(1)
 
-  await square.cardsApi.disableCard(card_id)
-  return NextResponse.json({ success: true })
+    if (activeBookings && activeBookings.length > 0) {
+      return NextResponse.json(
+        { error: 'This card is linked to an upcoming or recent booking and can’t be removed yet. You can remove it once that session is complete.' },
+        { status: 400 }
+      )
+    }
+
+    await square.cardsApi.disableCard(card_id)
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    console.error('[account/cards] DELETE error:', err)
+    const detail = err?.errors?.[0]?.detail || err?.message || 'Could not remove card.'
+    return NextResponse.json({ error: detail }, { status: 400 })
+  }
 }
