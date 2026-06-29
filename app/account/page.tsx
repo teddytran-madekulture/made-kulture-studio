@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 
 export default async function AccountDashboard() {
@@ -11,11 +12,24 @@ export default async function AccountDashboard() {
     .eq('id', user!.id)
     .single()
 
-  // Recent bookings count
-  const { data: upcoming } = await supabase
+  // Upcoming bookings count — match by auth user id OR the user's customer
+  // record(s) (customers is service-role only, so use a service client).
+  const service = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const { data: custRows } = await service
+    .from('customers')
+    .select('id')
+    .eq('email', (user!.email ?? '').toLowerCase())
+  const custIds = (custRows ?? []).map(c => c.id)
+  const orFilter = [`auth_user_id.eq.${user!.id}`]
+  if (custIds.length) orFilter.push(`customer_id.in.(${custIds.join(',')})`)
+
+  const { data: upcoming } = await service
     .from('bookings')
     .select('id')
-    .or(`customer_id.eq.${user!.id},customer_email.eq.${user!.email}`)
+    .or(orFilter.join(','))
     .gte('start_time', new Date().toISOString())
     .neq('status', 'cancelled')
 
