@@ -46,13 +46,17 @@ export async function saveActiveDevice(label: string, deviceId: string) {
 }
 
 export async function getActiveDevice() {
-  const { data } = await supabaseAdmin()
+  // Plain select + take first row. `.maybeSingle()` returned null on this stack
+  // even with one matching row (same supabase-js quirk as the Phase 1 count bug),
+  // which made the desk think no Register was paired.
+  const { data, error } = await supabaseAdmin()
     .from('square_devices')
     .select('id, label, device_id')
     .eq('is_active', true)
     .order('created_at', { ascending: false })
-    .maybeSingle()
-  return data
+    .limit(1)
+  if (error) { console.error('[getActiveDevice] failed', error); return null }
+  return data?.[0] ?? null
 }
 
 // ── Terminal checkout (push a charge to the paired Register) ────────────────────
