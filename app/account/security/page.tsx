@@ -28,15 +28,18 @@ export default function SecurityPage() {
   }, [supabase])
 
   // Password
-  const [pw, setPw] = useState(''); const [pwc, setPwc] = useState('')
+  const [curPw, setCurPw] = useState(''); const [pw, setPw] = useState(''); const [pwc, setPwc] = useState('')
   const [pwSaving, setPwSaving] = useState(false); const [pwMsg, setPwMsg] = useState(''); const [pwErr, setPwErr] = useState('')
   const changePw = async (e: React.FormEvent) => {
     e.preventDefault(); setPwMsg(''); setPwErr('')
     if (pw !== pwc) { setPwErr('Passwords do not match.'); return }
     setPwSaving(true)
+    // Safeguard: verify the current password before allowing a change.
+    const { error: reauthErr } = await supabase.auth.signInWithPassword({ email: currentEmail, password: curPw })
+    if (reauthErr) { setPwErr('Current password is incorrect.'); setPwSaving(false); return }
     const { error } = await supabase.auth.updateUser({ password: pw })
     if (error) setPwErr(error.message)
-    else { setPwMsg('Password updated.'); setPw(''); setPwc('') }
+    else { setPwMsg('Password updated.'); setCurPw(''); setPw(''); setPwc('') }
     setPwSaving(false)
   }
 
@@ -65,6 +68,10 @@ export default function SecurityPage() {
         <form onSubmit={changePw} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {pwErr && <div style={errBox}>{pwErr}</div>}
           {pwMsg && <div style={okBox}>{pwMsg}</div>}
+          <div>
+            <label style={labelStyle}>CURRENT PASSWORD</label>
+            <input type="password" value={curPw} onChange={e => setCurPw(e.target.value)} required placeholder="Your current password" style={inputStyle} />
+          </div>
           <div>
             <label style={labelStyle}>NEW PASSWORD</label>
             <input type="password" value={pw} onChange={e => setPw(e.target.value)} required minLength={6} placeholder="Min 6 characters" style={inputStyle} />
