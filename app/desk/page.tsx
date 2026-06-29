@@ -71,6 +71,29 @@ export default function Desk() {
     const reason = prompt('Reason (optional, logged):') ?? ''
     act(`/api/desk/bookings/${b.id}/cancel`, { reason }, b.id)
   }
+  const addTime = async (b: Booking) => {
+    const h = prompt(`Add how many hours to ${b.customers?.name ?? 'this booking'} (${setNameOf(b)})?`)
+    if (h === null) return
+    const hours = Number(h)
+    if (!(hours > 0 && hours <= 12)) { alert('Enter 1–12 hours.'); return }
+    setBusy(b.id)
+    const pv = await fetch(`/api/desk/bookings/${b.id}/add-time?hours=${hours}`, { cache: 'no-store' }).then(r => r.json()).catch(() => null)
+    setBusy(null)
+    if (!pv || pv.error) { alert(pv?.error ?? 'Could not price the extension.'); return }
+    if (pv.conflict) { alert('The set is booked right after — can’t extend into another booking.'); return }
+    const price = (pv.priceCents / 100).toFixed(2)
+    const msg = pv.hasCardOnFile
+      ? `Add ${hours} hr to ${pv.setName} — $${price}.\nCharge the card on file?`
+      : `Add ${hours} hr to ${pv.setName} — $${price}.\nNo card on file — extend now and collect $${price} manually?`
+    if (!confirm(msg)) return
+    setBusy(b.id)
+    const r = await fetch(`/api/desk/bookings/${b.id}/add-time`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hours, charge: pv.hasCardOnFile }) })
+    const d = await r.json()
+    setBusy(null)
+    if (!r.ok) { alert(d.error ?? 'Could not add time.'); return }
+    alert(d.charged ? `✓ $${price} charged and booking extended.` : `✓ Extended. Collect $${price} manually.`)
+    load()
+  }
   const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 
   if (loading) return <Shell><p style={{ color: C.dim }}>Loading…</p></Shell>
@@ -82,6 +105,7 @@ export default function Desk() {
   )
 
   const canCancel = !!me.permissions?.['booking.cancel']
+  const canAddTime = !!me.permissions?.['addon.add']
 
   return (
     <Shell>
@@ -137,6 +161,7 @@ export default function Desk() {
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                 {!b.checked_in_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkIn(b)}>Check in</button>}
                 {b.checked_in_at && !b.checked_out_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkOut(b)}>Check out</button>}
+                {canAddTime && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => addTime(b)}>+ Add time</button>}
                 {canCancel && <button disabled={busy === b.id} style={btn('danger')} onClick={() => cancel(b)}>Cancel</button>}
               </div>
             </div>
