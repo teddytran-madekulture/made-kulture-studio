@@ -32,12 +32,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // 2. Load the booking and confirm it belongs to this user
   const { data: booking } = await admin
     .from('bookings')
-    .select('id, start_time, end_time, status, auth_user_id, customer_email, sets ( name )')
+    .select('id, start_time, end_time, status, auth_user_id, customer_id, customers ( email ), sets ( name )')
     .eq('id', params.id)
     .single()
 
   if (!booking) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
-  const owns = booking.auth_user_id === user.id || booking.customer_email === user.email
+  const bookingEmail = (booking as any).customers?.email?.toLowerCase() ?? null
+  const owns = booking.auth_user_id === user.id || bookingEmail === (user.email ?? '').toLowerCase()
   if (!owns) return NextResponse.json({ error: 'This booking is not on your account.' }, { status: 403 })
   if (booking.status === 'cancelled') return NextResponse.json({ error: 'This booking was cancelled.' }, { status: 400 })
   if (new Date(booking.start_time) <= new Date()) return NextResponse.json({ error: 'This booking has already started.' }, { status: 400 })
