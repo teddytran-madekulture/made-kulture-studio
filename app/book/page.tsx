@@ -498,7 +498,13 @@ function BookingWizard() {
 
         {/* ── STEP 4: Time ── */}
         {((step === 4 && booking.type === 'set') || (step === 3 && booking.type === 'studio')) && (
-          <StepWrapper title="SELECT YOUR TIME">
+          <StepWrapper title={booking.type === 'set' && !booking.setId ? 'ADD ANOTHER SET' : 'SELECT YOUR TIME'}>
+            {booking.type === 'set' && !booking.setId ? (
+              <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, marginBottom: 24 }}>
+                Your sets so far are below. Tap “+ Add another set” to choose another, or Continue to checkout.
+              </p>
+            ) : (
+              <>
             <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 8 }}>
               {booking.startHour === null
                 ? `Click your start time, then click your end time.${minHours > 1 ? ` ${minLabel} has a ${minHours}-hour minimum.` : ''}`
@@ -559,6 +565,8 @@ function BookingWizard() {
                 RESET SELECTION
               </button>
             )}
+              </>
+            )}
 
             {/* Multi-set: sets added so far + add another */}
             {booking.type === 'set' && (
@@ -578,7 +586,7 @@ function BookingWizard() {
                     </div>
                   </div>
                 )}
-                {currentComplete && (
+                {(currentComplete || setCart.length > 0) && (
                   <button onClick={() => { commitCurrent(); setStep(2) }}
                     style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', padding: '12px 20px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.15em' }}>
                     + ADD ANOTHER SET
