@@ -3,9 +3,12 @@ import { createClient } from '@supabase/supabase-js'
 
 // Public, read-only catalog of active sets for the customer /sets and /book
 // pages. No auth — only active sets and display-safe fields are exposed.
+// Force no-store on every Supabase request so Next.js never serves a cached
+// row — the buyout rate and set edits must always reflect the live DB.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { global: { fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }) } }
 )
 
 const PUBLIC_COLUMNS =
