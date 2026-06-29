@@ -7,27 +7,40 @@ import { useRouter } from 'next/navigation'
 interface StudioSet {
   id: string
   name: string
+  slug: string | null
   description: string | null
   rate_per_hour: number
   min_hours: number | null
   capacity: number
   features: string[]
+  photo_url: string | null
+  dimensions: string | null
+  sort_order: number | null
+  category: string | null
+  accent_gradient: string | null
   is_active: boolean
 }
 
 interface SetDraft {
   name: string
+  slug: string
   description: string
   rate_per_hour: string
   min_hours: string
   capacity: string
   features: string
+  photo_url: string
+  dimensions: string
+  sort_order: string
+  category: string
+  accent_gradient: string
   is_active: boolean
 }
 
 const EMPTY_SET_DRAFT: SetDraft = {
-  name: '', description: '', rate_per_hour: '40', min_hours: '1',
-  capacity: '5', features: '', is_active: true,
+  name: '', slug: '', description: '', rate_per_hour: '40', min_hours: '1',
+  capacity: '5', features: '', photo_url: '', dimensions: '', sort_order: '100',
+  category: 'standard', accent_gradient: '', is_active: true,
 }
 
 interface EquipmentItem {
@@ -532,11 +545,17 @@ export default function AdminDashboard() {
     setSetsError('')
     setSetDraft({
       name:          s.name,
+      slug:          s.slug ?? '',
       description:   s.description ?? '',
       rate_per_hour: String(s.rate_per_hour),
       min_hours:     s.min_hours == null ? '' : String(s.min_hours),
       capacity:      String(s.capacity),
       features:      (s.features ?? []).join(', '),
+      photo_url:     s.photo_url ?? '',
+      dimensions:    s.dimensions ?? '',
+      sort_order:    s.sort_order == null ? '100' : String(s.sort_order),
+      category:      s.category ?? 'standard',
+      accent_gradient: s.accent_gradient ?? '',
       is_active:     s.is_active,
     })
   }
@@ -553,11 +572,17 @@ export default function AdminDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name:          setDraft.name,
+          slug:          setDraft.slug,
           description:   setDraft.description,
           rate_per_hour: setDraft.rate_per_hour,
           min_hours:     setDraft.min_hours === '' ? null : setDraft.min_hours,
           capacity:      setDraft.capacity,
           features:      setDraft.features,
+          photo_url:     setDraft.photo_url,
+          dimensions:    setDraft.dimensions,
+          sort_order:    setDraft.sort_order,
+          category:      setDraft.category,
+          accent_gradient: setDraft.accent_gradient,
           is_active:     setDraft.is_active,
         }),
       })
@@ -1537,6 +1562,63 @@ export default function AdminDashboard() {
                     <input value={setDraft.features} onChange={e => setSetDraft(d => ({ ...d, features: e.target.value }))}
                       placeholder="White cinderblock, Smooth walls, Large windows"
                       style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+                      Shown as tags on the set card.
+                    </div>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>URL SLUG</label>
+                    <input value={setDraft.slug} onChange={e => setSetDraft(d => ({ ...d, slug: e.target.value }))}
+                      placeholder="e.g. the-yard"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+                      Used in booking links (lowercase, hyphens, no spaces). Don&apos;t change this on an existing set unless you know what you&apos;re doing — it&apos;s how bookings and the calendar identify the set.
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>DIMENSIONS</label>
+                    <input value={setDraft.dimensions} onChange={e => setSetDraft(d => ({ ...d, dimensions: e.target.value }))}
+                      placeholder="e.g. 12 × 15 ft"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>DISPLAY ORDER</label>
+                    <input type="number" value={setDraft.sort_order} onChange={e => setSetDraft(d => ({ ...d, sort_order: e.target.value }))}
+                      placeholder="100"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>Lower numbers appear first.</div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>CATEGORY</label>
+                    <select value={setDraft.category} onChange={e => setSetDraft(d => ({ ...d, category: e.target.value }))}
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }}>
+                      <option value="standard">Standard ($40/hr grid)</option>
+                      <option value="premium">Premium (featured)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>PHOTO URL</label>
+                    <input value={setDraft.photo_url} onChange={e => setSetDraft(d => ({ ...d, photo_url: e.target.value }))}
+                      placeholder="/images/sets/your-set.jpg"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+                      Leave blank to show the accent gradient instead.
+                    </div>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={labelStyle}>ACCENT GRADIENT (CSS)</label>
+                    <input value={setDraft.accent_gradient} onChange={e => setSetDraft(d => ({ ...d, accent_gradient: e.target.value }))}
+                      placeholder="linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)"
+                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+                      Fallback background shown behind / instead of the photo.
+                    </div>
                   </div>
                 </div>
 

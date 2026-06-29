@@ -7,16 +7,22 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const SET_COLUMNS = 'id, name, description, rate_per_hour, min_hours, capacity, features, is_active, created_at'
+const SET_COLUMNS = 'id, name, slug, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, sort_order, category, accent_gradient, is_active, created_at'
 
 function sanitizeSet(body: any) {
   const row: Record<string, unknown> = {}
 
   if (typeof body.name === 'string')        row.name        = body.name.trim()
+  if (typeof body.slug === 'string')        row.slug        = body.slug.trim().toLowerCase()
   if (typeof body.description === 'string') row.description = body.description.trim()
   if (body.rate_per_hour !== undefined)     row.rate_per_hour = Number(body.rate_per_hour)
   if (body.min_hours !== undefined)         row.min_hours   = body.min_hours === null ? null : Number(body.min_hours)
   if (body.capacity !== undefined)          row.capacity    = parseInt(String(body.capacity), 10)
+  if (typeof body.photo_url === 'string')   row.photo_url   = body.photo_url.trim()
+  if (typeof body.dimensions === 'string')  row.dimensions  = body.dimensions.trim()
+  if (body.sort_order !== undefined)        row.sort_order  = parseInt(String(body.sort_order), 10)
+  if (typeof body.category === 'string')    row.category    = body.category.trim().toLowerCase()
+  if (typeof body.accent_gradient === 'string') row.accent_gradient = body.accent_gradient.trim()
   if (body.is_active !== undefined)         row.is_active   = Boolean(body.is_active)
 
   if (body.features !== undefined) {

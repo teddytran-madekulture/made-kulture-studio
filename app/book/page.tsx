@@ -30,18 +30,9 @@ function loadSquareScript(): Promise<void> {
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
-const SETS = [
-  { id: 'set-a',           name: 'Set A',             price: 40,  desc: '12×15ft white cinderblock walls, large windows',   minHours: 1 },
-  { id: 'set-b',           name: 'Set B',             price: 40,  desc: '12×14ft faux brush walls, duo color smooth walls', minHours: 1 },
-  { id: 'set-c',           name: 'Set C',             price: 40,  desc: '12×14ft white walls, 20ft red vinyl backdrop',     minHours: 1 },
-  { id: 'set-d',           name: 'Set D',             price: 40,  desc: '12×15ft bare cinderblock, concrete floor',         minHours: 1 },
-  { id: 'concrete',        name: 'Concrete',          price: 40,  desc: '12×16ft faux concrete walls, mirror wall',         minHours: 1 },
-  { id: 'vintage',         name: 'Vintage',           price: 40,  desc: '12×16ft vintage aesthetic',                        minHours: 1 },
-  { id: 'cottage',         name: 'Cottage',           price: 40,  desc: '12×16ft slate walls, faux wood flooring',          minHours: 1 },
-  { id: 'watering-hole',   name: 'The Watering Hole', price: 75,  desc: '12×16×13 shallow black pool',                      minHours: 2 },
-  { id: 'the-tank',        name: 'The Tank',          price: 75,  desc: 'Pool set',                                         minHours: 2 },
-  { id: 'studio-one',      name: 'Studio One',        price: 65,  desc: 'Large open warehouse aesthetic, up to 30 people',  minHours: 1 },
-]
+// Sets are loaded from /api/sets at runtime (admin Sets Manager is the source
+// of truth). Shape used by this page:
+interface BookSet { id: string; name: string; price: number; desc: string; minHours: number }
 
 const EQUIPMENT = [
   { id: 'eq-1',  name: 'Aputure LS 600d Daylight',        price: 70 },
@@ -156,6 +147,20 @@ function BookingWizard() {
     fetch('/api/equipment').then(r => r.json()).then(d => setGearCatalog(d.equipment ?? [])).catch(() => {})
   }, [])
 
+  // Sets catalog (DB-driven) for the set picker, pricing, and minimums.
+  const [sets, setSets] = useState<BookSet[]>([])
+  useEffect(() => {
+    fetch('/api/sets').then(r => r.json()).then(d => setSets(
+      (d.sets ?? []).map((s: any) => ({
+        id: s.slug,
+        name: s.name,
+        price: Number(s.rate_per_hour),
+        desc: s.description ?? '',
+        minHours: s.min_hours ?? 1,
+      }))
+    )).catch(() => {})
+  }, [])
+
   const gearQty = (id: string) => booking.equipment.find(l => l.id === id)?.quantity ?? 0
   const addGearItem = (item: { id: string; name: string; rate: number; quantity: number }) => {
     const existing = booking.equipment.find(l => l.id === item.id)
@@ -237,7 +242,7 @@ function BookingWizard() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  const selectedSet  = SETS.find(s => s.id === booking.setId)
+  const selectedSet  = sets.find(s => s.id === booking.setId)
   const hourCount    = booking.startHour !== null && booking.endHour !== null
                        ? booking.endHour - booking.startHour : 0
 
@@ -401,7 +406,12 @@ function BookingWizard() {
         {step === 2 && booking.type === 'set' && (
           <StepWrapper title="CHOOSE YOUR SET">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
-              {SETS.map(s => (
+              {sets.length === 0 && (
+                <div style={{ gridColumn: '1 / -1', padding: '28px 24px', background: '#0d0d0d', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                  Loading sets…
+                </div>
+              )}
+              {sets.map(s => (
                 <button key={s.id} onClick={() => setBooking(b => ({ ...b, setId: s.id }))}
                   style={{
                     background: booking.setId === s.id ? '#fff' : '#0d0d0d',
