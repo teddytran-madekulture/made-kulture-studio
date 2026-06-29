@@ -34,6 +34,13 @@ function loadSquareScript(): Promise<void> {
 // of truth). Shape used by this page:
 interface BookSet { id: string; name: string; price: number; desc: string; minHours: number }
 
+// One set added to a multi-set order (per-set scheduling). price = effective
+// hourly rate (with any customer overrides) captured when it was added.
+interface SetCartItem {
+  setId: string; setName: string; price: number; minHours: number
+  date: string; startHour: number; endHour: number
+}
+
 const EQUIPMENT = [
   { id: 'eq-1',  name: 'Aputure LS 600d Daylight',        price: 70 },
   { id: 'eq-2',  name: 'Aputure LS C300d II Daylight',     price: 50 },
@@ -146,6 +153,9 @@ function BookingWizard() {
   useEffect(() => {
     fetch('/api/equipment').then(r => r.json()).then(d => setGearCatalog(d.equipment ?? [])).catch(() => {})
   }, [])
+
+  // Multi-set order: committed set line items (each with its own date/time).
+  const [setCart, setSetCart] = useState<SetCartItem[]>([])
 
   // Sets catalog + buyout rate (DB-driven) for the picker, pricing, and minimums.
   const [sets, setSets] = useState<BookSet[]>([])
@@ -268,10 +278,34 @@ function BookingWizard() {
   const discountedEquipTotal = equipDiscount
     ? Math.round(equipTotal * (1 - Number(equipDiscount) / 100))
     : equipTotal
+
+  // Multi-set: space total is the sum of every set in the cart.
+  const cartSpaceTotal = setCart.reduce((s, it) => s + it.price * (it.endHour - it.startHour), 0)
   const spaceTotal   = booking.type === 'studio'
                        ? (buyoutRate * hourCount)
-                       : (setRate * hourCount)
+                       : cartSpaceTotal
   const grandTotal   = spaceTotal + discountedEquipTotal
+
+  // Is the in-progress set selection complete and valid?
+  const currentComplete =
+    booking.type === 'set' &&
+    !!booking.setId && booking.date !== '' &&
+    booking.startHour !== null && booking.endHour !== null &&
+    (booking.endHour - booking.startHour) >= minHours
+
+  // Commit the in-progress selection into the cart, then clear it for the next.
+  const commitCurrent = () => {
+    if (!currentComplete || !booking.setId) return
+    const set = sets.find(s => s.id === booking.setId)
+    setSetCart(c => [...c, {
+      setId: booking.setId!, setName: set?.name ?? booking.setId!,
+      price: setRate, minHours: set?.minHours ?? 1,
+      date: booking.date, startHour: booking.startHour!, endHour: booking.endHour!,
+    }])
+    setBooking(b => ({ ...b, setId: null, startHour: null, endHour: null }))
+    setBookedSlots([])
+  }
+  const removeCartItem = (i: number) => setSetCart(c => c.filter((_, idx) => idx !== i))
 
   const isHourBooked = (h: number) =>
     bookedSlots.some(b => h >= b.start && h < b.end)
@@ -319,8 +353,9 @@ function BookingWizard() {
     1: booking.type !== null,
     2: booking.type === 'studio' ? true : booking.setId !== null,
     3: booking.date !== '',
-    4: booking.startHour !== null && booking.endHour !== null
-       && (booking.endHour - booking.startHour) >= minHours,
+    4: booking.type === 'studio'
+       ? (booking.startHour !== null && booking.endHour !== null && (booking.endHour - booking.startHour) >= minHours)
+       : (currentComplete || setCart.length > 0),
     5: true, // equipment optional
     6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent,
   }
@@ -333,7 +368,7 @@ function BookingWizard() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (submitted) return <SuccessScreen booking={booking} selectedSet={selectedSet} />
+  if (submitted) return <SuccessScreen booking={booking} setCart={setCart} />
 
   return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
@@ -524,7 +559,35 @@ function BookingWizard() {
                 RESET SELECTION
               </button>
             )}
-            <NavRow onBack={back} onNext={next} canNext={canNext[4]} />
+
+            {/* Multi-set: sets added so far + add another */}
+            {booking.type === 'set' && (
+              <div style={{ marginBottom: 24 }}>
+                {setCart.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.18em', color: '#d4a843', marginBottom: 10 }}>SETS IN THIS BOOKING</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {setCart.map((it, i) => (
+                        <div key={i} style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0, fontFamily: 'Inter', fontSize: 13 }}>
+                            {it.setName} <span style={{ color: 'rgba(255,255,255,0.4)' }}>· {it.date} · {fmt12(it.startHour)}–{fmt12(it.endHour)} · ${it.price * (it.endHour - it.startHour)}</span>
+                          </div>
+                          <button onClick={() => removeCartItem(i)} style={{ background: 'transparent', border: 'none', color: 'rgba(220,120,120,0.7)', width: 26, height: 26, cursor: 'pointer', fontSize: 16 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {currentComplete && (
+                  <button onClick={() => { commitCurrent(); setStep(2) }}
+                    style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', padding: '12px 20px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.15em' }}>
+                    + ADD ANOTHER SET
+                  </button>
+                )}
+              </div>
+            )}
+
+            <NavRow onBack={back} onNext={() => { commitCurrent(); next() }} canNext={canNext[4]} />
           </StepWrapper>
         )}
 
@@ -684,11 +747,18 @@ function BookingWizard() {
               {/* Summary */}
               <div>
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 24, marginBottom: 32 }}>
-                  <Row label="TYPE"    value={booking.type === 'studio' ? 'Full Studio Takeover' : 'Individual Set'} />
-                  {selectedSet && <Row label="SET"   value={selectedSet.name} />}
-                  <Row label="DATE"    value={booking.date} />
-                  {booking.startHour !== null && booking.endHour !== null && (
-                    <Row label="TIME" value={`${fmt12(booking.startHour)} – ${fmt12(booking.endHour)} (${hourCount}hr)`} />
+                  <Row label="TYPE" value={booking.type === 'studio' ? 'Full Studio Takeover' : (setCart.length > 1 ? `${setCart.length} Sets` : 'Individual Set')} />
+                  {booking.type === 'studio' ? (
+                    <>
+                      <Row label="DATE" value={booking.date} />
+                      {booking.startHour !== null && booking.endHour !== null && (
+                        <Row label="TIME" value={`${fmt12(booking.startHour)} – ${fmt12(booking.endHour)} (${hourCount}hr)`} />
+                      )}
+                    </>
+                  ) : (
+                    setCart.map((it, i) => (
+                      <Row key={i} label={it.setName} value={`${it.date} · ${fmt12(it.startHour)}–${fmt12(it.endHour)}`} />
+                    ))
                   )}
                   <Row label="NAME"    value={booking.name} />
                   <Row label="EMAIL"   value={booking.email} />
@@ -706,9 +776,9 @@ function BookingWizard() {
                 )}
 
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 24 }}>
-                  {hourCount > 0 && (
-                    <Row label={`SPACE (${hourCount}hr × $${booking.type === 'studio' ? buyoutRate : setRate})`} value={`$${spaceTotal}`} />
-                  )}
+                  {booking.type === 'studio'
+                    ? (hourCount > 0 && <Row label={`SPACE (${hourCount}hr × $${buyoutRate})`} value={`$${spaceTotal}`} />)
+                    : (cartSpaceTotal > 0 && <Row label="SETS SUBTOTAL" value={`$${cartSpaceTotal}`} />)}
                   {equipTotal > 0 && (
                     equipDiscount
                       ? <Row label={`EQUIPMENT (${equipDiscount}% off)`} value={`$${discountedEquipTotal}`} />
@@ -725,6 +795,7 @@ function BookingWizard() {
               <SquarePaymentPanel
                 grandTotal={grandTotal}
                 booking={booking}
+                setCart={setCart}
                 selectedSet={selectedSet}
                 hourCount={hourCount}
                 setRate={setRate}
@@ -790,7 +861,8 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-function SuccessScreen({ booking, selectedSet }: { booking: BookingState; selectedSet: any }) {
+function SuccessScreen({ booking, setCart }: { booking: BookingState; setCart: SetCartItem[] }) {
+  const sessions = booking.type === 'set' ? setCart : []
   return (
     <div style={{ background: '#080808', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
       <div style={{ maxWidth: 480, textAlign: 'center' }}>
@@ -798,6 +870,15 @@ function SuccessScreen({ booking, selectedSet }: { booking: BookingState; select
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 72, color: '#fff', lineHeight: 0.9, marginBottom: 24 }}>
           YOU&apos;RE<br />LOCKED IN.
         </h1>
+        {sessions.length > 0 && (
+          <div style={{ display: 'inline-block', textAlign: 'left', margin: '0 auto 28px', padding: '16px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            {sessions.map((it, i) => (
+              <div key={i} style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.75)', padding: '3px 0' }}>
+                <strong style={{ color: '#fff' }}>{it.setName}</strong> — {it.date}, {fmt12(it.startHour)}–{fmt12(it.endHour)}
+              </div>
+            ))}
+          </div>
+        )}
         <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, marginBottom: 40 }}>
           Confirmation details will be sent to <strong style={{ color: '#fff' }}>{booking.email}</strong>. You&apos;ll also receive a text at {booking.phone} with everything you need.
         </p>
@@ -818,6 +899,7 @@ function SuccessScreen({ booking, selectedSet }: { booking: BookingState; select
 interface SquarePaymentPanelProps {
   grandTotal:  number
   booking:     BookingState
+  setCart:     SetCartItem[]
   selectedSet: any
   hourCount:   number
   setRate:     number
@@ -825,7 +907,7 @@ interface SquarePaymentPanelProps {
   onSuccess:   () => void
 }
 
-function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRate, onBack, onSuccess }: SquarePaymentPanelProps) {
+function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCount, setRate, onBack, onSuccess }: SquarePaymentPanelProps) {
   const isMobile = useIsMobile()
   const cardContainerRef    = useRef<HTMLDivElement>(null)
   const googlePayContainerRef = useRef<HTMLDivElement>(null)
@@ -850,6 +932,11 @@ function SquarePaymentPanel({ grandTotal, booking, selectedSet, hourCount, setRa
         body: JSON.stringify({
           sourceId,
           type:       booking.type,
+          // Multi-set order: one line item per set, each with its own date/time.
+          sets:       booking.type === 'set'
+                        ? setCart.map(it => ({ setSlug: it.setId, date: it.date, startHour: it.startHour, endHour: it.endHour }))
+                        : undefined,
+          // Legacy single-set / studio fields (studio uses these):
           setSlug:    booking.setId,
           date:       booking.date,
           startHour:  booking.startHour,

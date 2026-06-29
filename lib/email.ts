@@ -87,19 +87,27 @@ interface BookingConfirmationData {
   totalAmount: number
   bookingId: string
   notes?: string
+  scheduleLines?: string[] // multi-set orders: one line per set, e.g. "Set A — Sat Jul 12, 2pm–5pm"
 }
 
 export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines } = data
 
   const body = `
     <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;">Booking Confirmed</h1>
     <p style="margin:0 0 28px;font-size:14px;color:#999;">You're all set, ${customerName}. Here are your details:</p>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:28px;">
+      ${scheduleLines && scheduleLines.length ? `
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
+          <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Your Sessions</span><br/>
+          ${scheduleLines.map(l => `<span style="font-size:15px;color:#fff;font-weight:600;display:block;margin-top:6px;">${l}</span>`).join('')}
+        </td>
+      </tr>` : `
       <tr>
         <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
           <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Studio Set</span><br/>
@@ -117,7 +125,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
           <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Time</span><br/>
           <span style="font-size:15px;color:#fff;font-weight:600;">${startTime} – ${endTime}</span>
         </td>
-      </tr>
+      </tr>`}
       <tr>
         <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
           <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Total Paid</span><br/>
@@ -222,13 +230,14 @@ interface NewBookingAlertData {
   bookingId: string
   source: string
   notes?: string
+  scheduleLines?: string[]
 }
 
 export async function sendNewBookingAlert(data: NewBookingAlertData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('new_booking_alert')
   if (!enabled) return null
 
-  const { customerName, customerEmail, customerPhone, setName, date, startTime, endTime, totalAmount, bookingId, source, notes } = data
+  const { customerName, customerEmail, customerPhone, setName, date, startTime, endTime, totalAmount, bookingId, source, notes, scheduleLines } = data
 
   const body = `
     <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">New Booking</h1>
@@ -240,6 +249,11 @@ export async function sendNewBookingAlert(data: NewBookingAlertData) {
         <span style="font-size:15px;color:#fff;">${customerName}</span>
         <span style="font-size:13px;color:#888;"> — ${customerEmail}${customerPhone ? ' — ' + customerPhone : ''}</span>
       </td></tr>
+      ${scheduleLines && scheduleLines.length ? `
+      <tr><td style="padding:6px 0;border-bottom:1px solid #2a2a2a;">
+        <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Sessions</span><br/>
+        ${scheduleLines.map(l => `<span style="font-size:15px;color:#fff;display:block;margin-top:4px;">${l}</span>`).join('')}
+      </td></tr>` : `
       <tr><td style="padding:6px 0;border-bottom:1px solid #2a2a2a;">
         <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Set</span><br/>
         <span style="font-size:15px;color:#fff;">${setName}</span>
@@ -247,7 +261,7 @@ export async function sendNewBookingAlert(data: NewBookingAlertData) {
       <tr><td style="padding:6px 0;border-bottom:1px solid #2a2a2a;">
         <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Date &amp; Time</span><br/>
         <span style="font-size:15px;color:#fff;">${date} &nbsp; ${startTime} – ${endTime}</span>
-      </td></tr>
+      </td></tr>`}
       <tr><td style="padding:6px 0;${notes ? 'border-bottom:1px solid #2a2a2a;' : ''}">
         <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Amount</span><br/>
         <span style="font-size:18px;font-weight:700;color:${ACCENT_COLOR};">$${totalAmount.toFixed(2)}</span>
