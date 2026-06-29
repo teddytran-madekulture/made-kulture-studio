@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
       total_amount:          totalAmount,
       source:                'acuity' as const,
       notes:                 apt.notes ?? null,
-      guest_count:           1,
+      guest_count:           null as number | null, // Acuity doesn't capture party size — unknown
     }
 
     const { error: upsertError } = await supabase

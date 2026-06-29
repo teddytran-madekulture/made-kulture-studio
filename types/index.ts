@@ -44,7 +44,7 @@ export interface Booking {
   set_id: string
   start_time: string
   end_time: string
-  guest_count: number
+  guest_count: number | null
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
   payment_status: 'unpaid' | 'paid' | 'partially_paid' | 'refunded'
   base_amount: number

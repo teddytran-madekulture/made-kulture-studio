@@ -187,7 +187,7 @@ export async function GET(req: NextRequest) {
           total_amount:   totalAmount,
           source:         'acuity',
           notes:          apt.notes ?? null,
-          guest_count:    1,
+          guest_count:    null, // Acuity doesn't capture party size — unknown
         }, { onConflict: 'acuity_appointment_id' })
 
       if (upsertErr) {
