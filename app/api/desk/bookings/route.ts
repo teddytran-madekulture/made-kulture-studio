@@ -10,7 +10,7 @@ const SELECT = `
   customer_id,
   sets ( name ),
   customers ( name, phone, email, banned ),
-  booking_add_ons ( quantity, paid, equipment ( name ) )
+  booking_add_ons ( id, quantity, rate, paid, square_order_id, equipment ( name ) )
 `
 
 // Chicago calendar date (YYYY-MM-DD) for an instant.

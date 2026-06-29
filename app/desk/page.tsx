@@ -5,6 +5,7 @@ import { ROLE_LABELS, type StaffRole } from '@/lib/staff-permissions'
 import ChargePanel from './ChargePanel'
 import GearPanel from './GearPanel'
 
+type AddOn = { id: string; quantity: number; rate: number; paid: boolean; square_order_id: string | null; equipment: { name: string } | null }
 type Booking = {
   id: string; start_time: string; end_time: string; status: string
   guest_count: number | null; arrived_guest_count: number | null
@@ -12,7 +13,7 @@ type Booking = {
   total_amount: number | null
   sets: { name: string } | null
   customers: { name: string | null; phone: string | null; email: string | null; banned: boolean | null } | null
-  booking_add_ons: { quantity: number; paid: boolean; equipment: { name: string } | null }[] | null
+  booking_add_ons: AddOn[] | null
 }
 type Me = { staff: { id: string; name: string; role: StaffRole } | null; permissions?: Record<string, boolean> }
 
@@ -96,6 +97,21 @@ export default function Desk() {
     alert(d.charged ? `✓ $${price} charged and booking extended.` : `✓ Extended. Collect $${price} manually.`)
     load()
   }
+  const removeGear = async (b: Booking, a: AddOn) => {
+    const amt = (a.rate * a.quantity).toFixed(2)
+    const label = `${a.quantity}× ${a.equipment?.name ?? 'gear'}`
+    const msg = a.paid
+      ? `Remove ${label}?\nIt was charged $${amt} — this refunds the card (manager only).`
+      : `Remove ${label}? (not charged)`
+    if (!confirm(msg)) return
+    setBusy(b.id)
+    const r = await fetch(`/api/desk/add-ons/${a.id}`, { method: 'DELETE' })
+    const d = await r.json()
+    setBusy(null)
+    if (!r.ok) { alert(d.error ?? 'Could not remove.'); return }
+    alert(d.refunded ? `✓ Removed and $${amt} refunded.` : '✓ Removed.')
+    load()
+  }
   const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 
   if (loading) return <Shell><p style={{ color: C.dim }}>Loading…</p></Shell>
@@ -137,7 +153,7 @@ export default function Desk() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {bookings.map(b => {
           const isToday = !q && scope === 'today'
-          const unpaidGear = (b.booking_add_ons ?? []).filter(a => !a.paid)
+          const gear = b.booking_add_ons ?? []
           return (
             <div key={b.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -152,13 +168,26 @@ export default function Desk() {
                   <div style={{ color: C.dim, fontSize: 13, marginTop: 2 }}>
                     👥 {b.arrived_guest_count ?? '—'}/{b.guest_count ?? '—'}
                     {b.customers?.phone ? ` · ${b.customers.phone}` : ''}
-                    {unpaidGear.length ? ` · 🎒 ${unpaidGear.length} unpaid gear` : ''}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <StatusBadge b={b} />
                 </div>
               </div>
+
+              {gear.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {gear.map(a => (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <span style={{ color: C.dim }}>🎒 {a.quantity}× {a.equipment?.name ?? 'gear'} · ${Number(a.rate).toFixed(0)}{a.paid ? '' : ' · unpaid'}</span>
+                      {canAddOn && (
+                        <button disabled={busy === b.id} onClick={() => removeGear(b, a)} title="Remove"
+                          style={{ background: 'none', border: `1px solid ${C.line}`, color: C.accent, borderRadius: 6, width: 22, height: 22, lineHeight: '18px', cursor: 'pointer', fontSize: 14 }}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                 {!b.checked_in_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkIn(b)}>Check in</button>}
