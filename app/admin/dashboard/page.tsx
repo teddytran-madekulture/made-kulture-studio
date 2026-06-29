@@ -512,9 +512,9 @@ export default function AdminDashboard() {
     return () => clearInterval(id)
   }, [])
 
-  const fetchBookings = useCallback(async () => {
-    setLoading(true)
-    const res = await fetch('/api/admin/bookings')
+  const fetchBookings = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true)
+    const res = await fetch('/api/admin/bookings', { cache: 'no-store' })
     if (res.status === 401) { router.push('/admin'); return }
     const data = await res.json()
     setBookings(data.bookings || [])
@@ -522,6 +522,19 @@ export default function AdminDashboard() {
   }, [router])
 
   useEffect(() => { fetchBookings() }, [fetchBookings])
+
+  // Auto-refresh bookings whenever the admin returns to this tab/window, so a
+  // booking made elsewhere (or by a customer) shows up without a manual reload.
+  useEffect(() => {
+    const refetch = () => fetchBookings(true)
+    const onVis   = () => { if (!document.hidden) fetchBookings(true) }
+    window.addEventListener('focus', refetch)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('focus', refetch)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [fetchBookings])
 
   // ── Sets Manager helpers ─────────────────────────────────────────────────────
   const fetchSets = useCallback(async () => {
@@ -1180,10 +1193,16 @@ export default function AdminDashboard() {
                 </div>
                 {isToday && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', marginTop: 4 }}>TODAY</div>}
               </div>
-              <button onClick={() => setCalDate(d => addDays(d, 1))}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
-                NEXT &rarr;
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => fetchBookings()} title="Reload bookings"
+                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '8px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+                  {loading ? '…' : '↻ REFRESH'}
+                </button>
+                <button onClick={() => setCalDate(d => addDays(d, 1))}
+                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
+                  NEXT &rarr;
+                </button>
+              </div>
             </div>
 
             <div style={{ overflowX: 'auto' }}>

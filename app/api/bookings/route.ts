@@ -174,6 +174,7 @@ async function sendConfirmationSMS(
     ``,
     `4825 Gulf Freeway, Houston TX 77023`,
     `Questions? Reply to this message.`,
+    `Reply STOP to opt out.`,
   ].join('\n')
 
   await twilioClient.messages.create({
