@@ -3,11 +3,12 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { CREATIVE_ROLES } from '@/lib/roles'
 
 export default function SignupPage() {
   const router = useRouter()
   const [nextUrl, setNextUrl]  = useState('/account')
-  const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '' })
+  const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '', roles: [] as string[] })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
@@ -21,6 +22,9 @@ export default function SignupPage() {
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
+  const toggleRole = (role: string) =>
+    setForm(f => ({ ...f, roles: f.roles.includes(role) ? f.roles.filter(r => r !== role) : [...f.roles, role] }))
+
   const signUpEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); setError('')
@@ -28,7 +32,7 @@ export default function SignupPage() {
       email: form.email,
       password: form.password,
       options: {
-        data: { full_name: form.full_name, phone: form.phone },
+        data: { full_name: form.full_name, phone: form.phone, roles: form.roles },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
       },
     })
@@ -104,6 +108,29 @@ export default function SignupPage() {
           <input placeholder="Full name" value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
           <input type="email" placeholder="Email address" value={form.email} onChange={set('email')} required style={inputStyle} />
           <input placeholder="Phone number" value={form.phone} onChange={set('phone')} style={inputStyle} />
+
+          <div>
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
+              What do you do? <span style={{ color: 'rgba(255,255,255,0.25)' }}>(optional — pick any that apply)</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {CREATIVE_ROLES.map(role => {
+                const on = form.roles.includes(role)
+                return (
+                  <button type="button" key={role} onClick={() => toggleRole(role)}
+                    style={{
+                      background: on ? '#fff' : 'transparent',
+                      color: on ? '#080808' : 'rgba(255,255,255,0.7)',
+                      border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: 20, padding: '7px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
+                    }}>
+                    {role}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div style={{ position: 'relative' }}>
             <input type={showPw ? 'text' : 'password'} placeholder="Password (min 6 characters)" value={form.password} onChange={set('password')} required minLength={6} style={{ ...inputStyle, paddingRight: 44 }} />
             <button type="button" onClick={() => setShowPw(v => !v)} tabIndex={-1} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.35)', padding: 4, lineHeight: 1 }} aria-label={showPw ? 'Hide password' : 'Show password'}>

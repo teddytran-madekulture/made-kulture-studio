@@ -32,6 +32,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
           {[
             { href: '/account', label: 'Dashboard' },
             { href: '/account/bookings', label: 'My Bookings' },
+            { href: '/account/directory', label: 'Directory' },
             { href: '/account/profile', label: 'Profile' },
             { href: '/account/payment', label: 'Payment Methods' },
           ].map(({ href, label }) => (
