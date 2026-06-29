@@ -9,6 +9,20 @@ interface Profile {
   sms_opt_in: boolean
 }
 
+// Defined at module scope (NOT inside the page component) so its identity is
+// stable across renders — otherwise each keystroke remounts the input and the
+// cursor/focus is lost.
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
 export default function ProfilePage() {
   const [form, setForm]     = useState<Profile>({ full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false })
   const [loading, setLoading] = useState(true)
@@ -43,15 +57,6 @@ export default function ProfilePage() {
     borderRadius: 4, padding: '14px 16px', fontFamily: 'Inter', fontSize: 14, color: '#fff',
     outline: 'none', boxSizing: 'border-box',
   }
-
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div style={{ marginBottom: 20 }}>
-      <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
-        {label}
-      </label>
-      {children}
-    </div>
-  )
 
   if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', paddingTop: 40 }}>Loading...</div>
 
