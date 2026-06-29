@@ -57,6 +57,8 @@ interface BookingRequest {
   phone: string
   notes: string
 
+  guests?: number | null   // declared party size
+
   totalCents: number
 }
 
@@ -164,12 +166,14 @@ async function sendConfirmationSMS(
   const dollars = (totalCents / 100).toFixed(2)
   const sched = lines.map(l =>
     `📍 ${l.setName} — ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join('\n')
+  const guestLine = body.guests ? `👥 ${body.guests} guests — this is your booked limit` : null
 
   const message = [
     `✅ Made Kulture — Booking Confirmed!`,
     ``,
     `${body.name}, you're locked in.`,
     sched,
+    ...(guestLine ? [guestLine] : []),
     `💳 $${dollars} charged`,
     ``,
     `4825 Gulf Freeway, Houston TX 77023`,
@@ -182,8 +186,9 @@ async function sendConfirmationSMS(
   })
 
   const ownerSummary = lines.map(l => `${l.setName} ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join(' | ')
+  const ownerGuests = body.guests ? ` | 👥 ${body.guests}` : ''
   await twilioClient.messages.create({
-    body: `🆕 New booking: ${body.name} | ${ownerSummary} | $${dollars}`,
+    body: `🆕 New booking: ${body.name} | ${ownerSummary}${ownerGuests} | $${dollars}`,
     from: process.env.TWILIO_PHONE_NUMBER, to: '+18324081631',
   })
 }
@@ -205,10 +210,17 @@ export async function POST(req: NextRequest) {
       customerPricingOverrides = custPricing?.pricing_overrides ?? null
     }
 
-    // ── 2. Admin-editable full-warehouse buyout rate ───────────────────────
-    const { data: buyoutSetting } = await supabase
-      .from('studio_settings').select('value').eq('key', 'buyout_rate').maybeSingle()
-    const buyoutRate = Number(buyoutSetting?.value) || 400
+    // ── 2. Admin-editable buyout rate + guest pricing knobs ────────────────
+    const { data: settingRows } = await supabase
+      .from('studio_settings')
+      .select('key, value')
+      .in('key', ['buyout_rate', 'guest_capacity_per_set', 'per_person_fee', 'max_guests_per_set'])
+    const settingMap: Record<string, string> = {}
+    for (const s of settingRows ?? []) settingMap[s.key] = s.value
+    const buyoutRate     = Number(settingMap['buyout_rate']) || 400
+    const guestCapacity  = Number(settingMap['guest_capacity_per_set']) || 5
+    const perPersonFee   = Number(settingMap['per_person_fee']) || 10
+    const maxGuestsPerSet= Number(settingMap['max_guests_per_set']) || 7
 
     // ── 3. Normalize the requested set line items ──────────────────────────
     //     Studio = one line; otherwise use sets[] if present, else the legacy
@@ -262,6 +274,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── 4b. Guest count: capacity guard + single-set buffer fee ────────────
+    //     Mirrors the client ladder (anti-tamper). One set holds up to
+    //     maxGuestsPerSet (capacity + paid buffer); each additional set adds
+    //     capacity. The per-person buffer fee only applies to a single set.
+    const guestCount = Math.max(0, Math.floor(Number(body.guests) || 0))
+    let guestFeeDollars = 0
+    if (body.type === 'studio') {
+      if (guestCount > 30) {
+        return NextResponse.json(
+          { error: 'Groups over 30 require approval — please text (832) 408-1631.' },
+          { status: 400 }
+        )
+      }
+    } else if (guestCount > 0) {
+      const setsCount = lines.length
+      const allowed = setsCount === 1 ? maxGuestsPerSet : setsCount * guestCapacity
+      if (guestCount > allowed) {
+        return NextResponse.json(
+          { error: `${guestCount} guests need more space than ${setsCount} ${setsCount === 1 ? 'set' : 'sets'} allows (max ${allowed}). Add another set or reduce your party.` },
+          { status: 400 }
+        )
+      }
+      // Buffer fee: single set carrying capacity+1..maxGuestsPerSet guests.
+      if (setsCount === 1 && guestCount > guestCapacity) {
+        const hrs = lines[0].endHour - lines[0].startHour
+        guestFeeDollars = (guestCount - guestCapacity) * perPersonFee * hrs
+      }
+    }
+
     // ── 5. Equipment: DB rates + per-window inventory guard ─────────────────
     const equipIds = (body.equipment ?? []).map(l => l.equipment_id)
     const requested: Record<string, number> = {}
@@ -300,8 +341,8 @@ export async function POST(req: NextRequest) {
     const equipStd    = equipmentDollars(body.equipment, equipRates)
     const spaceCustom = lines.reduce((s, l) => s + l.spaceDollars, 0)
     const spaceStd    = lines.reduce((s, l) => s + l.stdSpaceDollars, 0)
-    const customCents   = Math.round((spaceCustom + equipCustom) * 100)
-    const standardCents = Math.round((spaceStd + equipStd) * 100)
+    const customCents   = Math.round((spaceCustom + equipCustom + guestFeeDollars) * 100)
+    const standardCents = Math.round((spaceStd + equipStd + guestFeeDollars) * 100)
     const verifiedCents = customCents
 
     if (body.totalCents !== standardCents && body.totalCents !== customCents) {
@@ -407,7 +448,7 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
-      const rowTotal = l.spaceDollars + (i === 0 ? equipDollars : 0)
+      const rowTotal = l.spaceDollars + (i === 0 ? equipDollars + guestFeeDollars : 0)
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
         .insert({
@@ -420,6 +461,8 @@ export async function POST(req: NextRequest) {
           base_amount:        l.spaceDollars,
           extras_amount:      i === 0 ? equipDollars : 0,
           total_amount:       rowTotal,
+          guest_count:        guestCount || null,
+          guest_fee_amount:   i === 0 ? guestFeeDollars : 0,
           square_payment_id:      squarePaymentId,
           square_card_on_file_id: savedCardId,
           order_group:            orderGroup,
@@ -501,6 +544,7 @@ export async function POST(req: NextRequest) {
         endTime: formatTimeLabel(primary.endHour),
         totalAmount: verifiedCents / 100, bookingId: firstBookingId,
         notes: body.notes || undefined, scheduleLines,
+        guestCount: guestCount || undefined,
       }).catch(err => console.error('Email confirmation error (non-fatal):', err))
 
       sendNewBookingAlert({

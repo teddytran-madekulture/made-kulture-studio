@@ -85,6 +85,7 @@ interface GearLine { id: string; name: string; rate: number; quantity: number }
 
 interface BookingState {
   type:        BookingType | null
+  guests:      number | null   // declared party size — drives the set ladder
   setId:       string | null
   date:        string
   startHour:   number | null
@@ -95,6 +96,28 @@ interface BookingState {
   phone:       string
   notes:       string
   smsConsent:  boolean
+  guestAck:    boolean         // confirmed the party-size limit at checkout
+}
+
+// Default guest pricing knobs (overridden by /api/sets → studio_settings).
+interface GuestPricing {
+  capacityPerSet: number; perPersonFee: number
+  maxGuestsPerSet: number; maxSetsBeforeBuyout: number; penaltyPerHead: number
+}
+const DEFAULT_GUEST_PRICING: GuestPricing = {
+  capacityPerSet: 5, perPersonFee: 10, maxGuestsPerSet: 7, maxSetsBeforeBuyout: 3, penaltyPerHead: 50,
+}
+
+// Map a declared party size to the recommended product tier.
+function recommendForGuests(n: number, k: GuestPricing) {
+  if (n <= k.capacityPerSet)
+    return { label: '1 set', setsNeeded: 1, buffer: 0, buyout: false }
+  if (n <= k.maxGuestsPerSet)
+    return { label: '1 set + guest fee', setsNeeded: 1, buffer: n - k.capacityPerSet, buyout: false }
+  const setsNeeded = Math.ceil(n / k.capacityPerSet)
+  if (setsNeeded <= k.maxSetsBeforeBuyout)
+    return { label: `${setsNeeded} sets`, setsNeeded, buffer: 0, buyout: false }
+  return { label: 'Full buyout', setsNeeded: 0, buffer: 0, buyout: true }
 }
 
 const GEAR_CART_KEY = 'mk_gear_cart'
@@ -120,12 +143,13 @@ function BookingWizard() {
   const [step, setStep] = useState(initialStep)
   const [booking, setBooking] = useState<BookingState>({
     type:      typeParam || null,
+    guests:    null,
     setId:     setParam || null,
     date:      dateParam || today(),
     startHour: startParam ? parseFloat(startParam) : null,
     endHour:   null,
     equipment: [],
-    name: '', email: '', phone: '', notes: '', smsConsent: false,
+    name: '', email: '', phone: '', notes: '', smsConsent: false, guestAck: false,
   })
   // Pull any gear the customer added on the /gear page into this booking,
   // and re-sync whenever they return to this tab (e.g. after adding on /gear).
@@ -160,6 +184,7 @@ function BookingWizard() {
   // Sets catalog + buyout rate (DB-driven) for the picker, pricing, and minimums.
   const [sets, setSets] = useState<BookSet[]>([])
   const [buyoutRate, setBuyoutRate] = useState(STUDIO_PRICE)
+  const [guestPricing, setGuestPricing] = useState<GuestPricing>(DEFAULT_GUEST_PRICING)
   useEffect(() => {
     fetch('/api/sets').then(r => r.json()).then(d => {
       setSets(
@@ -172,6 +197,7 @@ function BookingWizard() {
         }))
       )
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
+      if (d.guestPricing) setGuestPricing({ ...DEFAULT_GUEST_PRICING, ...d.guestPricing })
     }).catch(() => {})
   }, [])
 
@@ -284,7 +310,14 @@ function BookingWizard() {
   const spaceTotal   = booking.type === 'studio'
                        ? (buyoutRate * hourCount)
                        : cartSpaceTotal
-  const grandTotal   = spaceTotal + discountedEquipTotal
+
+  // Per-person buffer fee — only on a single set carrying 6-7 guests.
+  const guestRec = booking.guests ? recommendForGuests(booking.guests, guestPricing) : null
+  const guestFee = (booking.type === 'set' && setCart.length === 1 && guestRec && guestRec.buffer > 0)
+    ? guestRec.buffer * guestPricing.perPersonFee * (setCart[0].endHour - setCart[0].startHour)
+    : 0
+
+  const grandTotal   = spaceTotal + discountedEquipTotal + guestFee
 
   // Comp customers flagged "no card required" skip the card form when total is $0.
   const compNoCard   = !!pricingOverrides?.comp_no_card
@@ -360,7 +393,8 @@ function BookingWizard() {
        ? (booking.startHour !== null && booking.endHour !== null && (booking.endHour - booking.startHour) >= minHours)
        : (currentComplete || setCart.length > 0),
     5: true, // equipment optional
-    6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent,
+    6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent
+       && booking.guests != null && booking.guestAck,
   }
 
   const next = () => setStep(s => s + 1)
@@ -413,35 +447,52 @@ function BookingWizard() {
         </div>
 
         {/* ── STEP 1: Type ── */}
-        {step === 1 && (
+        {step === 1 && booking.type === null && (
           <StepWrapper title="HOW WOULD YOU LIKE TO BOOK?">
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
               {[
-                { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: 'Reserve one set by the hour. Up to 5 people. $40–$75/hr.', price: 'FROM $40/HR' },
-                { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private. Up to 30 people.', price: 'CONTACT FOR RATE' },
+                { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: 'Reserve one set by the hour. $40–$75/hr.',  limit: 'Up to 5 people per set', price: 'FROM $40/HR' },
+                { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private.',       limit: 'Up to 30 people',       price: 'CONTACT FOR RATE' },
               ].map(opt => (
-                <button key={opt.type} onClick={() => { setBooking(b => ({ ...b, type: opt.type })); setStep(2) }}
+                <button key={opt.type} onClick={() => { setBooking(b => ({ ...b, type: opt.type })) }}
                   style={{
-                    background: booking.type === opt.type ? '#fff' : '#0d0d0d',
+                    background: '#0d0d0d',
                     border: 'none', padding: '60px 48px', cursor: 'pointer', textAlign: 'left',
                     transition: 'background 0.2s',
                   }}
-                  onMouseEnter={e => { if (booking.type !== opt.type) (e.currentTarget as HTMLButtonElement).style.background = '#111' }}
-                  onMouseLeave={e => { if (booking.type !== opt.type) (e.currentTarget as HTMLButtonElement).style.background = '#0d0d0d' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#111' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#0d0d0d' }}
                 >
-                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, color: booking.type === opt.type ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 12 }}>
+                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, color: '#fff', letterSpacing: '0.02em', marginBottom: 12 }}>
                     {opt.label}
                   </div>
-                  <p style={{ fontFamily: 'Inter', fontSize: 13, color: booking.type === opt.type ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 24 }}>
+                  <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 10 }}>
                     {opt.sub}
                   </p>
-                  <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: booking.type === opt.type ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.3)' }}>
+                  <p style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.6, marginBottom: 24 }}>
+                    {opt.limit}
+                  </p>
+                  <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>
                     {opt.price}
                   </div>
                 </button>
               ))}
             </div>
           </StepWrapper>
+        )}
+
+        {/* ── STEP 1b: Guest count (own screen, after type is chosen) ── */}
+        {step === 1 && booking.type !== null && (
+          <GuestStep
+            type={booking.type}
+            guests={booking.guests}
+            pricing={guestPricing}
+            buyoutRate={buyoutRate}
+            onChange={(n) => setBooking(b => ({ ...b, guests: n }))}
+            onBack={() => setBooking(b => ({ ...b, type: null, guests: null }))}
+            onContinue={() => setStep(2)}
+            onSwitchToBuyout={() => setBooking(b => ({ ...b, type: 'studio' }))}
+          />
         )}
 
         {/* ── STEP 2: Set selection (individual only) ── */}
@@ -745,6 +796,40 @@ function BookingWizard() {
                   <a href="https://madekulture.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
                 </p>
               </div>
+
+              {/* Guest count fallback (only if it wasn't captured earlier, e.g. deep link) */}
+              {booking.guests == null && (
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
+                    HOW MANY PEOPLE TOTAL?
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <button type="button" onClick={() => setBooking(b => ({ ...b, guests: Math.max(1, (b.guests ?? 1) - 1) }))}
+                      style={{ width: 40, height: 40, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 18, cursor: 'pointer' }}>−</button>
+                    <span style={{ fontFamily: 'Inter', fontSize: 16, color: '#fff', minWidth: 28, textAlign: 'center' }}>{booking.guests ?? 1}</span>
+                    <button type="button" onClick={() => setBooking(b => ({ ...b, guests: Math.min(30, (b.guests ?? 0) + 1) }))}
+                      style={{ width: 40, height: 40, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 18, cursor: 'pointer' }}>+</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Guest-limit acknowledgment — the booking contract */}
+              <div
+                onClick={() => setBooking(b => ({ ...b, guestAck: !b.guestAck }))}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
+              >
+                <div style={{
+                  width: 18, height: 18, flexShrink: 0, marginTop: 2,
+                  border: `1px solid ${booking.guestAck ? '#fff' : 'rgba(255,255,255,0.3)'}`,
+                  background: booking.guestAck ? '#fff' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {booking.guestAck && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                </div>
+                <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
+                  I confirm my party is <strong style={{ color: '#fff' }}>{booking.guests ?? '—'} {booking.guests === 1 ? 'person' : 'people'}</strong> total. I understand extra guests beyond this may be charged <strong style={{ color: '#fff' }}>${guestPricing.penaltyPerHead}/guest</strong> and can result in a note or ban on my account.
+                </p>
+              </div>
             </div>
             <NavRow onBack={back} onNext={next} canNext={canNext[6]} />
           </StepWrapper>
@@ -771,6 +856,7 @@ function BookingWizard() {
                       <Row key={i} label={it.setName} value={`${it.date} · ${fmt12(it.startHour)}–${fmt12(it.endHour)}`} />
                     ))
                   )}
+                  {booking.guests != null && <Row label="PARTY" value={`${booking.guests} ${booking.guests === 1 ? 'person' : 'people'}`} />}
                   <Row label="NAME"    value={booking.name} />
                   <Row label="EMAIL"   value={booking.email} />
                   <Row label="PHONE"   value={booking.phone} />
@@ -790,6 +876,7 @@ function BookingWizard() {
                   {booking.type === 'studio'
                     ? (hourCount > 0 && <Row label={`SPACE (${hourCount}hr × $${buyoutRate})`} value={`$${spaceTotal}`} />)
                     : (cartSpaceTotal > 0 && <Row label="SETS SUBTOTAL" value={`$${cartSpaceTotal}`} />)}
+                  {guestFee > 0 && <Row label={`EXTRA GUESTS (${guestRec?.buffer} × $${guestPricing.perPersonFee}/hr)`} value={`$${guestFee}`} />}
                   {equipTotal > 0 && (
                     equipDiscount
                       ? <Row label={`EQUIPMENT (${equipDiscount}% off)`} value={`$${discountedEquipTotal}`} />
@@ -872,6 +959,80 @@ function NavRow({ onBack, onNext, canNext, nextLabel = 'CONTINUE' }: {
   )
 }
 
+// ─── Guest count step ─────────────────────────────────────────────────────────
+
+function GuestStep({ type, guests, pricing, buyoutRate, onChange, onBack, onContinue, onSwitchToBuyout }: {
+  type: BookingType
+  guests: number | null
+  pricing: GuestPricing
+  buyoutRate: number
+  onChange: (n: number) => void
+  onBack: () => void
+  onContinue: () => void
+  onSwitchToBuyout: () => void
+}) {
+  const isMobile = useIsMobile()
+  const max = type === 'studio' ? 30 : 24
+  const n = guests ?? 0
+  const rec = guests ? recommendForGuests(guests, pricing) : null
+
+  const dec = () => onChange(Math.max(1, n - 1))
+  const inc = () => onChange(Math.min(max, n < 1 ? 1 : n + 1))
+
+  // Guidance copy for the individual-set ladder.
+  let guidance: React.ReactNode = null
+  if (type === 'set' && rec) {
+    if (rec.buffer > 0) {
+      guidance = <>Over {pricing.capacityPerSet} on one set: <strong style={{ color: '#fff' }}>+${pricing.perPersonFee}/guest/hr</strong> for {rec.buffer} extra {rec.buffer === 1 ? 'guest' : 'guests'}, added at checkout.</>
+    } else if (rec.buyout) {
+      guidance = <>That&apos;s a full-warehouse production. We recommend the <strong style={{ color: '#fff' }}>Full Studio Takeover</strong> — privacy, all sets, fog/haze &amp; audio.</>
+    } else if (rec.setsNeeded > 1) {
+      guidance = <>You&apos;ll need <strong style={{ color: '#fff' }}>{rec.setsNeeded} sets</strong> ({pricing.capacityPerSet} people each). Add them on the next steps.</>
+    } else {
+      guidance = <>Fits comfortably on <strong style={{ color: '#fff' }}>one set</strong>.</>
+    }
+  } else if (type === 'studio') {
+    guidance = n > 30
+      ? <>Groups over 30 need approval — text us at (832) 408-1631.</>
+      : <>Up to <strong style={{ color: '#fff' }}>30 people</strong> included in a full buyout.</>
+  }
+
+  return (
+    <StepWrapper title="HOW MANY PEOPLE?">
+      <div style={{ maxWidth: 520 }}>
+        <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 32 }}>
+          Your total party — everyone on site, including photographers, models, stylists, assistants, clients and children.
+        </p>
+
+        {/* Stepper */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 28 }}>
+          <button onClick={dec}
+            style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>−</button>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 56, color: '#fff', minWidth: 80, textAlign: 'center', lineHeight: 1 }}>
+            {n < 1 ? '—' : n}
+          </div>
+          <button onClick={inc}
+            style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>+</button>
+        </div>
+
+        {guidance && (
+          <div style={{ background: rec?.buyout ? 'rgba(212,168,67,0.08)' : 'rgba(255,255,255,0.04)', border: `1px solid ${rec?.buyout ? 'rgba(212,168,67,0.3)' : 'rgba(255,255,255,0.1)'}`, padding: '16px 18px', marginBottom: 24 }}>
+            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, margin: 0 }}>{guidance}</p>
+            {type === 'set' && rec?.buyout && (
+              <button onClick={onSwitchToBuyout}
+                style={{ marginTop: 12, background: '#fff', border: 'none', color: '#080808', padding: '10px 18px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em' }}>
+                SWITCH TO FULL BUYOUT
+              </button>
+            )}
+          </div>
+        )}
+
+        <NavRow onBack={onBack} onNext={onContinue} canNext={n >= 1} />
+      </div>
+    </StepWrapper>
+  )
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 16 }}>
@@ -942,6 +1103,7 @@ function CompConfirmPanel({ booking, setCart, onBack, onSuccess }: {
           email:     booking.email,
           phone:     booking.phone,
           notes:     booking.notes,
+          guests:    booking.guests,
           totalCents: 0,
         }),
       })
@@ -1026,6 +1188,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           email:      booking.email,
           phone:      booking.phone,
           notes:      booking.notes,
+          guests:     booking.guests,
           totalCents: grandTotalRef.current * 100,
         }),
       })

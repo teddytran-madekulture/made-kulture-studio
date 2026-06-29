@@ -28,12 +28,29 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const { data: buyoutSetting } = await supabase
+  // Pull the buyout rate + guest pricing knobs in one shot (key/value settings).
+  const { data: settingRows } = await supabase
     .from('studio_settings')
-    .select('value')
-    .eq('key', 'buyout_rate')
-    .maybeSingle()
-  const buyoutRate = Number(buyoutSetting?.value) || 400
+    .select('key, value')
+    .in('key', [
+      'buyout_rate',
+      'guest_capacity_per_set',
+      'per_person_fee',
+      'max_guests_per_set',
+      'max_sets_before_buyout',
+      'guest_penalty_per_head',
+    ])
+  const settings: Record<string, string> = {}
+  for (const r of settingRows ?? []) settings[r.key] = r.value
 
-  return NextResponse.json({ sets: data ?? [], buyoutRate })
+  const buyoutRate = Number(settings['buyout_rate']) || 400
+  const guestPricing = {
+    capacityPerSet:     Number(settings['guest_capacity_per_set']) || 5,
+    perPersonFee:       Number(settings['per_person_fee'])         || 10,
+    maxGuestsPerSet:    Number(settings['max_guests_per_set'])     || 7,
+    maxSetsBeforeBuyout:Number(settings['max_sets_before_buyout']) || 3,
+    penaltyPerHead:     Number(settings['guest_penalty_per_head']) || 50,
+  }
+
+  return NextResponse.json({ sets: data ?? [], buyoutRate, guestPricing })
 }

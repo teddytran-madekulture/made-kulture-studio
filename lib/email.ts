@@ -107,13 +107,14 @@ interface BookingConfirmationData {
   bookingId: string
   notes?: string
   scheduleLines?: string[] // multi-set orders: one line per set, e.g. "Set A — Sat Jul 12, 2pm–5pm"
+  guestCount?: number      // declared party size (the booked limit)
 }
 
 export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount } = data
 
   const body = `
     <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;">Booking Confirmed</h1>
@@ -145,6 +146,13 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
           <span style="font-size:15px;color:#fff;font-weight:600;">${startTime} – ${endTime}</span>
         </td>
       </tr>`}
+      ${guestCount ? `
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
+          <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Party Size</span><br/>
+          <span style="font-size:15px;color:#fff;font-weight:600;">${guestCount} ${guestCount === 1 ? 'person' : 'people'} — your booked limit</span>
+        </td>
+      </tr>` : ''}
       <tr>
         <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
           <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Total Paid</span><br/>
