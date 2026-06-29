@@ -22,14 +22,18 @@ export async function GET(req: NextRequest) {
     .from('customers')
     .select(`
       id, name, email, phone, status, banned, created_at,
-      square_customer_id, acuity_client_id,
+      square_customer_id, acuity_client_id, alt_emails, alt_phones,
       bookings ( id, status, total_amount )
     `, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
   if (q && q.length >= 2) {
-    query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
+    // ilike on the primary fields (substring) + exact match against merged
+    // alternate emails/phones, so a lookup finds people by any saved contact.
+    query = query.or(
+      `name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,alt_emails.cs.{"${q}"},alt_phones.cs.{"${q}"}`
+    )
   }
 
   if (status === 'banned') {

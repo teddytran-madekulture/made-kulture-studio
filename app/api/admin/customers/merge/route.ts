@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const allIds = [primaryId, ...duplicateIds]
   const { data: customers, error: fetchError } = await supabase
     .from('customers')
-    .select('id, name, email, phone, status, banned, pricing_overrides, square_customer_id, acuity_client_id')
+    .select('id, name, email, phone, status, banned, pricing_overrides, square_customer_id, acuity_client_id, alt_emails, alt_phones')
     .in('id', allIds)
 
   if (fetchError || !customers) {
@@ -42,6 +42,11 @@ export async function POST(req: NextRequest) {
   let mergedAcuityClientId   = primary.acuity_client_id
   let mergedPricingOverrides = primary.pricing_overrides
 
+  // Collect every email/phone that differs from the primary so none is lost.
+  const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
+  const altEmails = new Set<string>((primary.alt_emails ?? []).map((e: string) => e.trim()).filter(Boolean))
+  const altPhones = new Set<string>((primary.alt_phones ?? []).map((p: string) => p.trim()).filter(Boolean))
+
   for (const dup of duplicates) {
     if (!mergedName  && dup.name)  mergedName  = dup.name
     if (!mergedPhone && dup.phone) mergedPhone = dup.phone
@@ -49,7 +54,17 @@ export async function POST(req: NextRequest) {
     if (!mergedSquareCustomerId && dup.square_customer_id) mergedSquareCustomerId = dup.square_customer_id
     if (!mergedAcuityClientId  && dup.acuity_client_id)  mergedAcuityClientId  = dup.acuity_client_id
     if (!mergedPricingOverrides && dup.pricing_overrides) mergedPricingOverrides = dup.pricing_overrides
+
+    // Preserve the duplicate's contact info (and any alternates it already had).
+    if (dup.email && norm(dup.email) !== norm(primary.email)) altEmails.add(dup.email.trim())
+    for (const e of (dup.alt_emails ?? [])) if (e?.trim()) altEmails.add(e.trim())
+    if (dup.phone && norm(dup.phone) !== norm(primary.phone)) altPhones.add(dup.phone.trim())
+    for (const p of (dup.alt_phones ?? [])) if (p?.trim()) altPhones.add(p.trim())
   }
+
+  // Don't duplicate the primary's own current email/phone in the alt lists.
+  const mergedAltEmails = [...altEmails].filter(e => norm(e) !== norm(primary.email))
+  const mergedAltPhones = [...altPhones].filter(p => norm(p) !== norm(mergedPhone))
 
   const errors: string[] = []
 
@@ -79,6 +94,8 @@ export async function POST(req: NextRequest) {
       square_customer_id: mergedSquareCustomerId,
       acuity_client_id:   mergedAcuityClientId,
       pricing_overrides:  mergedPricingOverrides,
+      alt_emails:         mergedAltEmails,
+      alt_phones:         mergedAltPhones,
     })
     .eq('id', primaryId)
 

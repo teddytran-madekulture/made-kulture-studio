@@ -154,6 +154,8 @@ interface CustomerDetailData {
   createdAt: string
   squareCustomerId: string | null
   acuityClientId: string | null
+  altEmails: string[]
+  altPhones: string[]
   bookings: any[]
   notes: CustomerNote[]
 }
@@ -2477,7 +2479,13 @@ export default function AdminDashboard() {
               ) : (
                 <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <Detail label="EMAIL" value={custDetail.email} />
+                  {(custDetail.altEmails ?? []).length > 0 && (
+                    <Detail label="ALSO EMAIL" value={custDetail.altEmails.join(', ')} />
+                  )}
                   <Detail label="PHONE" value={custDetail.phone || '—'} />
+                  {(custDetail.altPhones ?? []).length > 0 && (
+                    <Detail label="ALSO PHONE" value={custDetail.altPhones.join(', ')} />
+                  )}
                   <Detail label="MEMBER SINCE" value={new Date(custDetail.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} />
                   <button onClick={() => { setCustEditDraft({ name: custDetail.name, email: custDetail.email, phone: custDetail.phone }); setCustEditMode(true) }}
                     style={{ marginTop: 4, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '7px 14px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)', alignSelf: 'flex-start' }}>

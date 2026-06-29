@@ -15,7 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     .from('customers')
     .select(`
       id, name, email, phone, status, banned, pricing_overrides, created_at,
-      square_customer_id, acuity_client_id,
+      square_customer_id, acuity_client_id, alt_emails, alt_phones,
       bookings (
         id, start_time, end_time, status, total_amount, source, created_at,
         sets ( name )
@@ -48,6 +48,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       squareCustomerId: customer.square_customer_id,
       acuityClientId:   customer.acuity_client_id,
       pricingOverrides: customer.pricing_overrides ?? null,
+      altEmails:        customer.alt_emails ?? [],
+      altPhones:        customer.alt_phones ?? [],
       bookings,
       notes,
     }
