@@ -40,11 +40,12 @@ export async function PUT(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { full_name, phone, instagram, sms_opt_in, roles, directory_opt_in } = body
+  const { full_name, phone, instagram, sms_opt_in, roles, directory_opt_in, avatar_url } = body
 
   const patch: Record<string, unknown> = { id: user.id, full_name, phone, instagram, sms_opt_in }
   if (Array.isArray(roles)) patch.roles = roles.map((r: unknown) => String(r)).filter(Boolean)
   if (typeof directory_opt_in === 'boolean') patch.directory_opt_in = directory_opt_in
+  if (typeof avatar_url === 'string') patch.avatar_url = avatar_url
 
   const { data, error } = await supabase
     .from('customer_profiles')

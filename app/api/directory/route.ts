@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   let q = service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram')
+    .select('id, full_name, roles, instagram, avatar_url')
     .eq('directory_opt_in', true)
   if (role) q = q.contains('roles', [role])
 
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
   const members = (data ?? [])
     .filter(m => (m.full_name ?? '').trim())
-    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null }))
+    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null }))
 
   return NextResponse.json({ members })
 }

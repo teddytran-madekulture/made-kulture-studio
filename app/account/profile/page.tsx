@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { CREATIVE_ROLES } from '@/lib/roles'
+import { createClient } from '@/lib/supabase/client'
 
 interface Profile {
   full_name: string
@@ -10,6 +11,7 @@ interface Profile {
   sms_opt_in: boolean
   roles: string[]
   directory_opt_in: boolean
+  avatar_url: string | null
 }
 
 // Defined at module scope (NOT inside the page component) so its identity is
@@ -27,17 +29,37 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function ProfilePage() {
-  const [form, setForm]     = useState<Profile>({ full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false })
+  const [form, setForm]     = useState<Profile>({ full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
   const [error, setError]     = useState('')
+  const [uploading, setUploading] = useState(false)
+  const supabase = createClient()
 
   useEffect(() => {
     fetch('/api/account/profile')
       .then(r => r.json())
-      .then(d => { if (d.profile) setForm({ ...d.profile, roles: d.profile.roles ?? [], directory_opt_in: !!d.profile.directory_opt_in }); setLoading(false) })
+      .then(d => { if (d.profile) setForm({ ...d.profile, roles: d.profile.roles ?? [], directory_opt_in: !!d.profile.directory_opt_in, avatar_url: d.profile.avatar_url ?? null }); setLoading(false) })
   }, [])
+
+  const uploadAvatar = async (file: File) => {
+    setError(''); setUploading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError('Please sign in again.'); setUploading(false); return }
+      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase()
+      const path = `${user.id}/avatar.${ext}`
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) { setError(upErr.message); setUploading(false); return }
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      // cache-bust so the new image shows immediately
+      setForm(f => ({ ...f, avatar_url: `${data.publicUrl}?t=${Date.now()}` }))
+    } catch {
+      setError('Could not upload photo.')
+    }
+    setUploading(false)
+  }
 
   const set = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
@@ -51,7 +73,7 @@ export default function ProfilePage() {
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in }),
+      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
@@ -80,6 +102,23 @@ export default function ProfilePage() {
             Profile saved successfully.
           </div>
         )}
+
+        <Field label="PROFILE PHOTO">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {form.avatar_url
+                ? <img src={form.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>No photo</span>}
+            </div>
+            <label style={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, padding: '10px 16px', fontFamily: 'Inter', fontSize: 12, color: '#fff', cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
+              {uploading ? 'UPLOADING…' : (form.avatar_url ? 'CHANGE PHOTO' : 'UPLOAD PHOTO')}
+              <input type="file" accept="image/*" disabled={uploading} onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatar(f) }} style={{ display: 'none' }} />
+            </label>
+          </div>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+            Shown on your directory listing. Click <strong>Save Changes</strong> below to keep it.
+          </div>
+        </Field>
 
         <Field label="FULL NAME">
           <input value={form.full_name} onChange={set('full_name')} placeholder="Your full name" style={inputStyle} />

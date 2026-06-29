@@ -7,6 +7,7 @@ interface Member {
   full_name: string
   roles: string[]
   instagram: string | null
+  avatar_url: string | null
 }
 
 export default function DirectoryPage() {
@@ -61,8 +62,15 @@ export default function DirectoryPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
           {members.map(m => (
             <div key={m.id} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '18px 20px' }}>
-              <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', marginBottom: 8 }}>
-                {m.full_name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: '#1f1f1f', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {m.avatar_url
+                    ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>{(m.full_name || '?').charAt(0).toUpperCase()}</span>}
+                </div>
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em' }}>
+                  {m.full_name}
+                </div>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: m.instagram ? 12 : 0 }}>
                 {m.roles.map(r => (

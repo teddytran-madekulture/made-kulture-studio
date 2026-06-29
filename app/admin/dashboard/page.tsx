@@ -156,6 +156,7 @@ interface CustomerDetailData {
   acuityClientId: string | null
   altEmails: string[]
   altPhones: string[]
+  altNames: string[]
   bookings: any[]
   notes: CustomerNote[]
 }
@@ -2478,6 +2479,9 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {(custDetail.altNames ?? []).length > 0 && (
+                    <Detail label="ALSO KNOWN AS" value={custDetail.altNames.join(', ')} />
+                  )}
                   <Detail label="EMAIL" value={custDetail.email} />
                   {(custDetail.altEmails ?? []).length > 0 && (
                     <Detail label="ALSO EMAIL" value={custDetail.altEmails.join(', ')} />
