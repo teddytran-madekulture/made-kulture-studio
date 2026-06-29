@@ -30,7 +30,26 @@ function fillSubject(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? k)
 }
 
-const FROM_EMAIL  = 'Made Kulture <bookings@madekulture.com>'
+// Send via Resend and surface failures. The Resend SDK returns { data, error }
+// instead of throwing, so without this an unverified-domain rejection looks
+// like success. We log clearly and throw so callers' .catch records it.
+async function sendEmail(label: string, opts: Parameters<ReturnType<typeof getResend>['emails']['send']>[0]) {
+  if (!process.env.RESEND_API_KEY) {
+    console.error(`[email] ${label} NOT sent — RESEND_API_KEY is not set`)
+    return null
+  }
+  const { data, error } = await getResend().emails.send(opts as any)
+  if (error) {
+    console.error(`[email] ${label} send FAILED:`, JSON.stringify(error))
+    throw new Error(`Resend (${label}): ${(error as any)?.message || 'send failed'}`)
+  }
+  console.log(`[email] ${label} sent`, (data as any)?.id ? `id=${(data as any).id}` : '')
+  return data
+}
+
+// Sender address. Override with EMAIL_FROM env (e.g. while the domain is being
+// verified, set it to "Made Kulture <onboarding@resend.dev>").
+const FROM_EMAIL  = process.env.EMAIL_FROM || 'Made Kulture <bookings@madekulture.com>'
 const REPLY_TO    = 'Teddy @ Made Kulture <teddytran@madekulture.com>'
 const OWNER_EMAIL = 'teddytran@madekulture.com'
 const BRAND_COLOR = '#1a1a1a'
@@ -208,7 +227,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
 
-  return getResend().emails.send({
+  return sendEmail('booking_confirmation', {
     from: FROM_EMAIL,
     replyTo: REPLY_TO,
     to: customerEmail,
@@ -282,7 +301,7 @@ export async function sendNewBookingAlert(data: NewBookingAlertData) {
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
 
-  return getResend().emails.send({
+  return sendEmail('new_booking_alert', {
     from: FROM_EMAIL,
     to: OWNER_EMAIL,
     subject,
@@ -339,7 +358,7 @@ export async function sendCancellationEmail(data: CancellationData) {
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
 
-  return getResend().emails.send({
+  return sendEmail('cancellation', {
     from: FROM_EMAIL,
     replyTo: REPLY_TO,
     to: customerEmail,
@@ -433,7 +452,7 @@ export async function sendBookingReminder(data: BookingReminderData) {
     ? fillSubject(customSubject, { set: setName, date, customer: customerName })
     : defaultSubject
 
-  return getResend().emails.send({
+  return sendEmail('reminder', {
     from: FROM_EMAIL,
     replyTo: REPLY_TO,
     to: customerEmail,
