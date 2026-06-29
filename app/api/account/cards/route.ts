@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
@@ -127,6 +128,29 @@ export async function DELETE(req: NextRequest) {
   const cardRes = await square.cardsApi.retrieveCard(card_id)
   if (cardRes.result.card?.customerId !== profile.square_customer_id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // Don't allow removing a card that's attached to an upcoming or recent booking
+  // — it's the card a guest-overage would be charged to. 7-day grace after the
+  // session end gives the studio time to settle any overage first.
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: activeBookings } = await admin
+    .from('bookings')
+    .select('id')
+    .eq('square_card_on_file_id', card_id)
+    .neq('status', 'cancelled')
+    .gte('end_time', cutoff)
+    .limit(1)
+
+  if (activeBookings && activeBookings.length > 0) {
+    return NextResponse.json(
+      { error: 'This card is linked to an upcoming or recent booking and can’t be removed yet. You can remove it once that session is complete.' },
+      { status: 400 }
+    )
   }
 
   await square.cardsApi.disableCard(card_id)

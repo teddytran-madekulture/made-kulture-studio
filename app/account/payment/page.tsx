@@ -35,7 +35,10 @@ export default function PaymentPage() {
       body: JSON.stringify({ card_id: cardId }),
     })
     if (res.ok) setCards(cs => cs.filter(c => c.id !== cardId))
-    else setError('Failed to remove card')
+    else {
+      const d = await res.json().catch(() => ({}))
+      setError(d.error || 'Failed to remove card')
+    }
     setRemoving(null)
   }
 
