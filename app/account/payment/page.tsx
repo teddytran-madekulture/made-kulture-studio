@@ -116,20 +116,45 @@ function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const appId  = process.env.NEXT_PUBLIC_SQUARE_APP_ID!
-    const locId  = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID!
-    const env    = process.env.NEXT_PUBLIC_SQUARE_ENVIRONMENT === 'production' ? '' : 'sandbox.'
+    let cancelled = false
+    const appId = process.env.NEXT_PUBLIC_SQUARE_APP_ID
+    const locId = process.env.NEXT_PUBLIC_SQUARE_LOCATION_ID
+    if (!appId || !locId) { setError('Payment system isn’t configured. Contact the studio.'); return }
 
-    const script = document.createElement('script')
-    script.src = `https://${env}web.squarecdn.com/v1/square.js`
-    script.onload = async () => {
-      const payments = (window as any).Square.payments(appId, locId)
-      const c = await payments.card()
-      await c.attach(containerRef.current)
-      setCard(c)
+    // Match the booking checkout: pick the environment from the app ID prefix
+    // (sandbox app IDs start with "sandbox-"), not an env var that may be unset
+    // in production — otherwise the wrong Square SDK loads and the form fails.
+    const src = appId.startsWith('sandbox-')
+      ? 'https://sandbox.web.squarecdn.com/v1/square.js'
+      : 'https://web.squarecdn.com/v1/square.js'
+
+    const init = async () => {
+      try {
+        const payments = (window as any).Square.payments(appId, locId)
+        const c = await payments.card()
+        if (cancelled || !containerRef.current) return
+        containerRef.current.innerHTML = '' // guard against a double attach
+        await c.attach(containerRef.current)
+        if (cancelled) return
+        setCard(c)
+      } catch {
+        if (!cancelled) setError('Could not load the card form. Please refresh and try again.')
+      }
     }
-    document.head.appendChild(script)
-    return () => { document.head.removeChild(script) }
+
+    if ((window as any).Square) {
+      init()
+    } else {
+      let script = document.getElementById('square-sdk') as HTMLScriptElement | null
+      if (!script) {
+        script = document.createElement('script')
+        script.id = 'square-sdk'
+        script.src = src
+        document.head.appendChild(script)
+      }
+      script.addEventListener('load', init)
+    }
+    return () => { cancelled = true }
   }, [])
 
   const save = async () => {
