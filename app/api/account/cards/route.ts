@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
+import { randomUUID } from 'crypto'
 
 function getSquare() {
   return new Client({
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
 
     const square = getSquare()
     const res = await square.cardsApi.createCard({
-      idempotencyKey: `card-${user.id}-${Date.now()}`,
+      idempotencyKey: randomUUID(), // Square caps idempotencyKey at 45 chars
       sourceId: source_id,
       card: { customerId: squareCustomerId },
     })
