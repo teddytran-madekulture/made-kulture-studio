@@ -182,6 +182,12 @@ function StaffManager() {
     const r = await fetch(`/api/admin/staff/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) })
     if (!r.ok) alert((await r.json()).error ?? 'Failed.'); else alert('Password updated.')
   }
+  const setPin = async (id: string, name: string) => {
+    const pin = prompt(`Quick-unlock PIN for ${name} (4–6 digits; blank to clear):`)
+    if (pin === null) return
+    const r = await fetch(`/api/admin/staff/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: pin === '' ? null : pin }) })
+    if (!r.ok) alert((await r.json()).error ?? 'Failed.'); else alert(pin === '' ? 'PIN cleared.' : 'PIN set.')
+  }
 
   return (
     <section style={{ marginBottom: 28 }}>
@@ -221,6 +227,7 @@ function StaffManager() {
               {STAFF_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
             </select>
             <button style={{ ...btn(false), padding: '6px 10px' }} onClick={() => resetPw(emp.id, emp.name)}>Reset PW</button>
+            <button style={{ ...btn(false), padding: '6px 10px' }} onClick={() => setPin(emp.id, emp.name)}>Set PIN</button>
             {emp.is_active
               ? <button style={{ ...btn(false), padding: '6px 10px', color: C.accent, borderColor: C.accent }} onClick={() => deactivate(emp.id, emp.name)}>Deactivate</button>
               : <button style={{ ...btn(false), padding: '6px 10px', color: C.good, borderColor: C.good }} onClick={() => patch(emp.id, { is_active: true })}>Reactivate</button>}

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { ROLE_LABELS, type StaffRole } from '@/lib/staff-permissions'
 import ChargePanel from './ChargePanel'
 import GearPanel from './GearPanel'
+import LockGate from './LockGate'
 
 type AddOn = { id: string; quantity: number; rate: number; paid: boolean; square_order_id: string | null; equipment: { name: string } | null }
 type Booking = {
@@ -142,6 +143,8 @@ export default function Desk() {
 
   return (
     <Shell>
+      <LockGate staffName={me.staff.name} />
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 26 }}>FRONT DESK</div>
