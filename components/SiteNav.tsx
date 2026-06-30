@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
+import { createClient } from '@/lib/supabase/client'
 
 const LINKS: { label: string; href: string }[] = [
   { label: 'HOME',          href: '/' },
@@ -19,6 +20,14 @@ export default function SiteNav({ active }: { active?: string }) {
   const isMobile = useIsMobile()
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [authed, setAuthed] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => setAuthed(!!user))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setAuthed(!!s?.user))
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -87,6 +96,16 @@ export default function SiteNav({ active }: { active?: string }) {
               {l.label}
             </Link>
           ))}
+          {authed !== null && (
+            <Link href={authed ? '/account' : '/login'} onClick={() => setMenuOpen(false)}
+              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
+              {authed ? 'ACCOUNT' : 'LOG IN'}
+            </Link>
+          )}
+          <Link href="/admin" onClick={() => setMenuOpen(false)}
+            style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', textDecoration: 'none', padding: '18px 0 4px' }}>
+            ADMIN →
+          </Link>
           <div style={{ marginTop: 'auto', paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="label" style={{ marginBottom: 6 }}>MADE KULTURE / HOUSTON</div>
             <div style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>4825 Gulf Fwy, Houston TX · (832) 408-1631</div>
