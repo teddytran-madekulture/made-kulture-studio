@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from '@/lib/agreements'
+import { PROP_CATEGORIES, type Prop } from '@/lib/props'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -352,7 +353,7 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'equipment' | 'usage' | 'legal'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'equipment' | 'usage' | 'legal' | 'props'>('list')
   const [usage,         setUsage]         = useState<any | null>(null)
   const [usageLoading,  setUsageLoading]  = useState(false)
 
@@ -496,6 +497,44 @@ export default function AdminDashboard() {
   const [equipDraft,   setEquipDraft]   = useState<EquipDraft>(EMPTY_EQUIP_DRAFT)
   const [equipSaving,  setEquipSaving]  = useState(false)
   const [equipBusyId,  setEquipBusyId]  = useState<string | null>(null)
+
+  // ── Props Manager ───────────────────────────────────────────────────────────
+  const [propsList,    setPropsList]    = useState<Prop[]>([])
+  const [propsLoading, setPropsLoading] = useState(false)
+  const [propEditId,   setPropEditId]   = useState<string | null>(null)   // id, 'new', or null
+  const [propDraft,    setPropDraft]    = useState({ name: '', category: '', description: '', image_url: '', needs_repair: false, is_active: true, sort_order: '0' })
+  const [propSaving,   setPropSaving]   = useState(false)
+  const [propBusyId,   setPropBusyId]   = useState<string | null>(null)
+  const fetchProps = useCallback(async () => {
+    setPropsLoading(true)
+    const res = await fetch('/api/admin/props', { cache: 'no-store' })
+    const data = await res.json().catch(() => ({}))
+    setPropsList(data.props ?? [])
+    setPropsLoading(false)
+  }, [])
+  useEffect(() => { if (view === 'props') fetchProps() }, [view, fetchProps])
+  const startNewProp  = () => { setPropDraft({ name: '', category: '', description: '', image_url: '', needs_repair: false, is_active: true, sort_order: '0' }); setPropEditId('new') }
+  const startEditProp = (p: Prop) => { setPropDraft({ name: p.name, category: p.category ?? '', description: p.description ?? '', image_url: p.image_url ?? '', needs_repair: p.needs_repair, is_active: p.is_active, sort_order: String(p.sort_order ?? 0) }); setPropEditId(p.id) }
+  const saveProp = async () => {
+    if (!propDraft.name.trim()) return
+    setPropSaving(true)
+    const url    = propEditId === 'new' ? '/api/admin/props' : `/api/admin/props/${propEditId}`
+    const method = propEditId === 'new' ? 'POST' : 'PATCH'
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(propDraft) })
+    setPropSaving(false)
+    if (res.ok) { setPropEditId(null); fetchProps() }
+  }
+  const patchProp = async (p: Prop, patch: Record<string, unknown>) => {
+    setPropBusyId(p.id)
+    await fetch(`/api/admin/props/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }).catch(() => {})
+    await fetchProps(); setPropBusyId(null)
+  }
+  const deleteProp = async (p: Prop) => {
+    if (!confirm(`Delete "${p.name}"? This can't be undone.`)) return
+    setPropBusyId(p.id)
+    await fetch(`/api/admin/props/${p.id}`, { method: 'DELETE' }).catch(() => {})
+    await fetchProps(); setPropBusyId(null)
+  }
 
   // ── Customer fetch helpers ───────────────────────────────────────────────
   const fetchCustomers = useCallback(async (search: string, filter: string, page: number) => {
@@ -1170,7 +1209,7 @@ export default function AdminDashboard() {
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
-          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment']] as const).map(([v, icon, label]) => (
+          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['props', '🛋', 'Props']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -2572,6 +2611,92 @@ export default function AdminDashboard() {
                   style={{ padding: '7px 16px', background: 'rgba(255,255,255,0.06)', border: 'none', color: custPage >= Math.ceil(custTotal / 50) ? 'rgba(255,255,255,0.2)' : '#fff', cursor: custPage >= Math.ceil(custTotal / 50) ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12 }}>
                   Next →
                 </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── PROPS MANAGER ─────────────────────────────────────────────── */}
+        {view === 'props' && (
+          <div style={{ paddingBottom: 80 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 4 }}>PROPS</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>A browse-only directory of studio props. Hidden props don&apos;t show on the public /props page.</div>
+              </div>
+              {propEditId === null && (
+                <button onClick={startNewProp} style={{ background: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>+ NEW PROP</button>
+              )}
+            </div>
+
+            {/* New / edit form */}
+            {propEditId !== null && (
+              <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: '22px 24px', marginBottom: 28 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>{propEditId === 'new' ? 'NEW PROP' : 'EDIT PROP'}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Name
+                    <input value={propDraft.name} onChange={e => setPropDraft(d => ({ ...d, name: e.target.value }))}
+                      style={{ width: '100%', marginTop: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }} />
+                  </label>
+                  <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Category
+                    <select value={propDraft.category} onChange={e => setPropDraft(d => ({ ...d, category: e.target.value }))}
+                      style={{ width: '100%', marginTop: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }}>
+                      <option value="" style={{ color: '#000' }}>— none —</option>
+                      {PROP_CATEGORIES.map(c => <option key={c} value={c} style={{ color: '#000' }}>{c}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 14 }}>Image URL
+                  <input value={propDraft.image_url} onChange={e => setPropDraft(d => ({ ...d, image_url: e.target.value }))} placeholder="https://…"
+                    style={{ width: '100%', marginTop: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }} />
+                </label>
+                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 14 }}>Description
+                  <textarea value={propDraft.description} onChange={e => setPropDraft(d => ({ ...d, description: e.target.value }))}
+                    style={{ width: '100%', marginTop: 6, minHeight: 70, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', marginBottom: 18 }}>
+                  <label style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={propDraft.is_active} onChange={e => setPropDraft(d => ({ ...d, is_active: e.target.checked }))} style={{ accentColor: '#d4a843' }} /> Show on site
+                  </label>
+                  <label style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={propDraft.needs_repair} onChange={e => setPropDraft(d => ({ ...d, needs_repair: e.target.checked }))} style={{ accentColor: '#f97316' }} /> Needs repair
+                  </label>
+                  <label style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 8 }}>Sort
+                    <input type="number" value={propDraft.sort_order} onChange={e => setPropDraft(d => ({ ...d, sort_order: e.target.value }))} style={{ width: 64, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 12, padding: '6px 8px' }} />
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button disabled={propSaving || !propDraft.name.trim()} onClick={saveProp} style={{ background: '#d4a843', border: 'none', padding: '8px 18px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000', opacity: (propSaving || !propDraft.name.trim()) ? 0.6 : 1 }}>{propSaving ? 'SAVING…' : 'SAVE'}</button>
+                  <button onClick={() => setPropEditId(null)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)' }}>CANCEL</button>
+                </div>
+              </div>
+            )}
+
+            {/* List */}
+            {propsLoading ? (
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading…</div>
+            ) : propsList.length === 0 ? (
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>No props yet. Add your first one above.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'rgba(255,255,255,0.05)' }}>
+                {propsList.map(p => (
+                  <div key={p.id} style={{ background: '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 48, height: 48, flexShrink: 0, background: '#141414', overflow: 'hidden' }}>
+                      {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: p.is_active ? '#fff' : 'rgba(255,255,255,0.4)' }}>
+                        {p.name}
+                        {!p.is_active && <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.2)', padding: '1px 6px' }}>HIDDEN</span>}
+                        {p.needs_repair && <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', color: '#f97316', border: '1px solid rgba(249,115,22,0.4)', padding: '1px 6px' }}>NEEDS REPAIR</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{p.category || '—'}</div>
+                    </div>
+                    <button disabled={propBusyId === p.id} onClick={() => patchProp(p, { is_active: !p.is_active })} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.55)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>{p.is_active ? 'HIDE' : 'SHOW'}</button>
+                    <button onClick={() => startEditProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>EDIT</button>
+                    <button disabled={propBusyId === p.id} onClick={() => deleteProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff6b6b', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>DELETE</button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

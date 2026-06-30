@@ -8,6 +8,7 @@ const LINKS: { label: string; href: string }[] = [
   { label: 'HOME',          href: '/' },
   { label: 'SETS',          href: '/sets' },
   { label: 'GEAR',          href: '/gear' },
+  { label: 'PROPS',         href: '/props' },
   { label: 'STUDIO RULES',  href: '/studio-rules' },
   { label: 'AVAILABILITY',  href: '/availability' },
 ]
