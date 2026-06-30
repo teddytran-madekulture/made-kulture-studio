@@ -390,16 +390,42 @@ function BookingWizard() {
 
   const totalSteps = booking.type === 'studio' ? 5 : 7
 
-  // A party that needs multiple sets (or a buyout) can't continue under-provisioned.
+  // A party too large for individual sets needs a buyout.
   const needsBuyout  = booking.type === 'set' && !!guestRec?.buyout
+  // Sets required PER TIME WINDOW for this party (a group of 8 → 2 sets each time).
   const setsRequired = booking.type === 'set' && guestRec && !guestRec.buyout ? Math.max(1, guestRec.setsNeeded) : 1
-  const setsProvided = setCart.length + (currentComplete ? 1 : 0)
-  const enoughSets   = booking.type !== 'set' || (!needsBuyout && setsProvided >= setsRequired)
 
-  // Additional sets in one booking are locked to the first set's date + time —
-  // a group occupies multiple sets at the same time, not different windows.
-  const lockedToFirst  = booking.type === 'set' && setCart.length > 0
-  const lockedConflict = lockedToFirst && !!booking.setId && booking.startHour !== null && booking.endHour !== null &&
+  // Group committed sets into time windows (date + start + end). Each window must
+  // hold `setsRequired` sets, so a set at a different time opens a new window that
+  // also has to be filled before checkout.
+  const winKey = (date: string, s: number, e: number) => `${date}|${s}|${e}`
+  const windowCounts: Record<string, number> = {}
+  const windowOrder: string[] = []
+  for (const it of setCart) {
+    const k = winKey(it.date, it.startHour, it.endHour)
+    if (!(k in windowCounts)) { windowCounts[k] = 0; windowOrder.push(k) }
+    windowCounts[k]++
+  }
+  // First committed window still short of the requirement — the next set fills it.
+  const incompleteKey    = windowOrder.find(k => windowCounts[k] < setsRequired)
+  const incompleteWindow = incompleteKey
+    ? setCart.find(it => winKey(it.date, it.startHour, it.endHour) === incompleteKey)! : null
+  const mustFillWindow   = booking.type === 'set' && !needsBuyout && !!incompleteWindow
+
+  // Projected window counts including the in-progress set, used to gate checkout.
+  const projCounts: Record<string, number> = { ...windowCounts }
+  const projOrder = [...windowOrder]
+  if (booking.type === 'set' && currentComplete && booking.setId && booking.startHour !== null && booking.endHour !== null) {
+    const k = winKey(booking.date, booking.startHour, booking.endHour)
+    if (!(k in projCounts)) { projCounts[k] = 0; projOrder.push(k) }
+    projCounts[k]++
+  }
+  const needyKey   = booking.type === 'set' && !needsBuyout ? projOrder.find(k => projCounts[k] < setsRequired) : undefined
+  const enoughSets = booking.type !== 'set' ? true : (!needsBuyout && projOrder.length > 0 && !needyKey)
+
+  // While filling an incomplete window, the current set's time is locked to it.
+  const lockedToWindow = mustFillWindow && !!booking.setId
+  const lockedConflict = lockedToWindow && booking.startHour !== null && booking.endHour !== null &&
     Array.from({ length: Math.max(0, Math.round((booking.endHour - booking.startHour) * 2)) },
       (_, i) => booking.startHour! + i * 0.5).some(isHourBooked)
 
@@ -535,7 +561,7 @@ function BookingWizard() {
                 </div>
               )}
               {sets.map(s => (
-                <button key={s.id} onClick={() => setBooking(b => ({ ...b, setId: s.id, ...(setCart.length > 0 ? { date: setCart[0].date, startHour: setCart[0].startHour, endHour: setCart[0].endHour } : {}) }))}
+                <button key={s.id} onClick={() => setBooking(b => ({ ...b, setId: s.id, ...(mustFillWindow && incompleteWindow ? { date: incompleteWindow.date, startHour: incompleteWindow.startHour, endHour: incompleteWindow.endHour } : {}) }))}
                   style={{
                     background: booking.setId === s.id ? '#fff' : '#0d0d0d',
                     border: 'none', padding: '28px 24px', cursor: 'pointer', textAlign: 'left',
@@ -556,7 +582,7 @@ function BookingWizard() {
                 </button>
               ))}
             </div>
-            <NavRow onBack={back} onNext={() => setStep(setCart.length > 0 ? 4 : 3)} canNext={canNext[2]} />
+            <NavRow onBack={back} onNext={() => setStep(mustFillWindow ? 4 : 3)} canNext={canNext[2]} />
           </StepWrapper>
         )}
 
@@ -593,10 +619,10 @@ function BookingWizard() {
               <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, marginBottom: 24 }}>
                 Your sets so far are below. Tap “+ Add another set” to choose another, or Continue to checkout.
               </p>
-            ) : lockedToFirst ? (
+            ) : lockedToWindow ? (
               <div style={{ marginBottom: 24 }}>
                 <div style={{ border: '1px solid rgba(255,255,255,0.15)', padding: '16px 18px', marginBottom: 18 }}>
-                  <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>YOUR GROUP&apos;S TIME — LOCKED</div>
+                  <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>SAME-TIME SET — LOCKED</div>
                   <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', lineHeight: 1 }}>{sets.find(s => s.id === booking.setId)?.name?.toUpperCase() ?? 'SET'}</div>
                   <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>{booking.date}{booking.startHour !== null && booking.endHour !== null ? ` · ${fmt12(booking.startHour)}–${fmt12(booking.endHour)}` : ''}</div>
                   <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, margin: '10px 0 0' }}>Every set in your group shares the same date and time.</p>
@@ -701,14 +727,19 @@ function BookingWizard() {
               </div>
             )}
 
-            {booking.type === 'set' && !enoughSets && (
+            {booking.type === 'set' && !enoughSets && (needsBuyout || setsRequired > 1) && (
               <p style={{ fontFamily: 'Inter', fontSize: 13, color: '#e0a44c', lineHeight: 1.6, margin: '0 0 16px' }}>
                 {needsBuyout
                   ? <>Your party of <strong style={{ color: '#fff' }}>{booking.guests}</strong> is too large for individual sets — go back and switch to a <strong style={{ color: '#fff' }}>Full Studio Takeover</strong>.</>
-                  : <>Your party of <strong style={{ color: '#fff' }}>{booking.guests}</strong> needs <strong style={{ color: '#fff' }}>{setsRequired} sets</strong> ({guestPricing.capacityPerSet} people each). Add {setsRequired - setsProvided} more {setsRequired - setsProvided === 1 ? 'set' : 'sets'} to continue.</>}
+                  : (() => {
+                      const parts = needyKey ? needyKey.split('|') : null
+                      const when = parts ? `${fmt12(Number(parts[1]))}–${fmt12(Number(parts[2]))}` : 'this time'
+                      const remaining = needyKey ? setsRequired - projCounts[needyKey] : setsRequired
+                      return <>Your party of <strong style={{ color: '#fff' }}>{booking.guests}</strong> needs <strong style={{ color: '#fff' }}>{setsRequired} sets</strong> at {when} ({guestPricing.capacityPerSet} people each). Add {remaining} more {remaining === 1 ? 'set' : 'sets'} at that time to continue.</>
+                    })()}
               </p>
             )}
-            <NavRow onBack={lockedToFirst ? () => { setBooking(b => ({ ...b, setId: null, startHour: null, endHour: null })); setStep(2) } : back} onNext={() => { commitCurrent(); next() }} canNext={canNext[4]} />
+            <NavRow onBack={lockedToWindow ? () => { setBooking(b => ({ ...b, setId: null, startHour: null, endHour: null })); setStep(2) } : back} onNext={() => { commitCurrent(); next() }} canNext={canNext[4]} />
           </StepWrapper>
         )}
 
