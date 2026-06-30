@@ -26,6 +26,11 @@ function blobToImage(blob: Blob): Promise<HTMLImageElement> {
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise(res => { const r = new FileReader(); r.onloadend = () => res(String(r.result).split(',')[1] || ''); r.readAsDataURL(blob) })
 }
+function b64ToBlob(b64: string, type = 'image/png'): Blob {
+  const bin = atob(b64); const arr = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+  return new Blob([arr], { type })
+}
 async function compositeOnWhite(img: HTMLImageElement, max = 1400, quality = 0.85): Promise<Blob> {
   let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height
   const scale = Math.min(1, max / Math.max(w, h)); w = Math.round(w * scale); h = Math.round(h * scale)
@@ -36,7 +41,7 @@ async function compositeOnWhite(img: HTMLImageElement, max = 1400, quality = 0.8
 
 export default function AddPropByPhoto() {
   const [shots, setShots] = useState<Shot[]>([])
-  const [removeBg, setRemoveBg] = useState(true)
+  const [method, setMethod] = useState<'free' | 'chatgpt' | 'none'>('free')
   const [busy, setBusy] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [name, setName] = useState('')
@@ -57,9 +62,15 @@ export default function AddPropByPhoto() {
       const f = arr[i]; const id = next[i].id
       try {
         let imgBlob: Blob = f
-        if (removeBg) {
+        if (method === 'free') {
           const removeBackground = await loadBgRemover()
           imgBlob = await removeBackground(f)
+        } else if (method === 'chatgpt') {
+          const fd = new FormData(); fd.append('file', f, f.name || 'photo.jpg')
+          const r = await fetch('/api/admin/props/edit-image', { method: 'POST', credentials: 'include', body: fd })
+          const j = await r.json()
+          if (!r.ok) throw new Error(j.error || 'ChatGPT edit failed')
+          imgBlob = b64ToBlob(j.imageBase64, 'image/png')
         }
         const img = await blobToImage(imgBlob)
         const finalBlob = await compositeOnWhite(img)
@@ -78,7 +89,7 @@ export default function AddPropByPhoto() {
     setBusy(false)
     // auto-analyze the first done shot
     setShots(prev => { runAnalyze(prev); return prev })
-  }, [removeBg])
+  }, [method])
 
   const runAnalyze = async (current: Shot[]) => {
     const hero = current.find(s => s.status === 'done')
@@ -132,9 +143,25 @@ export default function AddPropByPhoto() {
           <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>First photo becomes the cover · add several for a gallery</div>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
-          <input type="checkbox" checked={removeBg} onChange={e => setRemoveBg(e.target.checked)} /> Remove background (white, ecomm-style)
-        </label>
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 10, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>PHOTO CLEANUP</div>
+          <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 8, overflow: 'hidden' }}>
+            {([['free', 'Free remover'], ['chatgpt', 'ChatGPT edit'], ['none', 'No edit']] as const).map(([v, label], i) => (
+              <button key={v} onClick={() => setMethod(v)} style={{
+                border: 'none', borderLeft: i ? '1px solid rgba(255,255,255,0.16)' : 'none',
+                padding: '8px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                fontFamily: 'Inter, sans-serif',
+                background: method === v ? '#d4a843' : 'transparent',
+                color: method === v ? '#080808' : 'rgba(255,255,255,0.6)',
+              }}>{label}</button>
+            ))}
+          </div>
+          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11.5, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
+            {method === 'free' && 'Free, in-browser background removal — keeps the object exactly as shot.'}
+            {method === 'chatgpt' && 'Uses your OpenAI account to clean up the photo (costs a few cents per image; may alter small details).'}
+            {method === 'none' && 'Use the original photo, just resized — no cleanup.'}
+          </div>
+        </div>
 
         {/* Thumbs */}
         {shots.length > 0 && (
@@ -142,13 +169,13 @@ export default function AddPropByPhoto() {
             {shots.map(s => (
               <div key={s.id} style={{ position: 'relative', aspectRatio: '1/1', background: '#141414', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
                 {s.preview && <img src={s.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                {s.status === 'processing' && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', fontSize: 10, letterSpacing: '0.1em', color: '#fff' }}>REMOVING BG…</div>}
+                {s.status === 'processing' && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', fontSize: 10, letterSpacing: '0.1em', color: '#fff', textAlign: 'center', padding: 4 }}>{method === 'chatgpt' ? 'CHATGPT EDITING…' : method === 'free' ? 'REMOVING BG…' : 'RESIZING…'}</div>}
                 {s.status === 'error' && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(120,0,0,0.6)', fontSize: 10 }}>FAILED</div>}
               </div>
             ))}
           </div>
         )}
-        {busy && <div style={{ marginTop: 10, fontSize: 12, color: '#d4a843' }}>Processing photos… (first time loads the background-removal model, ~a few seconds)</div>}
+        {busy && <div style={{ marginTop: 10, fontSize: 12, color: '#d4a843' }}>{method === 'chatgpt' ? 'ChatGPT is editing each photo… (~15–30s each)' : method === 'free' ? 'Processing… (first run loads the remover model, ~a few seconds)' : 'Resizing photos…'}</div>}
 
         {/* Form */}
         {shots.some(s => s.status === 'done') && (
