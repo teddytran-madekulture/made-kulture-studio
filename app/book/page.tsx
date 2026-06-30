@@ -143,7 +143,9 @@ function BookingWizard() {
   // confirmed — so the guided flow is never skipped.
   const hasSetPreFill = typeParam === 'set' && !!setParam && !!dateParam
 
-  const [step, setStep] = useState(1)
+  // Studio buyouts don't need a head count, so they skip the guest step and
+  // start on the date step. Sets (and the type chooser) start at step 1.
+  const [step, setStep] = useState(typeParam === 'studio' ? 2 : 1)
   const [booking, setBooking] = useState<BookingState>({
     type:      typeParam || null,
     guests:    null,
@@ -386,7 +388,7 @@ function BookingWizard() {
 
   // ── Steps ──────────────────────────────────────────────────────────────────
 
-  const totalSteps = booking.type === 'studio' ? 6 : 7
+  const totalSteps = booking.type === 'studio' ? 5 : 7
 
   const canNext: Record<number, boolean> = {
     1: booking.type !== null,
@@ -397,7 +399,7 @@ function BookingWizard() {
        : (currentComplete || setCart.length > 0),
     5: true, // equipment optional
     6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent
-       && booking.guests != null && booking.guestAck,
+       && (booking.type === 'studio' || (booking.guests != null && booking.guestAck)),
   }
 
   const next = () => setStep(s => s + 1)
@@ -462,7 +464,7 @@ function BookingWizard() {
                 { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: 'Reserve one set by the hour. $40–$75/hr.',  limit: 'Up to 5 people per set', price: 'FROM $40/HR' },
                 { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private.',       limit: 'Up to 30 people',       price: 'CONTACT FOR RATE' },
               ].map(opt => (
-                <button key={opt.type} onClick={() => { setBooking(b => ({ ...b, type: opt.type })) }}
+                <button key={opt.type} onClick={() => { setBooking(b => ({ ...b, type: opt.type })); if (opt.type === 'studio') setStep(2) }}
                   style={{
                     background: '#0d0d0d',
                     border: 'none', padding: '60px 48px', cursor: 'pointer', textAlign: 'left',
@@ -489,8 +491,8 @@ function BookingWizard() {
           </StepWrapper>
         )}
 
-        {/* ── STEP 1b: Guest count (own screen, after type is chosen) ── */}
-        {step === 1 && booking.type !== null && (
+        {/* ── STEP 1b: Guest count (sets only — buyouts skip this) ── */}
+        {step === 1 && booking.type === 'set' && (
           <GuestStep
             type={booking.type}
             guests={booking.guests}
@@ -506,7 +508,7 @@ function BookingWizard() {
               const fitsSingleSet = booking.guests != null && booking.guests <= guestPricing.maxGuestsPerSet
               setStep(hasSetPreFill && fitsSingleSet ? 4 : 2)
             }}
-            onSwitchToBuyout={() => setBooking(b => ({ ...b, type: 'studio' }))}
+            onSwitchToBuyout={() => { setBooking(b => ({ ...b, type: 'studio', guests: null })); setStep(2) }}
           />
         )}
 
@@ -561,7 +563,7 @@ function BookingWizard() {
                 }}
               />
             </div>
-            <NavRow onBack={back} onNext={next} canNext={canNext[3]} />
+            <NavRow onBack={booking.type === 'studio' ? () => { setBooking(b => ({ ...b, type: null, guests: null })); setStep(1) } : back} onNext={next} canNext={canNext[3]} />
           </StepWrapper>
         )}
 
@@ -812,8 +814,8 @@ function BookingWizard() {
                 </p>
               </div>
 
-              {/* Guest count fallback (only if it wasn't captured earlier, e.g. deep link) */}
-              {booking.guests == null && (
+              {/* Guest count fallback for sets that skipped it (e.g. deep link). Buyouts never ask. */}
+              {booking.type !== 'studio' && booking.guests == null && (
                 <div style={{ marginTop: 8 }}>
                   <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
                     HOW MANY PEOPLE TOTAL?
@@ -828,8 +830,8 @@ function BookingWizard() {
                 </div>
               )}
 
-              {/* Guest-limit acknowledgment — the booking contract */}
-              <div
+              {/* Guest-limit acknowledgment — sets only (buyouts have no head count) */}
+              {booking.type !== 'studio' && <div
                 onClick={() => setBooking(b => ({ ...b, guestAck: !b.guestAck }))}
                 style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
               >
@@ -844,7 +846,7 @@ function BookingWizard() {
                 <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
                   I confirm my party is <strong style={{ color: '#fff' }}>{booking.guests ?? '—'} {booking.guests === 1 ? 'person' : 'people'}</strong> total. I understand extra guests beyond this may be charged <strong style={{ color: '#fff' }}>${guestPricing.penaltyPerHead}/guest</strong> and can result in a note or ban on my account.
                 </p>
-              </div>
+              </div>}
             </div>
             <NavRow onBack={back} onNext={next} canNext={canNext[6]} />
           </StepWrapper>

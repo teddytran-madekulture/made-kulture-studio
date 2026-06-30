@@ -80,7 +80,7 @@ export default function Home() {
               display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
               background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.18)', padding:'16px 24px', textDecoration:'none',
             }}>
-              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>Book the Studio</span>
+              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>Full Studio Takeover</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
           </div>
