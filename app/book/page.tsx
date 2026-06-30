@@ -316,11 +316,31 @@ function BookingWizard() {
                        ? (buyoutRate * hourCount)
                        : cartSpaceTotal
 
-  // Per-person buffer fee — only on a single set carrying 6-7 guests.
+  // Per-person buffer fee — charged on each time window where a set carries more
+  // than its base capacity (e.g. 6-7 people in one set). Computed per window, so a
+  // multi-window booking pays the fee for every over-capacity window.
   const guestRec = booking.guests ? recommendForGuests(booking.guests, guestPricing) : null
-  const guestFee = (booking.type === 'set' && setCart.length === 1 && guestRec && guestRec.buffer > 0)
-    ? guestRec.buffer * guestPricing.perPersonFee * (setCart[0].endHour - setCart[0].startHour)
-    : 0
+  const guestFeeLines = (() => {
+    if (booking.type !== 'set' || !booking.guests) return [] as { label: string; amount: number }[]
+    const N = booking.guests, cap = guestPricing.capacityPerSet
+    const wins: Record<string, { count: number; hours: number; start: number; end: number }> = {}
+    for (const it of setCart) {
+      const k = `${it.date}|${it.startHour}|${it.endHour}`
+      if (!wins[k]) wins[k] = { count: 0, hours: it.endHour - it.startHour, start: it.startHour, end: it.endHour }
+      wins[k].count++
+    }
+    const out: { label: string; amount: number }[] = []
+    for (const k of Object.keys(wins)) {
+      const w = wins[k]
+      const over = Math.max(0, N - cap * w.count)
+      if (over > 0) out.push({
+        label: `EXTRA GUESTS · ${fmt12(w.start)}–${fmt12(w.end)} (${over} × $${guestPricing.perPersonFee} × ${w.hours}hr)`,
+        amount: over * guestPricing.perPersonFee * w.hours,
+      })
+    }
+    return out
+  })()
+  const guestFee = guestFeeLines.reduce((s, l) => s + l.amount, 0)
 
   const grandTotal   = spaceTotal + discountedEquipTotal + guestFee
 
@@ -943,7 +963,7 @@ function BookingWizard() {
                     </>
                   ) : (
                     setCart.map((it, i) => (
-                      <Row key={i} label={it.setName} value={`${it.date} · ${fmt12(it.startHour)}–${fmt12(it.endHour)}`} />
+                      <Row key={i} label={it.setName} value={`${fmt12(it.startHour)}–${fmt12(it.endHour)} · $${it.price * (it.endHour - it.startHour)}`} />
                     ))
                   )}
                   {booking.guests != null && <Row label="PARTY" value={`${booking.guests} ${booking.guests === 1 ? 'person' : 'people'}`} />}
@@ -966,7 +986,7 @@ function BookingWizard() {
                   {booking.type === 'studio'
                     ? (hourCount > 0 && <Row label={`SPACE (${hourCount}hr × $${buyoutRate})`} value={`$${spaceTotal}`} />)
                     : (cartSpaceTotal > 0 && <Row label="SETS SUBTOTAL" value={`$${cartSpaceTotal}`} />)}
-                  {guestFee > 0 && <Row label={`EXTRA GUESTS (${guestRec?.buffer} × $${guestPricing.perPersonFee}/hr)`} value={`$${guestFee}`} />}
+                  {guestFeeLines.map((g, i) => <Row key={`gf${i}`} label={g.label} value={`$${g.amount}`} />)}
                   {equipTotal > 0 && (
                     equipDiscount
                       ? <Row label={`EQUIPMENT (${equipDiscount}% off)`} value={`$${discountedEquipTotal}`} />

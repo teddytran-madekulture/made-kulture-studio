@@ -291,18 +291,26 @@ export async function POST(req: NextRequest) {
         )
       }
     } else if (guestCount > 0) {
-      const setsCount = lines.length
-      const allowed = setsCount === 1 ? maxGuestsPerSet : setsCount * guestCapacity
-      if (guestCount > allowed) {
-        return NextResponse.json(
-          { error: `${guestCount} guests need more space than ${setsCount} ${setsCount === 1 ? 'set' : 'sets'} allows (max ${allowed}). Add another set or reduce your party.` },
-          { status: 400 }
-        )
+      // Group lines into time windows (date + start + end). Each window must hold
+      // enough sets for the party, and pays a per-person buffer fee for anyone
+      // beyond base capacity in that window (mirrors the client breakdown).
+      const minSetsPerWindow = guestCount <= maxGuestsPerSet ? 1 : Math.ceil(guestCount / guestCapacity)
+      const wins: Record<string, { count: number; hours: number }> = {}
+      for (const l of lines) {
+        const k = `${l.date}|${l.startHour}|${l.endHour}`
+        if (!wins[k]) wins[k] = { count: 0, hours: l.endHour - l.startHour }
+        wins[k].count++
       }
-      // Buffer fee: single set carrying capacity+1..maxGuestsPerSet guests.
-      if (setsCount === 1 && guestCount > guestCapacity) {
-        const hrs = lines[0].endHour - lines[0].startHour
-        guestFeeDollars = (guestCount - guestCapacity) * perPersonFee * hrs
+      for (const k of Object.keys(wins)) {
+        const w = wins[k]
+        if (w.count < minSetsPerWindow) {
+          return NextResponse.json(
+            { error: `${guestCount} guests need at least ${minSetsPerWindow} ${minSetsPerWindow === 1 ? 'set' : 'sets'} at each time (max ${guestCapacity} per set). Add another set or reduce your party.` },
+            { status: 400 }
+          )
+        }
+        const over = Math.max(0, guestCount - guestCapacity * w.count)
+        if (over > 0) guestFeeDollars += over * perPersonFee * w.hours
       }
     }
 
