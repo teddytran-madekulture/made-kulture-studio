@@ -140,6 +140,7 @@ function Console({ me, onSignedOut }: { me: Me; onSignedOut: () => void }) {
         <p style={{ margin: 0, color: C.dim, fontSize: 14 }}>
           The full front-desk workflow lives at <a href="/desk" style={{ color: C.accent }}>/desk</a> — search, check-in, and card charges. This console manages staff and settings.
         </p>
+        {me.permissions?.['admin.access'] && <p style={{ margin: '10px 0 0', fontSize: 14 }}><a href="/admin/dashboard" style={{ color: C.accent }}>Admin Dashboard →</a></p>}
       </div>
 
       {isOwner && <StaffManager />}

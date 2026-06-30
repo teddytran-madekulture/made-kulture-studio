@@ -167,7 +167,10 @@ export default function Desk() {
           <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 26 }}>FRONT DESK</div>
           <div style={{ color: C.dim, fontSize: 14 }}>{me.staff.name} · <span style={{ color: C.accent }}>{ROLE_LABELS[me.staff.role]}</span></div>
         </div>
-        <button style={btn('ghost')} onClick={signOut}>Lock</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {me.permissions?.['admin.access'] && <a href="/admin/dashboard" style={{ ...btn('ghost'), textDecoration: 'none' }}>Admin →</a>}
+          <button style={btn('ghost')} onClick={signOut}>Lock</button>
+        </div>
       </div>
 
       {canPay && <ChargePanel />}
