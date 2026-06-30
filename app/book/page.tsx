@@ -390,13 +390,19 @@ function BookingWizard() {
 
   const totalSteps = booking.type === 'studio' ? 5 : 7
 
+  // A party that needs multiple sets (or a buyout) can't continue under-provisioned.
+  const needsBuyout  = booking.type === 'set' && !!guestRec?.buyout
+  const setsRequired = booking.type === 'set' && guestRec && !guestRec.buyout ? Math.max(1, guestRec.setsNeeded) : 1
+  const setsProvided = setCart.length + (currentComplete ? 1 : 0)
+  const enoughSets   = booking.type !== 'set' || (!needsBuyout && setsProvided >= setsRequired)
+
   const canNext: Record<number, boolean> = {
     1: booking.type !== null,
     2: booking.type === 'studio' ? true : booking.setId !== null,
     3: booking.date !== '',
     4: booking.type === 'studio'
        ? (booking.startHour !== null && booking.endHour !== null && (booking.endHour - booking.startHour) >= minHours)
-       : (currentComplete || setCart.length > 0),
+       : ((currentComplete || setCart.length > 0) && enoughSets),
     5: true, // equipment optional
     6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent
        && (booking.type === 'studio' || (booking.guests != null && booking.guestAck)),
@@ -672,6 +678,13 @@ function BookingWizard() {
               </div>
             )}
 
+            {booking.type === 'set' && !enoughSets && (
+              <p style={{ fontFamily: 'Inter', fontSize: 13, color: '#e0a44c', lineHeight: 1.6, margin: '0 0 16px' }}>
+                {needsBuyout
+                  ? <>Your party of <strong style={{ color: '#fff' }}>{booking.guests}</strong> is too large for individual sets — go back and switch to a <strong style={{ color: '#fff' }}>Full Studio Takeover</strong>.</>
+                  : <>Your party of <strong style={{ color: '#fff' }}>{booking.guests}</strong> needs <strong style={{ color: '#fff' }}>{setsRequired} sets</strong> ({guestPricing.capacityPerSet} people each). Add {setsRequired - setsProvided} more {setsRequired - setsProvided === 1 ? 'set' : 'sets'} to continue.</>}
+              </p>
+            )}
             <NavRow onBack={back} onNext={() => { commitCurrent(); next() }} canNext={canNext[4]} />
           </StepWrapper>
         )}
