@@ -99,6 +99,7 @@ interface BookingState {
   notes:       string
   smsConsent:  boolean
   guestAck:    boolean         // confirmed the party-size limit at checkout
+  agreementAck: boolean        // agreed to the rental agreement & waiver
 }
 
 // Default guest pricing knobs (overridden by /api/sets → studio_settings).
@@ -155,7 +156,7 @@ function BookingWizard() {
     startHour: startParam ? parseFloat(startParam) : null,
     endHour:   null,
     equipment: [],
-    name: '', email: '', phone: '', notes: '', smsConsent: false, guestAck: false,
+    name: '', email: '', phone: '', notes: '', smsConsent: false, guestAck: false, agreementAck: false,
   })
   // A fresh booking starts with no gear — clear any cart left over from a
   // previous, abandoned booking. Gear added during THIS booking is saved to the
@@ -469,6 +470,7 @@ function BookingWizard() {
        : ((currentComplete || setCart.length > 0) && enoughSets && !lockedConflict),
     5: true, // equipment optional
     6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent
+       && booking.agreementAck
        && (booking.type === 'studio' || (booking.guests != null && booking.guestAck)),
   }
 
@@ -923,6 +925,27 @@ function BookingWizard() {
                   <a href="https://madekulture.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Terms</a>
                   {' '}·{' '}
                   <a href="https://madekulture.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
+                </p>
+              </div>
+
+              {/* Rental agreement & waiver — required */}
+              <div
+                onClick={() => setBooking(b => ({ ...b, agreementAck: !b.agreementAck }))}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 16 }}
+              >
+                <div style={{
+                  width: 18, height: 18, flexShrink: 0, marginTop: 2,
+                  border: `1px solid ${booking.agreementAck ? '#fff' : 'rgba(255,255,255,0.3)'}`,
+                  background: booking.agreementAck ? '#fff' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {booking.agreementAck && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                </div>
+                <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
+                  I have read and agree to the{' '}
+                  <a href={`/rental-agreement?type=${booking.type === 'studio' ? 'studio' : 'set'}`} target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>
+                    {booking.type === 'studio' ? 'Full Warehouse Rental Agreement' : 'Individual Set Rental Agreement'} &amp; Waiver
+                  </a>, on behalf of myself and everyone in my party.
                 </p>
               </div>
 
