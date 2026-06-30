@@ -232,6 +232,53 @@ function fmtCalHeader(dateStr: string): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 }
 
+// Small month-grid date picker for the calendar view. Click a day to jump to it.
+function MiniMonth({ value, onSelect }: { value: string; onSelect: (d: string) => void }) {
+  const today = todayStr()
+  const [vm, setVm] = useState(() => { const [y, m] = value.split('-').map(Number); return { y, m: m - 1 } })
+  useEffect(() => { const [y, m] = value.split('-').map(Number); setVm({ y, m: m - 1 }) }, [value])
+
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const dateStr = (d: number) => `${vm.y}-${pad(vm.m + 1)}-${pad(d)}`
+  const first = new Date(vm.y, vm.m, 1)
+  const startDow = first.getDay()
+  const daysInMonth = new Date(vm.y, vm.m + 1, 0).getDate()
+  const label = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const cells: (number | null)[] = [...Array(startDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  const prevM = () => setVm(v => (v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 }))
+  const nextM = () => setVm(v => (v.m === 11 ? { y: v.y + 1, m: 0 } : { y: v.y, m: v.m + 1 }))
+  const arrow: React.CSSProperties = { background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 16, padding: '0 8px', lineHeight: 1 }
+
+  return (
+    <div style={{ width: 236, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.08)', padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <button onClick={prevM} style={arrow}>&lsaquo;</button>
+        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, letterSpacing: '0.08em', color: '#fff' }}>{label}</span>
+        <button onClick={nextM} style={arrow}>&rsaquo;</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <div key={`h${i}`} style={{ textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.3)', padding: '2px 0' }}>{d}</div>
+        ))}
+        {cells.map((d, i) => {
+          if (d === null) return <div key={`b${i}`} />
+          const ds = dateStr(d)
+          const isSel = ds === value
+          const isTod = ds === today
+          return (
+            <button key={`d${i}`} onClick={() => onSelect(ds)} style={{
+              textAlign: 'center', fontSize: 11, padding: '5px 0', cursor: 'pointer', borderRadius: 2,
+              border: isTod && !isSel ? '1px solid rgba(212,168,67,0.6)' : '1px solid transparent',
+              background: isSel ? '#d4a843' : 'transparent',
+              color: isSel ? '#080808' : '#fff', fontWeight: isSel ? 700 : 400,
+            }}>{d}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function fmt12(h: number) {
   const hour = Math.floor(h)
   const mins = h % 1 !== 0 ? '30' : '00'
@@ -1306,6 +1353,9 @@ export default function AdminDashboard() {
         {/* CALENDAR VIEW */}
         {view === 'calendar' && (
           <div style={{ paddingBottom: 60 }}>
+            <div style={{ marginBottom: 20 }}>
+              <MiniMonth value={calDate} onSelect={setCalDate} />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
               <button onClick={() => setCalDate(d => addDays(d, -1))}
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
