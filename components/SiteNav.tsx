@@ -102,10 +102,6 @@ export default function SiteNav({ active }: { active?: string }) {
               {authed ? 'ACCOUNT' : 'LOG IN'}
             </Link>
           )}
-          <Link href="/admin" onClick={() => setMenuOpen(false)}
-            style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', textDecoration: 'none', padding: '18px 0 4px' }}>
-            ADMIN →
-          </Link>
           <div style={{ marginTop: 'auto', paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="label" style={{ marginBottom: 6 }}>MADE KULTURE / HOUSTON</div>
             <div style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>4825 Gulf Fwy, Houston TX · (832) 408-1631</div>
