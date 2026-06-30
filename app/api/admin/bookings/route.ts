@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     .select(`
       id, start_time, end_time, status, total_amount, notes, source, created_at,
       square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount, customer_id,
-      checked_in_at, checked_out_at, arrived_guest_count,
+      checked_in_at, checked_out_at, arrived_guest_count, cleaning_status,
       sets ( name ),
       customers ( name, email, phone, status, banned, square_customer_id ),
       booking_add_ons ( quantity, rate, paid, equipment ( name ) )
@@ -42,11 +42,16 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const { data: penaltySetting } = await supabase
-    .from('studio_settings').select('value').eq('key', 'guest_penalty_per_head').maybeSingle()
-  const guestPenaltyPerHead = Number(penaltySetting?.value) || 50
+  const { data: settingRows } = await supabase
+    .from('studio_settings').select('key, value')
+    .in('key', ['guest_penalty_per_head', 'cleaning_fee_set', 'cleaning_fee_studio'])
+  const s: Record<string, string> = {}
+  for (const r of settingRows ?? []) s[r.key] = r.value
+  const guestPenaltyPerHead = Number(s['guest_penalty_per_head']) || 50
+  const cleaningFeeSet      = Number(s['cleaning_fee_set'])    || 100
+  const cleaningFeeStudio   = Number(s['cleaning_fee_studio']) || 150
 
-  return NextResponse.json({ bookings: data, guestPenaltyPerHead })
+  return NextResponse.json({ bookings: data, guestPenaltyPerHead, cleaningFeeSet, cleaningFeeStudio })
 }
 
 // ─── POST /api/admin/bookings — manual booking ────────────────────────────────

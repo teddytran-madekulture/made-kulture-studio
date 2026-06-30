@@ -100,6 +100,7 @@ interface Booking {
   checked_in_at: string | null
   checked_out_at: string | null
   arrived_guest_count: number | null
+  cleaning_status: 'charged' | 'waived' | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
   booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
@@ -338,6 +339,13 @@ export default function AdminDashboard() {
   const [overageCount,  setOverageCount]  = useState(1)
   const [overageBusy,   setOverageBusy]   = useState(false)
   const [overageMsg,    setOverageMsg]    = useState<string | null>(null)
+  // Cleaning fee (per-row, discretionary). Defaults configurable, loaded with the booking list.
+  const [cleanFeeSet,    setCleanFeeSet]    = useState(100)
+  const [cleanFeeStudio, setCleanFeeStudio] = useState(150)
+  const [cleanFor,       setCleanFor]       = useState<string | null>(null)
+  const [cleanAmount,    setCleanAmount]    = useState('')
+  const [cleanBusy,      setCleanBusy]      = useState(false)
+  const [cleanMsg,       setCleanMsg]       = useState<string | null>(null)
   const [tab,       setTab]       = useState<'upcoming' | 'past' | 'all'>('upcoming')
   const [expanded,  setExpanded]  = useState<string | null>(null)
   const [cancelling,setCancelling]= useState<string | null>(null)
@@ -468,6 +476,8 @@ export default function AdminDashboard() {
   const [buyoutRate,       setBuyoutRate]        = useState('400')
   const [buyoutSaving,     setBuyoutSaving]      = useState(false)
   const [buyoutSaved,      setBuyoutSaved]       = useState(false)
+  const [cleanDefSaving,   setCleanDefSaving]    = useState(false)
+  const [cleanDefSaved,    setCleanDefSaved]     = useState(false)
 
   // ── Sets Manager ───────────────────────────────────────────────────────────
   const [setsList,     setSetsList]     = useState<StudioSet[]>([])
@@ -572,6 +582,8 @@ export default function AdminDashboard() {
     const data = await res.json()
     setBookings(data.bookings || [])
     if (data.guestPenaltyPerHead) setGuestPenalty(Number(data.guestPenaltyPerHead))
+    if (data.cleaningFeeSet)      setCleanFeeSet(Number(data.cleaningFeeSet))
+    if (data.cleaningFeeStudio)   setCleanFeeStudio(Number(data.cleaningFeeStudio))
     setLoading(false)
   }, [router])
 
@@ -594,6 +606,38 @@ export default function AdminDashboard() {
     } catch {
       setOverageMsg('Charge failed'); setOverageBusy(false)
     }
+  }
+
+  // Charge a discretionary cleaning fee to the card on file.
+  const chargeCleaning = async (b: Booking) => {
+    if (cleanBusy) return
+    const amt = Number(cleanAmount)
+    if (!(amt > 0)) { setCleanMsg('Enter an amount'); return }
+    if (!confirm(`Charge ${b.customers?.name || 'this customer'} a $${amt.toFixed(2)} cleaning fee to the card on file?`)) return
+    setCleanBusy(true); setCleanMsg(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${b.id}/cleaning-fee`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amt, sendSms: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCleanMsg(data.error || 'Charge failed'); setCleanBusy(false); return }
+      setCleanMsg(`Charged $${Number(data.amount).toFixed(2)}`)
+      setCleanBusy(false)
+      fetchBookings(true)
+      setTimeout(() => { setCleanFor(null); setCleanMsg(null); setCleanAmount('') }, 2200)
+    } catch {
+      setCleanMsg('Charge failed'); setCleanBusy(false)
+    }
+  }
+
+  // Mark a booking's cleaning as reviewed with no charge.
+  const markClean = async (b: Booking) => {
+    await fetch(`/api/admin/bookings/${b.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cleaning_status: 'waived' }),
+    }).catch(() => {})
+    fetchBookings(true)
   }
 
   // Manual check-in / check-out override (no-show, forgotten check-out, etc.)
@@ -1342,6 +1386,56 @@ export default function AdminDashboard() {
                                 </button>
                               )
                             )}
+
+                            {/* Cleaning fee — discretionary post-booking charge to the card on file */}
+                            {!isCancelled && (() => {
+                              const isBuyout = !b.sets
+                              const def = isBuyout ? cleanFeeStudio : cleanFeeSet
+                              const pending = isBuyout && !!b.checked_out_at && !b.cleaning_status
+                              if (b.cleaning_status === 'charged') return <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em' }}>🧹 Cleaning fee charged</div>
+                              if (b.cleaning_status === 'waived')  return <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em' }}>🧹 Marked clean — no fee</div>
+                              if (cleanFor === b.id) {
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.25)', padding: '10px 12px' }}>
+                                    {!b.square_card_on_file_id ? (
+                                      <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>No card on file — can’t auto-charge.</div>
+                                    ) : (
+                                      <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>CLEANING FEE $</span>
+                                          <input type="number" min={1} value={cleanAmount} onChange={e => setCleanAmount(e.target.value)}
+                                            style={{ width: 72, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '6px 8px', fontFamily: 'Inter, sans-serif', fontSize: 12 }} />
+                                        </div>
+                                        <button onClick={() => chargeCleaning(b)} disabled={cleanBusy}
+                                          style={{ background: 'rgba(96,165,250,0.9)', border: 'none', padding: '8px 16px', cursor: cleanBusy ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', color: '#080808', fontWeight: 600 }}>
+                                          {cleanBusy ? 'CHARGING…' : `CHARGE $${(Number(cleanAmount) || 0).toFixed(0)}`}
+                                        </button>
+                                      </>
+                                    )}
+                                    {cleanMsg && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: cleanMsg.startsWith('Charged') ? '#4ade80' : '#ff6b6b' }}>{cleanMsg}</div>}
+                                    <button onClick={() => { setCleanFor(null); setCleanMsg(null); setCleanAmount('') }}
+                                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)' }}>CLOSE</button>
+                                  </div>
+                                )
+                              }
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, ...(pending ? { background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.3)', padding: '10px 12px' } : {}) }}>
+                                  {pending && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: '#60a5fa' }}>⚠ CLEANING REVIEW PENDING</div>}
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={() => { setCleanFor(b.id); setCleanAmount(String(def)); setCleanMsg(null) }}
+                                      style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.4)', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', color: '#60a5fa' }}>
+                                      CHARGE CLEANING FEE
+                                    </button>
+                                    {pending && (
+                                      <button onClick={() => markClean(b)}
+                                        style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.6)' }}>
+                                        MARK CLEAN
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })()}
                           </div>
                         </div>
                       )}
@@ -1796,6 +1890,37 @@ export default function AdminDashboard() {
                   {buyoutSaving ? 'SAVING…' : 'SAVE'}
                 </button>
                 {buyoutSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+              </div>
+            </div>
+
+            {/* Default cleaning fees (discretionary) */}
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '20px 24px', marginBottom: 28 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>🧹 DEFAULT CLEANING FEES</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 14, lineHeight: 1.5 }}>
+                Pre-filled amount when you charge a cleaning fee on a booking. Nothing is charged automatically — you set the amount each time. Full-warehouse bookings are flagged for a cleaning review after checkout.
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>Individual set $</span>
+                  <input type="number" value={cleanFeeSet} onChange={e => { setCleanFeeSet(Number(e.target.value)); setCleanDefSaved(false) }}
+                    style={{ width: 90, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, padding: '10px 12px', outline: 'none', boxSizing: 'border-box' as const }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>Full warehouse $</span>
+                  <input type="number" value={cleanFeeStudio} onChange={e => { setCleanFeeStudio(Number(e.target.value)); setCleanDefSaved(false) }}
+                    style={{ width: 90, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 14, padding: '10px 12px', outline: 'none', boxSizing: 'border-box' as const }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+                <button disabled={cleanDefSaving} onClick={async () => {
+                  setCleanDefSaving(true)
+                  await fetch('/api/admin/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'cleaning_fee_set', value: String(cleanFeeSet || 0) }) })
+                  await fetch('/api/admin/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'cleaning_fee_studio', value: String(cleanFeeStudio || 0) }) })
+                  setCleanDefSaved(true); setCleanDefSaving(false)
+                }} style={{ background: cleanDefSaving ? 'rgba(255,255,255,0.1)' : '#fff', border: 'none', padding: '7px 18px', cursor: cleanDefSaving ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000' }}>
+                  {cleanDefSaving ? 'SAVING…' : 'SAVE'}
+                </button>
+                {cleanDefSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
               </div>
             </div>
 

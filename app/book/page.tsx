@@ -949,6 +949,13 @@ function BookingWizard() {
                 </p>
               </div>
 
+              {/* Soft cleaning-fee disclosure — full warehouse only */}
+              {booking.type === 'studio' && (
+                <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, margin: '14px 0 0' }}>
+                  Note: a cleaning fee may apply based on the condition of the space after your booking. You won&apos;t be charged unless cleaning is needed.
+                </p>
+              )}
+
               {/* Guest count fallback for sets that skipped it (e.g. deep link). Buyouts never ask. */}
               {booking.type !== 'studio' && booking.guests == null && (
                 <div style={{ marginTop: 8 }}>

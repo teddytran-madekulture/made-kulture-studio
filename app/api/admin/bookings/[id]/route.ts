@@ -34,6 +34,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Manual check-in / check-out (admin override). Pass ISO string or null.
   if (body.checked_in_at  !== undefined) updates.checked_in_at  = body.checked_in_at
   if (body.checked_out_at !== undefined) updates.checked_out_at = body.checked_out_at
+  // Cleaning review status: null (pending) | 'charged' | 'waived'
+  if (body.cleaning_status !== undefined) updates.cleaning_status = body.cleaning_status
 
   // Resolve set name to set_id
   if (body.setName !== undefined) {
