@@ -6,6 +6,20 @@ export function todayDateStr(): string {
   return new Date().toISOString().split('T')[0]
 }
 
+// Current date in the studio's timezone (Houston), as YYYY-MM-DD.
+export function chiTodayStr(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
+}
+
+// Current Houston time as a decimal hour (e.g. 14.5 = 2:30 PM). Used to gray out
+// slots that have already passed when someone books same-day.
+export function chiNowDecimal(): number {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(new Date())
+  const h = Number(p.find(x => x.type === 'hour')?.value ?? 0)
+  const m = Number(p.find(x => x.type === 'minute')?.value ?? 0)
+  return h + m / 60
+}
+
 // True when the customer may book same-day right now. `po` is the customer's
 // pricing_overrides object (may be null).
 export function shortNoticeActive(po: any): boolean {

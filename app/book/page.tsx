@@ -6,7 +6,7 @@ import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import DatePicker from '@/components/DatePicker'
 import StudioConditions from '@/components/StudioConditions'
-import { shortNoticeActive, todayDateStr } from '@/lib/short-notice'
+import { shortNoticeActive, todayDateStr, chiTodayStr, chiNowDecimal } from '@/lib/short-notice'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -282,6 +282,9 @@ function BookingWizard() {
   // Customers with active short-notice access can book same-day; everyone else
   // is held to the 48-hour advance minimum.
   const minBookDate = shortNoticeActive(pricingOverrides) ? todayDateStr() : today()
+  // For same-day bookings, gray out time slots that have already passed (Houston time).
+  const bookingIsToday = booking.date === chiTodayStr()
+  const nowChiDec      = bookingIsToday ? chiNowDecimal() : -1
 
   // Fetch availability when set + date change
   useEffect(() => {
@@ -686,6 +689,7 @@ function BookingWizard() {
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
               {SLOTS.map(h => {
+                const isPast    = bookingIsToday && h < nowChiDec
                 const booked    = isHourBooked(h)
                 // When picking end time, only allow whole-hour slots that meet the
                 // set's minimum length (e.g. The Watering Hole / The Tank = 2hr min)
@@ -699,16 +703,17 @@ function BookingWizard() {
 
                 let bg = '#0d0d0d'
                 let color = isInvalidEnd ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                if (isPast)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
                 if (inRange)      { bg = '#fff'; color = '#080808' }
                 if (start || end) { bg = '#fff'; color = '#080808' }
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
-                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd}
+                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isPast}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: booked ? 'not-allowed' : isInvalidEnd ? 'default' : 'pointer',
+                      cursor: (booked || isPast) ? 'not-allowed' : isInvalidEnd ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
