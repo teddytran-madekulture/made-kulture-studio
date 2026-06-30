@@ -228,7 +228,7 @@ export default function AvailabilityPage() {
               NEED THE WHOLE SPACE?
             </div>
             <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', maxWidth: 480 }}>
-              Book a full studio buyout for private productions, large crews, or events up to 30 people. All sets, all equipment, complete creative control.
+              Book a full studio buyout for private productions and large crews of up to 30 people. All sets, all equipment, complete creative control.
             </div>
           </div>
           <Link href="/book?type=studio" style={{

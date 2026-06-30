@@ -20,7 +20,7 @@ const FAQS = [
   { q: 'What is the max occupancy?', a: 'Individual sets hold up to 5 people total — that includes photographers, models, stylists, assistants, and clients. Full studio buyout allows up to 30 people.' },
   { q: 'How does overtime work?', a: 'Sessions running more than 15 minutes past your booked end time are automatically charged an additional hour. A card is required on file at booking to cover any overages.' },
   { q: 'What is your cancellation policy?', a: 'Full refund if cancelled 48+ hours before your booking start time. No refund for cancellations within 48 hours.' },
-  { q: 'Can I book the studio privately?', a: 'Yes — the Full Studio Buyout gives you the entire warehouse privately. Perfect for large productions, music videos, or events requiring complete creative control.' },
+  { q: 'Can I book the studio privately?', a: 'Yes — the Full Studio Buyout gives you the entire warehouse privately. Perfect for large productions, music videos, and shoots requiring complete creative control.' },
   { q: 'Is the studio soundproofed?', a: 'No — the studio is not soundproofed and sits near I-45. For audio recording we strongly recommend a full buyout or plan accordingly.' },
   { q: 'Can I use fog or haze machines?', a: 'Special effects like fog and haze are only available during full buyouts or when your party is the only booking in the studio.' },
 ]
@@ -168,7 +168,7 @@ export default function Home() {
           <div className="label" style={{ color:'rgba(0,0,0,0.4)' }}>PATH B</div>
           <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color:'#000' }}>FULL STUDIO TAKEOVER</h2>
           <p style={{ fontSize:15, color:'rgba(0,0,0,0.5)', lineHeight:1.7, maxWidth:400 }}>
-            Take over every set, vanity room, and the open floor. Perfect for full-day productions, music videos, lookbooks, and private events.
+            Take over every set, vanity room, and the open floor. Perfect for full-day productions, music videos, and lookbooks.
           </p>
           <div style={{ marginTop:'auto', paddingTop:40 }}>
             <Link href="/book?type=studio" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', textDecoration:'none', borderTop:'1px solid rgba(0,0,0,0.15)', paddingTop:24 }}>
