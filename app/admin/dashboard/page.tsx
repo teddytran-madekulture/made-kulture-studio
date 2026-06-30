@@ -1113,6 +1113,16 @@ export default function AdminDashboard() {
           }}>
             + NEW BOOKING
           </button>
+          <a href="/desk" style={{
+            background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px',
+            fontFamily: 'Inter, sans-serif', fontSize: 11, textAlign: 'center', textDecoration: 'none',
+            letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)',
+          }}>FRONT DESK →</a>
+          <a href="/staff" style={{
+            background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px',
+            fontFamily: 'Inter, sans-serif', fontSize: 11, textAlign: 'center', textDecoration: 'none',
+            letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)',
+          }}>STAFF →</a>
           <button onClick={handleLogout} style={{
             background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px',
             cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11,
