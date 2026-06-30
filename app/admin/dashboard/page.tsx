@@ -2625,7 +2625,10 @@ export default function AdminDashboard() {
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>A browse-only directory of studio props. Hidden props don&apos;t show on the public /props page.</div>
               </div>
               {propEditId === null && (
-                <button onClick={startNewProp} style={{ background: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', flexShrink: 0, fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>+ NEW PROP</button>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <a href="/admin/props/new" style={{ background: '#d4a843', border: 'none', padding: '10px 18px', cursor: 'pointer', textDecoration: 'none', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>+ ADD BY PHOTO</a>
+                  <button onClick={startNewProp} style={{ background: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>+ NEW PROP</button>
+                </div>
               )}
             </div>
 

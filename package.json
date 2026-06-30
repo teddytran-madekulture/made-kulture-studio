@@ -14,6 +14,7 @@
     "react-dom": "^18",
     "@supabase/supabase-js": "^2.43.4",
     "@supabase/ssr": "^0.5.2",
+    "@imgly/background-removal": "^1.7.0",
     "square": "^37.0.0",
     "twilio": "^5.2.3",
     "date-fns": "^3.6.0",
