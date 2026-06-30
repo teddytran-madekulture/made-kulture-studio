@@ -112,6 +112,20 @@ export default function Desk() {
     alert(d.refunded ? `✓ Removed and $${amt} refunded.` : '✓ Removed.')
     load()
   }
+  const payLink = async (b: Booking) => {
+    const a = prompt(`Payment link for ${b.customers?.name ?? 'this customer'} — amount in $:`)
+    if (a === null) return
+    const amountCents = Math.round(parseFloat(a) * 100)
+    if (!amountCents || amountCents < 100) { alert('Enter at least $1.00.'); return }
+    const desc = prompt('What is this for? (shows on the checkout page)', 'Made Kulture — balance')
+    if (desc === null) return
+    setBusy(b.id)
+    const r = await fetch(`/api/desk/bookings/${b.id}/payment-link`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amountCents, description: desc }) })
+    const d = await r.json()
+    setBusy(null)
+    if (!r.ok) { alert(d.error ?? 'Could not create the link.'); return }
+    alert(d.smsSent ? `✓ Payment link texted to the customer.\n\n${d.url}` : `Link created — copy it for the customer:\n\n${d.url}`)
+  }
   const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 
   if (loading) return <Shell><p style={{ color: C.dim }}>Loading…</p></Shell>
@@ -124,6 +138,7 @@ export default function Desk() {
 
   const canCancel = !!me.permissions?.['booking.cancel']
   const canAddOn = !!me.permissions?.['addon.add']
+  const canPay = !!me.permissions?.['payment.terminal']
 
   return (
     <Shell>
@@ -135,7 +150,7 @@ export default function Desk() {
         <button style={btn('ghost')} onClick={signOut}>Lock</button>
       </div>
 
-      {!!me.permissions?.['payment.terminal'] && <ChargePanel />}
+      {canPay && <ChargePanel />}
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
         <input
@@ -194,6 +209,7 @@ export default function Desk() {
                 {b.checked_in_at && !b.checked_out_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkOut(b)}>Check out</button>}
                 {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => addTime(b)}>+ Add time</button>}
                 {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => setGearFor(b)}>+ Add gear</button>}
+                {canPay && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => payLink(b)}>Pay link</button>}
                 {canCancel && <button disabled={busy === b.id} style={btn('danger')} onClick={() => cancel(b)}>Cancel</button>}
               </div>
             </div>
