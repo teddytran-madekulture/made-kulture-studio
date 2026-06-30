@@ -6,6 +6,7 @@ import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import DatePicker from '@/components/DatePicker'
 import StudioConditions from '@/components/StudioConditions'
+import { shortNoticeActive, todayDateStr } from '@/lib/short-notice'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -277,6 +278,10 @@ function BookingWizard() {
       })
       .catch(() => {})
   }, [])
+
+  // Customers with active short-notice access can book same-day; everyone else
+  // is held to the 48-hour advance minimum.
+  const minBookDate = shortNoticeActive(pricingOverrides) ? todayDateStr() : today()
 
   // Fetch availability when set + date change
   useEffect(() => {
@@ -630,7 +635,7 @@ function BookingWizard() {
               </p>
               <DatePicker
                 value={booking.date}
-                min={today()}
+                min={minBookDate}
                 onChange={d => {
                   setBooking(b => ({ ...b, date: d, startHour: null, endHour: null }))
                   setBookedSlots([])

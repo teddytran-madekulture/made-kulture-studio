@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import NavAuthLink from '@/components/NavAuthLink'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
+import { shortNoticeActive, todayDateStr } from '@/lib/short-notice'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -76,7 +77,9 @@ interface SetData {
 export default function AvailabilityPage() {
   const router  = useRouter()
   const isMobile = useIsMobile()
-  const min     = minDate()
+  // Default to the 48-hr minimum; relaxed to today for customers with active
+  // short-notice access (checked once their profile loads below).
+  const [min, setMin]             = useState(minDate())
   const [date, setDate]           = useState(min)
   const [sets, setSets]           = useState<Record<string, SetData>>({})
   const [fullStudioSlots, setFullStudioSlots] = useState<{ start: number; end: number }[]>([])
@@ -95,6 +98,20 @@ export default function AvailabilityPage() {
       })
       .catch(() => setLoading(false))
   }, [date])
+
+  // Unlock same-day availability for a logged-in customer with active short-notice.
+  useEffect(() => {
+    fetch('/api/account/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && shortNoticeActive(d.pricingOverrides)) {
+          const t = todayDateStr()
+          setMin(t)
+          setDate(t)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const stepDate = (delta: number) => {
     const d = new Date(date + 'T12:00:00')

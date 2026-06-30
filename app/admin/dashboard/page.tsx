@@ -148,6 +148,8 @@ interface PricingOverrides {
   equipment_discount_percent?: number | null
   sets?: Record<string, number | null>
   comp_no_card?: boolean   // $0 bookings skip the card entirely
+  short_notice?: boolean            // allow booking inside the 48-hr advance window
+  short_notice_until?: string | null // optional expiry date (YYYY-MM-DD); blank = until turned off
 }
 
 interface CustomerDetailData {
@@ -409,7 +411,7 @@ export default function AdminDashboard() {
   const [custNoteText,     setCustNoteText]     = useState('')
   const [custNoteTag,      setCustNoteTag]      = useState('general')
   const [custNoteAdding,   setCustNoteAdding]   = useState(false)
-  const [custPricingDraft,  setCustPricingDraft]  = useState<{ hourly_rate: string; equipment_discount_percent: string; sets: Record<string, string>; comp_no_card: boolean }>({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false })
+  const [custPricingDraft,  setCustPricingDraft]  = useState<{ hourly_rate: string; equipment_discount_percent: string; sets: Record<string, string>; comp_no_card: boolean; short_notice: boolean; short_notice_until: string }>({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false, short_notice: false, short_notice_until: '' })
   const [custPricingSaving, setCustPricingSaving] = useState(false)
   const [dupGroups,         setDupGroups]         = useState<any[]>([])
   const [dupLoading,        setDupLoading]         = useState(false)
@@ -486,9 +488,11 @@ export default function AdminDashboard() {
           Object.entries(po.sets ?? {}).map(([k, v]) => [k, v != null ? String(v) : ''])
         ),
         comp_no_card: !!po.comp_no_card,
+        short_notice: !!po.short_notice,
+        short_notice_until: po.short_notice_until ?? '',
       })
     } else {
-      setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false })
+      setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false, short_notice: false, short_notice_until: '' })
     }
     setCustDetailLoading(false)
   }, [])
@@ -2787,6 +2791,27 @@ export default function AdminDashboard() {
                       </span>
                     </label>
 
+                    {/* Short-notice booking override */}
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 10 }}>
+                      <input type="checkbox" checked={custPricingDraft.short_notice}
+                        onChange={e => setCustPricingDraft(d => ({ ...d, short_notice: e.target.checked }))}
+                        style={{ width: 15, height: 15, accentColor: '#d4a843', marginTop: 1, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
+                        Allow short-notice booking. Lets this customer book inside the <strong style={{ color: '#fff' }}>48-hour</strong> window — including same day — when logged in. Others still can&apos;t see or book those slots.
+                      </span>
+                    </label>
+                    {custPricingDraft.short_notice && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 14px 23px' }}>
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Allow until</span>
+                        <input type="date" value={custPricingDraft.short_notice_until}
+                          onChange={e => setCustPricingDraft(d => ({ ...d, short_notice_until: e.target.value }))}
+                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12, padding: '6px 10px', outline: 'none' }} />
+                        {custPricingDraft.short_notice_until
+                          ? <button onClick={() => setCustPricingDraft(d => ({ ...d, short_notice_until: '' }))} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}>clear</button>
+                          : <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>(optional — blank = until you turn it off)</span>}
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button disabled={custPricingSaving} onClick={async () => {
                         setCustPricingSaving(true)
@@ -2797,6 +2822,10 @@ export default function AdminDashboard() {
                         Object.entries(custPricingDraft.sets).forEach(([k, v]) => { if (v !== '') sets[k] = Number(v) })
                         if (Object.keys(sets).length > 0) overrides.sets = sets
                         if (custPricingDraft.comp_no_card) overrides.comp_no_card = true
+                        if (custPricingDraft.short_notice) {
+                          overrides.short_notice = true
+                          if (custPricingDraft.short_notice_until) overrides.short_notice_until = custPricingDraft.short_notice_until
+                        }
                         const payload = Object.keys(overrides).length > 0 ? overrides : null
                         const res = await fetch(`/api/admin/customers/${custDetail!.id}`, {
                           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -2816,7 +2845,7 @@ export default function AdminDashboard() {
                           })
                           if (res.ok) {
                             setCustDetail(d => d ? { ...d, pricingOverrides: null } : d)
-                            setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false })
+                            setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false, short_notice: false, short_notice_until: '' })
                           }
                           setCustPricingSaving(false)
                         }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', padding: '7px 14px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>
