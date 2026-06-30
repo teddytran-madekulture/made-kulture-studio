@@ -1396,6 +1396,21 @@ export default function AdminDashboard() {
                     )
                   })}
 
+                  {/* Full-studio buyouts (no set) — banner across all columns */}
+                  {dayBookings.filter(b => !b.sets).map(b => {
+                    const startH = localHour(b.start_time)
+                    const endH   = localHour(b.end_time)
+                    const top    = (startH - CAL_START) * SLOT_H * 2
+                    const height = (endH - startH) * SLOT_H * 2
+                    return (
+                      <div key={b.id} onClick={() => setDetailBooking(b)}
+                        style={{ position: 'absolute', top, left: TIME_COL + 4, width: CAL_SETS.length * SET_COL - 8, height: Math.max(height - 4, 20), background: 'rgba(212,168,67,0.18)', border: '1px solid rgba(212,168,67,0.6)', borderRadius: 2, padding: '4px 8px', cursor: 'pointer', overflow: 'hidden', zIndex: 6 }}>
+                        <span style={{ fontSize: 10, color: '#fff', fontWeight: 600 }}>FULL STUDIO — {b.customers?.name || '—'}</span>
+                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginLeft: 8 }}>{fmtTime(b.start_time)} – {fmtTime(b.end_time)}</span>
+                      </div>
+                    )
+                  })}
+
                   {isToday && nowHour >= CAL_START && nowHour <= CAL_END && (
                     <div style={{
                       position: 'absolute', left: 0, right: 0, top: nowTop,
