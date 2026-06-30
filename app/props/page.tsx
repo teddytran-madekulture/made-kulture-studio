@@ -56,7 +56,7 @@ export default function PropsPage() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(240px, 1fr))', gap: isMobile ? 12 : 16 }}>
               {shown.map(p => (
-                <div key={p.id} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <a key={p.id} href={p.slug ? `/props/p/${p.slug}` : undefined} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'inherit', display: 'block', cursor: p.slug ? 'pointer' : 'default' }}>
                   <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', background: '#141414', overflow: 'hidden' }}>
                     {p.image_url ? (
                       <img src={p.image_url} alt={p.name} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
@@ -72,7 +72,7 @@ export default function PropsPage() {
                     {p.category && <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 9, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.35)', marginTop: 6 }}>{p.category.toUpperCase()}</div>}
                     {p.description && <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, margin: '8px 0 0' }}>{p.description}</p>}
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           )}

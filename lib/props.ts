@@ -11,10 +11,12 @@ export interface Prop {
   needs_repair: boolean
   is_active: boolean
   sort_order: number
+  slug?: string | null
+  gallery?: string[]
   created_at?: string
 }
 
-export const PROP_COLUMNS = 'id, name, category, description, image_url, needs_repair, is_active, sort_order, created_at'
+export const PROP_COLUMNS = 'id, name, category, description, image_url, needs_repair, is_active, sort_order, slug, gallery, created_at'
 
 // Whitelist + coerce an incoming prop payload for insert/update.
 export function sanitizeProp(body: any) {
