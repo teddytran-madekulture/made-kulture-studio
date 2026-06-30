@@ -462,7 +462,7 @@ function BookingWizard() {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
               {[
                 { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: 'Reserve one set by the hour. $40–$75/hr.',  limit: 'Up to 5 people per set', price: 'FROM $40/HR' },
-                { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private.',       limit: 'Up to 30 people',       price: 'CONTACT FOR RATE' },
+                { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private.',       limit: 'Up to 30 people',       price: `$${buyoutRate}/HR · ${STUDIO_MIN_HOURS}HR MIN` },
               ].map(opt => (
                 <button key={opt.type} onClick={() => { setBooking(b => ({ ...b, type: opt.type })); if (opt.type === 'studio') setStep(2) }}
                   style={{
