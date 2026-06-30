@@ -551,6 +551,12 @@ function BookingWizard() {
         {((step === 3 && booking.type === 'set') || (step === 2 && booking.type === 'studio')) && (
           <StepWrapper title="PICK A DATE">
             <div style={{ maxWidth: 400 }}>
+              {booking.type === 'studio' && (
+                <div style={{ border: '1px solid rgba(255,255,255,0.15)', padding: '14px 16px', marginBottom: 24 }}>
+                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', lineHeight: 1 }}>${buyoutRate}<span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>/hr</span></div>
+                  <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>Full warehouse · {STUDIO_MIN_HOURS}-hour minimum (${buyoutRate * STUDIO_MIN_HOURS} minimum)</div>
+                </div>
+              )}
               <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 32 }}>
                 Bookings require at least 48 hours advance notice. Studio hours are Monday–Sunday, 9am–10pm.
               </p>
