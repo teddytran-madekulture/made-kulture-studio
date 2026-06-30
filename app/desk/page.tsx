@@ -70,6 +70,10 @@ export default function Desk() {
     act(`/api/desk/bookings/${b.id}/checkin`, { action: 'check_in', guests: g ? Number(g) : undefined }, b.id)
   }
   const checkOut = (b: Booking) => act(`/api/desk/bookings/${b.id}/checkin`, { action: 'check_out' }, b.id)
+  const resetCheckin = (b: Booking) => {
+    if (!confirm(`Reset check-in for ${b.customers?.name ?? 'this booking'}? Clears arrival + checkout so you can redo it.`)) return
+    act(`/api/desk/bookings/${b.id}/checkin`, { action: 'reset' }, b.id)
+  }
   const cancel = (b: Booking) => {
     if (!confirm(`Cancel ${b.customers?.name ?? 'this booking'} — ${setNameOf(b)} ${fmtTime(b.start_time)}? This does not auto-refund.`)) return
     const reason = prompt('Reason (optional, logged):') ?? ''
@@ -231,6 +235,7 @@ export default function Desk() {
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                 {!b.checked_in_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkIn(b)}>Check in</button>}
                 {b.checked_in_at && !b.checked_out_at && <button disabled={busy === b.id} style={btn('solid')} onClick={() => checkOut(b)}>Check out</button>}
+                {(b.checked_in_at || b.checked_out_at) && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => resetCheckin(b)}>Reset check-in</button>}
                 {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => addTime(b)}>+ Add time</button>}
                 {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => setGearFor(b)}>+ Add gear</button>}
                 {canPay && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => payLink(b)}>Pay link</button>}

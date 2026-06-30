@@ -72,5 +72,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: true, checkedOut: true })
   }
 
+  // Undo check-in/out — clears all arrival state so staff can redo it.
+  if (body.action === 'reset') {
+    if (!b.checked_in_at && !b.checked_out_at) return NextResponse.json({ error: 'Nothing to reset.' }, { status: 400 })
+    await db.from('bookings').update({
+      checked_in_at: null, checked_out_at: null, arrived_guest_count: null,
+    }).eq('id', b.id)
+    await audit(g, 'booking.checkin_reset', { entityType: 'booking', entityId: b.id, details: { by: 'desk' } })
+    return NextResponse.json({ success: true, reset: true })
+  }
+
   return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
 }
