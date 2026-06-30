@@ -1,0 +1,3 @@
+-- 028: re-sync edited prop galleries
+update props set gallery='["/images/props/modern-leather-couch.jpg", "/images/props/modern-leather-couch/2.jpg", "/images/props/modern-leather-couch/3.jpg", "/images/props/modern-leather-couch/4.jpg", "/images/props/modern-leather-couch/5.jpg", "/images/props/modern-leather-couch/6.jpg"]'::jsonb, image_url='/images/props/modern-leather-couch.jpg' where slug='modern-leather-couch';
+update props set gallery='["/images/props/gymnastics-props-cart.jpg", "/images/props/gymnastics-props-cart/2.jpg", "/images/props/gymnastics-props-cart/3.jpg", "/images/props/gymnastics-props-cart/4.jpg", "/images/props/gymnastics-props-cart/5.jpg"]'::jsonb, image_url='/images/props/gymnastics-props-cart.jpg' where slug='gymnastics-props-cart';
