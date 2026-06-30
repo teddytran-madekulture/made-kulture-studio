@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from '@/lib/agreements'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -343,9 +344,39 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'equipment' | 'usage'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'equipment' | 'usage' | 'legal'>('list')
   const [usage,         setUsage]         = useState<any | null>(null)
   const [usageLoading,  setUsageLoading]  = useState(false)
+
+  // Legal / rental agreements editor
+  const [legalSet,      setLegalSet]      = useState('')
+  const [legalStudio,   setLegalStudio]   = useState('')
+  const [legalLoading,  setLegalLoading]  = useState(false)
+  const [legalSaving,   setLegalSaving]   = useState<'set' | 'studio' | null>(null)
+  const [legalSaved,    setLegalSaved]    = useState<'set' | 'studio' | null>(null)
+  useEffect(() => {
+    if (view !== 'legal') return
+    setLegalLoading(true)
+    Promise.all([
+      fetch(`/api/admin/settings?key=${AGREEMENT_KEYS.set}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/admin/settings?key=${AGREEMENT_KEYS.studio}`).then(r => r.json()).catch(() => null),
+    ]).then(([s, w]) => {
+      setLegalSet(s?.value ?? DEFAULT_SET_AGREEMENT)
+      setLegalStudio(w?.value ?? DEFAULT_STUDIO_AGREEMENT)
+      setLegalLoading(false)
+    })
+  }, [view])
+  const saveLegal = async (which: 'set' | 'studio') => {
+    setLegalSaving(which); setLegalSaved(null)
+    const key = which === 'set' ? AGREEMENT_KEYS.set : AGREEMENT_KEYS.studio
+    const value = which === 'set' ? legalSet : legalStudio
+    const res = await fetch('/api/admin/settings', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    })
+    setLegalSaving(null)
+    if (res.ok) { setLegalSaved(which); setTimeout(() => setLegalSaved(null), 2500) }
+  }
   const [calDate,       setCalDate]       = useState(todayStr)
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -1095,7 +1126,7 @@ export default function AdminDashboard() {
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
-          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['emails', '✉', 'Emails'], ['usage', '📊', 'Usage'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -1105,6 +1136,21 @@ export default function AdminDashboard() {
               color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
             }}>
               <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: v === 'customers' ? 12 : undefined }}>{icon}</span>{label}
+            </button>
+          ))}
+
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>SETTINGS</div>
+
+          {([['emails', '✉', 'Emails'], ['usage', '📊', 'Usage'], ['legal', '§', 'Legal'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
+              borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
+              padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
+              fontFamily: 'Inter, sans-serif', fontSize: 13,
+              color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
+            }}>
+              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
             </button>
           ))}
         </nav>
@@ -2402,6 +2448,47 @@ export default function AdminDashboard() {
                   Next →
                 </button>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── LEGAL / RENTAL AGREEMENTS ─────────────────────────────────── */}
+        {view === 'legal' && (
+          <div style={{ maxWidth: 860, paddingBottom: 80 }}>
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 8 }}>LEGAL — RENTAL AGREEMENTS</div>
+              <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
+                Edit the agreements customers must accept at checkout. Written in Markdown — use <code style={{ color: 'rgba(255,255,255,0.7)' }}>#</code> for the title, <code style={{ color: 'rgba(255,255,255,0.7)' }}>##</code> for section headings, and <code style={{ color: 'rgba(255,255,255,0.7)' }}>-</code> for bullet points. Changes go live immediately after saving.
+              </p>
+            </div>
+
+            {legalLoading ? (
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading…</div>
+            ) : (
+              ([['set', 'Individual Set Agreement', legalSet, setLegalSet, DEFAULT_SET_AGREEMENT],
+                ['studio', 'Full Warehouse Agreement', legalStudio, setLegalStudio, DEFAULT_STUDIO_AGREEMENT]] as const).map(([which, title, value, setter, def]) => (
+                <div key={which} style={{ marginBottom: 36 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 10 }}>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: '#fff', letterSpacing: '0.02em' }}>{title}</div>
+                    <a href={`/rental-agreement?type=${which}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textDecoration: 'underline' }}>View on site ↗</a>
+                    {value !== def && (
+                      <button onClick={() => setter(def)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}>Reset to default</button>
+                    )}
+                  </div>
+                  <textarea
+                    value={value}
+                    onChange={e => (which === 'set' ? setLegalSet : setLegalStudio)(e.target.value)}
+                    spellCheck
+                    style={{ width: '100%', minHeight: 320, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.12)', color: '#e8e8e8', fontFamily: 'ui-monospace, monospace', fontSize: 12, lineHeight: 1.6, padding: 14, outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10 }}>
+                    <button disabled={legalSaving === which} onClick={() => saveLegal(which)} style={{ background: '#d4a843', border: 'none', padding: '8px 18px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000', opacity: legalSaving === which ? 0.6 : 1 }}>
+                      {legalSaving === which ? 'SAVING…' : 'SAVE'}
+                    </button>
+                    {legalSaved === which && <span style={{ fontSize: 11, color: '#4ade80', letterSpacing: '0.1em' }}>SAVED ✓</span>}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
