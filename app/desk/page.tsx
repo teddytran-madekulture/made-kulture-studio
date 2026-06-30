@@ -11,7 +11,7 @@ type Booking = {
   id: string; start_time: string; end_time: string; status: string
   guest_count: number | null; arrived_guest_count: number | null
   checked_in_at: string | null; checked_out_at: string | null; notes: string | null
-  total_amount: number | null
+  total_amount: number | null; square_payment_id: string | null
   sets: { name: string } | null
   customers: { name: string | null; phone: string | null; email: string | null; banned: boolean | null } | null
   booking_add_ons: AddOn[] | null
@@ -127,6 +127,22 @@ export default function Desk() {
     if (!r.ok) { alert(d.error ?? 'Could not create the link.'); return }
     alert(d.smsSent ? `✓ Payment link texted to the customer.\n\n${d.url}` : `Link created — copy it for the customer:\n\n${d.url}`)
   }
+  const refund = async (b: Booking) => {
+    const full = b.total_amount != null ? Number(b.total_amount).toFixed(2) : null
+    const a = prompt(`Refund ${b.customers?.name ?? 'this booking'} — amount in $ (blank = full${full ? ` $${full}` : ''}):`)
+    if (a === null) return
+    const amountCents = a.trim() ? Math.round(parseFloat(a) * 100) : undefined
+    if (a.trim() && (!amountCents || amountCents < 1)) { alert('Enter a valid amount.'); return }
+    const reason = prompt('Reason (logged):') ?? ''
+    if (!confirm(`Refund ${amountCents ? `$${(amountCents / 100).toFixed(2)}` : `the full $${full ?? '?'}`} to the card? This cannot be undone.`)) return
+    setBusy(b.id)
+    const r = await fetch(`/api/desk/bookings/${b.id}/refund`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amountCents, reason }) })
+    const d = await r.json()
+    setBusy(null)
+    if (!r.ok) { alert(d.error ?? 'Refund failed.'); return }
+    alert(`✓ $${(d.amountCents / 100).toFixed(2)} refunded.`)
+    load()
+  }
   const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 
   if (loading) return <Shell><p style={{ color: C.dim }}>Loading…</p></Shell>
@@ -140,6 +156,7 @@ export default function Desk() {
   const canCancel = !!me.permissions?.['booking.cancel']
   const canAddOn = !!me.permissions?.['addon.add']
   const canPay = !!me.permissions?.['payment.terminal']
+  const canRefund = !!me.permissions?.['payment.refund']
 
   return (
     <Shell>
@@ -213,6 +230,7 @@ export default function Desk() {
                 {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => addTime(b)}>+ Add time</button>}
                 {canAddOn && !b.checked_out_at && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => setGearFor(b)}>+ Add gear</button>}
                 {canPay && <button disabled={busy === b.id} style={btn('ghost')} onClick={() => payLink(b)}>Pay link</button>}
+                {canRefund && <button disabled={busy === b.id} style={btn('danger')} onClick={() => refund(b)}>Refund</button>}
                 {canCancel && <button disabled={busy === b.id} style={btn('danger')} onClick={() => cancel(b)}>Cancel</button>}
               </div>
             </div>

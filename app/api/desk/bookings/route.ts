@@ -5,7 +5,7 @@ import { requireStaff } from '@/lib/staff-auth'
 export const dynamic = 'force-dynamic'
 
 const SELECT = `
-  id, start_time, end_time, status, notes, total_amount,
+  id, start_time, end_time, status, notes, total_amount, square_payment_id,
   guest_count, arrived_guest_count, checked_in_at, checked_out_at,
   customer_id,
   sets ( name ),
