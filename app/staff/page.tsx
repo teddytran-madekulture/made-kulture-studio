@@ -189,6 +189,19 @@ function StaffManager() {
     const r = await fetch(`/api/admin/staff/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: pin === '' ? null : pin }) })
     if (!r.ok) alert((await r.json()).error ?? 'Failed.'); else alert(pin === '' ? 'PIN cleared.' : 'PIN set.')
   }
+  const editInfo = async (emp: Employee) => {
+    const name = prompt('Name:', emp.name); if (name === null) return
+    const email = prompt('Email:', emp.email); if (email === null) return
+    const r = await fetch(`/api/admin/staff/${emp.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email }) })
+    if (!r.ok) { alert((await r.json()).error ?? 'Failed.'); return }
+    load()
+  }
+  const hardDelete = async (emp: Employee) => {
+    if (!confirm(`Permanently delete ${emp.name}? This can’t be undone. (Their past actions stay in the audit log.)`)) return
+    const r = await fetch(`/api/admin/staff/${emp.id}?hard=1`, { method: 'DELETE' })
+    if (!r.ok) { alert((await r.json()).error ?? 'Failed.'); return }
+    load()
+  }
 
   return (
     <section style={{ marginBottom: 28 }}>
@@ -227,11 +240,13 @@ function StaffManager() {
             <select value={emp.role} onChange={e => patch(emp.id, { role: e.target.value })} style={{ padding: '6px 8px', background: C.input, border: `1px solid ${C.line}`, borderRadius: 6, color: C.text, fontSize: 13 }}>
               {STAFF_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
             </select>
+            <button style={{ ...btn(false), padding: '6px 10px' }} onClick={() => editInfo(emp)}>Edit</button>
             <button style={{ ...btn(false), padding: '6px 10px' }} onClick={() => resetPw(emp.id, emp.name)}>Reset PW</button>
             <button style={{ ...btn(false), padding: '6px 10px' }} onClick={() => setPin(emp.id, emp.name)}>Set PIN</button>
             {emp.is_active
               ? <button style={{ ...btn(false), padding: '6px 10px', color: C.accent, borderColor: C.accent }} onClick={() => deactivate(emp.id, emp.name)}>Deactivate</button>
               : <button style={{ ...btn(false), padding: '6px 10px', color: C.good, borderColor: C.good }} onClick={() => patch(emp.id, { is_active: true })}>Reactivate</button>}
+            <button style={{ ...btn(false), padding: '6px 10px', color: C.accent, borderColor: C.accent }} onClick={() => hardDelete(emp)}>Delete</button>
           </div>
         ))}
       </div>

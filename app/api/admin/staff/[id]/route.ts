@@ -18,12 +18,12 @@ async function wouldOrphanOwners(targetId: string, opts: { demoting?: boolean; d
   return ownerIds.length <= 1 && ownerIds.includes(targetId)
 }
 
-// PATCH /api/admin/staff/[id] — update role / active / password / pin (owner only).
+// PATCH /api/admin/staff/[id] — update name / email / role / active / password / pin (owner only).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const g = requireStaff(req, 'staff.manage')
   if (g instanceof NextResponse) return g
 
-  let body: { role?: string; is_active?: boolean; password?: string; pin?: string | null }
+  let body: { name?: string; email?: string; role?: string; is_active?: boolean; password?: string; pin?: string | null }
   try {
     body = await req.json()
   } catch {
@@ -31,6 +31,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const update: Record<string, unknown> = {}
+
+  if (body.name !== undefined) {
+    if (!body.name.trim()) return NextResponse.json({ error: 'Name can’t be empty.' }, { status: 400 })
+    update.name = body.name.trim()
+  }
+
+  if (body.email !== undefined) {
+    const email = body.email.trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return NextResponse.json({ error: 'Enter a valid email.' }, { status: 400 })
+    update.email = email
+  }
 
   if (body.role !== undefined) {
     if (!STAFF_ROLES.includes(body.role as StaffRole)) return NextResponse.json({ error: 'Invalid role.' }, { status: 400 })
@@ -71,27 +82,37 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .select('id, name, email, role, is_active, created_at, last_login_at')
     .single()
 
-  if (error || !data) return NextResponse.json({ error: 'Could not update the employee.' }, { status: 500 })
+  if (error || !data) {
+    const dupe = (error?.message ?? '').includes('duplicate') || (error as any)?.code === '23505'
+    return NextResponse.json({ error: dupe ? 'That email is already in use.' : 'Could not update the employee.' }, { status: dupe ? 409 : 500 })
+  }
 
   const changed = Object.keys(update).map(k => (k === 'password_hash' ? 'password' : k === 'pin_hash' ? 'pin' : k))
   await audit(g, 'staff.update', { entityType: 'staff', entityId: params.id, details: { changed } })
   return NextResponse.json({ staff: data })
 }
 
-// DELETE /api/admin/staff/[id] — deactivate (we never hard-delete, to preserve audit history).
+// DELETE /api/admin/staff/[id]        → deactivate (default; preserves audit history)
+// DELETE /api/admin/staff/[id]?hard=1 → permanently remove the row. Audit entries
+//   survive (staff_user_id is set null, staff_name is denormalized).
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const g = requireStaff(req, 'staff.manage')
   if (g instanceof NextResponse) return g
 
+  const hard = new URL(req.url).searchParams.get('hard') === '1'
+
   if (await wouldOrphanOwners(params.id, { deactivating: true })) {
-    return NextResponse.json({ error: 'Can’t deactivate the only owner.' }, { status: 400 })
+    return NextResponse.json({ error: `Can’t ${hard ? 'delete' : 'deactivate'} the only owner.` }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin()
-    .from('staff_users')
-    .update({ is_active: false })
-    .eq('id', params.id)
+  if (hard) {
+    const { error } = await supabaseAdmin().from('staff_users').delete().eq('id', params.id)
+    if (error) return NextResponse.json({ error: 'Could not delete the employee.' }, { status: 500 })
+    await audit(g, 'staff.delete', { entityType: 'staff', entityId: params.id })
+    return NextResponse.json({ ok: true, deleted: true })
+  }
 
+  const { error } = await supabaseAdmin().from('staff_users').update({ is_active: false }).eq('id', params.id)
   if (error) return NextResponse.json({ error: 'Could not deactivate the employee.' }, { status: 500 })
   await audit(g, 'staff.deactivate', { entityType: 'staff', entityId: params.id })
   return NextResponse.json({ ok: true })
