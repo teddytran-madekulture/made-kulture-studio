@@ -2,6 +2,16 @@
 import { useState, useCallback, type CSSProperties } from 'react'
 import { PROP_CATEGORIES } from '@/lib/props'
 
+// Loaded from a CDN at runtime (browser only) so the heavy onnx/wasm code
+// never goes through the Next.js/webpack build.
+const BG_REMOVAL_CDN: string = 'https://esm.sh/@imgly/background-removal@1.7.0'
+let _bgPromise: Promise<any> | null = null
+async function loadBgRemover(): Promise<(input: Blob) => Promise<Blob>> {
+  if (!_bgPromise) _bgPromise = import(/* webpackIgnore: true */ BG_REMOVAL_CDN)
+  const mod: any = await _bgPromise
+  return mod.removeBackground || mod.default?.removeBackground || mod.default
+}
+
 type Shot = { id: string; preview: string; blob: Blob; status: 'processing' | 'done' | 'error' }
 
 function blobToImage(blob: Blob): Promise<HTMLImageElement> {
@@ -48,7 +58,7 @@ export default function AddPropByPhoto() {
       try {
         let imgBlob: Blob = f
         if (removeBg) {
-          const { removeBackground } = await import('@imgly/background-removal')
+          const removeBackground = await loadBgRemover()
           imgBlob = await removeBackground(f)
         }
         const img = await blobToImage(imgBlob)
