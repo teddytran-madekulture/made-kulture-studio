@@ -9,6 +9,7 @@ interface CheckinData {
   endTime: string
   status: string
   declaredGuests: number | null
+  guestLimit: number
   arrivedGuests: number | null
   checkedInAt: string | null
   checkedOutAt: string | null
@@ -146,8 +147,8 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
       <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, minWidth: 60 }}>{guests}</span>
       <button onClick={() => setGuests(g => Math.min(30, g + 1))} style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer' }}>+</button>
     </div>
-    {data.declaredGuests != null && guests > data.declaredGuests && (
-      <p style={{ fontFamily: 'Inter', fontSize: 12, color: '#e0a44c', marginBottom: 16 }}>Heads up: you booked for {data.declaredGuests}. Extra guests may be charged.</p>
+    {guests > data.guestLimit && (
+      <p style={{ fontFamily: 'Inter', fontSize: 12, color: '#e0a44c', marginBottom: 16 }}>Heads up: this booking allows up to {data.guestLimit} people. Extra guests may be charged.</p>
     )}
     <div style={{ height: 16 }} />
     {err && <p style={{ color: '#f0a0a0', fontFamily: 'Inter', fontSize: 13, marginBottom: 12 }}>{err}</p>}

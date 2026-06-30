@@ -14,9 +14,14 @@ export const dynamic = 'force-dynamic'
 const BOOKING_SELECT = `
   id, start_time, end_time, status, guest_count, arrived_guest_count,
   checked_in_at, checked_out_at,
-  sets ( name ),
+  sets ( name, capacity ),
   customers ( name, phone )
 `
+
+// Capacity limit for a booking: the set's own capacity, or 30 for a full buyout.
+function guestLimitOf(b: any) {
+  return (b.sets as any)?.capacity ?? 30
+}
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })
@@ -37,6 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     endTime:        b.end_time,
     status:         b.status,
     declaredGuests: b.guest_count ?? null,
+    guestLimit:     guestLimitOf(b),
     arrivedGuests:  b.arrived_guest_count ?? null,
     checkedInAt:    b.checked_in_at ?? null,
     checkedOutAt:   b.checked_out_at ?? null,
@@ -71,9 +77,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         ...(arrived ? { arrived_guest_count: arrived } : {}),
       }).eq('id', b.id)
 
-      const over = arrived && b.guest_count && arrived > b.guest_count
+      const limit = guestLimitOf(b)
+      const over = arrived && arrived > limit
       const guestLine = arrived
-        ? `\n👥 party of ${arrived}${over ? ` ⚠️ (booked ${b.guest_count})` : ''}`
+        ? `\n👥 party of ${arrived}${over ? ` ⚠️ (limit ${limit})` : ''}`
         : ''
       twilioClient.messages.create({
         body: `✅ ARRIVED — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}`,
