@@ -38,6 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   return NextResponse.json({
     name:           (b.customers as any)?.name ?? null,
     setName:        setNameOf(b),
+    isBuyout:       !(b.sets as any),
     startTime:      b.start_time,
     endTime:        b.end_time,
     status:         b.status,

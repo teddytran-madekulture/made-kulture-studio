@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 interface CheckinData {
   name: string | null
   setName: string
+  isBuyout: boolean
   startTime: string
   endTime: string
   status: string
@@ -61,7 +62,7 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
     try {
       const res = await fetch(`/api/checkin/${params.token}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, guests: action === 'check_in' ? guests : undefined }),
+        body: JSON.stringify({ action, guests: action === 'check_in' && !data?.isBuyout ? guests : undefined }),
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'Something went wrong.'); setBusy(false); return }
@@ -140,16 +141,18 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   return wrap(<>
     <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>WELCOME{data.name ? `,\n${data.name.split(' ')[0].toUpperCase()}` : ''}</h1>
     {summary}
-    <div style={{ ...label, marginBottom: 6, textAlign: 'left' }}>CONFIRM THE GUESTS IN YOUR PARTY</div>
-    <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'left', margin: '0 0 14px' }}>Your total party size for this booking — not everyone has to be here yet.</p>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 8 }}>
-      <button onClick={() => setGuests(g => Math.max(1, g - 1))} style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer' }}>−</button>
-      <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, minWidth: 60 }}>{guests}</span>
-      <button onClick={() => setGuests(g => Math.min(30, g + 1))} style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer' }}>+</button>
-    </div>
-    {guests > data.guestLimit && (
-      <p style={{ fontFamily: 'Inter', fontSize: 12, color: '#e0a44c', marginBottom: 16 }}>Heads up: this booking allows up to {data.guestLimit} people. Extra guests may be charged.</p>
-    )}
+    {!data.isBuyout && <>
+      <div style={{ ...label, marginBottom: 6, textAlign: 'left' }}>CONFIRM THE GUESTS IN YOUR PARTY</div>
+      <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'left', margin: '0 0 14px' }}>Your total party size for this booking — not everyone has to be here yet.</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 8 }}>
+        <button onClick={() => setGuests(g => Math.max(1, g - 1))} style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer' }}>−</button>
+        <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, minWidth: 60 }}>{guests}</span>
+        <button onClick={() => setGuests(g => Math.min(30, g + 1))} style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer' }}>+</button>
+      </div>
+      {guests > data.guestLimit && (
+        <p style={{ fontFamily: 'Inter', fontSize: 12, color: '#e0a44c', marginBottom: 16 }}>Heads up: this booking allows up to {data.guestLimit} people. Extra guests may be charged.</p>
+      )}
+    </>}
     <div style={{ height: 16 }} />
     {err && <p style={{ color: '#f0a0a0', fontFamily: 'Inter', fontSize: 13, marginBottom: 12 }}>{err}</p>}
     <button onClick={() => act('check_in')} disabled={busy} style={bigBtn('#fff', '#080808')}>
