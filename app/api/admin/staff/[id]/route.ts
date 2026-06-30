@@ -92,24 +92,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ staff: data })
 }
 
-// DELETE /api/admin/staff/[id]        → deactivate (default; preserves audit history)
-// DELETE /api/admin/staff/[id]?hard=1 → permanently remove the row. Audit entries
-//   survive (staff_user_id is set null, staff_name is denormalized).
+// DELETE /api/admin/staff/[id] — deactivate (we never hard-delete, to preserve audit history).
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const g = requireStaff(req, 'staff.manage')
   if (g instanceof NextResponse) return g
 
-  const hard = new URL(req.url).searchParams.get('hard') === '1'
-
   if (await wouldOrphanOwners(params.id, { deactivating: true })) {
-    return NextResponse.json({ error: `Can’t ${hard ? 'delete' : 'deactivate'} the only owner.` }, { status: 400 })
-  }
-
-  if (hard) {
-    const { error } = await supabaseAdmin().from('staff_users').delete().eq('id', params.id)
-    if (error) return NextResponse.json({ error: 'Could not delete the employee.' }, { status: 500 })
-    await audit(g, 'staff.delete', { entityType: 'staff', entityId: params.id })
-    return NextResponse.json({ ok: true, deleted: true })
+    return NextResponse.json({ error: 'Can’t deactivate the only owner.' }, { status: 400 })
   }
 
   const { error } = await supabaseAdmin().from('staff_users').update({ is_active: false }).eq('id', params.id)

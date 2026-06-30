@@ -196,12 +196,6 @@ function StaffManager() {
     if (!r.ok) { alert((await r.json()).error ?? 'Failed.'); return }
     load()
   }
-  const hardDelete = async (emp: Employee) => {
-    if (!confirm(`Permanently delete ${emp.name}? This can’t be undone. (Their past actions stay in the audit log.)`)) return
-    const r = await fetch(`/api/admin/staff/${emp.id}?hard=1`, { method: 'DELETE' })
-    if (!r.ok) { alert((await r.json()).error ?? 'Failed.'); return }
-    load()
-  }
 
   return (
     <section style={{ marginBottom: 28 }}>
@@ -246,7 +240,6 @@ function StaffManager() {
             {emp.is_active
               ? <button style={{ ...btn(false), padding: '6px 10px', color: C.accent, borderColor: C.accent }} onClick={() => deactivate(emp.id, emp.name)}>Deactivate</button>
               : <button style={{ ...btn(false), padding: '6px 10px', color: C.good, borderColor: C.good }} onClick={() => patch(emp.id, { is_active: true })}>Reactivate</button>}
-            <button style={{ ...btn(false), padding: '6px 10px', color: C.accent, borderColor: C.accent }} onClick={() => hardDelete(emp)}>Delete</button>
           </div>
         ))}
       </div>
