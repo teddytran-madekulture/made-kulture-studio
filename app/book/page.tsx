@@ -137,11 +137,13 @@ function BookingWizard() {
   const dateParam  = searchParams.get('date')  // e.g. "2026-06-28"
   const startParam = searchParams.get('start') // e.g. "10"
 
-  // If coming from availability chart with set+date+start, jump to time step
-  const hasPreFill = typeParam === 'set' && !!setParam && !!dateParam
-  const initialStep = hasPreFill ? 4 : (typeParam ? 2 : 1)
+  // Every entry point runs the guest-count step. A pre-selected type (home
+  // "Book a Set"/"Book the Studio") or a set+date+time pick (availability
+  // calendar) is carried in booking state below and applied AFTER guests are
+  // confirmed — so the guided flow is never skipped.
+  const hasSetPreFill = typeParam === 'set' && !!setParam && !!dateParam
 
-  const [step, setStep] = useState(initialStep)
+  const [step, setStep] = useState(1)
   const [booking, setBooking] = useState<BookingState>({
     type:      typeParam || null,
     guests:    null,
@@ -496,7 +498,14 @@ function BookingWizard() {
             buyoutRate={buyoutRate}
             onChange={(n) => setBooking(b => ({ ...b, guests: n }))}
             onBack={() => setBooking(b => ({ ...b, type: null, guests: null }))}
-            onContinue={() => setStep(2)}
+            onContinue={() => {
+              // From the availability calendar (set + date + time pre-picked):
+              // if the party still fits a single set, jump to the time step with
+              // their selection pre-filled. Otherwise fall back to the set picker
+              // so the multi-set / buyout recommendation can take over.
+              const fitsSingleSet = booking.guests != null && booking.guests <= guestPricing.maxGuestsPerSet
+              setStep(hasSetPreFill && fitsSingleSet ? 4 : 2)
+            }}
             onSwitchToBuyout={() => setBooking(b => ({ ...b, type: 'studio' }))}
           />
         )}
