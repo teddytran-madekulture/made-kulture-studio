@@ -26,6 +26,7 @@ export const PERMISSIONS = {
   'staff.manage':     ['owner'],
   'audit.view':       ['owner'],
   'settings.edit':    ['owner'],
+  'admin.access':     ['owner'],          // legacy /admin dashboard (add 'manager' to grant)
 } as const
 
 export type Permission = keyof typeof PERMISSIONS

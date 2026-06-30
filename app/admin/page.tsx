@@ -19,6 +19,7 @@ type View = 'login' | 'forgot' | 'sent'
 
 export default function AdminLogin() {
   const [view,        setView]        = useState<View>('login')
+  const [email,       setEmail]       = useState('')
   const [password,    setPassword]    = useState('')
   const [showPw,      setShowPw]      = useState(false)
   const [error,       setError]       = useState('')
@@ -48,17 +49,34 @@ export default function AdminLogin() {
     // Page will navigate — no need to reset loading
   }
 
-  const handlePasswordLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+
+    // With an email → sign in as a staff account (per-user, audited). Without
+    // an email → the legacy shared admin password.
+    if (email.trim()) {
+      const res = await fetch('/api/staff/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: email.trim(), password }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Incorrect email or password.'); setLoading(false); return }
+      if (data.staff?.role !== 'owner') {
+        setError('This account doesn’t have admin access. Use the front desk at /desk.')
+        setLoading(false); return
+      }
+      router.push('/admin/dashboard')
+      return
+    }
 
     const res = await fetch('/api/admin/auth', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ password }),
     })
-
     if (res.ok) {
       router.push('/admin/dashboard')
     } else {
@@ -122,6 +140,18 @@ export default function AdminLogin() {
     fontWeight:  500,
     letterSpacing: '0.12em',
     transition:  'opacity 0.15s',
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width:       '100%',
+    background:  'transparent',
+    border:      '1px solid rgba(255,255,255,0.14)',
+    color:       '#fff',
+    padding:     '13px 16px',
+    fontSize:    14,
+    fontFamily:  'Inter, sans-serif',
+    outline:     'none',
+    boxSizing:   'border-box',
   }
 
   // ── Views ───────────────────────────────────────────────────────────────────
@@ -223,8 +253,19 @@ export default function AdminLogin() {
           <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
         </div>
 
-        {/* Password form */}
-        <form onSubmit={handlePasswordLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+        {/* Email + password form */}
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            autoComplete="username"
+            style={inputStyle}
+            onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)')}
+            onBlur={e  => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)')}
+          />
+
           <div style={{ position: 'relative' }}>
             <input
               type={showPw ? 'text' : 'password'}
@@ -232,17 +273,7 @@ export default function AdminLogin() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               autoComplete="current-password"
-              style={{
-                width:       '100%',
-                background:  'transparent',
-                border:      '1px solid rgba(255,255,255,0.14)',
-                color:       '#fff',
-                padding:     '13px 44px 13px 16px',
-                fontSize:    14,
-                fontFamily:  'Inter, sans-serif',
-                outline:     'none',
-                boxSizing:   'border-box',
-              }}
+              style={{ ...inputStyle, padding: '13px 44px 13px 16px' }}
               onFocus={e  => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)')}
               onBlur={e   => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)')}
             />
@@ -282,6 +313,10 @@ export default function AdminLogin() {
             {loading ? 'SIGNING IN...' : 'SIGN IN ↗'}
           </button>
         </form>
+
+        <p style={{ margin: '12px 0 0', fontSize: 10, color: 'rgba(255,255,255,0.2)', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
+          Staff: sign in with your email + password. (Leave email blank to use the shared admin password.)
+        </p>
 
         <button
           onClick={() => { setView('forgot'); setError('') }}

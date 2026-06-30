@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
+import { getStaffFromRequest } from '@/lib/staff-auth'
+import { can } from '@/lib/staff-permissions'
 
 // ── Supabase (service role — for password overrides stored in admin_config) ────
 function getSupabase() {
@@ -82,9 +84,14 @@ export function verifyAdminToken(token: string): boolean {
 }
 
 export function isAdminAuthed(req: NextRequest): boolean {
+  // (a) Legacy shared-password admin cookie (unchanged — backward compatible).
   const token = req.cookies.get('admin_auth')?.value
-  if (!token) return false
-  return verifyAdminToken(token)
+  if (token && verifyAdminToken(token)) return true
+  // (b) Signed-in staff with admin access (owner). Lets the staff login double
+  //     as the admin login so /admin uses real per-user identity + the audit log.
+  const staff = getStaffFromRequest(req)
+  if (staff && can(staff.role, 'admin.access')) return true
+  return false
 }
 
 export function setAdminCookie(res: NextResponse): NextResponse {
