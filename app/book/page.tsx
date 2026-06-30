@@ -191,6 +191,7 @@ function BookingWizard() {
   // Sets catalog + buyout rate (DB-driven) for the picker, pricing, and minimums.
   const [sets, setSets] = useState<BookSet[]>([])
   const [buyoutRate, setBuyoutRate] = useState(STUDIO_PRICE)
+  const [ratesLoaded, setRatesLoaded] = useState(false)
   const [guestPricing, setGuestPricing] = useState<GuestPricing>(DEFAULT_GUEST_PRICING)
   useEffect(() => {
     fetch('/api/sets').then(r => r.json()).then(d => {
@@ -205,7 +206,7 @@ function BookingWizard() {
       )
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
       if (d.guestPricing) setGuestPricing({ ...DEFAULT_GUEST_PRICING, ...d.guestPricing })
-    }).catch(() => {})
+    }).catch(() => {}).finally(() => setRatesLoaded(true))
   }, [])
 
   const gearQty = (id: string) => booking.equipment.find(l => l.id === id)?.quantity ?? 0
@@ -523,7 +524,7 @@ function BookingWizard() {
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
               {[
                 { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: 'Reserve one set by the hour. $40–$75/hr.',  limit: 'Up to 5 people per set', price: 'FROM $40/HR' },
-                { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private.',       limit: 'Up to 30 people',       price: `$${buyoutRate}/HR · ${STUDIO_MIN_HOURS}HR MIN` },
+                { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private.',       limit: 'Up to 30 people',       price: ratesLoaded ? `$${buyoutRate}/HR · ${STUDIO_MIN_HOURS}HR MIN` : 'LOADING RATE…' },
               ].map(opt => (
                 <button key={opt.type} onClick={() => { setBooking(b => ({ ...b, type: opt.type })); if (opt.type === 'studio') setStep(2) }}
                   style={{
@@ -614,8 +615,14 @@ function BookingWizard() {
             <div style={{ maxWidth: 400 }}>
               {booking.type === 'studio' && (
                 <div style={{ border: '1px solid rgba(255,255,255,0.15)', padding: '14px 16px', marginBottom: 24 }}>
-                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', lineHeight: 1 }}>${buyoutRate}<span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>/hr</span></div>
-                  <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>Full warehouse · {STUDIO_MIN_HOURS}-hour minimum (${buyoutRate * STUDIO_MIN_HOURS} minimum)</div>
+                  {ratesLoaded ? (
+                    <>
+                      <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', lineHeight: 1 }}>${buyoutRate}<span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>/hr</span></div>
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>Full warehouse · {STUDIO_MIN_HOURS}-hour minimum (${buyoutRate * STUDIO_MIN_HOURS} minimum)</div>
+                    </>
+                  ) : (
+                    <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em' }}>LOADING RATE…</div>
+                  )}
                 </div>
               )}
               <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 32 }}>

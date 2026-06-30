@@ -269,7 +269,7 @@ export default function SetsPage() {
       <section style={{ padding: isMobile ? '0 20px 64px' : '0 40px 100px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>FULL WAREHOUSE — ${buyoutRate} FLAT RATE</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>FULL WAREHOUSE — {loading ? 'LOADING RATE…' : `$${buyoutRate}/HR · 4HR MIN`}</div>
           </div>
           <div style={{ position: 'relative', background: STUDIO.gradient, overflow: 'hidden', minHeight: 520 }}>
             <img src={STUDIO.photo} alt="Full Studio"
@@ -294,7 +294,7 @@ export default function SetsPage() {
                     { label: 'CAPACITY', value: STUDIO.capacity },
                     { label: 'SPACE', value: STUDIO.sqft },
                     { label: 'INCLUDES', value: 'All sets + Studio One' },
-                    { label: 'RATE', value: `$${buyoutRate} flat` },
+                    { label: 'RATE', value: loading ? '—' : `$${buyoutRate}/hr · 4hr min` },
                   ].map(d => (
                     <div key={d.label}>
                       <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>{d.label}</div>
