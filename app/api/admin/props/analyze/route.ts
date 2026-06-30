@@ -5,38 +5,38 @@ import { PROP_CATEGORIES } from '@/lib/props'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = 'gpt-4o-mini'
 
 // POST /api/admin/props/analyze — body { imageBase64, mediaType }.
-// Returns { name, category, description } suggested by Claude vision.
+// Uses OpenAI vision to suggest { name, category, description }.
 export async function POST(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const key = process.env.ANTHROPIC_API_KEY
-  if (!key) return NextResponse.json({ error: 'AI is not configured (missing ANTHROPIC_API_KEY).' }, { status: 503 })
+  const key = process.env.OPENAI_API_KEY
+  if (!key) return NextResponse.json({ error: 'AI is not configured (missing OPENAI_API_KEY).' }, { status: 503 })
 
   const { imageBase64, mediaType } = await req.json().catch(() => ({} as any))
   if (!imageBase64) return NextResponse.json({ error: 'No image' }, { status: 400 })
 
   const prompt = `You are cataloging a single prop for a photography studio's rental directory.
-Look at the prop in the image and reply with ONLY a JSON object (no markdown, no prose):
-{"name": "...", "category": "...", "description": "..."}
-- name: a short Title Case label, 2-4 words (e.g. "Vintage Rocking Chair").
-- category: EXACTLY one of: ${PROP_CATEGORIES.join(', ')}.
-- description: one short sentence (max ~18 words) describing the prop for renters.`
+Look at the prop in the image and return a JSON object with these keys:
+- "name": a short Title Case label, 2-4 words (e.g. "Vintage Rocking Chair").
+- "category": EXACTLY one of: ${PROP_CATEGORIES.join(', ')}.
+- "description": one short sentence (max ~18 words) describing the prop for renters.`
 
   let resp: Response
   try {
-    resp = await fetch('https://api.anthropic.com/v1/messages', {
+    resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 400,
+        response_format: { type: 'json_object' },
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
             { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:${mediaType || 'image/jpeg'};base64,${imageBase64}` } },
           ],
         }],
       }),
@@ -51,7 +51,7 @@ Look at the prop in the image and reply with ONLY a JSON object (no markdown, no
   }
 
   const data = await resp.json()
-  const text: string = (data?.content?.[0]?.text || '').trim()
+  const text: string = (data?.choices?.[0]?.message?.content || '').trim()
   let parsed: any = {}
   try {
     const m = text.match(/\{[\s\S]*\}/)
@@ -59,7 +59,6 @@ Look at the prop in the image and reply with ONLY a JSON object (no markdown, no
   } catch {
     return NextResponse.json({ error: 'Could not parse AI response', raw: text }, { status: 502 })
   }
-  // Normalize category to an allowed value.
   const cat = (PROP_CATEGORIES as readonly string[]).find(c => c.toLowerCase() === String(parsed.category || '').toLowerCase()) || 'Misc'
   return NextResponse.json({
     name: String(parsed.name || '').slice(0, 80),
