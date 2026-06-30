@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
       const over = arrived && b.guest_count && arrived > b.guest_count
       const guestLine = arrived
-        ? `\n👥 ${arrived} here${over ? ` ⚠️ (booked ${b.guest_count})` : ''}`
+        ? `\n👥 party of ${arrived}${over ? ` ⚠️ (booked ${b.guest_count})` : ''}`
         : ''
       twilioClient.messages.create({
         body: `✅ ARRIVED — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}`,

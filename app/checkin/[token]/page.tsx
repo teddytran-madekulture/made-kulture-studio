@@ -139,7 +139,8 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   return wrap(<>
     <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>WELCOME{data.name ? `,\n${data.name.split(' ')[0].toUpperCase()}` : ''}</h1>
     {summary}
-    <div style={{ ...label, marginBottom: 12, textAlign: 'left' }}>HOW MANY PEOPLE ARE HERE?</div>
+    <div style={{ ...label, marginBottom: 6, textAlign: 'left' }}>CONFIRM THE GUESTS IN YOUR PARTY</div>
+    <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'left', margin: '0 0 14px' }}>Your total party size for this booking — not everyone has to be here yet.</p>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 8 }}>
       <button onClick={() => setGuests(g => Math.max(1, g - 1))} style={{ width: 52, height: 52, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 24, cursor: 'pointer' }}>−</button>
       <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, minWidth: 60 }}>{guests}</span>
