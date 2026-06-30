@@ -156,14 +156,16 @@ function BookingWizard() {
     equipment: [],
     name: '', email: '', phone: '', notes: '', smsConsent: false, guestAck: false,
   })
-  // Pull any gear the customer added on the /gear page into this booking,
-  // and re-sync whenever they return to this tab (e.g. after adding on /gear).
+  // A fresh booking starts with no gear — clear any cart left over from a
+  // previous, abandoned booking. Gear added during THIS booking is saved to the
+  // cart and re-synced whenever the customer returns to this tab.
   useEffect(() => {
+    try { localStorage.removeItem(GEAR_CART_KEY) } catch {}
+    setBooking(b => ({ ...b, equipment: [] }))
     const sync = () => {
       const cart = loadGearCart()
       setBooking(b => ({ ...b, equipment: cart }))
     }
-    sync()
     window.addEventListener('focus', sync)
     return () => window.removeEventListener('focus', sync)
   }, [])
