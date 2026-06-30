@@ -42,11 +42,12 @@ function fmtFull(h: number) {
   return `${h12}:${mins} ${ampm}`
 }
 
-// Short codes for the mobile overview heatmap columns
+// Column labels for the mobile overview heatmap — shown vertically so the grid
+// columns stay narrow while the names stay readable.
 const CODES: Record<string, string> = {
-  'set-a': 'A', 'set-b': 'B', 'set-c': 'C', 'set-d': 'D',
-  'concrete': 'CN', 'vintage': 'VN', 'cottage': 'CT',
-  'watering-hole': 'WH', 'the-tank': 'TK', 'studio-one': 'S1',
+  'set-a': 'SET A', 'set-b': 'SET B', 'set-c': 'SET C', 'set-d': 'SET D',
+  'concrete': 'CONCRETE', 'vintage': 'VINTAGE', 'cottage': 'COTTAGE',
+  'watering-hole': 'WATER HOLE', 'the-tank': 'THE TANK', 'studio-one': 'STUDIO ONE',
 }
 
 // Whole-hour rows for the compact overview (9AM–9PM)
@@ -251,8 +252,10 @@ export default function AvailabilityPage() {
             <div style={{ display: 'grid', gridTemplateColumns: `28px repeat(${SETS.length}, 1fr)`, gap: 2, marginBottom: 10 }}>
               <div />
               {SETS.map(s => (
-                <div key={s.slug} style={{ textAlign: 'center', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 9, color: 'rgba(255,255,255,0.45)', paddingBottom: 4 }}>
-                  {CODES[s.slug]}
+                <div key={s.slug} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4 }}>
+                  <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 9, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.45)' }}>
+                    {CODES[s.slug]}
+                  </span>
                 </div>
               ))}
               {HOURS.map(h => (
