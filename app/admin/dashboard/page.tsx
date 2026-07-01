@@ -534,9 +534,13 @@ export default function AdminDashboard() {
   const [propsList,    setPropsList]    = useState<Prop[]>([])
   const [propsLoading, setPropsLoading] = useState(false)
   const [propEditId,   setPropEditId]   = useState<string | null>(null)   // id, 'new', or null
-  const [propDraft,    setPropDraft]    = useState({ name: '', category: '', description: '', image_url: '', needs_repair: false, is_active: true, sort_order: '0' })
+  const [propDraft,    setPropDraft]    = useState({ name: '', category: '', description: '', image_url: '', gallery: [] as string[], needs_repair: false, is_active: true, sort_order: '0' })
   const [propSaving,   setPropSaving]   = useState(false)
   const [propBusyId,   setPropBusyId]   = useState<string | null>(null)
+  const [galleryBusy,  setGalleryBusy]  = useState(false)   // uploading / adding photos
+  // ChatGPT clean-up preview modal: which gallery index, the before URL, the
+  // cleaned result (base64, null while generating), and status flags.
+  const [cleanImg, setCleanImg] = useState<{ index: number; before: string; after: string | null; busy: boolean; error: string | null } | null>(null)
   const fetchProps = useCallback(async () => {
     setPropsLoading(true)
     const res = await fetch('/api/admin/props', { cache: 'no-store' })
@@ -545,16 +549,69 @@ export default function AdminDashboard() {
     setPropsLoading(false)
   }, [])
   useEffect(() => { if (view === 'props') fetchProps() }, [view, fetchProps])
-  const startNewProp  = () => { setPropDraft({ name: '', category: '', description: '', image_url: '', needs_repair: false, is_active: true, sort_order: '0' }); setPropEditId('new') }
-  const startEditProp = (p: Prop) => { setPropDraft({ name: p.name, category: p.category ?? '', description: p.description ?? '', image_url: p.image_url ?? '', needs_repair: p.needs_repair, is_active: p.is_active, sort_order: String(p.sort_order ?? 0) }); setPropEditId(p.id) }
+  const startNewProp  = () => { setPropDraft({ name: '', category: '', description: '', image_url: '', gallery: [], needs_repair: false, is_active: true, sort_order: '0' }); setPropEditId('new') }
+  const startEditProp = (p: Prop) => { setPropDraft({ name: p.name, category: p.category ?? '', description: p.description ?? '', image_url: p.image_url ?? '', gallery: (p.gallery && p.gallery.length ? p.gallery : (p.image_url ? [p.image_url] : [])), needs_repair: p.needs_repair, is_active: p.is_active, sort_order: String(p.sort_order ?? 0) }); setPropEditId(p.id) }
   const saveProp = async () => {
     if (!propDraft.name.trim()) return
     setPropSaving(true)
     const url    = propEditId === 'new' ? '/api/admin/props' : `/api/admin/props/${propEditId}`
     const method = propEditId === 'new' ? 'POST' : 'PATCH'
-    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(propDraft) })
+    // Keep hero (image_url) in sync with the first gallery image.
+    const payload = { ...propDraft, image_url: propDraft.gallery[0] ?? propDraft.image_url ?? '' }
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     setPropSaving(false)
     if (res.ok) { setPropEditId(null); fetchProps() }
+  }
+  // ── Gallery editing (operates on propDraft.gallery; persisted on SAVE) ──────
+  const galSetHero  = (i: number) => setPropDraft(d => { const g = [...d.gallery]; const [x] = g.splice(i, 1); g.unshift(x); return { ...d, gallery: g, image_url: g[0] ?? '' } })
+  const galRemove   = (i: number) => setPropDraft(d => { const g = d.gallery.filter((_, k) => k !== i); return { ...d, gallery: g, image_url: g[0] ?? '' } })
+  // Upload chosen files to the props bucket, append their URLs to the gallery.
+  const galAddFiles = async (files: FileList | null) => {
+    if (!files || !files.length) return
+    setGalleryBusy(true)
+    try {
+      const fd = new FormData()
+      Array.from(files).forEach(f => fd.append('files', f))
+      const res = await fetch('/api/admin/props/upload', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && Array.isArray(data.urls)) {
+        setPropDraft(d => { const g = [...d.gallery, ...data.urls]; return { ...d, gallery: g, image_url: g[0] ?? '' } })
+      } else { alert(data.error || 'Upload failed') }
+    } finally { setGalleryBusy(false) }
+  }
+  // Clean-up-with-ChatGPT: generate a preview (does not save yet).
+  const galClean = async (i: number) => {
+    const before = propDraft.gallery[i]
+    setCleanImg({ index: i, before, after: null, busy: true, error: null })
+    try {
+      const res = await fetch('/api/admin/props/clean-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: before }) })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.imageBase64) setCleanImg(c => c ? { ...c, after: data.imageBase64, busy: false } : c)
+      else setCleanImg(c => c ? { ...c, busy: false, error: data.error || 'Clean-up failed' } : c)
+    } catch (e: any) {
+      setCleanImg(c => c ? { ...c, busy: false, error: String(e?.message || e) } : c)
+    }
+  }
+  // Confirm the preview: upload the cleaned image, swap it into the gallery slot.
+  const galCleanConfirm = async () => {
+    if (!cleanImg?.after) return
+    setCleanImg(c => c ? { ...c, busy: true } : c)
+    try {
+      const bin = atob(cleanImg.after)
+      const bytes = new Uint8Array(bin.length)
+      for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k)
+      const fd = new FormData()
+      fd.append('files', new File([bytes], 'cleaned.png', { type: 'image/png' }))
+      const res = await fetch('/api/admin/props/upload', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.urls?.[0]) {
+        const url = data.urls[0]
+        setPropDraft(d => { const g = [...d.gallery]; g[cleanImg.index] = url; return { ...d, gallery: g, image_url: g[0] ?? '' } })
+        setCleanImg(null)
+      } else { setCleanImg(c => c ? { ...c, busy: false, error: data.error || 'Save failed' } : c) }
+    } catch (e: any) {
+      setCleanImg(c => c ? { ...c, busy: false, error: String(e?.message || e) } : c)
+    }
   }
   const patchProp = async (p: Prop, patch: Record<string, unknown>) => {
     setPropBusyId(p.id)
@@ -2787,10 +2844,36 @@ export default function AdminDashboard() {
                     </select>
                   </label>
                 </div>
-                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 14 }}>Image URL
-                  <input value={propDraft.image_url} onChange={e => setPropDraft(d => ({ ...d, image_url: e.target.value }))} placeholder="https://…"
-                    style={{ width: '100%', marginTop: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }} />
-                </label>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Photos <span style={{ color: 'rgba(255,255,255,0.3)' }}>· first image is the hero shown on the /props card</span></span>
+                    <label style={{ fontSize: 10, letterSpacing: '0.1em', color: '#080808', background: galleryBusy ? 'rgba(255,255,255,0.3)' : '#fff', padding: '6px 12px', cursor: galleryBusy ? 'wait' : 'pointer', fontWeight: 600 }}>
+                      {galleryBusy ? 'UPLOADING…' : '+ ADD PHOTOS'}
+                      <input type="file" accept="image/*" multiple disabled={galleryBusy} onChange={e => { galAddFiles(e.target.files); e.currentTarget.value = '' }} style={{ display: 'none' }} />
+                    </label>
+                  </div>
+                  {propDraft.gallery.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', border: '1px dashed rgba(255,255,255,0.15)', padding: '18px 12px', textAlign: 'center' }}>No photos yet — add some above.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 100 : 120}px, 1fr))`, gap: 10 }}>
+                      {propDraft.gallery.map((url, i) => (
+                        <div key={url + i} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.1)' }}>
+                          <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: '#0a0a0a' }}>
+                            <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.opacity = '0.2' }} />
+                            {i === 0 && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: 8, letterSpacing: '0.1em', fontWeight: 700, color: '#080808', background: '#d4a843', padding: '2px 5px' }}>HERO</span>}
+                          </div>
+                          <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                            {i !== 0 && (
+                              <button title="Set as hero" onClick={() => galSetHero(i)} style={{ flex: 1, background: 'transparent', border: 'none', borderRight: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.55)', padding: '6px 0', cursor: 'pointer', fontSize: 9, letterSpacing: '0.08em' }}>HERO</button>
+                            )}
+                            <button title="Clean up the background with ChatGPT" onClick={() => galClean(i)} style={{ flex: 1, background: 'transparent', border: 'none', borderRight: '1px solid rgba(255,255,255,0.08)', color: '#60a5fa', padding: '6px 0', cursor: 'pointer', fontSize: 9, letterSpacing: '0.08em' }}>CLEAN</button>
+                            <button title="Delete this photo" onClick={() => galRemove(i)} style={{ flex: 1, background: 'transparent', border: 'none', color: '#ff6b6b', padding: '6px 0', cursor: 'pointer', fontSize: 9, letterSpacing: '0.08em' }}>DEL</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 14 }}>Description
                   <textarea value={propDraft.description} onChange={e => setPropDraft(d => ({ ...d, description: e.target.value }))}
                     style={{ width: '100%', marginTop: 6, minHeight: 70, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
@@ -2840,6 +2923,43 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── PROP PHOTO CLEAN-UP PREVIEW MODAL ─────────────────────────── */}
+        {cleanImg && (
+          <div onClick={() => { if (!cleanImg.busy) setCleanImg(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.14)', padding: 24, maxWidth: 640, width: '100%' }}>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 4 }}>CLEAN UP PHOTO</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 18 }}>ChatGPT places the object on a clean white background. Review before replacing — the result is a 1024×1024 square.</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>BEFORE</div>
+                  <div style={{ aspectRatio: '1', background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                    <img src={cleanImg.before} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>AFTER</div>
+                  <div style={{ aspectRatio: '1', background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                    {cleanImg.busy && !cleanImg.after ? (
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Generating…</span>
+                    ) : cleanImg.error ? (
+                      <span style={{ fontSize: 11, color: '#ff6b6b', padding: 10 }}>{cleanImg.error}</span>
+                    ) : cleanImg.after ? (
+                      <img src={`data:image/png;base64,${cleanImg.after}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button onClick={() => setCleanImg(null)} disabled={cleanImg.busy} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: cleanImg.busy ? 'default' : 'pointer', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', opacity: cleanImg.busy ? 0.5 : 1 }}>CANCEL</button>
+                {cleanImg.error && !cleanImg.busy && (
+                  <button onClick={() => galClean(cleanImg.index)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', color: '#60a5fa' }}>TRY AGAIN</button>
+                )}
+                <button onClick={galCleanConfirm} disabled={!cleanImg.after || cleanImg.busy} style={{ background: (!cleanImg.after || cleanImg.busy) ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: (!cleanImg.after || cleanImg.busy) ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{cleanImg.busy && cleanImg.after ? 'SAVING…' : 'REPLACE'}</button>
+              </div>
+            </div>
           </div>
         )}
 
