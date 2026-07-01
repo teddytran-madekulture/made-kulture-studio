@@ -47,10 +47,14 @@ jobs:
           fi
           STAMP="$(date -u +%Y-%m-%d_%H%M)Z"
           OUT="madekulture-db-${STAMP}.sql.gz.enc"
+          # Use the v17 pg_dump explicitly (Supabase server is PG17; the PATH
+          # default can resolve to an older client and refuse to dump).
+          PGDUMP=/usr/lib/postgresql/17/bin/pg_dump
+          "$PGDUMP" --version
           echo "Dumping database..."
           # --no-owner / --no-privileges keep the dump portable for restore into
           # a fresh Supabase project. Full schema + data.
-          pg_dump "$SUPABASE_DB_URL" \
+          "$PGDUMP" "$SUPABASE_DB_URL" \
             --no-owner --no-privileges --clean --if-exists \
             | gzip -9 \
             | openssl enc -aes-256-cbc -pbkdf2 -salt \
