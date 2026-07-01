@@ -6,7 +6,7 @@ export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
 const MODEL = 'gpt-image-1'
-const PROMPT = 'Remove the background and place this exact object on a clean, evenly lit, pure white studio background. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
+const DEFAULT_PROMPT = 'Remove the background and place this exact object on a clean, evenly lit, pure white studio background. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
 
 // POST /api/admin/props/edit-image — multipart 'file'.
 // Sends the photo to OpenAI's image edit API and returns the edited image (PNG base64).
@@ -19,11 +19,13 @@ export async function POST(req: NextRequest) {
   try { form = await req.formData() } catch { return NextResponse.json({ error: 'Expected multipart form-data' }, { status: 400 }) }
   const file = form.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file' }, { status: 400 })
+  const pf = form.get('prompt')
+  const prompt = (typeof pf === 'string' && pf.trim()) ? pf.trim() : DEFAULT_PROMPT
 
   const oai = new FormData()
   oai.append('model', MODEL)
   oai.append('image', file, file.name || 'photo.png')
-  oai.append('prompt', PROMPT)
+  oai.append('prompt', prompt)
   oai.append('size', '1024x1024')
   oai.append('n', '1')
 
