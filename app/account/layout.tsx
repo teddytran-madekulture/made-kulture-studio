@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import AccountNav from '@/components/AccountNav'
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -27,24 +28,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
 
       {/* Sidebar + content */}
       <div className="acct-shell" style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
-        <nav className="acct-nav">
-          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', marginBottom: 16 }}>ACCOUNT</div>
-          {[
-            { href: '/account', label: 'Dashboard' },
-            { href: '/account/bookings', label: 'My Bookings' },
-            { href: '/account/directory', label: 'Directory' },
-            { href: '/account/profile', label: 'Profile' },
-            { href: '/account/security', label: 'Login & Security' },
-            { href: '/account/payment', label: 'Payment Methods' },
-          ].map(({ href, label }) => (
-            <Link key={href} href={href} style={{
-              display: 'block', fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.6)',
-              textDecoration: 'none', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
-            }}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <AccountNav />
         <div style={{ flex: 1 }}>
           {children}
         </div>
