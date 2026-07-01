@@ -558,6 +558,7 @@ export default function AdminDashboard() {
   const [cleanMethod,  setCleanMethod]  = useState<'chatgpt' | 'free'>('chatgpt') // method for Clean-all
   const [cleanPrompt,  setCleanPrompt]  = useState(DEFAULT_CLEAN_PROMPT)          // editable ChatGPT instruction
   const [batchClean,   setBatchClean]   = useState<{ done: number; total: number } | null>(null)
+  const [batchOpen,    setBatchOpen]    = useState(false)  // "Clean all" setup dialog
   const [propSearch,   setPropSearch]   = useState('')
   const [propCatFilter, setPropCatFilter] = useState('')
   const editFormRef = useRef<HTMLDivElement | null>(null)
@@ -664,11 +665,11 @@ export default function AdminDashboard() {
       setCleanImg(c => c ? { ...c, busy: false, error: String(e?.message || e) } : c)
     }
   }
-  // Batch: clean every gallery image with the chosen method (auto-replace).
-  const batchCleanAll = async () => {
+  // Batch: clean every gallery image with the chosen method + prompt, then
+  // replace them. Invoked from the "Clean all" setup dialog (not automatic).
+  const runBatchClean = async () => {
     const urls = propDraft.gallery
     if (!urls.length) return
-    if (!confirm(`Clean all ${urls.length} photo(s) with ${cleanMethod === 'free' ? 'the free remover' : 'ChatGPT'}? This replaces them.`)) return
     setBatchClean({ done: 0, total: urls.length })
     const out = [...urls]
     for (let i = 0; i < urls.length; i++) {
@@ -677,6 +678,7 @@ export default function AdminDashboard() {
     }
     setPropDraft(d => ({ ...d, gallery: out, image_url: out[0] ?? '' }))
     setBatchClean(null)
+    setBatchOpen(false)
   }
   // ── AI description + tag suggestions (uses the hero image) ──────────────────
   const runAnalyze = async (): Promise<any | null> => {
@@ -2935,14 +2937,8 @@ export default function AdminDashboard() {
                     </label>
                   </div>
                   {propDraft.gallery.length > 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)' }}>CLEAN ALL WITH</span>
-                      <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)' }}>
-                        {([['chatgpt', 'ChatGPT'], ['free', 'Free']] as const).map(([m, label], i) => (
-                          <button key={m} disabled={!!batchClean} onClick={() => setCleanMethod(m)} style={{ border: 'none', borderLeft: i ? '1px solid rgba(255,255,255,0.16)' : 'none', padding: '5px 10px', fontSize: 10, fontWeight: 600, cursor: batchClean ? 'default' : 'pointer', background: cleanMethod === m ? '#d4a843' : 'transparent', color: cleanMethod === m ? '#080808' : 'rgba(255,255,255,0.6)' }}>{label}</button>
-                        ))}
-                      </div>
-                      <button disabled={!!batchClean} onClick={batchCleanAll} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '5px 12px', cursor: batchClean ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{batchClean ? `CLEANING ${batchClean.done}/${batchClean.total}…` : 'CLEAN ALL'}</button>
+                    <div style={{ marginBottom: 10 }}>
+                      <button disabled={!!batchClean} onClick={() => setBatchOpen(true)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '6px 14px', cursor: batchClean ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{batchClean ? `CLEANING ${batchClean.done}/${batchClean.total}…` : '✨ CLEAN ALL PHOTOS'}</button>
                     </div>
                   )}
                   {propDraft.gallery.length === 0 ? (
@@ -3127,6 +3123,41 @@ export default function AdminDashboard() {
                   <button onClick={() => galGen(cleanImg.index, cleanImg.method)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', color: '#60a5fa' }}>TRY AGAIN</button>
                 )}
                 <button onClick={galCleanConfirm} disabled={!cleanImg.afterBlob || cleanImg.busy} style={{ background: (!cleanImg.afterBlob || cleanImg.busy) ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: (!cleanImg.afterBlob || cleanImg.busy) ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{cleanImg.busy && cleanImg.afterBlob ? 'SAVING…' : 'REPLACE'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── CLEAN ALL SETUP DIALOG ────────────────────────────────────── */}
+        {batchOpen && (
+          <div onClick={() => { if (!batchClean) setBatchOpen(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.14)', padding: 24, maxWidth: 520, width: '100%' }}>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 4 }}>CLEAN ALL {propDraft.gallery.length} PHOTOS</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 16 }}>Pick a method{cleanMethod === 'chatgpt' ? ' and instructions' : ''}, then start. Each photo is processed and replaced — there&apos;s no per-photo preview.</div>
+              <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)', marginBottom: 14 }}>
+                {([['chatgpt', 'ChatGPT'], ['free', 'Free remover']] as const).map(([m, label], i) => (
+                  <button key={m} disabled={!!batchClean} onClick={() => setCleanMethod(m)}
+                    style={{ border: 'none', borderLeft: i ? '1px solid rgba(255,255,255,0.16)' : 'none', padding: '7px 14px', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', cursor: batchClean ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', background: cleanMethod === m ? '#d4a843' : 'transparent', color: cleanMethod === m ? '#080808' : 'rgba(255,255,255,0.6)' }}>{label}</button>
+                ))}
+              </div>
+              {cleanMethod === 'chatgpt' && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>CHATGPT INSTRUCTIONS <span style={{ letterSpacing: 0, color: 'rgba(255,255,255,0.3)' }}>· applied to every photo</span></span>
+                    {cleanPrompt !== DEFAULT_CLEAN_PROMPT && (
+                      <button type="button" onClick={() => setCleanPrompt(DEFAULT_CLEAN_PROMPT)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer', textDecoration: 'underline' }}>reset to default</button>
+                    )}
+                  </div>
+                  <textarea value={cleanPrompt} onChange={e => setCleanPrompt(e.target.value)} disabled={!!batchClean}
+                    style={{ width: '100%', minHeight: 58, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.5, padding: '8px 10px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+                </div>
+              )}
+              {batchClean && (
+                <div style={{ fontSize: 12, color: '#60a5fa', marginBottom: 14 }}>Cleaning {batchClean.done} / {batchClean.total}…</div>
+              )}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button onClick={() => setBatchOpen(false)} disabled={!!batchClean} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: batchClean ? 'default' : 'pointer', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', opacity: batchClean ? 0.5 : 1 }}>CANCEL</button>
+                <button onClick={runBatchClean} disabled={!!batchClean} style={{ background: batchClean ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: batchClean ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{batchClean ? 'WORKING…' : `CLEAN ALL ${propDraft.gallery.length}`}</button>
               </div>
             </div>
           </div>
