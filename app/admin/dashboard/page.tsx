@@ -69,6 +69,7 @@ interface EquipmentItem {
   quantity: number
   description: string | null
   image_url: string | null
+  gallery?: string[]
   sort_order: number | null
   is_available: boolean
   allow_offsite: boolean
@@ -84,13 +85,14 @@ interface EquipDraft {
   quantity: string
   description: string
   image_url: string
+  gallery: string[]
   is_available: boolean
   allow_offsite: boolean
 }
 
 const EMPTY_EQUIP_DRAFT: EquipDraft = {
   name: '', category: 'lighting', rate: '', quantity: '1',
-  description: '', image_url: '', is_available: true, allow_offsite: false,
+  description: '', image_url: '', gallery: [], is_available: true, allow_offsite: false,
 }
 
 const EQUIP_CATEGORIES: { value: string; label: string }[] = [
@@ -558,12 +560,12 @@ export default function AdminDashboard() {
   const [cleanMethod,  setCleanMethod]  = useState<'chatgpt' | 'free'>('chatgpt') // method for Clean-all
   const [cleanPrompt,  setCleanPrompt]  = useState(DEFAULT_CLEAN_PROMPT)          // editable ChatGPT instruction
   const [batchClean,   setBatchClean]   = useState<{ done: number; total: number } | null>(null)
-  const [batchOpen,    setBatchOpen]    = useState(false)  // "Clean all" setup dialog
+  const [batchOpen,    setBatchOpen]    = useState<'prop' | 'equip' | null>(null)  // "Clean all" dialog + which editor
   const [propSearch,   setPropSearch]   = useState('')
   const [propCatFilter, setPropCatFilter] = useState('')
   const editFormRef = useRef<HTMLDivElement | null>(null)
   // Clean-up preview modal (per gallery image); method is chosen in the modal.
-  const [cleanImg, setCleanImg] = useState<{ index: number; method: 'chatgpt' | 'free'; before: string; afterUrl: string | null; afterBlob: Blob | null; busy: boolean; error: string | null } | null>(null)
+  const [cleanImg, setCleanImg] = useState<{ index: number; method: 'chatgpt' | 'free'; target: 'prop' | 'equip'; before: string; afterUrl: string | null; afterBlob: Blob | null; busy: boolean; error: string | null } | null>(null)
   const fetchProps = useCallback(async () => {
     setPropsLoading(true)
     const res = await fetch('/api/admin/props', { cache: 'no-store' })
@@ -586,11 +588,18 @@ export default function AdminDashboard() {
     setPropSaving(false)
     if (res.ok) { setPropEditId(null); fetchProps() }
   }
-  // ── Gallery editing (operates on propDraft.gallery; persisted on SAVE) ──────
-  const galSetHero  = (i: number) => setPropDraft(d => { const g = [...d.gallery]; const [x] = g.splice(i, 1); g.unshift(x); return { ...d, gallery: g, image_url: g[0] ?? '' } })
-  const galRemove   = (i: number) => setPropDraft(d => { const g = d.gallery.filter((_, k) => k !== i); return { ...d, gallery: g, image_url: g[0] ?? '' } })
-  // Upload chosen files to the props bucket, append their URLs to the gallery.
-  const galAddFiles = async (files: FileList | null) => {
+  // ── Gallery editing — shared by the Props and Equipment managers ────────────
+  // Each handler takes a `target` ('prop' | 'equip', default 'prop') so the same
+  // logic drives both editors, reading/writing that editor's draft gallery and
+  // keeping image_url (the hero) in sync with gallery[0].
+  const galleryOf = (t: 'prop' | 'equip') => (t === 'equip' ? equipDraft.gallery : propDraft.gallery)
+  const applyGallery = (t: 'prop' | 'equip', updater: (g: string[]) => string[]) => {
+    if (t === 'equip') setEquipDraft(d => { const g = updater(d.gallery); return { ...d, gallery: g, image_url: g[0] ?? '' } })
+    else               setPropDraft(d => { const g = updater(d.gallery); return { ...d, gallery: g, image_url: g[0] ?? '' } })
+  }
+  const galSetHero = (i: number, t: 'prop' | 'equip' = 'prop') => applyGallery(t, g => { const a = [...g]; const [x] = a.splice(i, 1); a.unshift(x); return a })
+  const galRemove  = (i: number, t: 'prop' | 'equip' = 'prop') => applyGallery(t, g => g.filter((_, k) => k !== i))
+  const galAddFiles = async (files: FileList | null, t: 'prop' | 'equip' = 'prop') => {
     if (!files || !files.length) return
     setGalleryBusy(true)
     try {
@@ -598,9 +607,8 @@ export default function AdminDashboard() {
       Array.from(files).forEach(f => fd.append('files', f))
       const res = await fetch('/api/admin/props/upload', { method: 'POST', body: fd })
       const data = await res.json().catch(() => ({}))
-      if (res.ok && Array.isArray(data.urls)) {
-        setPropDraft(d => { const g = [...d.gallery, ...data.urls]; return { ...d, gallery: g, image_url: g[0] ?? '' } })
-      } else { alert(data.error || 'Upload failed') }
+      if (res.ok && Array.isArray(data.urls)) applyGallery(t, g => [...g, ...data.urls])
+      else alert(data.error || 'Upload failed')
     } finally { setGalleryBusy(false) }
   }
   // Produce a cleaned image Blob from an existing image URL, by either method.
@@ -640,9 +648,9 @@ export default function AdminDashboard() {
     return data.urls[0]
   }
   // Open the clean-up modal for image i and generate a preview with `method`.
-  const galGen = async (i: number, method: 'chatgpt' | 'free') => {
-    const before = propDraft.gallery[i]
-    setCleanImg({ index: i, method, before, afterUrl: null, afterBlob: null, busy: true, error: null })
+  const galGen = async (i: number, method: 'chatgpt' | 'free', t: 'prop' | 'equip' = 'prop') => {
+    const before = galleryOf(t)[i]
+    setCleanImg({ index: i, method, target: t, before, afterUrl: null, afterBlob: null, busy: true, error: null })
     try {
       const blob = await runClean(method, before, cleanPrompt)
       const afterUrl = URL.createObjectURL(blob)
@@ -652,14 +660,15 @@ export default function AdminDashboard() {
     }
   }
   // Per-image CLEAN button: open the modal idle (no auto-generate).
-  const galClean = (i: number) => setCleanImg({ index: i, method: cleanMethod, before: propDraft.gallery[i], afterUrl: null, afterBlob: null, busy: false, error: null })
+  const galClean = (i: number, t: 'prop' | 'equip' = 'prop') => setCleanImg({ index: i, method: cleanMethod, target: t, before: galleryOf(t)[i], afterUrl: null, afterBlob: null, busy: false, error: null })
   // Confirm the preview: upload the cleaned image, swap it into the gallery slot.
   const galCleanConfirm = async () => {
     if (!cleanImg?.afterBlob) return
+    const t = cleanImg.target
     setCleanImg(c => c ? { ...c, busy: true } : c)
     try {
       const url = await uploadBlob(cleanImg.afterBlob)
-      setPropDraft(d => { const g = [...d.gallery]; g[cleanImg.index] = url; return { ...d, gallery: g, image_url: g[0] ?? '' } })
+      applyGallery(t, g => { const a = [...g]; a[cleanImg.index] = url; return a })
       setCleanImg(null)
     } catch (e: any) {
       setCleanImg(c => c ? { ...c, busy: false, error: String(e?.message || e) } : c)
@@ -668,7 +677,8 @@ export default function AdminDashboard() {
   // Batch: clean every gallery image with the chosen method + prompt, then
   // replace them. Invoked from the "Clean all" setup dialog (not automatic).
   const runBatchClean = async () => {
-    const urls = propDraft.gallery
+    const t = batchOpen === 'equip' ? 'equip' : 'prop'
+    const urls = galleryOf(t)
     if (!urls.length) return
     setBatchClean({ done: 0, total: urls.length })
     const out = [...urls]
@@ -676,9 +686,9 @@ export default function AdminDashboard() {
       try { out[i] = await uploadBlob(await runClean(cleanMethod, urls[i], cleanPrompt)) } catch { /* keep original on failure */ }
       setBatchClean({ done: i + 1, total: urls.length })
     }
-    setPropDraft(d => ({ ...d, gallery: out, image_url: out[0] ?? '' }))
+    applyGallery(t, () => out)
     setBatchClean(null)
-    setBatchOpen(false)
+    setBatchOpen(null)
   }
   // ── AI description + tag suggestions (uses the hero image) ──────────────────
   const runAnalyze = async (): Promise<any | null> => {
@@ -1029,6 +1039,7 @@ export default function AdminDashboard() {
       quantity:      String(e.quantity),
       description:   e.description ?? '',
       image_url:     e.image_url ?? '',
+      gallery:       (e.gallery && e.gallery.length ? e.gallery : (e.image_url ? [e.image_url] : [])),
       is_available:  e.is_available,
       allow_offsite: e.allow_offsite,
     })
@@ -1050,7 +1061,8 @@ export default function AdminDashboard() {
           rate:          equipDraft.rate,
           quantity:      equipDraft.quantity,
           description:   equipDraft.description,
-          image_url:     equipDraft.image_url,
+          image_url:     equipDraft.gallery[0] ?? equipDraft.image_url,
+          gallery:       equipDraft.gallery,
           is_available:  equipDraft.is_available,
           allow_offsite: equipDraft.allow_offsite,
         }),
@@ -2523,13 +2535,39 @@ export default function AdminDashboard() {
                   </div>
 
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>PHOTO URL (shown on the gear catalog)</label>
-                    <input value={equipDraft.image_url} onChange={e => setEquipDraft(d => ({ ...d, image_url: e.target.value }))}
-                      placeholder="https://…/your-photo.jpg  (or upload to public/images/equipment and use /images/equipment/name.jpg)"
-                      style={{ width: '100%', background: '#080808', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box' }} />
-                    {equipDraft.image_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={equipDraft.image_url} alt="" style={{ marginTop: 10, maxHeight: 90, borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <label style={labelStyle}>PHOTOS <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.3)' }}>· first is the hero on the gear catalog</span></label>
+                      <label style={{ fontSize: 10, letterSpacing: '0.1em', color: '#080808', background: galleryBusy ? 'rgba(255,255,255,0.3)' : '#fff', padding: '6px 12px', cursor: galleryBusy ? 'wait' : 'pointer', fontWeight: 600 }}>
+                        {galleryBusy ? 'UPLOADING…' : '+ ADD PHOTOS'}
+                        <input type="file" accept="image/*" multiple disabled={galleryBusy} onChange={e => { galAddFiles(e.target.files, 'equip'); e.currentTarget.value = '' }} style={{ display: 'none' }} />
+                      </label>
+                    </div>
+                    {equipDraft.gallery.length > 1 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <button type="button" disabled={!!batchClean} onClick={() => setBatchOpen('equip')} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '6px 14px', cursor: batchClean ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{batchClean ? `CLEANING ${batchClean.done}/${batchClean.total}…` : '✨ CLEAN ALL PHOTOS'}</button>
+                      </div>
+                    )}
+                    {equipDraft.gallery.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', border: '1px dashed rgba(255,255,255,0.15)', padding: '18px 12px', textAlign: 'center' }}>No photos yet — add some above.</div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 100 : 120}px, 1fr))`, gap: 10 }}>
+                        {equipDraft.gallery.map((url, i) => (
+                          <div key={url + i} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: '#0a0a0a' }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.opacity = '0.2' }} />
+                              {i === 0 && <span style={{ position: 'absolute', top: 4, left: 4, fontSize: 8, letterSpacing: '0.1em', fontWeight: 700, color: '#080808', background: '#d4a843', padding: '2px 5px' }}>HERO</span>}
+                            </div>
+                            <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                              {i !== 0 && (
+                                <button type="button" title="Set as hero" onClick={() => galSetHero(i, 'equip')} style={{ flex: 1, background: 'transparent', border: 'none', borderRight: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.55)', padding: '6px 0', cursor: 'pointer', fontSize: 9, letterSpacing: '0.08em' }}>HERO</button>
+                              )}
+                              <button type="button" title="Clean up the background" onClick={() => galClean(i, 'equip')} style={{ flex: 1, background: 'transparent', border: 'none', borderRight: '1px solid rgba(255,255,255,0.08)', color: '#60a5fa', padding: '6px 0', cursor: 'pointer', fontSize: 9, letterSpacing: '0.08em' }}>CLEAN</button>
+                              <button type="button" title="Delete this photo" onClick={() => galRemove(i, 'equip')} style={{ flex: 1, background: 'transparent', border: 'none', color: '#ff6b6b', padding: '6px 0', cursor: 'pointer', fontSize: 9, letterSpacing: '0.08em' }}>DEL</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2938,7 +2976,7 @@ export default function AdminDashboard() {
                   </div>
                   {propDraft.gallery.length > 1 && (
                     <div style={{ marginBottom: 10 }}>
-                      <button disabled={!!batchClean} onClick={() => setBatchOpen(true)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '6px 14px', cursor: batchClean ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{batchClean ? `CLEANING ${batchClean.done}/${batchClean.total}…` : '✨ CLEAN ALL PHOTOS'}</button>
+                      <button disabled={!!batchClean} onClick={() => setBatchOpen('prop')} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '6px 14px', cursor: batchClean ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{batchClean ? `CLEANING ${batchClean.done}/${batchClean.total}…` : '✨ CLEAN ALL PHOTOS'}</button>
                     </div>
                   )}
                   {propDraft.gallery.length === 0 ? (
@@ -3090,7 +3128,7 @@ export default function AdminDashboard() {
                 </div>
               )}
               {/* Explicit Generate button — nothing runs until you click this */}
-              <button type="button" disabled={cleanImg.busy} onClick={() => galGen(cleanImg.index, cleanImg.method)}
+              <button type="button" disabled={cleanImg.busy} onClick={() => galGen(cleanImg.index, cleanImg.method, cleanImg.target)}
                 style={{ marginBottom: 16, background: cleanImg.busy ? 'rgba(96,165,250,0.35)' : 'rgba(96,165,250,0.95)', border: 'none', color: '#08131f', padding: '9px 18px', cursor: cleanImg.busy ? 'default' : 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>
                 {cleanImg.busy ? 'WORKING…' : cleanImg.afterUrl ? '↻ REGENERATE' : (cleanImg.method === 'free' ? '✨ REMOVE BACKGROUND' : '✨ GENERATE')}
               </button>
@@ -3120,7 +3158,7 @@ export default function AdminDashboard() {
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button onClick={() => setCleanImg(null)} disabled={cleanImg.busy} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: cleanImg.busy ? 'default' : 'pointer', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', opacity: cleanImg.busy ? 0.5 : 1 }}>CANCEL</button>
                 {cleanImg.error && !cleanImg.busy && (
-                  <button onClick={() => galGen(cleanImg.index, cleanImg.method)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', color: '#60a5fa' }}>TRY AGAIN</button>
+                  <button onClick={() => galGen(cleanImg.index, cleanImg.method, cleanImg.target)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', color: '#60a5fa' }}>TRY AGAIN</button>
                 )}
                 <button onClick={galCleanConfirm} disabled={!cleanImg.afterBlob || cleanImg.busy} style={{ background: (!cleanImg.afterBlob || cleanImg.busy) ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: (!cleanImg.afterBlob || cleanImg.busy) ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{cleanImg.busy && cleanImg.afterBlob ? 'SAVING…' : 'REPLACE'}</button>
               </div>
@@ -3130,9 +3168,9 @@ export default function AdminDashboard() {
 
         {/* ── CLEAN ALL SETUP DIALOG ────────────────────────────────────── */}
         {batchOpen && (
-          <div onClick={() => { if (!batchClean) setBatchOpen(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div onClick={() => { if (!batchClean) setBatchOpen(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.14)', padding: 24, maxWidth: 520, width: '100%' }}>
-              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 4 }}>CLEAN ALL {propDraft.gallery.length} PHOTOS</div>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 4 }}>CLEAN ALL {(batchOpen === 'equip' ? equipDraft.gallery : propDraft.gallery).length} PHOTOS</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 16 }}>Pick a method{cleanMethod === 'chatgpt' ? ' and instructions' : ''}, then start. Each photo is processed and replaced — there&apos;s no per-photo preview.</div>
               <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)', marginBottom: 14 }}>
                 {([['chatgpt', 'ChatGPT'], ['free', 'Free remover']] as const).map(([m, label], i) => (
@@ -3156,8 +3194,8 @@ export default function AdminDashboard() {
                 <div style={{ fontSize: 12, color: '#60a5fa', marginBottom: 14 }}>Cleaning {batchClean.done} / {batchClean.total}…</div>
               )}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button onClick={() => setBatchOpen(false)} disabled={!!batchClean} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: batchClean ? 'default' : 'pointer', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', opacity: batchClean ? 0.5 : 1 }}>CANCEL</button>
-                <button onClick={runBatchClean} disabled={!!batchClean} style={{ background: batchClean ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: batchClean ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{batchClean ? 'WORKING…' : `CLEAN ALL ${propDraft.gallery.length}`}</button>
+                <button onClick={() => setBatchOpen(null)} disabled={!!batchClean} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: batchClean ? 'default' : 'pointer', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', opacity: batchClean ? 0.5 : 1 }}>CANCEL</button>
+                <button onClick={runBatchClean} disabled={!!batchClean} style={{ background: batchClean ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: batchClean ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{batchClean ? 'WORKING…' : `CLEAN ALL ${(batchOpen === 'equip' ? equipDraft.gallery : propDraft.gallery).length}`}</button>
               </div>
             </div>
           </div>
