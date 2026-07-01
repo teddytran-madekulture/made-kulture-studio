@@ -1336,7 +1336,7 @@ export default function AdminDashboard() {
                   return (
                     <div key={b.id} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)' }}>
                       <div onClick={() => setExpanded(isOpen ? null : b.id)}
-                        style={{ padding: '20px 24px', cursor: 'pointer', display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr 1fr 100px', alignItems: 'center', gap: 16, opacity: isCancelled ? 0.4 : 1 }}>
+                        style={{ padding: '20px 24px', cursor: 'pointer', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1.5fr 1fr 1fr 100px', alignItems: isMobile ? 'start' : 'center', gap: isMobile ? 5 : 16, opacity: isCancelled ? 0.4 : 1 }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                             <span style={{ fontSize: 14, color: '#fff', fontWeight: 500 }}>{b.customers?.name || '—'}</span>
@@ -1511,7 +1511,7 @@ export default function AdminDashboard() {
         {/* CALENDAR VIEW */}
         {view === 'calendar' && (
           <div style={{ paddingBottom: 60 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
               <button onClick={() => setCalDate(d => addDays(d, -1))}
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
                 &larr; PREV
@@ -2362,14 +2362,14 @@ export default function AdminDashboard() {
           <div style={{ paddingBottom: 80 }}>
 
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start', justifyContent: 'space-between', gap: isMobile ? 12 : 0, marginBottom: isMobile ? 20 : 28 }}>
               <div>
                 <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 4 }}>CUSTOMERS</div>
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
                   {custTotal > 0 ? `${custTotal} total` : 'No customers yet'}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   onClick={async () => {
                     setDupLoading(true)
@@ -2575,8 +2575,8 @@ export default function AdminDashboard() {
             </div>
 
             {/* Table */}
-            <div style={{ border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 80px 80px 100px', background: 'rgba(255,255,255,0.03)', padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            <div style={{ border: '1px solid rgba(255,255,255,0.07)', overflowX: isMobile ? 'auto' : 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 80px 80px 100px', minWidth: isMobile ? 600 : undefined, background: 'rgba(255,255,255,0.03)', padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                 {['NAME', 'EMAIL', 'PHONE', 'BOOKINGS', 'SPEND', 'STATUS'].map(h => (
                   <div key={h} style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>{h}</div>
                 ))}
@@ -2594,7 +2594,7 @@ export default function AdminDashboard() {
                   <div key={c.id}
                     onClick={() => { setCustDetail(null); fetchCustomerDetail(c.id) }}
                     style={{
-                      display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 80px 80px 100px',
+                      display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 80px 80px 100px', minWidth: isMobile ? 600 : undefined,
                       padding: '13px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)',
                       cursor: 'pointer', alignItems: 'center',
                       background: custDetail?.id === c.id ? 'rgba(255,255,255,0.05)' : 'transparent',
