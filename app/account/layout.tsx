@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import AccountNav from '@/components/AccountNav'
+import AccountMenu from '@/components/AccountMenu'
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -18,11 +19,14 @@ export default async function AccountLayout({ children }: { children: React.Reac
               MADE KULTURE
             </span>
           </Link>
-          <form action="/api/auth/signout" method="POST">
-            <button type="submit" style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '8px 16px', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
-              SIGN OUT
-            </button>
-          </form>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <form action="/api/auth/signout" method="POST">
+              <button type="submit" style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '8px 16px', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+                SIGN OUT
+              </button>
+            </form>
+            <AccountMenu />
+          </div>
         </div>
       </div>
 
