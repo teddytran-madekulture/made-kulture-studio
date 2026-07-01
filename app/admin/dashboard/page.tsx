@@ -5,6 +5,16 @@ import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from 
 import { PROP_CATEGORIES, type Prop } from '@/lib/props'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
+// Free, in-browser background remover (same lib the Add-by-Photo flow uses).
+// Loaded from a CDN at runtime so the heavy onnx/wasm code isn't bundled.
+const BG_REMOVAL_CDN = 'https://esm.sh/@imgly/background-removal@1.7.0'
+let _bgPromise: Promise<any> | null = null
+async function loadBgRemover(): Promise<(input: Blob | string) => Promise<Blob>> {
+  if (!_bgPromise) _bgPromise = import(/* webpackIgnore: true */ BG_REMOVAL_CDN)
+  const mod: any = await _bgPromise
+  return mod.removeBackground || mod.default?.removeBackground || mod.default
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface StudioSet {
@@ -534,13 +544,19 @@ export default function AdminDashboard() {
   const [propsList,    setPropsList]    = useState<Prop[]>([])
   const [propsLoading, setPropsLoading] = useState(false)
   const [propEditId,   setPropEditId]   = useState<string | null>(null)   // id, 'new', or null
-  const [propDraft,    setPropDraft]    = useState({ name: '', category: '', description: '', image_url: '', gallery: [] as string[], needs_repair: false, is_active: true, sort_order: '0' })
+  const [propDraft,    setPropDraft]    = useState({ name: '', category: '', description: '', image_url: '', gallery: [] as string[], tags: [] as string[], needs_repair: false, is_active: true, sort_order: '0' })
   const [propSaving,   setPropSaving]   = useState(false)
   const [propBusyId,   setPropBusyId]   = useState<string | null>(null)
   const [galleryBusy,  setGalleryBusy]  = useState(false)   // uploading / adding photos
-  // ChatGPT clean-up preview modal: which gallery index, the before URL, the
-  // cleaned result (base64, null while generating), and status flags.
-  const [cleanImg, setCleanImg] = useState<{ index: number; before: string; after: string | null; busy: boolean; error: string | null } | null>(null)
+  const [tagInput,     setTagInput]     = useState('')
+  const [aiBusy,       setAiBusy]       = useState<'desc' | 'tags' | null>(null)  // AI description / tag suggestion
+  const [cleanMethod,  setCleanMethod]  = useState<'chatgpt' | 'free'>('chatgpt') // method for Clean-all
+  const [batchClean,   setBatchClean]   = useState<{ done: number; total: number } | null>(null)
+  const [propSearch,   setPropSearch]   = useState('')
+  const [propCatFilter, setPropCatFilter] = useState('')
+  const editFormRef = useRef<HTMLDivElement | null>(null)
+  // Clean-up preview modal (per gallery image); method is chosen in the modal.
+  const [cleanImg, setCleanImg] = useState<{ index: number; method: 'chatgpt' | 'free'; before: string; afterUrl: string | null; afterBlob: Blob | null; busy: boolean; error: string | null } | null>(null)
   const fetchProps = useCallback(async () => {
     setPropsLoading(true)
     const res = await fetch('/api/admin/props', { cache: 'no-store' })
@@ -549,8 +565,9 @@ export default function AdminDashboard() {
     setPropsLoading(false)
   }, [])
   useEffect(() => { if (view === 'props') fetchProps() }, [view, fetchProps])
-  const startNewProp  = () => { setPropDraft({ name: '', category: '', description: '', image_url: '', gallery: [], needs_repair: false, is_active: true, sort_order: '0' }); setPropEditId('new') }
-  const startEditProp = (p: Prop) => { setPropDraft({ name: p.name, category: p.category ?? '', description: p.description ?? '', image_url: p.image_url ?? '', gallery: (p.gallery && p.gallery.length ? p.gallery : (p.image_url ? [p.image_url] : [])), needs_repair: p.needs_repair, is_active: p.is_active, sort_order: String(p.sort_order ?? 0) }); setPropEditId(p.id) }
+  const scrollToEditor = () => setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  const startNewProp  = () => { setPropDraft({ name: '', category: '', description: '', image_url: '', gallery: [], tags: [], needs_repair: false, is_active: true, sort_order: '0' }); setTagInput(''); setPropEditId('new'); scrollToEditor() }
+  const startEditProp = (p: Prop) => { setPropDraft({ name: p.name, category: p.category ?? '', description: p.description ?? '', image_url: p.image_url ?? '', gallery: (p.gallery && p.gallery.length ? p.gallery : (p.image_url ? [p.image_url] : [])), tags: p.tags ?? [], needs_repair: p.needs_repair, is_active: p.is_active, sort_order: String(p.sort_order ?? 0) }); setTagInput(''); setPropEditId(p.id); scrollToEditor() }
   const saveProp = async () => {
     if (!propDraft.name.trim()) return
     setPropSaving(true)
@@ -579,40 +596,83 @@ export default function AdminDashboard() {
       } else { alert(data.error || 'Upload failed') }
     } finally { setGalleryBusy(false) }
   }
-  // Clean-up-with-ChatGPT: generate a preview (does not save yet).
-  const galClean = async (i: number) => {
+  // Produce a cleaned image Blob from an existing image URL, by either method.
+  const runClean = async (method: 'chatgpt' | 'free', url: string): Promise<Blob> => {
+    if (method === 'free') {
+      const removeBackground = await loadBgRemover()
+      return await removeBackground(url)
+    }
+    const res = await fetch('/api/admin/props/clean-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url }) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.imageBase64) throw new Error(data.error || 'Clean-up failed')
+    const bin = atob(data.imageBase64); const bytes = new Uint8Array(bin.length)
+    for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k)
+    return new Blob([bytes], { type: 'image/png' })
+  }
+  const uploadBlob = async (blob: Blob): Promise<string> => {
+    const fd = new FormData()
+    fd.append('files', new File([blob], 'img.png', { type: blob.type || 'image/png' }))
+    const res = await fetch('/api/admin/props/upload', { method: 'POST', body: fd })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.urls?.[0]) throw new Error(data.error || 'Upload failed')
+    return data.urls[0]
+  }
+  // Open the clean-up modal for image i and generate a preview with `method`.
+  const galGen = async (i: number, method: 'chatgpt' | 'free') => {
     const before = propDraft.gallery[i]
-    setCleanImg({ index: i, before, after: null, busy: true, error: null })
+    setCleanImg({ index: i, method, before, afterUrl: null, afterBlob: null, busy: true, error: null })
     try {
-      const res = await fetch('/api/admin/props/clean-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: before }) })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok && data.imageBase64) setCleanImg(c => c ? { ...c, after: data.imageBase64, busy: false } : c)
-      else setCleanImg(c => c ? { ...c, busy: false, error: data.error || 'Clean-up failed' } : c)
+      const blob = await runClean(method, before)
+      const afterUrl = URL.createObjectURL(blob)
+      setCleanImg(c => (c && c.index === i) ? { ...c, method, afterUrl, afterBlob: blob, busy: false } : c)
     } catch (e: any) {
       setCleanImg(c => c ? { ...c, busy: false, error: String(e?.message || e) } : c)
     }
   }
+  const galClean = (i: number) => galGen(i, cleanMethod)   // per-image CLEAN button (uses current default method)
   // Confirm the preview: upload the cleaned image, swap it into the gallery slot.
   const galCleanConfirm = async () => {
-    if (!cleanImg?.after) return
+    if (!cleanImg?.afterBlob) return
     setCleanImg(c => c ? { ...c, busy: true } : c)
     try {
-      const bin = atob(cleanImg.after)
-      const bytes = new Uint8Array(bin.length)
-      for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k)
-      const fd = new FormData()
-      fd.append('files', new File([bytes], 'cleaned.png', { type: 'image/png' }))
-      const res = await fetch('/api/admin/props/upload', { method: 'POST', body: fd })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok && data.urls?.[0]) {
-        const url = data.urls[0]
-        setPropDraft(d => { const g = [...d.gallery]; g[cleanImg.index] = url; return { ...d, gallery: g, image_url: g[0] ?? '' } })
-        setCleanImg(null)
-      } else { setCleanImg(c => c ? { ...c, busy: false, error: data.error || 'Save failed' } : c) }
+      const url = await uploadBlob(cleanImg.afterBlob)
+      setPropDraft(d => { const g = [...d.gallery]; g[cleanImg.index] = url; return { ...d, gallery: g, image_url: g[0] ?? '' } })
+      setCleanImg(null)
     } catch (e: any) {
       setCleanImg(c => c ? { ...c, busy: false, error: String(e?.message || e) } : c)
     }
   }
+  // Batch: clean every gallery image with the chosen method (auto-replace).
+  const batchCleanAll = async () => {
+    const urls = propDraft.gallery
+    if (!urls.length) return
+    if (!confirm(`Clean all ${urls.length} photo(s) with ${cleanMethod === 'free' ? 'the free remover' : 'ChatGPT'}? This replaces them.`)) return
+    setBatchClean({ done: 0, total: urls.length })
+    const out = [...urls]
+    for (let i = 0; i < urls.length; i++) {
+      try { out[i] = await uploadBlob(await runClean(cleanMethod, urls[i])) } catch { /* keep original on failure */ }
+      setBatchClean({ done: i + 1, total: urls.length })
+    }
+    setPropDraft(d => ({ ...d, gallery: out, image_url: out[0] ?? '' }))
+    setBatchClean(null)
+  }
+  // ── AI description + tag suggestions (uses the hero image) ──────────────────
+  const runAnalyze = async (): Promise<any | null> => {
+    const hero = propDraft.gallery[0] || propDraft.image_url
+    if (!hero) { alert('Add a photo first.'); return null }
+    const blob = await (await fetch(hero, { cache: 'no-store' })).blob()
+    const dataUrl: string = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = rej; fr.readAsDataURL(blob) })
+    const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+    const res = await fetch('/api/admin/props/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ imageBase64: b64, mediaType: blob.type || 'image/jpeg' }) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { alert(data.error || 'AI request failed'); return null }
+    return data
+  }
+  const generateDescription = async () => { setAiBusy('desc'); try { const d = await runAnalyze(); if (d?.description) setPropDraft(p => ({ ...p, description: d.description })) } finally { setAiBusy(null) } }
+  const suggestTags = async () => { setAiBusy('tags'); try { const d = await runAnalyze(); if (Array.isArray(d?.tags)) setPropDraft(p => ({ ...p, tags: Array.from(new Set([...p.tags, ...d.tags])) })) } finally { setAiBusy(null) } }
+  // ── Tag editing ────────────────────────────────────────────────────────────
+  const addTag = (raw: string) => { const t = raw.trim().toLowerCase(); if (!t) return; setPropDraft(d => d.tags.includes(t) ? d : { ...d, tags: [...d.tags, t] }); setTagInput('') }
+  const removeTag = (i: number) => setPropDraft(d => ({ ...d, tags: d.tags.filter((_, k) => k !== i) }))
   const patchProp = async (p: Prop, patch: Record<string, unknown>) => {
     setPropBusyId(p.id)
     await fetch(`/api/admin/props/${p.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }).catch(() => {})
@@ -2829,7 +2889,7 @@ export default function AdminDashboard() {
 
             {/* New / edit form */}
             {propEditId !== null && (
-              <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: '22px 24px', marginBottom: 28 }}>
+              <div ref={editFormRef} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: '22px 24px', marginBottom: 28, scrollMarginTop: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>{propEditId === 'new' ? 'NEW PROP' : 'EDIT PROP'}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, marginBottom: 14 }}>
                   <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Name
@@ -2852,6 +2912,17 @@ export default function AdminDashboard() {
                       <input type="file" accept="image/*" multiple disabled={galleryBusy} onChange={e => { galAddFiles(e.target.files); e.currentTarget.value = '' }} style={{ display: 'none' }} />
                     </label>
                   </div>
+                  {propDraft.gallery.length > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)' }}>CLEAN ALL WITH</span>
+                      <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)' }}>
+                        {([['chatgpt', 'ChatGPT'], ['free', 'Free']] as const).map(([m, label], i) => (
+                          <button key={m} disabled={!!batchClean} onClick={() => setCleanMethod(m)} style={{ border: 'none', borderLeft: i ? '1px solid rgba(255,255,255,0.16)' : 'none', padding: '5px 10px', fontSize: 10, fontWeight: 600, cursor: batchClean ? 'default' : 'pointer', background: cleanMethod === m ? '#d4a843' : 'transparent', color: cleanMethod === m ? '#080808' : 'rgba(255,255,255,0.6)' }}>{label}</button>
+                        ))}
+                      </div>
+                      <button disabled={!!batchClean} onClick={batchCleanAll} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '5px 12px', cursor: batchClean ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{batchClean ? `CLEANING ${batchClean.done}/${batchClean.total}…` : 'CLEAN ALL'}</button>
+                    </div>
+                  )}
                   {propDraft.gallery.length === 0 ? (
                     <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', border: '1px dashed rgba(255,255,255,0.15)', padding: '18px 12px', textAlign: 'center' }}>No photos yet — add some above.</div>
                   ) : (
@@ -2874,10 +2945,32 @@ export default function AdminDashboard() {
                     </div>
                   )}
                 </div>
-                <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: 14 }}>Description
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Description</span>
+                    <button type="button" disabled={aiBusy === 'desc'} onClick={generateDescription} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '4px 10px', cursor: aiBusy === 'desc' ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{aiBusy === 'desc' ? 'GENERATING…' : '✨ GENERATE'}</button>
+                  </div>
                   <textarea value={propDraft.description} onChange={e => setPropDraft(d => ({ ...d, description: e.target.value }))}
-                    style={{ width: '100%', marginTop: 6, minHeight: 70, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
-                </label>
+                    style={{ width: '100%', minHeight: 70, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Tags <span style={{ color: 'rgba(255,255,255,0.3)' }}>· for search (material, color, style…)</span></span>
+                    <button type="button" disabled={aiBusy === 'tags'} onClick={suggestTags} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '4px 10px', cursor: aiBusy === 'tags' ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{aiBusy === 'tags' ? 'SUGGESTING…' : '✨ SUGGEST'}</button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', padding: '8px 10px' }}>
+                    {propDraft.tags.map((t, i) => (
+                      <span key={t + i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.4)', color: '#e6c67a', fontSize: 11, padding: '3px 8px' }}>{t}
+                        <button type="button" onClick={() => removeTag(i)} style={{ background: 'none', border: 'none', color: '#e6c67a', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}>×</button>
+                      </span>
+                    ))}
+                    <input value={tagInput} onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput) } }}
+                      onBlur={() => addTag(tagInput)}
+                      placeholder={propDraft.tags.length ? 'add…' : 'type a tag, Enter to add'}
+                      style={{ flex: 1, minWidth: 100, background: 'transparent', border: 'none', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, outline: 'none' }} />
+                  </div>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', marginBottom: 18 }}>
                   <label style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                     <input type="checkbox" checked={propDraft.is_active} onChange={e => setPropDraft(d => ({ ...d, is_active: e.target.checked }))} style={{ accentColor: '#d4a843' }} /> Show on site
@@ -2896,33 +2989,60 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* Search + category filter */}
+            {!propsLoading && propsList.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <input value={propSearch} onChange={e => setPropSearch(e.target.value)} placeholder="Search name, description, tags…"
+                  style={{ flex: 1, minWidth: 180, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '8px 11px', outline: 'none', boxSizing: 'border-box' }} />
+                <select value={propCatFilter} onChange={e => setPropCatFilter(e.target.value)}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '8px 11px', outline: 'none' }}>
+                  <option value="" style={{ color: '#000' }}>All categories</option>
+                  {PROP_CATEGORIES.map(c => <option key={c} value={c} style={{ color: '#000' }}>{c}</option>)}
+                </select>
+                {(propSearch || propCatFilter) && (
+                  <button onClick={() => { setPropSearch(''); setPropCatFilter('') }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', padding: '8px 12px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.08em' }}>CLEAR</button>
+                )}
+              </div>
+            )}
+
             {/* List */}
             {propsLoading ? (
               <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading…</div>
             ) : propsList.length === 0 ? (
               <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>No props yet. Add your first one above.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'rgba(255,255,255,0.05)' }}>
-                {propsList.map(p => (
-                  <div key={p.id} style={{ background: '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 48, height: 48, flexShrink: 0, background: '#141414', overflow: 'hidden' }}>
-                      {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: p.is_active ? '#fff' : 'rgba(255,255,255,0.4)' }}>
-                        {p.name}
-                        {!p.is_active && <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.2)', padding: '1px 6px' }}>HIDDEN</span>}
-                        {p.needs_repair && <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', color: '#f97316', border: '1px solid rgba(249,115,22,0.4)', padding: '1px 6px' }}>NEEDS REPAIR</span>}
+            ) : (() => {
+              const q = propSearch.trim().toLowerCase()
+              const filtered = propsList.filter(p =>
+                (!propCatFilter || p.category === propCatFilter) &&
+                (!q || [p.name, p.description, p.category, ...((p.tags as string[]) || [])].filter(Boolean).some(s => String(s).toLowerCase().includes(q)))
+              )
+              if (!filtered.length) return <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>No props match your search.</div>
+              return (
+                <>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>{filtered.length} of {propsList.length}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'rgba(255,255,255,0.05)' }}>
+                    {filtered.map(p => (
+                      <div key={p.id} style={{ background: '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 48, height: 48, flexShrink: 0, background: '#141414', overflow: 'hidden' }}>
+                          {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: p.is_active ? '#fff' : 'rgba(255,255,255,0.4)' }}>
+                            {p.name}
+                            {!p.is_active && <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.2)', padding: '1px 6px' }}>HIDDEN</span>}
+                            {p.needs_repair && <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', color: '#f97316', border: '1px solid rgba(249,115,22,0.4)', padding: '1px 6px' }}>NEEDS REPAIR</span>}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{p.category || '—'}{p.tags && p.tags.length ? <span style={{ color: 'rgba(255,255,255,0.25)' }}> · {(p.tags as string[]).slice(0, 5).join(', ')}</span> : null}</div>
+                        </div>
+                        <button disabled={propBusyId === p.id} onClick={() => patchProp(p, { is_active: !p.is_active })} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.55)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>{p.is_active ? 'HIDE' : 'SHOW'}</button>
+                        <button onClick={() => startEditProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>EDIT</button>
+                        <button disabled={propBusyId === p.id} onClick={() => deleteProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff6b6b', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>DELETE</button>
                       </div>
-                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{p.category || '—'}</div>
-                    </div>
-                    <button disabled={propBusyId === p.id} onClick={() => patchProp(p, { is_active: !p.is_active })} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.55)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>{p.is_active ? 'HIDE' : 'SHOW'}</button>
-                    <button onClick={() => startEditProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>EDIT</button>
-                    <button disabled={propBusyId === p.id} onClick={() => deleteProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff6b6b', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>DELETE</button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                </>
+              )
+            })()}
           </div>
         )}
 
@@ -2931,7 +3051,14 @@ export default function AdminDashboard() {
           <div onClick={() => { if (!cleanImg.busy) setCleanImg(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.14)', padding: 24, maxWidth: 640, width: '100%' }}>
               <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 4 }}>CLEAN UP PHOTO</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 18 }}>ChatGPT places the object on a clean white background. Review before replacing — the result is a 1024×1024 square.</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 14 }}>{cleanImg.method === 'free' ? 'Free in-browser background removal — keeps the object exactly as shot, on a transparent background.' : 'ChatGPT places the object on a clean white studio background (1024×1024 square).'} Review before replacing.</div>
+              {/* Method toggle — regenerates the preview when switched */}
+              <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)', marginBottom: 16 }}>
+                {([['chatgpt', 'ChatGPT'], ['free', 'Free remover']] as const).map(([m, label], i) => (
+                  <button key={m} disabled={cleanImg.busy} onClick={() => { if (cleanImg.method !== m) galGen(cleanImg.index, m) }}
+                    style={{ border: 'none', borderLeft: i ? '1px solid rgba(255,255,255,0.16)' : 'none', padding: '7px 14px', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', cursor: cleanImg.busy ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', background: cleanImg.method === m ? '#d4a843' : 'transparent', color: cleanImg.method === m ? '#080808' : 'rgba(255,255,255,0.6)' }}>{label}</button>
+                ))}
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>BEFORE</div>
@@ -2941,13 +3068,14 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>AFTER</div>
-                  <div style={{ aspectRatio: '1', background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-                    {cleanImg.busy && !cleanImg.after ? (
-                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Generating…</span>
+                  {/* checkerboard so transparent (free-remover) results are visible */}
+                  <div style={{ aspectRatio: '1', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', backgroundColor: '#0a0a0a', backgroundImage: 'linear-gradient(45deg,#222 25%,transparent 25%),linear-gradient(-45deg,#222 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#222 75%),linear-gradient(-45deg,transparent 75%,#222 75%)', backgroundSize: '16px 16px', backgroundPosition: '0 0,0 8px,8px -8px,-8px 0px' }}>
+                    {cleanImg.busy && !cleanImg.afterUrl ? (
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>{cleanImg.method === 'free' ? 'Removing background…' : 'Generating…'}</span>
                     ) : cleanImg.error ? (
                       <span style={{ fontSize: 11, color: '#ff6b6b', padding: 10 }}>{cleanImg.error}</span>
-                    ) : cleanImg.after ? (
-                      <img src={`data:image/png;base64,${cleanImg.after}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : cleanImg.afterUrl ? (
+                      <img src={cleanImg.afterUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     ) : null}
                   </div>
                 </div>
@@ -2955,9 +3083,9 @@ export default function AdminDashboard() {
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button onClick={() => setCleanImg(null)} disabled={cleanImg.busy} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '8px 16px', cursor: cleanImg.busy ? 'default' : 'pointer', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', opacity: cleanImg.busy ? 0.5 : 1 }}>CANCEL</button>
                 {cleanImg.error && !cleanImg.busy && (
-                  <button onClick={() => galClean(cleanImg.index)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', color: '#60a5fa' }}>TRY AGAIN</button>
+                  <button onClick={() => galGen(cleanImg.index, cleanImg.method)} style={{ background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', padding: '8px 16px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', color: '#60a5fa' }}>TRY AGAIN</button>
                 )}
-                <button onClick={galCleanConfirm} disabled={!cleanImg.after || cleanImg.busy} style={{ background: (!cleanImg.after || cleanImg.busy) ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: (!cleanImg.after || cleanImg.busy) ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{cleanImg.busy && cleanImg.after ? 'SAVING…' : 'REPLACE'}</button>
+                <button onClick={galCleanConfirm} disabled={!cleanImg.afterBlob || cleanImg.busy} style={{ background: (!cleanImg.afterBlob || cleanImg.busy) ? 'rgba(212,168,67,0.4)' : '#d4a843', border: 'none', padding: '8px 18px', cursor: (!cleanImg.afterBlob || cleanImg.busy) ? 'default' : 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>{cleanImg.busy && cleanImg.afterBlob ? 'SAVING…' : 'REPLACE'}</button>
               </div>
             </div>
           </div>

@@ -13,10 +13,11 @@ export interface Prop {
   sort_order: number
   slug?: string | null
   gallery?: string[]
+  tags?: string[]
   created_at?: string
 }
 
-export const PROP_COLUMNS = 'id, name, category, description, image_url, needs_repair, is_active, sort_order, slug, gallery, created_at'
+export const PROP_COLUMNS = 'id, name, category, description, image_url, needs_repair, is_active, sort_order, slug, gallery, tags, created_at'
 
 // URL-safe slug from a display name.
 export function slugify(s: string): string {
@@ -32,6 +33,7 @@ export function sanitizeProp(body: any) {
   if (typeof body.image_url === 'string')    row.image_url    = body.image_url.trim() || null
   if (typeof body.slug === 'string')         row.slug         = body.slug.trim() || null
   if (Array.isArray(body.gallery))           row.gallery      = body.gallery.filter((u: any) => typeof u === 'string')
+  if (Array.isArray(body.tags))              row.tags         = body.tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 20)
   if (body.needs_repair !== undefined)       row.needs_repair = Boolean(body.needs_repair)
   if (body.is_active !== undefined)          row.is_active    = Boolean(body.is_active)
   if (body.sort_order !== undefined)         row.sort_order   = parseInt(String(body.sort_order), 10) || 0

@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
 Look at the prop in the image and return a JSON object with these keys:
 - "name": a short Title Case label, 2-4 words (e.g. "Vintage Rocking Chair").
 - "category": EXACTLY one of: ${PROP_CATEGORIES.join(', ')}.
-- "description": one short sentence (max ~18 words) describing the prop for renters.`
+- "description": one short sentence (max ~18 words) describing the prop for renters.
+- "tags": an array of 3-6 short lowercase keywords a renter might search by (material, color, style, era, use) — e.g. ["wood","vintage","mid-century","desk"]. Single words or short phrases, no punctuation.`
 
   let resp: Response
   try {
@@ -60,9 +61,13 @@ Look at the prop in the image and return a JSON object with these keys:
     return NextResponse.json({ error: 'Could not parse AI response', raw: text }, { status: 502 })
   }
   const cat = (PROP_CATEGORIES as readonly string[]).find(c => c.toLowerCase() === String(parsed.category || '').toLowerCase()) || 'Misc'
+  const tags = Array.isArray(parsed.tags)
+    ? parsed.tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 8)
+    : []
   return NextResponse.json({
     name: String(parsed.name || '').slice(0, 80),
     category: cat,
     description: String(parsed.description || '').slice(0, 300),
+    tags,
   })
 }
