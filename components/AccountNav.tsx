@@ -21,6 +21,13 @@ export default function AccountNav() {
 
   return (
     <nav className="acct-nav">
+      <Link href="/" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'Inter', fontSize: 13,
+        color: 'rgba(255,255,255,0.55)', textDecoration: 'none', marginBottom: 24,
+      }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.55)')}
+      >← Back to Home</Link>
       <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', marginBottom: 16 }}>ACCOUNT</div>
       {ITEMS.map(({ href, label }) => (
         <Link key={href} href={href} style={{
