@@ -635,7 +635,8 @@ export default function AdminDashboard() {
       setCleanImg(c => c ? { ...c, busy: false, error: String(e?.message || e) } : c)
     }
   }
-  const galClean = (i: number) => galGen(i, cleanMethod)   // per-image CLEAN button (uses current default method)
+  // Per-image CLEAN button: open the modal idle (no auto-generate).
+  const galClean = (i: number) => setCleanImg({ index: i, method: cleanMethod, before: propDraft.gallery[i], afterUrl: null, afterBlob: null, busy: false, error: null })
   // Confirm the preview: upload the cleaned image, swap it into the gallery slot.
   const galCleanConfirm = async () => {
     if (!cleanImg?.afterBlob) return
@@ -3058,27 +3059,30 @@ export default function AdminDashboard() {
             <div onClick={e => e.stopPropagation()} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.14)', padding: 24, maxWidth: 640, width: '100%' }}>
               <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 4 }}>CLEAN UP PHOTO</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 14 }}>{cleanImg.method === 'free' ? 'Free in-browser background removal — keeps the object exactly as shot, on a transparent background.' : 'ChatGPT places the object on a clean white studio background (1024×1024 square).'} Review before replacing.</div>
-              {/* Method toggle — regenerates the preview when switched */}
-              <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)', marginBottom: 16 }}>
+              {/* Method toggle — switching clears the preview; you press Generate to run */}
+              <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)', marginBottom: 14 }}>
                 {([['chatgpt', 'ChatGPT'], ['free', 'Free remover']] as const).map(([m, label], i) => (
-                  <button key={m} disabled={cleanImg.busy} onClick={() => { if (cleanImg.method !== m) galGen(cleanImg.index, m) }}
+                  <button key={m} disabled={cleanImg.busy} onClick={() => setCleanImg(c => c ? { ...c, method: m, afterUrl: null, afterBlob: null, error: null } : c)}
                     style={{ border: 'none', borderLeft: i ? '1px solid rgba(255,255,255,0.16)' : 'none', padding: '7px 14px', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', cursor: cleanImg.busy ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', background: cleanImg.method === m ? '#d4a843' : 'transparent', color: cleanImg.method === m ? '#080808' : 'rgba(255,255,255,0.6)' }}>{label}</button>
                 ))}
               </div>
               {cleanImg.method === 'chatgpt' && (
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>CHATGPT INSTRUCTIONS</span>
+                    <span style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>CHATGPT INSTRUCTIONS <span style={{ letterSpacing: 0, color: 'rgba(255,255,255,0.3)' }}>· edit before generating</span></span>
                     {cleanPrompt !== DEFAULT_CLEAN_PROMPT && (
                       <button type="button" onClick={() => setCleanPrompt(DEFAULT_CLEAN_PROMPT)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer', textDecoration: 'underline' }}>reset to default</button>
                     )}
                   </div>
                   <textarea value={cleanPrompt} onChange={e => setCleanPrompt(e.target.value)} disabled={cleanImg.busy}
                     style={{ width: '100%', minHeight: 58, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.5, padding: '8px 10px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
-                  <button type="button" disabled={cleanImg.busy} onClick={() => galGen(cleanImg.index, 'chatgpt')}
-                    style={{ marginTop: 8, background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '6px 14px', cursor: cleanImg.busy ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{cleanImg.busy ? 'WORKING…' : '↻ REGENERATE WITH THIS PROMPT'}</button>
                 </div>
               )}
+              {/* Explicit Generate button — nothing runs until you click this */}
+              <button type="button" disabled={cleanImg.busy} onClick={() => galGen(cleanImg.index, cleanImg.method)}
+                style={{ marginBottom: 16, background: cleanImg.busy ? 'rgba(96,165,250,0.35)' : 'rgba(96,165,250,0.95)', border: 'none', color: '#08131f', padding: '9px 18px', cursor: cleanImg.busy ? 'default' : 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>
+                {cleanImg.busy ? 'WORKING…' : cleanImg.afterUrl ? '↻ REGENERATE' : (cleanImg.method === 'free' ? '✨ REMOVE BACKGROUND' : '✨ GENERATE')}
+              </button>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>BEFORE</div>
@@ -3096,7 +3100,9 @@ export default function AdminDashboard() {
                       <span style={{ fontSize: 11, color: '#ff6b6b', padding: 10 }}>{cleanImg.error}</span>
                     ) : cleanImg.afterUrl ? (
                       <img src={cleanImg.afterUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    ) : null}
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 10 }}>Press Generate to preview</span>
+                    )}
                   </div>
                 </div>
               </div>
