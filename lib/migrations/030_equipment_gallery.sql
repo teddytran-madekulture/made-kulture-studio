@@ -40,4 +40,12 @@ update equipment set
   gallery = ARRAY['/images/equipment/christie-hd6k-m-projector/1.jpg']
 where name = 'Christie HD6K-M Projector';
 
--- 3) New item: 4ft RGB Battery LED Tube Light  (PRICE PENDING — see 030b)
+-- 3) New item: 4ft RGB Battery LED Tube Light ($15)
+insert into equipment (name, rate, category, quantity, description, image_url, gallery, is_available, sort_order)
+select
+  '4ft RGB Battery LED Tube Light', 15, 'lighting', 1,
+  '4ft RGB battery-powered LED tube light. Full-color (RGB) with adjustable white, cordless and mountable anywhere for accents, backgrounds, and creative color effects.',
+  '/images/equipment/4ft-rgb-battery-led-tube-light/1.jpg',
+  ARRAY['/images/equipment/4ft-rgb-battery-led-tube-light/1.jpg','/images/equipment/4ft-rgb-battery-led-tube-light/2.jpg','/images/equipment/4ft-rgb-battery-led-tube-light/3.jpg'],
+  true, 0
+where not exists (select 1 from equipment where name = '4ft RGB Battery LED Tube Light');
