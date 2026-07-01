@@ -393,6 +393,13 @@ function BookingWizard() {
       setBooking(b => ({ ...b, startHour: h, endHour: null }))
       setSelecting('end')
     } else {
+      // Clicking your chosen start again (before an end is set) clears it, so a
+      // wrong start is easy to undo.
+      if (booking.endHour === null && h === booking.startHour) {
+        setBooking(b => ({ ...b, startHour: null, endHour: null }))
+        setSelecting('start')
+        return
+      }
       if (h <= (booking.startHour ?? 0)) {
         setBooking(b => ({ ...b, startHour: h, endHour: null }))
         return
@@ -693,6 +700,11 @@ function BookingWizard() {
                   : `${fmt12(booking.startHour)} – ${fmt12(booking.endHour)} · ${hourCount} hour${hourCount !== 1 ? 's' : ''}`
               }
             </p>
+            {booking.startHour !== null && booking.endHour === null && (
+              <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, marginBottom: 12 }}>
+                Wrong start? Tap it again to clear it, or hit ↺ Reset Time below.
+              </p>
+            )}
             {loadingSlots && (
               <p style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 16 }}>
                 CHECKING AVAILABILITY...
@@ -747,8 +759,10 @@ function BookingWizard() {
             {/* Reset */}
             {(booking.startHour !== null) && (
               <button onClick={() => { setBooking(b => ({ ...b, startHour: null, endHour: null })); setSelecting('start') }}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)', textDecoration: 'underline', marginBottom: 24, display: 'block' }}>
-                RESET SELECTION
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.35)', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#fff', padding: '9px 16px', marginBottom: 24, display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.7)'}
+                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.35)'}>
+                ↺ RESET TIME
               </button>
             )}
               </>
