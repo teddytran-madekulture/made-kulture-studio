@@ -138,7 +138,7 @@ export default function AddPropByPhoto() {
 
         {/* Step 1: choose photos */}
         <label style={{ display: 'block', border: '1.5px dashed rgba(255,255,255,0.25)', borderRadius: 10, padding: '28px 16px', textAlign: 'center', cursor: 'pointer', background: '#0d0d0d' }}>
-          <input type="file" accept="image/*" capture="environment" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.currentTarget.value = '' }} />
+          <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.currentTarget.value = '' }} />
           <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600 }}>+ Take / choose photos</div>
           <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>First photo becomes the cover · add several for a gallery</div>
         </label>
