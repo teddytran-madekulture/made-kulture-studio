@@ -612,7 +612,16 @@ export default function AdminDashboard() {
       const srcRes = await fetch(url, { cache: 'no-store' })
       if (!srcRes.ok) throw new Error(`Could not load the image (${srcRes.status})`)
       const srcBlob = await srcRes.blob()
-      return await removeBackground(srcBlob)
+      const cut = await removeBackground(srcBlob)
+      // Flatten the transparent cutout onto white so it matches the site (a
+      // transparent PNG shows dark on the dark prop pages). Object stays as shot.
+      const bmp = await createImageBitmap(cut)
+      const canvas = document.createElement('canvas')
+      canvas.width = bmp.width; canvas.height = bmp.height
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(bmp, 0, 0)
+      return await new Promise<Blob>((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('Could not encode image')), 'image/jpeg', 0.92))
     }
     const res = await fetch('/api/admin/props/clean-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url, prompt: (prompt && prompt.trim()) ? prompt.trim() : undefined }) })
     const data = await res.json().catch(() => ({}))
@@ -3064,7 +3073,7 @@ export default function AdminDashboard() {
           <div onClick={() => { if (!cleanImg.busy) setCleanImg(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.14)', padding: 24, maxWidth: 640, width: '100%' }}>
               <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 4 }}>CLEAN UP PHOTO</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 14 }}>{cleanImg.method === 'free' ? 'Free in-browser background removal — keeps the object exactly as shot, on a transparent background.' : 'ChatGPT places the object on a clean white studio background (1024×1024 square).'} Review before replacing.</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 14 }}>{cleanImg.method === 'free' ? 'Free in-browser background removal — keeps the object exactly as shot, on a clean white background.' : 'ChatGPT places the object on a clean white studio background (1024×1024 square).'} Review before replacing.</div>
               {/* Method toggle — switching clears the preview; you press Generate to run */}
               <div style={{ display: 'inline-flex', border: '1px solid rgba(255,255,255,0.16)', marginBottom: 14 }}>
                 {([['chatgpt', 'ChatGPT'], ['free', 'Free remover']] as const).map(([m, label], i) => (
