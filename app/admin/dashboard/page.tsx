@@ -5,6 +5,11 @@ import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from 
 import { PROP_CATEGORIES, type Prop } from '@/lib/props'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
+// Default instruction sent to ChatGPT when cleaning a prop photo. Editable per
+// image in the clean-up modal. Keep in sync with the fallback in
+// app/api/admin/props/clean-image/route.ts.
+const DEFAULT_CLEAN_PROMPT = 'Remove the background and place this exact object on a clean, evenly lit, pure white studio background. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
+
 // Free, in-browser background remover (same lib the Add-by-Photo flow uses).
 // Loaded from a CDN at runtime so the heavy onnx/wasm code isn't bundled.
 const BG_REMOVAL_CDN = 'https://esm.sh/@imgly/background-removal@1.7.0'
@@ -551,6 +556,7 @@ export default function AdminDashboard() {
   const [tagInput,     setTagInput]     = useState('')
   const [aiBusy,       setAiBusy]       = useState<'desc' | 'tags' | null>(null)  // AI description / tag suggestion
   const [cleanMethod,  setCleanMethod]  = useState<'chatgpt' | 'free'>('chatgpt') // method for Clean-all
+  const [cleanPrompt,  setCleanPrompt]  = useState(DEFAULT_CLEAN_PROMPT)          // editable ChatGPT instruction
   const [batchClean,   setBatchClean]   = useState<{ done: number; total: number } | null>(null)
   const [propSearch,   setPropSearch]   = useState('')
   const [propCatFilter, setPropCatFilter] = useState('')
@@ -597,12 +603,12 @@ export default function AdminDashboard() {
     } finally { setGalleryBusy(false) }
   }
   // Produce a cleaned image Blob from an existing image URL, by either method.
-  const runClean = async (method: 'chatgpt' | 'free', url: string): Promise<Blob> => {
+  const runClean = async (method: 'chatgpt' | 'free', url: string, prompt?: string): Promise<Blob> => {
     if (method === 'free') {
       const removeBackground = await loadBgRemover()
       return await removeBackground(url)
     }
-    const res = await fetch('/api/admin/props/clean-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url }) })
+    const res = await fetch('/api/admin/props/clean-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url, prompt: (prompt && prompt.trim()) ? prompt.trim() : undefined }) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok || !data.imageBase64) throw new Error(data.error || 'Clean-up failed')
     const bin = atob(data.imageBase64); const bytes = new Uint8Array(bin.length)
@@ -622,7 +628,7 @@ export default function AdminDashboard() {
     const before = propDraft.gallery[i]
     setCleanImg({ index: i, method, before, afterUrl: null, afterBlob: null, busy: true, error: null })
     try {
-      const blob = await runClean(method, before)
+      const blob = await runClean(method, before, cleanPrompt)
       const afterUrl = URL.createObjectURL(blob)
       setCleanImg(c => (c && c.index === i) ? { ...c, method, afterUrl, afterBlob: blob, busy: false } : c)
     } catch (e: any) {
@@ -650,7 +656,7 @@ export default function AdminDashboard() {
     setBatchClean({ done: 0, total: urls.length })
     const out = [...urls]
     for (let i = 0; i < urls.length; i++) {
-      try { out[i] = await uploadBlob(await runClean(cleanMethod, urls[i])) } catch { /* keep original on failure */ }
+      try { out[i] = await uploadBlob(await runClean(cleanMethod, urls[i], cleanPrompt)) } catch { /* keep original on failure */ }
       setBatchClean({ done: i + 1, total: urls.length })
     }
     setPropDraft(d => ({ ...d, gallery: out, image_url: out[0] ?? '' }))
@@ -3059,6 +3065,20 @@ export default function AdminDashboard() {
                     style={{ border: 'none', borderLeft: i ? '1px solid rgba(255,255,255,0.16)' : 'none', padding: '7px 14px', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', cursor: cleanImg.busy ? 'default' : 'pointer', fontFamily: 'Inter, sans-serif', background: cleanImg.method === m ? '#d4a843' : 'transparent', color: cleanImg.method === m ? '#080808' : 'rgba(255,255,255,0.6)' }}>{label}</button>
                 ))}
               </div>
+              {cleanImg.method === 'chatgpt' && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>CHATGPT INSTRUCTIONS</span>
+                    {cleanPrompt !== DEFAULT_CLEAN_PROMPT && (
+                      <button type="button" onClick={() => setCleanPrompt(DEFAULT_CLEAN_PROMPT)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer', textDecoration: 'underline' }}>reset to default</button>
+                    )}
+                  </div>
+                  <textarea value={cleanPrompt} onChange={e => setCleanPrompt(e.target.value)} disabled={cleanImg.busy}
+                    style={{ width: '100%', minHeight: 58, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.5, padding: '8px 10px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+                  <button type="button" disabled={cleanImg.busy} onClick={() => galGen(cleanImg.index, 'chatgpt')}
+                    style={{ marginTop: 8, background: 'transparent', border: '1px solid rgba(96,165,250,0.5)', color: '#60a5fa', padding: '6px 14px', cursor: cleanImg.busy ? 'default' : 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>{cleanImg.busy ? 'WORKING…' : '↻ REGENERATE WITH THIS PROMPT'}</button>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
                 <div>
                   <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>BEFORE</div>
