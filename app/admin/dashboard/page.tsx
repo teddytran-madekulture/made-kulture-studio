@@ -238,6 +238,34 @@ function fmtCalHeader(dateStr: string): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 }
 
+// 0 = Sunday … 6 = Saturday (in the studio's timezone)
+function dowIndex(dateStr: string): number {
+  const wd = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Chicago' })
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wd)
+}
+function weekStart(dateStr: string): string { return addDays(dateStr, -dowIndex(dateStr)) }
+function weekLabel(dateStr: string): string {
+  const s = weekStart(dateStr), e = addDays(s, 6)
+  const f = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return `${f(s)} – ${f(e)}`
+}
+function monthLabel(dateStr: string): string {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+function addMonths(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T12:00:00'); d.setMonth(d.getMonth() + n)
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+}
+// 42 date strings (6 weeks) covering the month grid that contains dateStr.
+function monthGridDates(dateStr: string): string[] {
+  const first = dateStr.slice(0, 8) + '01'
+  const gridStart = addDays(first, -dowIndex(first))
+  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i))
+}
+function shortDayLabel(dateStr: string): string {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 function fmt12(h: number) {
   const hour = Math.floor(h)
   const mins = h % 1 !== 0 ? '30' : '00'
@@ -390,6 +418,7 @@ export default function AdminDashboard() {
     if (res.ok) { setLegalSaved(which); setTimeout(() => setLegalSaved(null), 2500) }
   }
   const [calDate,       setCalDate]       = useState(todayStr)
+  const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [nowHour,       setNowHour]       = useState(getNowHour)
 
@@ -1158,6 +1187,18 @@ export default function AdminDashboard() {
   // Calendar
   const isToday     = calDate === todayStr()
   const dayBookings = bookings.filter(b => b.status !== 'cancelled' && localDateStr(b.start_time) === calDate)
+
+  // Calendar view-mode helpers
+  const calNav = (dir: number) => setCalDate(d => calMode === 'month' ? addMonths(d, dir) : addDays(d, dir * (calMode === 'week' ? 7 : 1)))
+  const bkByDate: Record<string, Booking[]> = {}
+  bookings.filter(b => b.status !== 'cancelled').forEach(b => {
+    const d = localDateStr(b.start_time); (bkByDate[d] ||= []).push(b)
+  })
+  const sortByStart = (a: Booking, b: Booking) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  const calHeaderLabel = calMode === 'day' ? fmtCalHeader(calDate)
+    : calMode === 'week' ? weekLabel(calDate)
+    : calMode === 'month' ? monthLabel(calDate)
+    : 'Upcoming'
   const nowTop      = (nowHour - CAL_START) * SLOT_H * 2
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -1511,29 +1552,34 @@ export default function AdminDashboard() {
         {/* CALENDAR VIEW */}
         {view === 'calendar' && (
           <div style={{ paddingBottom: 60 }}>
+            {/* Mode toggle */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+              {([['day', 'Day'], ['week', 'Week'], ['month', 'Month'], ['agenda', 'Agenda']] as const).map(([m, label]) => (
+                <button key={m} onClick={() => setCalMode(m)} style={{
+                  border: '1px solid rgba(255,255,255,0.15)', padding: '7px 15px', cursor: 'pointer',
+                  fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
+                  background: calMode === m ? '#fff' : 'transparent', color: calMode === m ? '#080808' : 'rgba(255,255,255,0.6)',
+                }}>{label}</button>
+              ))}
+            </div>
+
+            {/* Nav */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
-              <button onClick={() => setCalDate(d => addDays(d, -1))}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
-                &larr; PREV
-              </button>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 24, letterSpacing: '0.05em' }}>
-                  {fmtCalHeader(calDate)}
-                </div>
-                {isToday && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', marginTop: 4 }}>TODAY</div>}
+              {calMode !== 'agenda'
+                ? <button onClick={() => calNav(-1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>&larr; PREV</button>
+                : <span />}
+              <div style={{ textAlign: 'center', flex: '1 1 120px' }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: isMobile ? 20 : 24, letterSpacing: '0.05em' }}>{calHeaderLabel}</div>
+                {calMode === 'day' && isToday && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', marginTop: 4 }}>TODAY</div>}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => fetchBookings()} title="Reload bookings"
-                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '8px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
-                  {loading ? '…' : '↻ REFRESH'}
-                </button>
-                <button onClick={() => setCalDate(d => addDays(d, 1))}
-                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
-                  NEXT &rarr;
-                </button>
+                {calMode !== 'day' && <button onClick={() => setCalDate(todayStr())} title="Jump to today" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '8px 12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>TODAY</button>}
+                <button onClick={() => fetchBookings()} title="Reload bookings" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '8px 13px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>{loading ? '…' : '↻'}</button>
+                {calMode !== 'agenda' && <button onClick={() => calNav(1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>NEXT &rarr;</button>}
               </div>
             </div>
 
+            {calMode === 'day' && (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: TIME_COL + CAL_SETS.length * SET_COL, position: 'relative' }}>
                 <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 12 }}>
@@ -1627,6 +1673,76 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
+            )}
+
+            {/* WEEK — day-by-day agenda for the week */}
+            {calMode === 'week' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {Array.from({ length: 7 }, (_, i) => addDays(weekStart(calDate), i)).map(dateStr => {
+                  const list = (bkByDate[dateStr] || []).slice().sort(sortByStart)
+                  return (
+                    <div key={dateStr} style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+                      <button onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: dateStr === todayStr() ? 'rgba(212,168,67,0.12)' : 'rgba(255,255,255,0.03)', border: 'none', padding: '12px 14px', cursor: 'pointer', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600 }}>
+                        <span>{shortDayLabel(dateStr)}</span>
+                        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{list.length ? `${list.length} booking${list.length > 1 ? 's' : ''}` : '—'}</span>
+                      </button>
+                      {list.map(b => (
+                        <div key={b.id} onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}>
+                          <div><div style={{ fontSize: 13, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* MONTH — grid with per-day counts; tap a day to open it */}
+            {calMode === 'month' && (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4, marginBottom: 6 }}>
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 10, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.3)' }}>{d}</div>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+                  {monthGridDates(calDate).map(dateStr => {
+                    const inMonth = dateStr.slice(0, 7) === calDate.slice(0, 7)
+                    const count = (bkByDate[dateStr] || []).length
+                    const isTod = dateStr === todayStr()
+                    return (
+                      <button key={dateStr} onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ aspectRatio: '1 / 1', border: '1px solid rgba(255,255,255,0.06)', background: isTod ? 'rgba(212,168,67,0.16)' : count ? 'rgba(255,255,255,0.04)' : 'transparent', cursor: 'pointer', padding: '5px 5px', display: 'flex', flexDirection: 'column', gap: 2, opacity: inMonth ? 1 : 0.3, color: '#fff' }}>
+                        <span style={{ fontSize: 12, fontWeight: isTod ? 700 : 500, textAlign: 'left' }}>{Number(dateStr.slice(8, 10))}</span>
+                        {count > 0 && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 'auto', textAlign: 'left' }}>{count}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* AGENDA — chronological list of upcoming bookings */}
+            {calMode === 'agenda' && (() => {
+              const now = new Date()
+              const upcoming = bookings.filter(b => b.status !== 'cancelled' && new Date(b.end_time) >= now).sort(sortByStart)
+              if (!upcoming.length) return <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No upcoming bookings.</div>
+              let lastDate = ''
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {upcoming.map(b => {
+                    const d = localDateStr(b.start_time); const showHeader = d !== lastDate; lastDate = d
+                    return (
+                      <div key={b.id}>
+                        {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
+                        <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
+                          <div><div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
+                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_price != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_price}</div>}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </div>
         )}
 
