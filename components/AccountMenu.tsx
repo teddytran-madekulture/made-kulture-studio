@@ -40,6 +40,13 @@ export default function AccountMenu() {
                 color: href === pathname ? '#fff' : 'rgba(255,255,255,0.82)', textDecoration: 'none', padding: '4px 0',
               }}>{label}</Link>
             ))}
+            <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
+              <button type="submit" style={{
+                background: 'transparent', border: 'none', padding: '4px 0', cursor: 'pointer', textAlign: 'left',
+                fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(32px, 9vw, 52px)', letterSpacing: '0.02em', lineHeight: 1.12,
+                color: 'rgba(255,255,255,0.5)',
+              }}>SIGN OUT</button>
+            </form>
           </div>
 
           <div style={{ marginTop: 'auto', paddingTop: 28, borderTop: '1px solid rgba(255,255,255,0.1)' }}>

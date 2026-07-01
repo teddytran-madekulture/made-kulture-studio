@@ -62,10 +62,8 @@ h1, h2, h3, .display {
   .acct-nav { width: 100%; }
 }
 
-  border-color: rgba(255,255,255,0.3);
-  color: var(--gray);
-}
-
-.btn-ghost:hover { border-color: var(--white); color: var(--white); background: transparent; }
+/* Hide an element on phones (used for the desktop-only account sign-out) */
+@media (max-width: 640px) { .acct-hide-mobile { display: none !important; } }
+; }
 
 section { border-top: 1px solid var(--border); }
