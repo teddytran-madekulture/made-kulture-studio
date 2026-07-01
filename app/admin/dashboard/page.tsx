@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from '@/lib/agreements'
 import { PROP_CATEGORIES, type Prop } from '@/lib/props'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -331,6 +332,8 @@ function Detail({ label, value, mono }: { label: string; value: string; mono?: b
 
 export default function AdminDashboard() {
   const router = useRouter()
+  const isMobile = useIsMobile()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [bookings,  setBookings]  = useState<Booking[]>([])
   const [loading,   setLoading]   = useState(true)
@@ -1162,11 +1165,30 @@ export default function AdminDashboard() {
   return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
 
+      {/* ── MOBILE TOP BAR ──────────────────────────────────────────────────── */}
+      {isMobile && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, height: 54, zIndex: 55,
+          background: '#080808', borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px',
+        }}>
+          <button onClick={() => setSidebarOpen(o => !o)} aria-label="Menu" style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }}>☰</button>
+          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 18, letterSpacing: '0.05em' }}>MADE KULTURE <span style={{ fontSize: 10, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>/ ADMIN</span></div>
+        </div>
+      )}
+      {/* Backdrop when drawer open on mobile */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 55 }} />
+      )}
+
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <div style={{
         position: 'fixed', left: 0, top: 0, bottom: 0, width: 220,
         background: '#080808', borderRight: '1px solid rgba(255,255,255,0.06)',
-        display: 'flex', flexDirection: 'column', zIndex: 50,
+        display: 'flex', flexDirection: 'column', zIndex: 60,
+        transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+        transition: 'transform 0.25s ease',
+        boxShadow: isMobile && sidebarOpen ? '0 0 40px rgba(0,0,0,0.6)' : 'none',
       }}>
         {/* Wordmark */}
         <div style={{ padding: '28px 24px 24px' }}>
@@ -1193,7 +1215,7 @@ export default function AdminDashboard() {
           {bookingsOpen && (
             <div>
               {([['list', '≡', 'List View'], ['calendar', '⊡', 'Calendar']] as const).map(([v, icon, label]) => (
-                <button key={v} onClick={() => setView(v)} style={{
+                <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                   background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
                   borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
@@ -1210,7 +1232,7 @@ export default function AdminDashboard() {
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
           {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['props', '🛋', 'Props']] as const).map(([v, icon, label]) => (
-            <button key={v} onClick={() => setView(v)} style={{
+            <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
               borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
@@ -1225,7 +1247,7 @@ export default function AdminDashboard() {
           <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>SETTINGS</div>
 
           {([['emails', '✉', 'Emails'], ['usage', '📊', 'Usage'], ['legal', '§', 'Legal'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
-            <button key={v} onClick={() => setView(v)} style={{
+            <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
               borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
@@ -1267,11 +1289,11 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <div style={{ marginLeft: 220 }}>
-      <div style={{ maxWidth: view === 'calendar' ? '100%' : 1200, margin: '0 auto', padding: '40px 40px 0' }}>
+      <div style={{ marginLeft: isMobile ? 0 : 220 }}>
+      <div style={{ maxWidth: view === 'calendar' ? '100%' : 1200, margin: '0 auto', padding: isMobile ? '70px 14px 0' : '40px 40px 0' }}>
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 40 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 1, background: 'rgba(255,255,255,0.05)', marginBottom: isMobile ? 24 : 40 }}>
           {[
             { label: 'ALL-TIME REVENUE', value: `$${revenueTotal.toLocaleString()}` },
             { label: 'THIS MONTH',       value: `$${revenueThisMonth.toLocaleString()}` },

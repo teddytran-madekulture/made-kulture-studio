@@ -26,8 +26,8 @@ export default async function AccountLayout({ children }: { children: React.Reac
       </div>
 
       {/* Sidebar + content */}
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px', display: 'flex', gap: 48 }}>
-        <nav style={{ width: 180, flexShrink: 0 }}>
+      <div className="acct-shell" style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
+        <nav className="acct-nav">
           <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', marginBottom: 16 }}>ACCOUNT</div>
           {[
             { href: '/account', label: 'Dashboard' },
