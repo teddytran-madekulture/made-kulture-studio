@@ -13,13 +13,25 @@ const ITEMS = [
   { href: '/account/payment', label: 'Payment Methods' },
 ]
 
-// Mobile-only: hamburger in the top bar that opens a full-screen overlay
-// menu, matching the homepage nav. Renders nothing on desktop.
 export default function AccountMenu() {
   const isMobile = useIsMobile()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  if (!isMobile) return null
+
+  // Desktop: a simple sign-out button in the top bar.
+  if (!isMobile) {
+    return (
+      <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
+        <button type="submit" style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '8px 16px', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+          SIGN OUT
+        </button>
+      </form>
+    )
+  }
+
+  // Mobile: hamburger in the top bar + full-screen overlay menu.
+  const invert = (e: any) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#080808' }
+  const revert = (e: any) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff' }
 
   return (
     <>
@@ -44,12 +56,14 @@ export default function AccountMenu() {
 
           <div style={{ marginTop: 'auto' }}>
             <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
-              <button type="submit" style={{
-                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff',
-                padding: '17px 22px', cursor: 'pointer',
-                fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 13, fontWeight: 500, letterSpacing: '0.2em',
-              }}>
+              <button type="submit"
+                onMouseDown={invert} onMouseUp={revert} onMouseLeave={revert} onTouchStart={invert} onTouchEnd={revert}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff',
+                  padding: '17px 22px', cursor: 'pointer',
+                  fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 13, fontWeight: 500, letterSpacing: '0.2em',
+                }}>
                 SIGN OUT
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
               </button>

@@ -19,14 +19,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
               MADE KULTURE
             </span>
           </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <form action="/api/auth/signout" method="POST" className="acct-hide-mobile">
-              <button type="submit" style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '8px 16px', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
-                SIGN OUT
-              </button>
-            </form>
-            <AccountMenu />
-          </div>
+          <AccountMenu />
         </div>
       </div>
 
