@@ -77,10 +77,12 @@ interface SetData {
 export default function AvailabilityPage() {
   const router  = useRouter()
   const isMobile = useIsMobile()
-  // Default to the 48-hr minimum; relaxed to today for customers with active
+  // Anyone can VIEW availability from today onward. BOOKING stays gated to the
+  // 48-hr advance window (bookMin), relaxed to today for customers with active
   // short-notice access (checked once their profile loads below).
-  const [min, setMin]             = useState(minDate())
-  const [date, setDate]           = useState(min)
+  const [min]                     = useState(todayDateStr())   // earliest viewable date
+  const [bookMin, setBookMin]     = useState(minDate())         // earliest bookable date (48hr)
+  const [date, setDate]           = useState(minDate())         // open on the first bookable date
   const [sets, setSets]           = useState<Record<string, SetData>>({})
   const [fullStudioSlots, setFullStudioSlots] = useState<{ start: number; end: number }[]>([])
   const [loading, setLoading]     = useState(true)
@@ -99,19 +101,22 @@ export default function AvailabilityPage() {
       .catch(() => setLoading(false))
   }, [date])
 
-  // Unlock same-day availability for a logged-in customer with active short-notice.
+  // Unlock same-day booking for a logged-in customer with active short-notice.
   useEffect(() => {
     fetch('/api/account/profile')
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d && shortNoticeActive(d.pricingOverrides)) {
           const t = todayDateStr()
-          setMin(t)
+          setBookMin(t)   // near-term dates become bookable for this customer
           setDate(t)
         }
       })
       .catch(() => {})
   }, [])
+
+  // Is the currently viewed date bookable, or view-only (inside the 48hr window)?
+  const dateBookable = date >= bookMin
 
   const stepDate = (delta: number) => {
     const d = new Date(date + 'T12:00:00')
@@ -130,6 +135,7 @@ export default function AvailabilityPage() {
 
   const handleCell = (slug: string, slot: number) => {
     if (isBooked(slug, slot)) return
+    if (!dateBookable) return   // view-only inside the 48hr window
     router.push(`/book?type=set&set=${slug}&date=${date}&start=${slot}`)
   }
 
@@ -166,7 +172,7 @@ export default function AvailabilityPage() {
             CHECK WHAT'S OPEN
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 16, maxWidth: 500 }}>
-            Pick a date to see real-time availability across all 10 sets. Click any open slot to book it instantly.
+            Pick a date to see real-time availability across all sets. Slots 48+ hours out are bookable — click any open one to book instantly. Nearer dates are view-only.
           </p>
         </div>
 
@@ -258,6 +264,13 @@ export default function AvailabilityPage() {
           </Link>
         </div>
 
+        {/* View-only notice inside the 48hr window */}
+        {!dateBookable && (
+          <div style={{ marginBottom: 28, padding: '14px 18px', background: 'rgba(224,164,76,0.08)', border: '1px solid rgba(224,164,76,0.3)', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#e6c07a', lineHeight: 1.5 }}>
+            You&apos;re viewing availability inside the 48-hour window. These slots are <strong>view-only</strong> — bookings require at least 48 hours&apos; notice. Pick a date 2+ days out to book.
+          </div>
+        )}
+
         {/* ── Mobile view: overview heatmap + set picker + time list ───────── */}
         {isMobile && (
           <div style={{ marginBottom: 8 }}>
@@ -334,16 +347,16 @@ export default function AvailabilityPage() {
                 {SLOTS.map(slot => {
                   const booked = isBooked(mobileSet, slot)
                   return (
-                    <button key={slot} onClick={() => handleCell(mobileSet, slot)} disabled={booked} style={{
+                    <button key={slot} onClick={() => handleCell(mobileSet, slot)} disabled={booked || !dateBookable} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', boxSizing: 'border-box',
                       padding: '15px 18px', textAlign: 'left',
                       background: booked ? '#121212' : 'transparent',
                       border: booked ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.16)',
-                      borderRadius: 3, cursor: booked ? 'default' : 'pointer', opacity: booked ? 0.55 : 1,
+                      borderRadius: 3, cursor: (booked || !dateBookable) ? 'default' : 'pointer', opacity: booked ? 0.55 : 1,
                     }}>
                       <span style={{ fontFamily: '"Inter Tight", Inter, sans-serif', fontSize: 15, color: '#fff' }}>{fmtFull(slot)}</span>
-                      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.12em', color: booked ? 'rgba(255,120,120,0.7)' : '#5dca8f' }}>
-                        {booked ? 'BOOKED' : 'AVAILABLE'}
+                      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.12em', color: booked ? 'rgba(255,120,120,0.7)' : dateBookable ? '#5dca8f' : 'rgba(255,255,255,0.4)' }}>
+                        {booked ? 'BOOKED' : dateBookable ? 'AVAILABLE' : 'OPEN'}
                       </span>
                     </button>
                   )
@@ -413,8 +426,8 @@ export default function AvailabilityPage() {
                         <button
                           key={set.slug}
                           onClick={() => handleCell(set.slug, slot)}
-                          disabled={booked}
-                          title={booked ? 'Already booked' : `Book ${set.name} at ${fmt12(slot)}`}
+                          disabled={booked || !dateBookable}
+                          title={booked ? 'Already booked' : dateBookable ? `Book ${set.name} at ${fmt12(slot)}` : 'Open — bookings require 48 hours advance notice'}
                           style={{
                             ...cellBase,
                             background: booked
@@ -426,17 +439,17 @@ export default function AvailabilityPage() {
                             color: booked
                               ? 'rgba(255,80,80,0.4)'
                               : 'rgba(255,255,255,0.0)',
-                            cursor: booked ? 'default' : 'pointer',
+                            cursor: (booked || !dateBookable) ? 'default' : 'pointer',
                           }}
                           onMouseEnter={e => {
-                            if (!booked) {
+                            if (!booked && dateBookable) {
                               ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)'
                               ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.3)'
                               ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.8)'
                             }
                           }}
                           onMouseLeave={e => {
-                            if (!booked) {
+                            if (!booked && dateBookable) {
                               ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)'
                               ;(e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(255,255,255,${isHalf ? '0.05' : '0.08'})`
                               ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.0)'

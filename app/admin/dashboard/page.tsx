@@ -3633,7 +3633,7 @@ export default function AdminDashboard() {
                         onChange={e => setCustPricingDraft(d => ({ ...d, short_notice: e.target.checked }))}
                         style={{ width: 15, height: 15, accentColor: '#d4a843', marginTop: 1, flexShrink: 0 }} />
                       <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
-                        Allow short-notice booking. Lets this customer book inside the <strong style={{ color: '#fff' }}>48-hour</strong> window — including same day — when logged in. Others still can&apos;t see or book those slots.
+                        Allow short-notice booking. Lets this customer book inside the <strong style={{ color: '#fff' }}>48-hour</strong> window — including same day — when logged in. Everyone can <em>see</em> availability inside that window, but only this customer can <em>book</em> it.
                       </span>
                     </label>
                     {custPricingDraft.short_notice && (
