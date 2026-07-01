@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
@@ -12,7 +12,39 @@ interface Gear {
   quantity: number
   description: string | null
   image_url: string | null
+  gallery?: string[]
   allow_offsite: boolean
+}
+
+// Per-card image carousel: shows the hero, with arrows + dots when there are
+// multiple photos. Falls back to a placeholder when there are none.
+function GearImage({ gear }: { gear: Gear }) {
+  const imgs = (gear.gallery && gear.gallery.length) ? gear.gallery : (gear.image_url ? [gear.image_url] : [])
+  const [idx, setIdx] = useState(0)
+  const arrow: CSSProperties = { position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 30, height: 30, border: 'none', background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 20, lineHeight: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+  if (!imgs.length) {
+    return <div style={{ aspectRatio: '4 / 3', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 16, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.18)' }}>MADE KULTURE</span>
+    </div>
+  }
+  const go = (d: number) => setIdx(i => (i + d + imgs.length) % imgs.length)
+  return (
+    <div style={{ position: 'relative', aspectRatio: '4 / 3', background: '#111', overflow: 'hidden' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imgs[idx]} alt={gear.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      {imgs.length > 1 && (
+        <>
+          <button aria-label="Previous photo" onClick={() => go(-1)} style={{ ...arrow, left: 0 }}>‹</button>
+          <button aria-label="Next photo" onClick={() => go(1)} style={{ ...arrow, right: 0 }}>›</button>
+          <div style={{ position: 'absolute', bottom: 8, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5 }}>
+            {imgs.map((_, i) => (
+              <span key={i} onClick={() => setIdx(i)} style={{ width: 6, height: 6, borderRadius: '50%', cursor: 'pointer', background: i === idx ? '#fff' : 'rgba(255,255,255,0.4)' }} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -70,13 +102,8 @@ export default function GearPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
                   {items.map(g => (
                     <div key={g.id} id={g.id} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden', display: 'flex', flexDirection: 'column', scrollMarginTop: 90 }}>
-                      {/* Image or placeholder */}
-                      <div style={{ aspectRatio: '4 / 3', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                        {g.image_url
-                          // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={g.image_url} alt={g.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 16, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.18)' }}>MADE KULTURE</span>}
-                      </div>
+                      {/* Image carousel or placeholder */}
+                      <GearImage gear={g} />
                       <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
                           <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 500, lineHeight: 1.3 }}>{g.name}</div>

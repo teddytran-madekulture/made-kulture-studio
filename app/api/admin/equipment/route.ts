@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const COLUMNS = 'id, name, rate, category, quantity, description, image_url, sort_order, is_available, allow_offsite, deposit, created_at'
+const COLUMNS = 'id, name, rate, category, quantity, description, image_url, gallery, sort_order, is_available, allow_offsite, deposit, created_at'
 const CATEGORIES = ['lighting', 'modifier', 'special_effects', 'camera']
 
 function sanitize(body: any) {
@@ -16,6 +16,7 @@ function sanitize(body: any) {
   if (typeof body.name === 'string')        row.name        = body.name.trim()
   if (typeof body.description === 'string') row.description = body.description.trim()
   if (typeof body.image_url === 'string')   row.image_url   = body.image_url.trim()
+  if (Array.isArray(body.gallery))          row.gallery     = body.gallery.filter((u: any) => typeof u === 'string')
   if (body.rate !== undefined)              row.rate        = Number(body.rate)
   if (body.quantity !== undefined)          row.quantity    = parseInt(String(body.quantity), 10)
   if (body.sort_order !== undefined)        row.sort_order  = parseInt(String(body.sort_order), 10)
