@@ -482,3 +482,53 @@ export function formatDateLabel(isoDate: string): string {
     weekday: 'short', month: 'short', day: 'numeric'
   })
 }
+
+function esc(s: string): string {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+}
+
+// ─── Short-notice booking request (to owner) ──────────────────────────────────
+export async function sendShortNoticeRequestAlert(data: {
+  customerName: string; customerEmail: string; desiredDate?: string | null; desiredStart?: number | null; note?: string | null; approveUrl: string
+}) {
+  const when = data.desiredDate
+    ? `${formatDateLabel(data.desiredDate)}${data.desiredStart != null ? ' · ' + formatTimeLabel(Math.floor(data.desiredStart)) : ''}`
+    : 'Not specified'
+  const row = (k: string, v: string) => `<tr><td style="padding:6px 0;font-size:11px;letter-spacing:0.12em;color:#888;">${k}</td><td style="padding:6px 0;font-size:14px;color:#fff;text-align:right;">${v}</td></tr>`
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:20px;color:#fff;">Short-notice booking request</h1>
+    <p style="margin:0 0 20px;font-size:14px;color:#aaa;line-height:1.6;"><strong style="color:#fff;">${esc(data.customerName)}</strong> (${esc(data.customerEmail)}) is asking to book inside the 48-hour window.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #333;border-bottom:1px solid #333;margin-bottom:24px;">
+      ${row('REQUESTED', when)}
+      ${data.note ? row('NOTE', esc(data.note)) : ''}
+    </table>
+    <a href="${data.approveUrl}" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">Review &amp; approve</a>
+    <p style="margin:20px 0 0;font-size:12px;color:#666;line-height:1.6;">Or open your admin dashboard — pending requests show at the top with Allow buttons.</p>
+  `
+  return sendEmail('short_notice_request', {
+    from: FROM_EMAIL,
+    reply_to: REPLY_TO,
+    to: OWNER_EMAIL,
+    subject: `Short-notice request — ${data.customerName}`,
+    html: layout(body),
+  })
+}
+
+// ─── Short-notice approved (to customer) ──────────────────────────────────────
+export async function sendShortNoticeApprovedEmail(data: {
+  customerName: string; customerEmail: string; grantedUntil: string
+}) {
+  const first = (data.customerName || '').split(' ')[0] || 'there'
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:20px;color:#fff;">You're cleared to book short-notice</h1>
+    <p style="margin:0 0 20px;font-size:14px;color:#aaa;line-height:1.6;">Hi ${esc(first)} — you can now book inside the 48-hour window through <strong style="color:#fff;">${formatDateLabel(data.grantedUntil)}</strong>. Head to availability and grab your time.</p>
+    <a href="https://made-kulture-studio.vercel.app/availability" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">Book now</a>
+  `
+  return sendEmail('short_notice_approved', {
+    from: FROM_EMAIL,
+    reply_to: REPLY_TO,
+    to: data.customerEmail,
+    subject: 'You can now book short-notice at Made Kulture',
+    html: layout(body),
+  })
+}

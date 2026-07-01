@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import { shortNoticeViewActive } from '@/lib/short-notice'
+import ShortNoticeRequest from '@/components/ShortNoticeRequest'
 
 export default async function AccountDashboard() {
   const supabase = createClient()
@@ -20,9 +22,10 @@ export default async function AccountDashboard() {
   )
   const { data: custRows } = await service
     .from('customers')
-    .select('id')
+    .select('id, pricing_overrides')
     .eq('email', (user!.email ?? '').toLowerCase())
   const custIds = (custRows ?? []).map(c => c.id)
+  const canRequestShortNotice = shortNoticeViewActive((custRows ?? [])[0]?.pricing_overrides ?? null)
   const orFilter = [`auth_user_id.eq.${user!.id}`]
   if (custIds.length) orFilter.push(`customer_id.in.(${custIds.join(',')})`)
 
@@ -51,6 +54,9 @@ export default async function AccountDashboard() {
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Upcoming bookings</div>
         </div>
       </div>
+
+      {/* Short-notice booking request — only for customers granted view access */}
+      {canRequestShortNotice && <ShortNoticeRequest />}
 
       {/* Quick links */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
