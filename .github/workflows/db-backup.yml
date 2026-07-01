@@ -1,0 +1,74 @@
+name: Supabase DB Backup
+
+# Automated backup of the Made Kulture Supabase Postgres database.
+# - Runs daily at 08:00 UTC (03:00 Houston / CDT).
+# - Dumps the full database with pg_dump, gzips it, then encrypts it with
+#   AES-256 using the BACKUP_PASSPHRASE secret.
+# - Uploads the encrypted dump as a GitHub Actions artifact (90-day retention).
+#   That artifact is your off-site cloud copy (off-site from Supabase itself).
+# - Can also be run on demand from the Actions tab (workflow_dispatch).
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   SUPABASE_DB_URL   - the Supabase "Session pooler" connection string,
+#                       e.g. postgresql://postgres.<ref>:<PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres
+#   BACKUP_PASSPHRASE - a long random passphrase used to encrypt/decrypt the dump.
+#                       KEEP A COPY somewhere safe (password manager) - without it
+#                       the backups cannot be restored.
+
+on:
+  schedule:
+    - cron: "0 8 * * *"   # daily 08:00 UTC
+  workflow_dispatch: {}    # allow manual "Run workflow" from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump, compress, and encrypt
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set."; exit 1
+          fi
+          if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "::error::BACKUP_PASSPHRASE secret is not set."; exit 1
+          fi
+          STAMP="$(date -u +%Y-%m-%d_%H%M)Z"
+          OUT="madekulture-db-${STAMP}.sql.gz.enc"
+          echo "Dumping database..."
+          # --no-owner / --no-privileges keep the dump portable for restore into
+          # a fresh Supabase project. Full schema + data.
+          pg_dump "$SUPABASE_DB_URL" \
+            --no-owner --no-privileges --clean --if-exists \
+            | gzip -9 \
+            | openssl enc -aes-256-cbc -pbkdf2 -salt \
+                -pass env:BACKUP_PASSPHRASE \
+                -out "$OUT"
+          BYTES="$(stat -c %s "$OUT")"
+          echo "Wrote $OUT (${BYTES} bytes)"
+          if [ "$BYTES" -lt 1024 ]; then
+            echo "::error::Backup file is suspiciously small (< 1 KB). Failing.";
+            exit 1
+          fi
+          echo "ARTIFACT_NAME=madekulture-db-${STAMP}" >> "$GITHUB_ENV"
+          echo "OUT_FILE=${OUT}" >> "$GITHUB_ENV"
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.OUT_FILE }}
+          retention-days: 90
+          if-no-files-found: error
