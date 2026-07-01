@@ -693,8 +693,10 @@ function BookingWizard() {
               {[...SLOTS, CLOSE_HOUR].map(h => {
                 const isPast    = bookingIsToday && h < nowChiDec
                 const booked    = isHourBooked(h)
-                // 10pm (CLOSE_HOUR) is a valid END time only — you can't start at closing.
-                const closeAsStart = h === CLOSE_HOUR && booking.startHour === null
+                // While picking a start, disable any slot too late to fit the minimum
+                // before closing (e.g. 9:30pm, and 10pm itself). 10pm stays available
+                // as an END once a start is chosen.
+                const closeAsStart = booking.startHour === null && h > CLOSE_HOUR - minHours
                 // When picking end time, only allow whole-hour slots that meet the
                 // set's minimum length (e.g. The Watering Hole / The Tank = 2hr min)
                 const isInvalidEnd = selecting === 'end' && booking.startHour !== null
