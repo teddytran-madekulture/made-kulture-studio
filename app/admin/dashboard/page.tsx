@@ -606,7 +606,13 @@ export default function AdminDashboard() {
   const runClean = async (method: 'chatgpt' | 'free', url: string, prompt?: string): Promise<Blob> => {
     if (method === 'free') {
       const removeBackground = await loadBgRemover()
-      return await removeBackground(url)
+      // Fetch the image to a Blob first (same as the Add-by-Photo flow). Passing
+      // the URL string makes the library do its own fetch, which can come back as
+      // text/html and error out.
+      const srcRes = await fetch(url, { cache: 'no-store' })
+      if (!srcRes.ok) throw new Error(`Could not load the image (${srcRes.status})`)
+      const srcBlob = await srcRes.blob()
+      return await removeBackground(srcBlob)
     }
     const res = await fetch('/api/admin/props/clean-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url, prompt: (prompt && prompt.trim()) ? prompt.trim() : undefined }) })
     const data = await res.json().catch(() => ({}))
