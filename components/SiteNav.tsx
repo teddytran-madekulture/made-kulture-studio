@@ -63,7 +63,7 @@ export default function SiteNav({ active }: { active?: string }) {
               }}>BOOK NOW</Link>
             )}
             <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu"
-              style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, cursor: 'pointer', padding: 4, zIndex: 101 }}>
+              style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 34, lineHeight: 1, cursor: 'pointer', padding: 4, zIndex: 101 }}>
               {menuOpen ? '✕' : '☰'}
             </button>
           </div>
