@@ -35,7 +35,10 @@ export default function AccountMenu() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="Menu" style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, cursor: 'pointer', padding: 4 }}>☰</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <Link href="/" style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', textDecoration: 'none', whiteSpace: 'nowrap' }}>← HOME</Link>
+        <button onClick={() => setOpen(true)} aria-label="Menu" style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, cursor: 'pointer', padding: 4 }}>☰</button>
+      </div>
 
       {open && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: '#080808', display: 'flex', flexDirection: 'column', padding: '20px 24px 40px' }}>
