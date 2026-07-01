@@ -1368,7 +1368,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       {isOpen && (
-                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '20px 24px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 32 }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                             <Detail label="PARTY"  value={b.guest_count != null ? `${b.guest_count} ${b.guest_count === 1 ? 'person' : 'people'}${b.guest_fee_amount ? ` (+$${Number(b.guest_fee_amount).toFixed(0)} guest fee)` : ''}` : '—'} />
                             <Detail label="CHECK-IN" value={
@@ -1998,7 +1998,7 @@ export default function AdminDashboard() {
                   {setEditId === 'new' ? 'NEW SET' : 'EDIT SET'}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18, marginBottom: 18 }}>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>SET NAME</label>
                     <input value={setDraft.name} onChange={e => setSetDraft(d => ({ ...d, name: e.target.value }))}
@@ -2217,7 +2217,7 @@ export default function AdminDashboard() {
                   {equipEditId === 'new' ? 'NEW ITEM' : 'EDIT ITEM'}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18, marginBottom: 18 }}>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>NAME</label>
                     <input value={equipDraft.name} onChange={e => setEquipDraft(d => ({ ...d, name: e.target.value }))}
@@ -2658,7 +2658,7 @@ export default function AdminDashboard() {
             {propEditId !== null && (
               <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: '22px 24px', marginBottom: 28 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>{propEditId === 'new' ? 'NEW PROP' : 'EDIT PROP'}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, marginBottom: 14 }}>
                   <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Name
                     <input value={propDraft.name} onChange={e => setPropDraft(d => ({ ...d, name: e.target.value }))}
                       style={{ width: '100%', marginTop: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }} />
@@ -3127,7 +3127,7 @@ export default function AdminDashboard() {
 
                     {/* Per-set overrides */}
                     <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.2)', marginBottom: 8 }}>PER-SET OVERRIDE (overrides global)</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: 14 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '6px 12px', marginBottom: 14 }}>
                       {ALL_SETS.map(s => (
                         <div key={s.slug} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', width: 80, flexShrink: 0 }}>{s.label}</div>
@@ -3378,7 +3378,7 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', marginBottom: 24, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
               <Detail label="CUSTOMER"       value={editBooking.customers?.name || '—'} />
               <Detail label="EMAIL"          value={editBooking.customers?.email || '—'} />
               <Detail label="PHONE"          value={editBooking.customers?.phone || '—'} />
@@ -3398,7 +3398,7 @@ export default function AdminDashboard() {
                   style={{ ...inputStyle, colorScheme: 'dark' as const }} />
               </Field>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
                 <Field label="START TIME">
                   <select value={editState.startHour} onChange={e => setEditState(s => ({ ...s, startHour: Number(e.target.value) }))}
                     style={{ ...inputStyle, appearance: 'none' as const }}>
@@ -3568,7 +3568,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
                   <Field label="NAME">
                     <input required value={manual.name} onChange={e => setManual(m => ({ ...m, name: e.target.value }))} style={inputStyle} />
                   </Field>
@@ -3592,7 +3592,7 @@ export default function AdminDashboard() {
                     style={{ ...inputStyle, colorScheme: 'dark' as const }} />
                 </Field>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
                   <Field label="START HOUR (24h)">
                     <input type="number" min={9} max={21} value={manual.startHour}
                       onChange={e => setManual(m => ({ ...m, startHour: Number(e.target.value) }))} style={inputStyle} />
