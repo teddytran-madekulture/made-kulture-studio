@@ -40,17 +40,23 @@ export default function AccountMenu() {
                 color: href === pathname ? '#fff' : 'rgba(255,255,255,0.82)', textDecoration: 'none', padding: '4px 0',
               }}>{label}</Link>
             ))}
-            <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
-              <button type="submit" style={{
-                background: 'transparent', border: 'none', padding: '4px 0', cursor: 'pointer', textAlign: 'left',
-                fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(32px, 9vw, 52px)', letterSpacing: '0.02em', lineHeight: 1.12,
-                color: 'rgba(255,255,255,0.5)',
-              }}>SIGN OUT</button>
-            </form>
           </div>
 
-          <div style={{ marginTop: 'auto', paddingTop: 28, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            <Link href="/" onClick={() => setOpen(false)} style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.55)', textDecoration: 'none' }}>← BACK TO SITE</Link>
+          <div style={{ marginTop: 'auto' }}>
+            <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
+              <button type="submit" style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff',
+                padding: '17px 22px', cursor: 'pointer',
+                fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 13, fontWeight: 500, letterSpacing: '0.2em',
+              }}>
+                SIGN OUT
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+              </button>
+            </form>
+            <div style={{ marginTop: 20, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <Link href="/" onClick={() => setOpen(false)} style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.55)', textDecoration: 'none' }}>← BACK TO SITE</Link>
+            </div>
           </div>
         </div>
       )}
