@@ -148,6 +148,9 @@ function BookingWizard() {
   // Studio buyouts don't need a head count, so they skip the guest step and
   // start on the date step. Sets (and the type chooser) start at step 1.
   const [step, setStep] = useState(typeParam === 'studio' ? 2 : 1)
+  // On every step change, jump back to the top — the set-pick auto-scroll to
+  // Continue shouldn't leave the next step scrolled to the bottom.
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }) }, [step])
   const [booking, setBooking] = useState<BookingState>({
     type:      typeParam || null,
     guests:    null,
