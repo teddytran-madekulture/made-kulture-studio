@@ -685,7 +685,7 @@ function BookingWizard() {
               </div>
             ) : (
               <>
-            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 8 }}>
+            <p style={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.4, marginBottom: 14 }}>
               {booking.startHour === null
                 ? `Click your start time, then click your end time.${minHours > 1 ? ` ${minLabel} has a ${minHours}-hour minimum.` : ''}`
                 : booking.endHour === null
