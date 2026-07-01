@@ -476,6 +476,13 @@ function BookingWizard() {
 
   const next = () => setStep(s => s + 1)
   const back = () => setStep(s => s - 1)
+  // Scroll target for the set-step Continue button, so picking a set nudges the
+  // customer toward the (easy-to-miss) Continue button.
+  const setNavRef = useRef<HTMLDivElement | null>(null)
+  const pickSet = (id: string) => {
+    setBooking(b => ({ ...b, setId: id, ...(mustFillWindow && incompleteWindow ? { date: incompleteWindow.date, startHour: incompleteWindow.startHour, endHour: incompleteWindow.endHour } : {}) }))
+    setTimeout(() => setNavRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+  }
 
   // Adjust step labels for studio (no set selection step)
   const effectiveStep = booking.type === 'studio' && step >= 2 ? step - 1 : step
@@ -594,7 +601,7 @@ function BookingWizard() {
                 </div>
               )}
               {sets.map(s => (
-                <button key={s.id} onClick={() => setBooking(b => ({ ...b, setId: s.id, ...(mustFillWindow && incompleteWindow ? { date: incompleteWindow.date, startHour: incompleteWindow.startHour, endHour: incompleteWindow.endHour } : {}) }))}
+                <button key={s.id} onClick={() => pickSet(s.id)}
                   style={{
                     background: booking.setId === s.id ? '#fff' : '#0d0d0d',
                     border: 'none', padding: '28px 24px', cursor: 'pointer', textAlign: 'left',
@@ -615,7 +622,9 @@ function BookingWizard() {
                 </button>
               ))}
             </div>
-            <NavRow onBack={back} onNext={() => setStep(mustFillWindow ? 4 : 3)} canNext={canNext[2]} />
+            <div ref={setNavRef}>
+              <NavRow onBack={back} onNext={() => setStep(mustFillWindow ? 4 : 3)} canNext={canNext[2]} />
+            </div>
           </StepWrapper>
         )}
 
