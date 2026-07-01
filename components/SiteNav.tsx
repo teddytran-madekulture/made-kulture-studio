@@ -58,8 +58,8 @@ export default function SiteNav({ active }: { active?: string }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             {!menuOpen && (
               <Link href="/book" style={{
-                background: '#fff', color: '#080808', padding: '8px 14px', textDecoration: 'none',
-                fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, fontWeight: 500, letterSpacing: '0.14em', whiteSpace: 'nowrap',
+                background: '#fff', color: '#080808', padding: '11px 18px', textDecoration: 'none',
+                fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', whiteSpace: 'nowrap',
               }}>BOOK NOW</Link>
             )}
             <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu"
