@@ -690,9 +690,11 @@ function BookingWizard() {
               </p>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
-              {SLOTS.map(h => {
+              {[...SLOTS, CLOSE_HOUR].map(h => {
                 const isPast    = bookingIsToday && h < nowChiDec
                 const booked    = isHourBooked(h)
+                // 10pm (CLOSE_HOUR) is a valid END time only — you can't start at closing.
+                const closeAsStart = h === CLOSE_HOUR && booking.startHour === null
                 // When picking end time, only allow whole-hour slots that meet the
                 // set's minimum length (e.g. The Watering Hole / The Tank = 2hr min)
                 const isInvalidEnd = selecting === 'end' && booking.startHour !== null
@@ -704,7 +706,7 @@ function BookingWizard() {
                 const isPending = booking.startHour === h && booking.endHour === null
 
                 let bg = '#0d0d0d'
-                let color = isInvalidEnd ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                let color = (isInvalidEnd || closeAsStart) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
                 if (isPast)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
                 if (inRange)      { bg = '#fff'; color = '#080808' }
@@ -712,10 +714,10 @@ function BookingWizard() {
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
-                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isPast}
+                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isPast || closeAsStart}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: (booked || isPast) ? 'not-allowed' : isInvalidEnd ? 'default' : 'pointer',
+                      cursor: (booked || isPast) ? 'not-allowed' : (isInvalidEnd || closeAsStart) ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
