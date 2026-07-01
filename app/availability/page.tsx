@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import NavAuthLink from '@/components/NavAuthLink'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
-import { shortNoticeActive, todayDateStr } from '@/lib/short-notice'
+import { shortNoticeActive, shortNoticeViewActive, todayDateStr } from '@/lib/short-notice'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -77,12 +77,12 @@ interface SetData {
 export default function AvailabilityPage() {
   const router  = useRouter()
   const isMobile = useIsMobile()
-  // Anyone can VIEW availability from today onward. BOOKING stays gated to the
-  // 48-hr advance window (bookMin), relaxed to today for customers with active
-  // short-notice access (checked once their profile loads below).
-  const [min]                     = useState(todayDateStr())   // earliest viewable date
-  const [bookMin, setBookMin]     = useState(minDate())         // earliest bookable date (48hr)
-  const [date, setDate]           = useState(minDate())         // open on the first bookable date
+  // Both VIEWING and BOOKING default to the 48-hr window, then get relaxed per
+  // customer once their profile loads: short-notice VIEW access opens the near-
+  // term dates to view, short-notice BOOK access lets them book those slots.
+  const [viewMin, setViewMin]     = useState(minDate())   // earliest viewable date
+  const [bookMin, setBookMin]     = useState(minDate())   // earliest bookable date
+  const [date, setDate]           = useState(minDate())
   const [sets, setSets]           = useState<Record<string, SetData>>({})
   const [fullStudioSlots, setFullStudioSlots] = useState<{ start: number; end: number }[]>([])
   const [loading, setLoading]     = useState(true)
@@ -101,16 +101,16 @@ export default function AvailabilityPage() {
       .catch(() => setLoading(false))
   }, [date])
 
-  // Unlock same-day booking for a logged-in customer with active short-notice.
+  // Relax the window for this logged-in customer based on their grants:
+  // view access → they can see near-term dates; book access → they can book them.
   useEffect(() => {
     fetch('/api/account/profile')
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (d && shortNoticeActive(d.pricingOverrides)) {
-          const t = todayDateStr()
-          setBookMin(t)   // near-term dates become bookable for this customer
-          setDate(t)
-        }
+        const po = d?.pricingOverrides
+        const t = todayDateStr()
+        if (shortNoticeViewActive(po)) { setViewMin(t); setDate(t) }  // can see near-term
+        if (shortNoticeActive(po))     { setBookMin(t) }              // can book near-term
       })
       .catch(() => {})
   }, [])
@@ -122,7 +122,7 @@ export default function AvailabilityPage() {
     const d = new Date(date + 'T12:00:00')
     d.setDate(d.getDate() + delta)
     const next = d.toISOString().split('T')[0]
-    if (next >= min) setDate(next)
+    if (next >= viewMin) setDate(next)
   }
 
   const isBooked = (slug: string, slot: number) => {
@@ -172,7 +172,7 @@ export default function AvailabilityPage() {
             CHECK WHAT'S OPEN
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 16, maxWidth: 500 }}>
-            Pick a date to see real-time availability across all sets. Slots 48+ hours out are bookable — click any open one to book instantly. Nearer dates are view-only.
+            Pick a date to see real-time availability across all sets. Click any open slot to book it instantly.
           </p>
         </div>
 
@@ -185,12 +185,12 @@ export default function AvailabilityPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 onClick={() => stepDate(-1)}
-                disabled={date <= min}
+                disabled={date <= viewMin}
                 style={{
                   background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
                   borderRadius: 4, width: 40, height: 44,
-                  color: date <= min ? 'rgba(255,255,255,0.2)' : '#fff',
-                  fontSize: 18, cursor: date <= min ? 'default' : 'pointer',
+                  color: date <= viewMin ? 'rgba(255,255,255,0.2)' : '#fff',
+                  fontSize: 18, cursor: date <= viewMin ? 'default' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0,
                 }}
@@ -198,7 +198,7 @@ export default function AvailabilityPage() {
               <input
                 type="date"
                 value={date}
-                min={min}
+                min={viewMin}
                 onChange={e => setDate(e.target.value)}
                 style={{
                   background: '#141414', border: '1px solid rgba(255,255,255,0.12)',

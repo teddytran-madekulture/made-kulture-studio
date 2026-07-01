@@ -27,3 +27,11 @@ export function shortNoticeActive(po: any): boolean {
   if (!po.short_notice_until) return true // no expiry → active until turned off
   return String(po.short_notice_until) >= todayDateStr() // active through the "until" date (inclusive)
 }
+
+// True when the customer may VIEW availability inside the 48-hr window. This is
+// a separate, view-only grant (`short_notice_view`); anyone who can BOOK
+// short-notice can obviously also see it.
+export function shortNoticeViewActive(po: any): boolean {
+  if (!po) return false
+  return !!po.short_notice_view || shortNoticeActive(po)
+}
