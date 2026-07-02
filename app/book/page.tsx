@@ -263,6 +263,7 @@ function BookingWizard() {
   const [bookedSlots,      setBookedSlots]      = useState<{ start: number; end: number }[]>([])
   const [loadingSlots,     setLoadingSlots]     = useState(false)
   const [submitted,        setSubmitted]        = useState(false)
+  const [loggedIn,         setLoggedIn]         = useState(false)
   const [pricingOverrides, setPricingOverrides] = useState<any>(null)
 
   // Pre-fill contact info + fetch custom pricing from logged-in profile
@@ -271,6 +272,7 @@ function BookingWizard() {
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d?.profile) {
+          setLoggedIn(true)
           setBooking(b => ({
             ...b,
             name:  d.profile.full_name  || b.name,
@@ -499,7 +501,7 @@ function BookingWizard() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (submitted) return <SuccessScreen booking={booking} setCart={setCart} />
+  if (submitted) return <SuccessScreen booking={booking} setCart={setCart} loggedIn={loggedIn} />
 
   return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
@@ -1231,8 +1233,9 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-function SuccessScreen({ booking, setCart }: { booking: BookingState; setCart: SetCartItem[] }) {
+function SuccessScreen({ booking, setCart, loggedIn }: { booking: BookingState; setCart: SetCartItem[]; loggedIn: boolean }) {
   const sessions = booking.type === 'set' ? setCart : []
+  const signupHref = `/signup?email=${encodeURIComponent(booking.email || '')}&name=${encodeURIComponent(booking.name || '')}&phone=${encodeURIComponent(booking.phone || '')}`
   return (
     <div style={{ background: '#080808', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
       <div style={{ maxWidth: 480, textAlign: 'center' }}>
@@ -1252,9 +1255,22 @@ function SuccessScreen({ booking, setCart }: { booking: BookingState; setCart: S
         <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, marginBottom: 40 }}>
           Confirmation details will be sent to <strong style={{ color: '#fff' }}>{booking.email}</strong>. You&apos;ll also receive a text at {booking.phone} with everything you need.
         </p>
-        <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6, marginBottom: 48 }}>
+        <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6, marginBottom: loggedIn ? 48 : 32 }}>
           Questions? Text us at <strong style={{ color: '#fff' }}>(832) 408-1631</strong>
         </p>
+
+        {!loggedIn && (
+          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,168,67,0.35)', borderRadius: 10, padding: '24px 22px', marginBottom: 40, textAlign: 'left' }}>
+            <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 24, color: '#fff', letterSpacing: '0.02em', marginBottom: 8 }}>MAKE IT EASIER NEXT TIME</div>
+            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, margin: '0 0 18px' }}>
+              Create a free account to check out faster next time, manage your bookings, and join our growing directory of Houston creatives. We&apos;ve already got your info — just add a password.
+            </p>
+            <Link href={signupHref} style={{ display: 'inline-block', background: '#fff', color: '#080808', textDecoration: 'none', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', padding: '13px 24px', borderRadius: 4 }}>
+              CREATE MY ACCOUNT →
+            </Link>
+          </div>
+        )}
+
         <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 28px', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', textDecoration: 'none', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em' }}>
           BACK TO HOME
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>

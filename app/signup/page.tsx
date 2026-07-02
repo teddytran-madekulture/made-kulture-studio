@@ -21,7 +21,13 @@ export default function SignupPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    setNextUrl(new URLSearchParams(window.location.search).get('next') ?? '/account')
+    const params = new URLSearchParams(window.location.search)
+    setNextUrl(params.get('next') ?? '/account')
+    // Prefill from a post-checkout invite (?email=&name=&phone=).
+    const email = params.get('email'), name = params.get('name'), phone = params.get('phone')
+    if (email || name || phone) {
+      setForm(f => ({ ...f, email: email ?? f.email, full_name: name ?? f.full_name, phone: phone ?? f.phone }))
+    }
     fetch('/api/roles').then(r => (r.ok ? r.json() : null))
       .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
   }, [])
