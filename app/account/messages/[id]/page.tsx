@@ -18,7 +18,7 @@ export default function ThreadPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
-  const bottom = useRef<HTMLDivElement | null>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
 
   const markRead = () => {
     fetch('/api/messages/read', {
@@ -53,7 +53,9 @@ export default function ThreadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  useEffect(() => { bottom.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages.length])
+  // Keep the message list pinned to the newest message — scroll only the list
+  // box, never the page (scrollIntoView would drag the whole window down).
+  useEffect(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight }, [messages.length])
 
   const send = async () => {
     const text = input.trim()
@@ -93,7 +95,7 @@ export default function ThreadPage() {
         </Link>
       )}
 
-      <div style={{ height: 'min(58vh, 520px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+      <div ref={listRef} style={{ height: 'min(58vh, 520px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
         {messages.length === 0 && (
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 20 }}>Say hello 👋</div>
         )}
@@ -111,7 +113,6 @@ export default function ThreadPage() {
             </div>
           )
         })}
-        <div ref={bottom} />
       </div>
 
       {error && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginTop: 8 }}>{error}</div>}
