@@ -8,7 +8,11 @@ import { CREATIVE_ROLES } from '@/lib/roles'
 export default function SignupPage() {
   const router = useRouter()
   const [nextUrl, setNextUrl]  = useState('/account')
-  const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '', roles: [] as string[] })
+  const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '', instagram: '', roles: [] as string[] })
+  const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
+  const [otherRole, setOtherRole]     = useState('')
+  const [showOther, setShowOther]     = useState(false)
+  const [directoryOptIn, setDirectoryOptIn] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
@@ -18,7 +22,16 @@ export default function SignupPage() {
 
   useEffect(() => {
     setNextUrl(new URLSearchParams(window.location.search).get('next') ?? '/account')
+    fetch('/api/roles').then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
   }, [])
+
+  const addOther = () => {
+    const r = otherRole.trim()
+    if (r && !form.roles.some(x => x.toLowerCase() === r.toLowerCase()))
+      setForm(f => ({ ...f, roles: [...f.roles, r] }))
+    setOtherRole(''); setShowOther(false)
+  }
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -30,16 +43,27 @@ export default function SignupPage() {
     e.preventDefault()
     if (form.password !== password2) { setError('Passwords do not match'); return }
     setLoading(true); setError('')
+    const igHandle = form.instagram.trim().replace(/^@/, '')
     const { error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: {
-        data: { full_name: form.full_name, phone: form.phone, roles: form.roles },
+        data: {
+          full_name: form.full_name, phone: form.phone, roles: form.roles,
+          instagram: igHandle || null, directory_opt_in: directoryOptIn,
+        },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
       },
     })
-    if (error) { setError(error.message); setLoading(false) }
-    else setSuccess(true)
+    if (error) { setError(error.message); setLoading(false); return }
+    // Queue any custom ("Other") roles for owner review — best-effort.
+    const customRoles = form.roles.filter(r => !roleOptions.includes(r))
+    await Promise.allSettled(customRoles.map(role =>
+      fetch('/api/roles/suggest', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, email: form.email }),
+      })))
+    setSuccess(true)
   }
 
   const signInGoogle = async () => {
@@ -55,6 +79,13 @@ export default function SignupPage() {
     borderRadius: 4, padding: '14px 16px', fontFamily: 'Inter', fontSize: 14, color: '#fff',
     outline: 'none', boxSizing: 'border-box',
   }
+
+  const chipStyle = (on: boolean): React.CSSProperties => ({
+    background: on ? '#fff' : 'transparent',
+    color: on ? '#080808' : 'rgba(255,255,255,0.7)',
+    border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+    borderRadius: 20, padding: '7px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
+  })
 
   if (success) return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, textAlign: 'center' }}>
@@ -110,28 +141,45 @@ export default function SignupPage() {
           <input placeholder="Full name" value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
           <input type="email" placeholder="Email address" value={form.email} onChange={set('email')} required style={inputStyle} />
           <input placeholder="Phone number" value={form.phone} onChange={set('phone')} style={inputStyle} />
+          <input placeholder="Instagram (optional)" value={form.instagram} onChange={set('instagram')} style={inputStyle} />
 
           <div>
             <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
               What do you do? <span style={{ color: 'rgba(255,255,255,0.25)' }}>(optional — pick any that apply)</span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {CREATIVE_ROLES.map(role => {
-                const on = form.roles.includes(role)
-                return (
-                  <button type="button" key={role} onClick={() => toggleRole(role)}
-                    style={{
-                      background: on ? '#fff' : 'transparent',
-                      color: on ? '#080808' : 'rgba(255,255,255,0.7)',
-                      border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: 20, padding: '7px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
-                    }}>
-                    {role}
-                  </button>
-                )
-              })}
+              {roleOptions.map(role => (
+                <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(form.roles.includes(role))}>
+                  {role}
+                </button>
+              ))}
+              {form.roles.filter(r => !roleOptions.includes(r)).map(role => (
+                <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(true)} title="Remove">
+                  {role} ✕
+                </button>
+              ))}
+              {!showOther && (
+                <button type="button" onClick={() => setShowOther(true)} style={chipStyle(false)}>+ Other</button>
+              )}
             </div>
+            {showOther && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input value={otherRole} onChange={e => setOtherRole(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOther() } }}
+                  placeholder="Your role (e.g. Photo Assistant)" maxLength={40} autoFocus
+                  style={{ ...inputStyle, flex: 1, padding: '10px 12px' }} />
+                <button type="button" onClick={addOther}
+                  style={{ background: 'rgba(255,255,255,0.9)', color: '#080808', border: 'none', borderRadius: 4, padding: '0 16px', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  Add
+                </button>
+              </div>
+            )}
           </div>
+
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.55 }}>
+            <input type="checkbox" checked={directoryOptIn} onChange={e => setDirectoryOptIn(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
+            <span>Show me in the member directory so other creatives can find me by role. Only your name, roles, and Instagram are shown — never your email or phone. <strong style={{ color: 'rgba(255,255,255,0.85)' }}>If you opt out, you also won&apos;t be able to browse the directory.</strong></span>
+          </label>
 
           <div style={{ position: 'relative' }}>
             <input type={showPw ? 'text' : 'password'} placeholder="Password (min 6 characters)" value={form.password} onChange={set('password')} required minLength={6} style={{ ...inputStyle, paddingRight: 44 }} />

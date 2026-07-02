@@ -14,12 +14,23 @@ export default function DirectoryPage() {
   const [role, setRole]       = useState<string>('')
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
+  const [optedOut, setOptedOut] = useState(false)
+  const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
+
+  useEffect(() => {
+    fetch('/api/roles').then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setLoading(true)
     fetch('/api/directory' + (role ? `?role=${encodeURIComponent(role)}` : ''))
-      .then(r => r.json())
-      .then(d => { setMembers(d.members ?? []); setLoading(false) })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}))
+        if (r.status === 403 && d.optedOut) { setOptedOut(true); setMembers([]) }
+        else { setOptedOut(false); setMembers(d.members ?? []) }
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [role])
 
@@ -46,10 +57,22 @@ export default function DirectoryPage() {
         <a href="/account/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }}>profile</a>.
       </p>
 
+      {optedOut ? (
+        <div style={{ background: '#141414', border: '1px solid rgba(212,168,67,0.3)', borderRadius: 8, padding: '28px 24px', maxWidth: 520 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: '#e6c07a', marginBottom: 8 }}>You&apos;re not in the directory</div>
+          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, margin: '0 0 18px' }}>
+            The creative directory is members-only both ways — to browse other creatives, you need to be listed yourself.
+            Turn on directory visibility in your profile to join and unlock browsing. Only your name, roles, and Instagram are ever shown.
+          </p>
+          <a href="/account/profile" style={{ display: 'inline-block', background: '#fff', color: '#080808', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textDecoration: 'none', padding: '11px 20px', borderRadius: 4 }}>
+            JOIN THE DIRECTORY →
+          </a>
+        </div>
+      ) : (<>
       {/* Role filter */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28 }}>
         {chip('All', '')}
-        {CREATIVE_ROLES.map(r => chip(r, r))}
+        {roleOptions.map(r => chip(r, r))}
       </div>
 
       {loading ? (
@@ -89,6 +112,7 @@ export default function DirectoryPage() {
           ))}
         </div>
       )}
+      </>)}
     </div>
   )
 }

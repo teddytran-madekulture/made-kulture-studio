@@ -15,6 +15,17 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view the directory.' }, { status: 401 })
 
+  // Access rule: only members who are themselves visible in the directory may
+  // browse it. Opting out of visibility also opts you out of viewing.
+  const { data: me } = await service
+    .from('customer_profiles').select('directory_opt_in').eq('id', user.id).maybeSingle()
+  if (!me?.directory_opt_in) {
+    return NextResponse.json(
+      { error: 'Join the directory to browse members.', optedOut: true },
+      { status: 403 }
+    )
+  }
+
   const role = req.nextUrl.searchParams.get('role')
 
   let q = service

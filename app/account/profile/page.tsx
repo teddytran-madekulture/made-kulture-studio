@@ -35,13 +35,25 @@ export default function ProfilePage() {
   const [saved, setSaved]     = useState(false)
   const [error, setError]     = useState('')
   const [uploading, setUploading] = useState(false)
+  const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
+  const [otherRole, setOtherRole] = useState('')
+  const [showOther, setShowOther] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
     fetch('/api/account/profile')
       .then(r => r.json())
       .then(d => { if (d.profile) setForm({ ...d.profile, roles: d.profile.roles ?? [], directory_opt_in: !!d.profile.directory_opt_in, avatar_url: d.profile.avatar_url ?? null }); setLoading(false) })
+    fetch('/api/roles').then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
   }, [])
+
+  const addOther = () => {
+    const r = otherRole.trim()
+    if (r && !form.roles.some(x => x.toLowerCase() === r.toLowerCase()))
+      setForm(f => ({ ...f, roles: [...f.roles, r] }))
+    setOtherRole(''); setShowOther(false)
+  }
 
   // Downscale + compress in the browser before upload. Avatars only ever show
   // at ~44–72px, so capping the longest side at 512px and re-encoding as JPEG
@@ -110,8 +122,24 @@ export default function ProfilePage() {
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
-    else { setSaved(true); setSaving(false) }
+    else {
+      // Queue any custom ("Other") roles for owner review — best-effort.
+      const customRoles = form.roles.filter(r => !roleOptions.includes(r))
+      await Promise.allSettled(customRoles.map(role =>
+        fetch('/api/roles/suggest', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, email: form.email }),
+        })))
+      setSaved(true); setSaving(false)
+    }
   }
+
+  const chipStyle = (on: boolean): React.CSSProperties => ({
+    background: on ? '#fff' : 'transparent',
+    color: on ? '#080808' : 'rgba(255,255,255,0.7)',
+    border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 20, padding: '7px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
+  })
 
   const inputStyle: React.CSSProperties = {
     width: '100%', background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
@@ -171,21 +199,32 @@ export default function ProfilePage() {
 
         <Field label="WHAT YOU DO">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {CREATIVE_ROLES.map(role => {
-              const on = form.roles.includes(role)
-              return (
-                <button type="button" key={role} onClick={() => toggleRole(role)}
-                  style={{
-                    background: on ? '#fff' : 'transparent',
-                    color: on ? '#080808' : 'rgba(255,255,255,0.7)',
-                    border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 20, padding: '7px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
-                  }}>
-                  {role}
-                </button>
-              )
-            })}
+            {roleOptions.map(role => (
+              <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(form.roles.includes(role))}>
+                {role}
+              </button>
+            ))}
+            {form.roles.filter(r => !roleOptions.includes(r)).map(role => (
+              <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(true)} title="Remove">
+                {role} ✕
+              </button>
+            ))}
+            {!showOther && (
+              <button type="button" onClick={() => setShowOther(true)} style={chipStyle(false)}>+ Other</button>
+            )}
           </div>
+          {showOther && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input value={otherRole} onChange={e => setOtherRole(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOther() } }}
+                placeholder="Your role (e.g. Photo Assistant)" maxLength={40} autoFocus
+                style={{ ...inputStyle, flex: 1, padding: '10px 12px' }} />
+              <button type="button" onClick={addOther}
+                style={{ background: 'rgba(255,255,255,0.9)', color: '#080808', border: 'none', borderRadius: 4, padding: '0 16px', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                Add
+              </button>
+            </div>
+          )}
         </Field>
 
         {/* Directory opt-in */}
@@ -199,7 +238,7 @@ export default function ProfilePage() {
           <div>
             <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff', marginBottom: 2 }}>List me in the creative directory</div>
             <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
-              Let other Made Kulture members find you by role for collaborations. Only your name, roles, and Instagram are shown — never your email or phone. You can turn this off anytime.
+              Let other Made Kulture members find you by role for collaborations. Only your name, roles, and Instagram are shown — never your email or phone. It works both ways: <strong style={{ color: 'rgba(255,255,255,0.7)' }}>if you turn this off, you also won&apos;t be able to browse the directory.</strong>
             </div>
           </div>
         </div>
