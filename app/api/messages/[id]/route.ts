@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { sendNewMessageEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -66,6 +67,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Mark my own side read (I just saw the thread).
   const col = c.user_a === user.id ? 'last_read_a' : 'last_read_b'
   await service.from('conversations').update({ [col]: new Date().toISOString() }).eq('id', params.id)
+
+  // Throttled email notify to the recipient (best-effort; never blocks the send).
+  try {
+    const recipientId = c.user_a === user.id ? c.user_b : c.user_a
+    const recipIsA = c.user_a === recipientId
+    const { data: conv } = await service
+      .from('conversations').select('last_read_a, last_read_b, notified_a_at, notified_b_at').eq('id', params.id).maybeSingle()
+    const recipRead = recipIsA ? conv?.last_read_a : conv?.last_read_b
+    const recipNotified = recipIsA ? conv?.notified_a_at : conv?.notified_b_at
+    const now = Date.now()
+    const activeRecently = recipRead && now - new Date(recipRead).getTime() < 2 * 60 * 1000       // in the thread now
+    const cooldownOk = !recipNotified || now - new Date(recipNotified).getTime() > 3 * 60 * 60 * 1000 // 3h per convo
+    if (!activeRecently && cooldownOk) {
+      const { data: recipProf } = await service.from('customer_profiles').select('notify_email').eq('id', recipientId).maybeSingle()
+      if (recipProf?.notify_email !== false) {
+        const { data: senderProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
+        const { data: authUser } = await service.auth.admin.getUserById(recipientId)
+        const email = authUser?.user?.email
+        if (email) {
+          await sendNewMessageEmail({ to: email, fromName: senderProf?.full_name || 'A member', conversationId: params.id })
+          const ncol = recipIsA ? 'notified_a_at' : 'notified_b_at'
+          await service.from('conversations').update({ [ncol]: new Date().toISOString() }).eq('id', params.id)
+        }
+      }
+    }
+  } catch { /* notification failures never break sending */ }
 
   return NextResponse.json({ message })
 }

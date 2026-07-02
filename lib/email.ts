@@ -529,6 +529,36 @@ function esc(s: string): string {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
 }
 
+// ─── Community notifications ──────────────────────────────────────────────────
+
+const NOTIF_FOOTER = (link: string) =>
+  `<p style="margin:0;font-size:12px;color:#666;">You can turn these emails off in your <a href="${link}" style="color:${ACCENT_COLOR};text-decoration:none;">profile settings</a>.</p>`
+
+const NOTIF_BUTTON = (href: string, label: string) =>
+  `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;"><tr><td align="center"><a href="${href}" style="display:inline-block;background:#fff;color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 32px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">${label}</a></td></tr></table>`
+
+export async function sendNewMessageEmail(opts: { to: string; fromName: string; conversationId: string }) {
+  const link = `${APP_URL}/account/messages/${opts.conversationId}`
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">New message</h1>
+    <p style="margin:0 0 24px;font-size:14px;color:#999;"><strong style="color:#fff;">${esc(opts.fromName)}</strong> sent you a message on Made Kulture.</p>
+    ${NOTIF_BUTTON(link, 'Read &amp; reply')}
+    ${NOTIF_FOOTER(`${APP_URL}/account/profile`)}
+  `
+  return sendEmail('new_message', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `${opts.fromName} messaged you on Made Kulture`, html: layout(body) })
+}
+
+export async function sendCastingInterestEmail(opts: { to: string; interestedName: string; castingTitle: string; castingId: string }) {
+  const link = `${APP_URL}/account/castings/${opts.castingId}`
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">Someone&rsquo;s interested</h1>
+    <p style="margin:0 0 24px;font-size:14px;color:#999;"><strong style="color:#fff;">${esc(opts.interestedName)}</strong> is interested in your casting: <strong style="color:#fff;">${esc(opts.castingTitle)}</strong>.</p>
+    ${NOTIF_BUTTON(link, 'View casting')}
+    ${NOTIF_FOOTER(`${APP_URL}/account/profile`)}
+  `
+  return sendEmail('casting_interest', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `${opts.interestedName} is interested in "${opts.castingTitle}"`, html: layout(body) })
+}
+
 // ─── Short-notice booking request (to owner) ──────────────────────────────────
 export async function sendShortNoticeRequestAlert(data: {
   customerName: string; customerEmail: string; desiredDate?: string | null; desiredStart?: number | null; note?: string | null; approveUrl: string

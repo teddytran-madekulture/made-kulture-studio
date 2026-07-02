@@ -52,6 +52,7 @@ export async function PUT(req: NextRequest) {
   if (typeof body.show_email === 'boolean') patch.show_email = body.show_email
   if (typeof body.show_phone === 'boolean') patch.show_phone = body.show_phone
   if (['customer', 'creative', 'brand'].includes(body.account_type)) patch.account_type = body.account_type
+  if (typeof body.notify_email === 'boolean') patch.notify_email = body.notify_email
   if (Array.isArray(body.links)) {
     patch.links = body.links
       .filter((l: unknown): l is { label?: unknown; url?: unknown } =>

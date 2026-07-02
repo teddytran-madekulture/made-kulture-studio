@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { sendCastingInterestEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,9 +25,14 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   if (!c) return NextResponse.json({ error: 'Casting not found.' }, { status: 404 })
   if (c.author_id === user.id) return NextResponse.json({ error: "This is your casting." }, { status: 400 })
 
-  // Register interest (idempotent).
-  await service.from('casting_participants')
-    .upsert({ casting_id: params.id, user_id: user.id, status: 'interested' }, { onConflict: 'casting_id,user_id', ignoreDuplicates: true })
+  // Register interest (idempotent) — track whether it's brand new so we only
+  // email the author the first time someone opts in.
+  const { data: existingPart } = await service
+    .from('casting_participants').select('user_id').eq('casting_id', params.id).eq('user_id', user.id).maybeSingle()
+  const isNewInterest = !existingPart
+  if (isNewInterest) {
+    await service.from('casting_participants').insert({ casting_id: params.id, user_id: user.id, status: 'interested' })
+  }
 
   // Open (or find) the conversation with the author.
   const [a, b] = [user.id, c.author_id].sort()
@@ -41,6 +47,20 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       const { data: again } = await service.from('conversations').select('id').eq('user_a', a).eq('user_b', b).maybeSingle()
       conversationId = again?.id ?? null
     }
+  }
+
+  // Notify the author on new interest (best-effort; respects opt-out).
+  if (isNewInterest) {
+    try {
+      const { data: authorProf } = await service.from('customer_profiles').select('notify_email').eq('id', c.author_id).maybeSingle()
+      if (authorProf?.notify_email !== false) {
+        const { data: casting } = await service.from('castings').select('title').eq('id', params.id).maybeSingle()
+        const { data: meProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
+        const { data: authUser } = await service.auth.admin.getUserById(c.author_id)
+        const email = authUser?.user?.email
+        if (email) await sendCastingInterestEmail({ to: email, interestedName: meProf?.full_name || 'A member', castingTitle: casting?.title || 'your casting', castingId: params.id })
+      }
+    } catch { /* notification failures never break interest */ }
   }
 
   return NextResponse.json({ ok: true, conversationId })
