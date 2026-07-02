@@ -16,11 +16,15 @@ export default function RolePicker({
   onChange,
   options,
   max = MAX_ROLES,
+  label = 'What do you do?',
+  hint,
 }: {
   value: string[]
   onChange: (next: string[]) => void
   options: string[]
   max?: number
+  label?: string
+  hint?: string
 }) {
   const [query, setQuery] = useState('')
   const atMax = value.length >= max
@@ -64,8 +68,8 @@ export default function RolePicker({
   return (
     <div>
       <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
-        What do you do?{' '}
-        <span style={{ color: 'rgba(255,255,255,0.25)' }}>(optional — pick up to {max})</span>
+        {label}{' '}
+        <span style={{ color: 'rgba(255,255,255,0.25)' }}>{hint ?? `(optional — pick up to ${max})`}</span>
       </div>
 
       {/* Selected roles */}

@@ -8,6 +8,7 @@ const ITEMS = [
   { href: '/account', label: 'Dashboard' },
   { href: '/account/bookings', label: 'My Bookings' },
   { href: '/account/directory', label: 'Directory' },
+  { href: '/account/castings', label: 'Castings' },
   { href: '/account/messages', label: 'Messages' },
   { href: '/account/profile', label: 'Profile' },
   { href: '/account/security', label: 'Login & Security' },
