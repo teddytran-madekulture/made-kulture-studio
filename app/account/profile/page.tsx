@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { CREATIVE_ROLES } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/client'
+import RolePicker from '@/components/RolePicker'
 
 interface Profile {
   full_name: string
@@ -36,8 +37,6 @@ export default function ProfilePage() {
   const [error, setError]     = useState('')
   const [uploading, setUploading] = useState(false)
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
-  const [otherRole, setOtherRole] = useState('')
-  const [showOther, setShowOther] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -47,13 +46,6 @@ export default function ProfilePage() {
     fetch('/api/roles').then(r => (r.ok ? r.json() : null))
       .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
   }, [])
-
-  const addOther = () => {
-    const r = otherRole.trim()
-    if (r && !form.roles.some(x => x.toLowerCase() === r.toLowerCase()))
-      setForm(f => ({ ...f, roles: [...f.roles, r] }))
-    setOtherRole(''); setShowOther(false)
-  }
 
   // Downscale + compress in the browser before upload. Avatars only ever show
   // at ~44–72px, so capping the longest side at 512px and re-encoding as JPEG
@@ -109,9 +101,6 @@ export default function ProfilePage() {
   const set = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
 
-  const toggleRole = (role: string) =>
-    setForm(f => ({ ...f, roles: f.roles.includes(role) ? f.roles.filter(r => r !== role) : [...f.roles, role] }))
-
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true); setError(''); setSaved(false)
@@ -133,13 +122,6 @@ export default function ProfilePage() {
       setSaved(true); setSaving(false)
     }
   }
-
-  const chipStyle = (on: boolean): React.CSSProperties => ({
-    background: on ? '#fff' : 'transparent',
-    color: on ? '#080808' : 'rgba(255,255,255,0.7)',
-    border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.15)',
-    borderRadius: 20, padding: '7px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
-  })
 
   const inputStyle: React.CSSProperties = {
     width: '100%', background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
@@ -198,33 +180,11 @@ export default function ProfilePage() {
         </Field>
 
         <Field label="WHAT YOU DO">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {roleOptions.map(role => (
-              <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(form.roles.includes(role))}>
-                {role}
-              </button>
-            ))}
-            {form.roles.filter(r => !roleOptions.includes(r)).map(role => (
-              <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(true)} title="Remove">
-                {role} ✕
-              </button>
-            ))}
-            {!showOther && (
-              <button type="button" onClick={() => setShowOther(true)} style={chipStyle(false)}>+ Other</button>
-            )}
-          </div>
-          {showOther && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input value={otherRole} onChange={e => setOtherRole(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOther() } }}
-                placeholder="Your role (e.g. Photo Assistant)" maxLength={40} autoFocus
-                style={{ ...inputStyle, flex: 1, padding: '10px 12px' }} />
-              <button type="button" onClick={addOther}
-                style={{ background: 'rgba(255,255,255,0.9)', color: '#080808', border: 'none', borderRadius: 4, padding: '0 16px', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                Add
-              </button>
-            </div>
-          )}
+          <RolePicker
+            value={form.roles}
+            onChange={roles => setForm(f => ({ ...f, roles }))}
+            options={roleOptions}
+          />
         </Field>
 
         {/* Directory opt-in */}

@@ -4,14 +4,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CREATIVE_ROLES } from '@/lib/roles'
+import RolePicker from '@/components/RolePicker'
 
 export default function SignupPage() {
   const router = useRouter()
   const [nextUrl, setNextUrl]  = useState('/account')
   const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '', instagram: '', roles: [] as string[] })
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
-  const [otherRole, setOtherRole]     = useState('')
-  const [showOther, setShowOther]     = useState(false)
   const [directoryOptIn, setDirectoryOptIn] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
@@ -32,18 +31,8 @@ export default function SignupPage() {
       .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
   }, [])
 
-  const addOther = () => {
-    const r = otherRole.trim()
-    if (r && !form.roles.some(x => x.toLowerCase() === r.toLowerCase()))
-      setForm(f => ({ ...f, roles: [...f.roles, r] }))
-    setOtherRole(''); setShowOther(false)
-  }
-
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
-
-  const toggleRole = (role: string) =>
-    setForm(f => ({ ...f, roles: f.roles.includes(role) ? f.roles.filter(r => r !== role) : [...f.roles, role] }))
 
   const signUpEmail = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,13 +74,6 @@ export default function SignupPage() {
     borderRadius: 4, padding: '14px 16px', fontFamily: 'Inter', fontSize: 14, color: '#fff',
     outline: 'none', boxSizing: 'border-box',
   }
-
-  const chipStyle = (on: boolean): React.CSSProperties => ({
-    background: on ? '#fff' : 'transparent',
-    color: on ? '#080808' : 'rgba(255,255,255,0.7)',
-    border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
-    borderRadius: 20, padding: '7px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
-  })
 
   if (success) return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, textAlign: 'center' }}>
@@ -149,38 +131,11 @@ export default function SignupPage() {
           <input placeholder="Phone number" value={form.phone} onChange={set('phone')} style={inputStyle} />
           <input placeholder="Instagram (optional)" value={form.instagram} onChange={set('instagram')} style={inputStyle} />
 
-          <div>
-            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
-              What do you do? <span style={{ color: 'rgba(255,255,255,0.25)' }}>(optional — pick any that apply)</span>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {roleOptions.map(role => (
-                <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(form.roles.includes(role))}>
-                  {role}
-                </button>
-              ))}
-              {form.roles.filter(r => !roleOptions.includes(r)).map(role => (
-                <button type="button" key={role} onClick={() => toggleRole(role)} style={chipStyle(true)} title="Remove">
-                  {role} ✕
-                </button>
-              ))}
-              {!showOther && (
-                <button type="button" onClick={() => setShowOther(true)} style={chipStyle(false)}>+ Other</button>
-              )}
-            </div>
-            {showOther && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <input value={otherRole} onChange={e => setOtherRole(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOther() } }}
-                  placeholder="Your role (e.g. Photo Assistant)" maxLength={40} autoFocus
-                  style={{ ...inputStyle, flex: 1, padding: '10px 12px' }} />
-                <button type="button" onClick={addOther}
-                  style={{ background: 'rgba(255,255,255,0.9)', color: '#080808', border: 'none', borderRadius: 4, padding: '0 16px', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  Add
-                </button>
-              </div>
-            )}
-          </div>
+          <RolePicker
+            value={form.roles}
+            onChange={roles => setForm(f => ({ ...f, roles }))}
+            options={roleOptions}
+          />
 
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.55 }}>
             <input type="checkbox" checked={directoryOptIn} onChange={e => setDirectoryOptIn(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
