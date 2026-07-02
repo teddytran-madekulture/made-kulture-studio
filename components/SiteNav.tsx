@@ -104,11 +104,23 @@ export default function SiteNav({ active }: { active?: string }) {
               {l.label}
             </Link>
           ))}
-          {authed !== null && (
-            <Link href={authed ? '/account' : '/login'} onClick={() => setMenuOpen(false)}
+          {authed === true && (
+            <Link href="/account" onClick={() => setMenuOpen(false)}
               style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
-              {authed ? 'ACCOUNT' : 'LOG IN'}
+              ACCOUNT
             </Link>
+          )}
+          {authed === false && (
+            <>
+              <Link href="/login" onClick={() => setMenuOpen(false)}
+                style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
+                LOG IN
+              </Link>
+              <Link href="/signup" onClick={() => setMenuOpen(false)}
+                style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: '#fff', textDecoration: 'none', padding: '6px 0' }}>
+                SIGN UP
+              </Link>
+            </>
           )}
           <div style={{ marginTop: 'auto', paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="label" style={{ marginBottom: 6 }}>MADE KULTURE / HOUSTON</div>

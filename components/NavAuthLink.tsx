@@ -22,14 +22,35 @@ export default function NavAuthLink() {
 
   if (authed === null) return null // avoid flash
 
-  return (
+  if (authed) return (
     <Link
-      href={authed ? '/account' : '/login'}
+      href="/account"
       style={linkStyle}
       onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
       onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
     >
-      {authed ? 'ACCOUNT' : 'LOGIN'}
+      ACCOUNT
     </Link>
+  )
+
+  return (
+    <>
+      <Link
+        href="/login"
+        style={linkStyle}
+        onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
+      >
+        LOGIN
+      </Link>
+      <Link
+        href="/signup"
+        style={{ ...linkStyle, color: '#fff' }}
+        onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#fff')}
+      >
+        SIGN UP
+      </Link>
+    </>
   )
 }
