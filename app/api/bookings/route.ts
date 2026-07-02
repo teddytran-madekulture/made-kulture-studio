@@ -569,37 +569,48 @@ export async function POST(req: NextRequest) {
       }).catch(err => console.error('Flagged customer check error:', err))
     }
 
-    // ── 13. Confirmations (SMS + email), non-blocking ──────────────────────
-    sendConfirmationSMS(body, lines, verifiedCents, checkInToken, doorCode).catch(err =>
-      console.error('SMS error (non-fatal):', err))
+    // ── 13. Confirmations (SMS + email) ────────────────────────────────────
+    //     Collect the sends and AWAIT them below (see Promise.allSettled). On
+    //     Vercel, un-awaited promises can be frozen when the function suspends
+    //     right after responding, delaying the email/SMS by minutes. Each send
+    //     still .catch()es so a failure stays non-fatal.
+    const notifications: Promise<any>[] = [
+      sendConfirmationSMS(body, lines, verifiedCents, checkInToken, doorCode)
+        .catch(err => console.error('SMS error (non-fatal):', err)),
+    ]
 
     if (firstBookingId) {
       const scheduleLines = lines.length > 1
         ? lines.map(l => `${l.setName} — ${formatDateLabel(l.date)}, ${formatTimeLabel(l.startHour)} – ${formatTimeLabel(l.endHour)}`)
         : undefined
 
-      sendBookingConfirmation({
-        customerName: body.name, customerEmail: body.email,
-        setName: lines.map(l => l.setName).join(', '),
-        date: formatDateLabel(primary.date),
-        startTime: formatTimeLabel(primary.startHour),
-        endTime: formatTimeLabel(primary.endHour),
-        totalAmount: verifiedCents / 100, bookingId: firstBookingId,
-        notes: body.notes || undefined, scheduleLines,
-        guestCount: guestCount || undefined,
-        doorCode: doorCode || undefined,
-      }).catch(err => console.error('Email confirmation error (non-fatal):', err))
+      notifications.push(
+        sendBookingConfirmation({
+          customerName: body.name, customerEmail: body.email,
+          setName: lines.map(l => l.setName).join(', '),
+          date: formatDateLabel(primary.date),
+          startTime: formatTimeLabel(primary.startHour),
+          endTime: formatTimeLabel(primary.endHour),
+          totalAmount: verifiedCents / 100, bookingId: firstBookingId,
+          notes: body.notes || undefined, scheduleLines,
+          guestCount: guestCount || undefined,
+          doorCode: doorCode || undefined,
+        }).catch(err => console.error('Email confirmation error (non-fatal):', err)),
 
-      sendNewBookingAlert({
-        customerName: body.name, customerEmail: body.email, customerPhone: body.phone,
-        setName: lines.map(l => l.setName).join(', '),
-        date: formatDateLabel(primary.date),
-        startTime: formatTimeLabel(primary.startHour),
-        endTime: formatTimeLabel(primary.endHour),
-        totalAmount: verifiedCents / 100, bookingId: firstBookingId,
-        source: 'website', notes: body.notes || undefined, scheduleLines,
-      }).catch(err => console.error('Email alert error (non-fatal):', err))
+        sendNewBookingAlert({
+          customerName: body.name, customerEmail: body.email, customerPhone: body.phone,
+          setName: lines.map(l => l.setName).join(', '),
+          date: formatDateLabel(primary.date),
+          startTime: formatTimeLabel(primary.startHour),
+          endTime: formatTimeLabel(primary.endHour),
+          totalAmount: verifiedCents / 100, bookingId: firstBookingId,
+          source: 'website', notes: body.notes || undefined, scheduleLines,
+        }).catch(err => console.error('Email alert error (non-fatal):', err)),
+      )
     }
+
+    // Ensure the sends finish before the serverless function suspends.
+    await Promise.allSettled(notifications)
 
     return NextResponse.json({
       success: true,
