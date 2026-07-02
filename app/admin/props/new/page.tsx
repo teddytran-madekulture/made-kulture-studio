@@ -145,7 +145,7 @@ export default function AddPropByPhoto() {
 
         {/* Thumbs */}
         {shots.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 8, marginTop: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(220px, 100%), 1fr))', gap: 8, marginTop: 16 }}>
             {shots.map(s => (
               <div key={s.id} style={{ position: 'relative', aspectRatio: '1/1', background: '#141414', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
                 <img src={s.outPreview || s.origPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
