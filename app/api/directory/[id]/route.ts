@@ -36,6 +36,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .from('portfolio_images')
     .select('id, url, is_mature, sort_order')
     .eq('user_id', params.id)
+    .eq('hidden', false)
     .order('sort_order', { ascending: true })
 
   // Email lives in auth, not the profile row — fetch it only when shown.

@@ -34,6 +34,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [agreed, setAgreed] = useState(false)
 
   const sync = (list: Img[]) => { setImages(list); onCountChange?.(list.length) }
 
@@ -45,7 +46,10 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
         .select('id, url, is_mature, sort_order')
         .eq('user_id', user.id)
         .order('sort_order', { ascending: true })
-      sync((data as Img[]) ?? [])
+      const list = (data as Img[]) ?? []
+      sync(list)
+      // Members who already have photos accepted the terms on a prior upload.
+      if (list.length > 0) setAgreed(true)
       setLoading(false)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -151,6 +155,15 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
         </div>
       )}
 
+      {!loading && !atMax && !agreed && (
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5, marginBottom: 12 }}>
+          <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
+          <span>I own or have the rights to these images, everyone shown is 18 or older and has consented, and this content follows Made Kulture&apos;s{' '}
+            <a href="https://madekulture.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>content standards</a>.
+          </span>
+        </label>
+      )}
+
       {loading ? (
         <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>Loading…</div>
       ) : (
@@ -184,10 +197,11 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
           ))}
 
           {!atMax && (
-            <label style={{ aspectRatio: '1 / 1', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: uploading ? 'default' : 'pointer', color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.02)' }}>
+            <label title={!agreed ? 'Check the box above first' : undefined}
+              style={{ aspectRatio: '1 / 1', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: (uploading || !agreed) ? 'default' : 'pointer', color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.02)', opacity: agreed ? 1 : 0.4 }}>
               <span style={{ fontSize: 22, lineHeight: 1 }}>{uploading ? '…' : '+'}</span>
               <span style={{ fontFamily: 'Inter', fontSize: 11 }}>{uploading ? 'Uploading' : 'Add photos'}</span>
-              <input type="file" accept="image/*" multiple disabled={uploading}
+              <input type="file" accept="image/*" multiple disabled={uploading || !agreed}
                 onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
                 style={{ display: 'none' }} />
             </label>
