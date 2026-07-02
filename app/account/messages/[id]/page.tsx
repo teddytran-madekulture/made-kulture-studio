@@ -78,8 +78,8 @@ export default function ThreadPage() {
   )
 
   return (
-    <div style={{ maxWidth: 620, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
-      <Link href="/account/messages" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginBottom: 12 }}>← Messages</Link>
+    <div style={{ maxWidth: 620 }}>
+      <Link href="/account/messages" style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginBottom: 12 }}>← Messages</Link>
 
       {meta && (
         <Link href={`/account/directory/${meta.other.id}`}
@@ -93,7 +93,7 @@ export default function ThreadPage() {
         </Link>
       )}
 
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+      <div style={{ height: 'min(58vh, 520px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
         {messages.length === 0 && (
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 20 }}>Say hello 👋</div>
         )}
