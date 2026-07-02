@@ -51,6 +51,7 @@ export async function PUT(req: NextRequest) {
   if (typeof body.video_url === 'string') patch.video_url = body.video_url.slice(0, 300)
   if (typeof body.show_email === 'boolean') patch.show_email = body.show_email
   if (typeof body.show_phone === 'boolean') patch.show_phone = body.show_phone
+  if (body.account_type === 'creative' || body.account_type === 'brand') patch.account_type = body.account_type
   if (Array.isArray(body.links)) {
     patch.links = body.links
       .filter((l: unknown): l is { label?: unknown; url?: unknown } =>

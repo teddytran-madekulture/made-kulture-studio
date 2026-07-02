@@ -7,6 +7,7 @@ type PortfolioImg = { id: string; url: string; is_mature: boolean }
 type Member = {
   id: string
   full_name: string
+  account_type?: string
   roles: string[]
   instagram: string | null
   avatar_url: string | null
@@ -109,6 +110,9 @@ export default function MemberProfilePage() {
         <div>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '0 0 6px', lineHeight: 1 }}>{member.full_name}</h1>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {member.account_type === 'brand' && (
+              <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#8ab4f8', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '3px 8px' }}>BRAND</span>
+            )}
             {member.roles.map(r => (
               <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
             ))}

@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const { data: p } = await service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, show_email, show_phone, directory_opt_in')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, show_email, show_phone, directory_opt_in, account_type')
     .eq('id', params.id)
     .maybeSingle()
 
@@ -50,6 +50,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     member: {
       id: p.id,
       full_name: p.full_name,
+      account_type: p.account_type === 'brand' ? 'brand' : 'creative',
       roles: p.roles ?? [],
       instagram: p.instagram ?? null,
       avatar_url: p.avatar_url ?? null,

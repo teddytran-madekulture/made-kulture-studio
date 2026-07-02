@@ -9,6 +9,7 @@ interface Member {
   roles: string[]
   instagram: string | null
   avatar_url: string | null
+  account_type?: string
 }
 
 export default function DirectoryPage() {
@@ -92,8 +93,9 @@ export default function DirectoryPage() {
                     ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: 'rgba(255,255,255,0.5)' }}>{(m.full_name || '?').charAt(0).toUpperCase()}</span>}
                 </div>
-                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em' }}>
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
                   {m.full_name}
+                  {m.account_type === 'brand' && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#8ab4f8', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>BRAND</span>}
                 </div>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: m.instagram ? 12 : 0 }}>

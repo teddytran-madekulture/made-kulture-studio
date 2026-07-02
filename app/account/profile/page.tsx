@@ -9,6 +9,7 @@ type ProfileLink = { label: string; url: string }
 
 interface Profile {
   id: string
+  account_type: 'creative' | 'brand'
   full_name: string
   email: string
   phone: string
@@ -39,7 +40,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function ProfilePage() {
-  const [form, setForm]     = useState<Profile>({ id: '', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false })
+  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -55,6 +56,7 @@ export default function ProfilePage() {
       .then(d => {
         if (d.profile) setForm({
           ...d.profile,
+          account_type: d.profile.account_type === 'brand' ? 'brand' : 'creative',
           roles: d.profile.roles ?? [],
           directory_opt_in: !!d.profile.directory_opt_in,
           avatar_url: d.profile.avatar_url ?? null,
@@ -71,10 +73,11 @@ export default function ProfilePage() {
   }, [])
 
   // Minimum profile to be listed/browsable in the directory.
+  const isBrand = form.account_type === 'brand'
   const missing: string[] = []
-  if (!form.full_name.trim()) missing.push('your name')
-  if (form.roles.length === 0) missing.push('at least one role')
-  if (!form.bio.trim()) missing.push('a short bio')
+  if (!form.full_name.trim()) missing.push(isBrand ? 'your company name' : 'your name')
+  if (!isBrand && form.roles.length === 0) missing.push('at least one role')
+  if (!form.bio.trim()) missing.push(isBrand ? 'a short about' : 'a short bio')
   if (portfolioCount === 0 && form.links.length === 0 && !form.instagram.trim())
     missing.push('a portfolio photo, a link, or Instagram')
 
@@ -138,7 +141,7 @@ export default function ProfilePage() {
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone }),
+      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
@@ -194,7 +197,20 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <Field label="PROFILE PHOTO">
+        <Field label="ACCOUNT TYPE">
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['creative', 'brand'] as const).map(t => (
+              <button key={t} type="button" onClick={() => setForm(f => ({ ...f, account_type: t }))} style={{
+                flex: 1, padding: '10px', borderRadius: 4, fontFamily: 'Inter', fontSize: 13, cursor: 'pointer',
+                background: form.account_type === t ? '#fff' : 'transparent',
+                color: form.account_type === t ? '#080808' : 'rgba(255,255,255,0.6)',
+                border: form.account_type === t ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+              }}>{t === 'creative' ? 'Creative' : 'Brand / Business'}</button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label={isBrand ? 'LOGO' : 'PROFILE PHOTO'}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {form.avatar_url
@@ -211,8 +227,8 @@ export default function ProfilePage() {
           </div>
         </Field>
 
-        <Field label="FULL NAME">
-          <input value={form.full_name} onChange={set('full_name')} placeholder="Your full name" style={inputStyle} />
+        <Field label={isBrand ? 'COMPANY NAME' : 'FULL NAME'}>
+          <input value={form.full_name} onChange={set('full_name')} placeholder={isBrand ? 'Your company name' : 'Your full name'} style={inputStyle} />
         </Field>
         <Field label="EMAIL">
           <input value={form.email} disabled style={{ ...inputStyle, opacity: 0.4 }} />
@@ -227,19 +243,21 @@ export default function ProfilePage() {
           </div>
         </Field>
 
-        <Field label="WHAT YOU DO">
-          <RolePicker
-            value={form.roles}
-            onChange={roles => setForm(f => ({ ...f, roles }))}
-            options={roleOptions}
-          />
-        </Field>
+        {!isBrand && (
+          <Field label="WHAT YOU DO">
+            <RolePicker
+              value={form.roles}
+              onChange={roles => setForm(f => ({ ...f, roles }))}
+              options={roleOptions}
+            />
+          </Field>
+        )}
 
-        <Field label="BIO">
+        <Field label={isBrand ? 'ABOUT / WHAT YOU’RE LOOKING FOR' : 'BIO'}>
           <textarea
             value={form.bio}
             onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-            placeholder="A sentence or two about you and your work."
+            placeholder={isBrand ? 'Who you are as a brand and the kind of creatives or work you’re looking for.' : 'A sentence or two about you and your work.'}
             maxLength={600}
             rows={3}
             style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}

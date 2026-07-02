@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   let q = service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type')
     .eq('directory_opt_in', true)
   if (role) q = q.contains('roles', [role])
 
@@ -41,19 +41,20 @@ export async function GET(req: NextRequest) {
   const { data: pics } = await service.from('portfolio_images').select('user_id')
   const withPhotos = new Set((pics ?? []).map((p: { user_id: string }) => p.user_id))
 
-  // Minimum profile to be listed: name + >=1 role + bio + (photo | link | IG).
+  // Minimum profile to be listed: name + bio + (photo | link | IG), and — for
+  // creatives — at least one role. Brands don't have creative roles.
   const isComplete = (m: {
     id: string; full_name: string | null; roles: string[] | null;
-    bio: string | null; instagram: string | null; links: unknown
+    bio: string | null; instagram: string | null; links: unknown; account_type?: string | null
   }) =>
     !!(m.full_name ?? '').trim() &&
-    (m.roles?.length ?? 0) > 0 &&
+    (m.account_type === 'brand' || (m.roles?.length ?? 0) > 0) &&
     !!(m.bio ?? '').trim() &&
     (withPhotos.has(m.id) || (Array.isArray(m.links) && m.links.length > 0) || !!(m.instagram ?? '').trim())
 
   const members = (data ?? [])
     .filter(isComplete)
-    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null }))
+    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative' }))
 
   return NextResponse.json({ members })
 }

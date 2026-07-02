@@ -10,6 +10,7 @@ export default function SignupPage() {
   const router = useRouter()
   const [nextUrl, setNextUrl]  = useState('/account')
   const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '', instagram: '', roles: [] as string[] })
+  const [accountType, setAccountType] = useState<'creative' | 'brand'>('creative')
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
   const [directoryOptIn, setDirectoryOptIn] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -44,8 +45,8 @@ export default function SignupPage() {
       password: form.password,
       options: {
         data: {
-          full_name: form.full_name, phone: form.phone, roles: form.roles,
-          instagram: igHandle || null, directory_opt_in: directoryOptIn,
+          full_name: form.full_name, phone: form.phone, roles: accountType === 'brand' ? [] : form.roles,
+          instagram: igHandle || null, directory_opt_in: directoryOptIn, account_type: accountType,
         },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
       },
@@ -126,16 +127,28 @@ export default function SignupPage() {
               {error}
             </div>
           )}
-          <input placeholder="Full name" value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['creative', 'brand'] as const).map(t => (
+              <button key={t} type="button" onClick={() => setAccountType(t)} style={{
+                flex: 1, padding: '10px', borderRadius: 4, fontFamily: 'Inter', fontSize: 13, cursor: 'pointer',
+                background: accountType === t ? '#fff' : 'transparent',
+                color: accountType === t ? '#080808' : 'rgba(255,255,255,0.6)',
+                border: accountType === t ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+              }}>{t === 'creative' ? "I'm a Creative" : "I'm a Brand"}</button>
+            ))}
+          </div>
+          <input placeholder={accountType === 'brand' ? 'Company name' : 'Full name'} value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
           <input type="email" placeholder="Email address" value={form.email} onChange={set('email')} required style={inputStyle} />
           <input placeholder="Phone number" value={form.phone} onChange={set('phone')} style={inputStyle} />
           <input placeholder="Instagram (optional)" value={form.instagram} onChange={set('instagram')} style={inputStyle} />
 
-          <RolePicker
-            value={form.roles}
-            onChange={roles => setForm(f => ({ ...f, roles }))}
-            options={roleOptions}
-          />
+          {accountType !== 'brand' && (
+            <RolePicker
+              value={form.roles}
+              onChange={roles => setForm(f => ({ ...f, roles }))}
+              options={roleOptions}
+            />
+          )}
 
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.55 }}>
             <input type="checkbox" checked={directoryOptIn} onChange={e => setDirectoryOptIn(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
