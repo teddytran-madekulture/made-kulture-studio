@@ -1189,10 +1189,11 @@ export default function AdminDashboard() {
 
   const handleCancel = async (id: string) => {
     if (!confirm('Cancel this booking?')) return
+    const notifyCustomer = confirm('Email the customer to let them know it was cancelled?\n\nOK = send the cancellation email\nCancel = cancel quietly (no email)')
     setCancelling(id)
     await fetch(`/api/admin/bookings/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'cancelled' }),
+      body: JSON.stringify({ status: 'cancelled', notifyCustomer }),
     })
     setCancelling(null)
     fetchBookings()

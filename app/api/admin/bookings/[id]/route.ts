@@ -2,11 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
+import { sendCancellationEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+// Central-time helpers so the cancellation email reads in the studio's timezone
+// regardless of how the timestamp offset was stored.
+function centralDateStr(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(iso))
+}
+function centralHourDecimal(iso: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso))
+  const hh = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
+  const mm = Number(parts.find(p => p.type === 'minute')?.value ?? 0)
+  return (hh % 24) + (mm >= 30 ? 0.5 : 0)
+}
 
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -60,5 +75,31 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       { status: isConflict ? 409 : 500 }
     )
   }
+
+  // Optionally notify the customer that their booking was cancelled (opt-in from
+  // the admin dashboard). Non-fatal — the cancellation itself already succeeded.
+  if (body.status === 'cancelled' && body.notifyCustomer) {
+    try {
+      const { data: bk } = await supabase
+        .from('bookings')
+        .select('start_time, end_time, customers(name, email), sets(name)')
+        .eq('id', params.id).single()
+      const cust: any = (bk as any)?.customers
+      const setRow: any = (bk as any)?.sets
+      if (bk && cust?.email) {
+        await sendCancellationEmail({
+          customerName: cust.name || 'there',
+          customerEmail: cust.email,
+          setName: setRow?.name || 'Full Studio Takeover',
+          date: formatDateLabel(centralDateStr(bk.start_time)),
+          startTime: formatTimeLabel(centralHourDecimal(bk.start_time)),
+          endTime: formatTimeLabel(centralHourDecimal(bk.end_time)),
+        })
+      }
+    } catch (err) {
+      console.error('[admin cancel] cancellation email error (non-fatal):', err)
+    }
+  }
+
   return NextResponse.json({ success: true })
 }
