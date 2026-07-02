@@ -55,6 +55,11 @@ const OWNER_EMAIL = 'teddytran@madekulture.com'
 const BRAND_COLOR = '#1a1a1a'
 const ACCENT_COLOR = '#d4a843'
 
+// Base URL of the booking app (where customers manage/rebook). Matches the rest
+// of the app; falls back to the live Vercel URL. NOTE: bookings live in THIS app,
+// not the old Squarespace madekulture.com site — links must point here.
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
+
 // ─── HTML base layout ─────────────────────────────────────────────────────────
 function layout(body: string) {
   return `<!DOCTYPE html>
@@ -173,7 +178,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
       <tr>
         <td align="center">
-          <a href="https://madekulture.com/account" style="display:inline-block;background:#fff;color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 32px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;margin-right:8px;">Change / Cancel Booking</a>
+          <a href="${APP_URL}/account" style="display:inline-block;background:#fff;color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 32px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;margin-right:8px;">Change / Cancel Booking</a>
         </td>
       </tr>
       <tr>
@@ -370,7 +375,7 @@ export async function sendCancellationEmail(data: CancellationData) {
       </td></tr>` : ''}
     </table>
 
-    <p style="margin:0 0 6px;font-size:13px;color:#888;">Want to rebook? Visit <a href="https://madekulture.com/book" style="color:${ACCENT_COLOR};text-decoration:none;">madekulture.com/book</a></p>
+    <p style="margin:0 0 6px;font-size:13px;color:#888;">Want to rebook? Visit <a href="${APP_URL}/book" style="color:${ACCENT_COLOR};text-decoration:none;">our booking page</a></p>
     <p style="margin:0;font-size:13px;color:#888;">Questions? Text <a href="sms:+18324081631" style="color:${ACCENT_COLOR};text-decoration:none;">(832) 408-1631</a></p>
   `
 
@@ -463,7 +468,7 @@ export async function sendBookingReminder(data: BookingReminderData) {
 
     <!-- Manage booking -->
     <p style="margin:16px 0 4px;font-size:13px;color:#666;">Need to cancel? Cancellations within 48 hours are non-refundable.</p>
-    <p style="margin:0 0 24px;font-size:13px;color:#666;">To manage your booking, visit <a href="https://madekulture.com/account" style="color:${ACCENT_COLOR};text-decoration:none;">madekulture.com/account</a>.</p>
+    <p style="margin:0 0 24px;font-size:13px;color:#666;">To manage your booking, visit <a href="${APP_URL}/account" style="color:${ACCENT_COLOR};text-decoration:none;">your account page</a>.</p>
 
     <p style="margin:0;font-size:11px;color:#555;">Booking reference: #${bookingId.slice(0, 8).toUpperCase()}</p>
   `
