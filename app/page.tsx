@@ -37,8 +37,8 @@ export default function Home() {
 
       {/* HERO */}
       <section style={{
-        position: 'relative', height: '100vh', display: 'flex', alignItems: 'flex-end',
-        padding: isMobile ? '0 20px 60px' : '0 40px 80px', border: 'none', overflow: 'hidden',
+        position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'flex-end',
+        padding: isMobile ? '110px 20px 60px' : '130px 40px 80px', border: 'none', overflow: 'hidden',
       }}>
         {/* Background — replace src with real studio photo */}
         <div style={{
