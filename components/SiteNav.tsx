@@ -17,7 +17,9 @@ const LINKS: { label: string; href: string }[] = [
 // Shared site navigation: transparent at the top, solid on scroll, with a
 // full-screen bold menu on mobile. `active` highlights the current page.
 export default function SiteNav({ active }: { active?: string }) {
-  const isMobile = useIsMobile()
+  // Use the compact/hamburger nav below 1024px so the full desktop row (logo +
+  // 6 links + login/signup + book) never has to cram or overlap.
+  const isMobile = useIsMobile(1024)
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [authed, setAuthed] = useState<boolean | null>(null)
@@ -75,18 +77,19 @@ export default function SiteNav({ active }: { active?: string }) {
           </div>
         ) : (
           <>
-            {/* Centered nav links */}
-            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', gap: 36, alignItems: 'center' }}>
+            {/* Centered nav links — in-flow (flex:1) so they always reserve
+                their own space and can't overlap the logo or the right actions. */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', gap: 30, alignItems: 'center' }}>
               {LINKS.map(l => (
                 <Link key={l.label} href={l.href}
-                  style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none', transition: 'color 0.2s' }}
+                  style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none', transition: 'color 0.2s', whiteSpace: 'nowrap' }}
                   onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
                   onMouseLeave={e => (e.currentTarget.style.color = isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)')}
                 >{l.label}</Link>
               ))}
             </div>
             {/* Right-side actions */}
-            <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexShrink: 0 }}>
               <NavAuthLink />
               <Link href="/book" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 16,
