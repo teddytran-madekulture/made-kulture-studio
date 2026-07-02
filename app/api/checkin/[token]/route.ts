@@ -9,6 +9,21 @@ const supabase = createClient(
 const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
 const OWNER_PHONE = '+18324081631'
 
+// Studio location — approx, geocoded from 4825 Gulf Freeway / 77023. Replace with
+// the exact Google-Maps pin (right-click → coordinates) for a tighter geofence.
+const STUDIO_LAT = 29.7133
+const STUDIO_LNG = -95.3137
+const ONSITE_RADIUS_M = 350   // within this → "on-site ✓" in the owner alert
+const FAR_LIMIT_M = 2000      // beyond this → clearly not at the studio, block
+
+// Straight-line distance in metres (haversine).
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000, toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
 export const dynamic = 'force-dynamic'
 
 const BOOKING_SELECT = `
@@ -53,7 +68,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 // POST /api/checkin/[token] — { action: 'check_in' | 'check_out', guests?: number }
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
-    const { action, guests } = await req.json()
+    const { action, guests, lat, lng } = await req.json()
     const { data: b } = await supabase.from('bookings').select(BOOKING_SELECT).eq('check_in_token', params.token).maybeSingle()
     if (!b) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 })
     if (b.status === 'cancelled') return NextResponse.json({ error: 'This booking was cancelled.' }, { status: 400 })
@@ -65,13 +80,27 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     const setName = setNameOf(b)
 
     if (action === 'check_in') {
-      // Window: 60 min before start through 60 min after end.
-      if (now < start - 60 * 60 * 1000) {
-        return NextResponse.json({ error: `Check-in opens at ${fmtTime(new Date(start - 60 * 60 * 1000).toISOString())}.` }, { status: 400 })
+      // Window: 15 min before start (matches "arrive 15 min early") through 60
+      // min after end.
+      if (now < start - 15 * 60 * 1000) {
+        return NextResponse.json({ error: `Check-in opens at ${fmtTime(new Date(start - 15 * 60 * 1000).toISOString())}.` }, { status: 400 })
       }
       if (now > end + 60 * 60 * 1000) {
         return NextResponse.json({ error: 'This booking has ended. Text (832) 408-1631 for help.' }, { status: 400 })
       }
+
+      // Location: only block check-ins that are clearly far from the studio
+      // (forgiving of GPS wobble / imprecise geocode). Note the confidence in the
+      // owner alert so a "not confirmed" ping can be double-checked before greeting.
+      let locNote = '❓ location not shared'
+      if (typeof lat === 'number' && typeof lng === 'number') {
+        const dist = distanceMeters(lat, lng, STUDIO_LAT, STUDIO_LNG)
+        if (dist > FAR_LIMIT_M) {
+          return NextResponse.json({ error: "You don't look like you're at the studio yet — check in once you arrive." }, { status: 400 })
+        }
+        locNote = dist <= ONSITE_RADIUS_M ? '✅ on-site' : `📌 ~${Math.round(dist)}m away`
+      }
+
       const arrived = Math.floor(Number(guests) || 0) || null
       await supabase.from('bookings').update({
         checked_in_at: new Date().toISOString(),
@@ -84,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         ? `\n👥 party of ${arrived}${over ? ` ⚠️ (limit ${limit})` : ''}`
         : ''
       twilioClient.messages.create({
-        body: `✅ ARRIVED — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}`,
+        body: `✅ ARRIVED — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}\n${locNote}`,
         from: process.env.TWILIO_PHONE_NUMBER, to: OWNER_PHONE,
       }).catch(e => console.error('[checkin] owner SMS error:', e))
 

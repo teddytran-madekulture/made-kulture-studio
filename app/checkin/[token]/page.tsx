@@ -60,9 +60,26 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   const act = async (action: 'check_in' | 'check_out') => {
     setBusy(true); setErr(null)
     try {
+      // On a self-check-in (not the on-site kiosk), grab the visitor's location so
+      // the studio knows they're actually there. Denied/unavailable is fine — the
+      // server just flags it as unconfirmed.
+      let coords: { lat: number; lng: number } | null = null
+      if (action === 'check_in' && !kiosk && typeof navigator !== 'undefined' && navigator.geolocation) {
+        coords = await new Promise(resolve => {
+          navigator.geolocation.getCurrentPosition(
+            p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+          )
+        })
+      }
       const res = await fetch(`/api/checkin/${params.token}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, guests: action === 'check_in' && !data?.isBuyout ? guests : undefined }),
+        body: JSON.stringify({
+          action,
+          guests: action === 'check_in' && !data?.isBuyout ? guests : undefined,
+          lat: coords?.lat, lng: coords?.lng,
+        }),
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'Something went wrong.'); setBusy(false); return }
