@@ -369,12 +369,14 @@ export default function ProfilePage() {
         )}
 
         {!isCustomer && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <input type="checkbox" id="notify_sms" checked={!!form.notify_sms} onChange={e => setForm(f => ({ ...f, notify_sms: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-            <label htmlFor="notify_sms" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
-              Also text me about new messages and casting interest
-            </label>
-          </div>
+          <label htmlFor="notify_sms" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginBottom: 16 }}>
+            <input type="checkbox" id="notify_sms" checked={!!form.notify_sms} onChange={e => setForm(f => ({ ...f, notify_sms: e.target.checked }))} style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0, cursor: 'pointer' }} />
+            <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55 }}>
+              Text me about new messages and casting interest. By checking this you agree to receive recurring automated text messages from <strong style={{ color: 'rgba(255,255,255,0.7)' }}>Made Kulture</strong>. Message frequency varies. Message &amp; data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
+              <a href="https://madekulture.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Terms</a> and{' '}
+              <a href="https://madekulture.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>.
+            </span>
+          </label>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
