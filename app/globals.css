@@ -53,7 +53,12 @@ h1, h2, h3, .display {
   color: var(--white);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 12px;
-  fon
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
 /* Account area responsive shell */
 .acct-shell { display: flex; gap: 48px; }
 .acct-nav { width: 180px; flex-shrink: 0; }
@@ -64,6 +69,5 @@ h1, h2, h3, .display {
 
 /* Hide an element on phones (used for the desktop-only account sign-out) */
 @media (max-width: 640px) { .acct-hide-mobile { display: none !important; } }
-; }
 
 section { border-top: 1px solid var(--border); }
