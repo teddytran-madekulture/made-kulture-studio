@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from('customers')
     .select(`
-      id, name, email, phone, status, banned, created_at,
+      id, name, email, phone, status, banned, created_at, pricing_overrides,
       square_customer_id, acuity_client_id, alt_emails, alt_phones, alt_names,
       bookings ( id, status, total_amount )
     `, { count: 'exact' })
@@ -48,6 +48,12 @@ export async function GET(req: NextRequest) {
 
   const customers = (data ?? []).map(c => {
     const bkgs = (c.bookings as any[]) ?? []
+    // Which custom overrides this customer carries (for a glanceable badge).
+    const po = (c.pricing_overrides as any) || {}
+    const customTags: string[] = []
+    if (po.hourly_rate != null || (po.sets && Object.keys(po.sets).length) || po.equipment_discount_percent) customTags.push('pricing')
+    if (po.comp_no_card) customTags.push('comp')
+    if (po.short_notice || po.short_notice_view || po.short_notice_until) customTags.push('short-notice')
     return {
       id:               c.id,
       name:             c.name,
@@ -61,6 +67,8 @@ export async function GET(req: NextRequest) {
       totalBookings:    bkgs.length,
       confirmedBookings: bkgs.filter(b => b.status === 'confirmed').length,
       totalSpend:       bkgs.reduce((sum: number, b: any) => sum + (b.total_amount ?? 0), 0),
+      customTags,
+      hasCustom:        customTags.length > 0,
     }
   })
 

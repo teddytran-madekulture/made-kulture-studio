@@ -155,6 +155,8 @@ interface CustomerListItem {
   totalBookings: number
   confirmedBookings: number
   totalSpend: number
+  hasCustom?: boolean
+  customTags?: string[]
 }
 
 interface CustomerNote {
@@ -2945,7 +2947,12 @@ export default function AdminDashboard() {
                     onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
                     onMouseLeave={e => (e.currentTarget.style.background = custDetail?.id === c.id ? 'rgba(255,255,255,0.05)' : 'transparent')}
                   >
-                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff', fontWeight: 500 }}>{c.name || '—'}</div>
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name || '—'}</span>
+                      {c.hasCustom && (
+                        <span title={`Custom settings: ${(c.customTags || []).join(', ')}`} style={{ flexShrink: 0, background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.45)', color: '#e6c07a', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '1px 5px', borderRadius: 3 }}>★ CUSTOM</span>
+                      )}
+                    </div>
                     <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
                     <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{c.phone || '—'}</div>
                     <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>{c.totalBookings}</div>
@@ -3726,7 +3733,15 @@ export default function AdminDashboard() {
                           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ pricingOverrides: payload }),
                         })
-                        if (res.ok) setCustDetail(d => d ? { ...d, pricingOverrides: payload } : d)
+                        if (res.ok) {
+                          setCustDetail(d => d ? { ...d, pricingOverrides: payload } : d)
+                          // Keep the list badge in sync without a reload.
+                          const tags: string[] = []
+                          if (payload && (payload.hourly_rate != null || (payload.sets && Object.keys(payload.sets).length) || payload.equipment_discount_percent)) tags.push('pricing')
+                          if (payload?.comp_no_card) tags.push('comp')
+                          if (payload?.short_notice || payload?.short_notice_view || payload?.short_notice_until) tags.push('short-notice')
+                          setCustList(list => list.map(x => x.id === custDetail!.id ? { ...x, hasCustom: tags.length > 0, customTags: tags } : x))
+                        }
                         setCustPricingSaving(false)
                       }} style={{ background: '#d4a843', border: 'none', padding: '7px 16px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000', opacity: custPricingSaving ? 0.6 : 1 }}>
                         {custPricingSaving ? 'SAVING…' : 'SAVE PRICING'}
@@ -3741,6 +3756,7 @@ export default function AdminDashboard() {
                           if (res.ok) {
                             setCustDetail(d => d ? { ...d, pricingOverrides: null } : d)
                             setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false, short_notice: false, short_notice_until: '', short_notice_view: false })
+                            setCustList(list => list.map(x => x.id === custDetail!.id ? { ...x, hasCustom: false, customTags: [] } : x))
                           }
                           setCustPricingSaving(false)
                         }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', padding: '7px 14px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>
