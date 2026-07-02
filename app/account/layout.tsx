@@ -9,6 +9,12 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?next=/account')
 
+  // First-login profile step: users who skipped the signup form (e.g. Google
+  // OAuth) land un-onboarded — send them to complete their profile first.
+  const { data: prof } = await supabase
+    .from('customer_profiles').select('onboarded').eq('id', user.id).maybeSingle()
+  if (prof && prof.onboarded === false) redirect('/welcome')
+
   return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
       {/* Top nav */}

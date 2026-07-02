@@ -46,6 +46,7 @@ export async function PUT(req: NextRequest) {
   if (Array.isArray(roles)) patch.roles = roles.map((r: unknown) => String(r)).filter(Boolean)
   if (typeof directory_opt_in === 'boolean') patch.directory_opt_in = directory_opt_in
   if (typeof avatar_url === 'string') patch.avatar_url = avatar_url
+  if (typeof body.onboarded === 'boolean') patch.onboarded = body.onboarded
 
   const { data, error } = await supabase
     .from('customer_profiles')

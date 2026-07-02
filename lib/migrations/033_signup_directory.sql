@@ -4,6 +4,13 @@
 --  2. role_suggestions: custom "Other" roles people type, queued for owner review.
 --  3. directory_roles: owner-approved extra roles, added on top of the code list.
 
+-- 0. Onboarding flag: whether the member has been through profile setup. Google
+--    OAuth users skip the signup form, so they land un-onboarded and get a
+--    first-login "complete your profile" step. Existing members are grandfathered
+--    in as already-onboarded so they never see the prompt.
+alter table customer_profiles add column if not exists onboarded boolean not null default false;
+update customer_profiles set onboarded = true where onboarded = false;
+
 -- 1. New-user trigger (extends the existing full_name/phone/roles copy) ──────────
 create or replace function public.handle_new_user()
   returns trigger
@@ -12,7 +19,7 @@ create or replace function public.handle_new_user()
   set search_path to 'public'
 as $function$
 begin
-  insert into public.customer_profiles (id, full_name, phone, roles, instagram, directory_opt_in)
+  insert into public.customer_profiles (id, full_name, phone, roles, instagram, directory_opt_in, onboarded)
   values (
     new.id,
     new.raw_user_meta_data->>'full_name',
@@ -27,7 +34,10 @@ begin
     ),
     nullif(new.raw_user_meta_data->>'instagram', ''),
     -- New members are visible by default; only an explicit "false" opts them out.
-    coalesce((new.raw_user_meta_data->>'directory_opt_in')::boolean, true)
+    coalesce((new.raw_user_meta_data->>'directory_opt_in')::boolean, true),
+    -- Signup-form users pass directory_opt_in in metadata (already onboarded);
+    -- OAuth users don't, so they get sent through the first-login profile step.
+    (new.raw_user_meta_data ? 'directory_opt_in')
   )
   on conflict (id) do nothing;
   return new;
