@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
   const { data: bookings, error } = await supabase
     .from('bookings')
-    .select('id, end_time, customers ( name, phone ), sets ( name )')
+    .select('id, end_time, check_in_token, customers ( name, phone ), sets ( name )')
     .eq('status', 'confirmed')
     .is('session_reminder_sent_at', null)
     .is('checked_out_at', null)
@@ -56,13 +56,18 @@ export async function GET(req: NextRequest) {
     if (!phone) continue // no reachable number — already dequeued above
 
     const firstName = customer?.name ? customer.name.split(' ')[0] : 'there'
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
+    const token = (b as any).check_in_token
+    const checkoutLine = token
+      ? `• Check out when you're packed up: ${appUrl}/checkin/${token}`
+      : `• Check out on your booking link when you're packed up`
     const body = [
       `⏰ Made Kulture — 15 minutes left, ${firstName}.`,
       ``,
       `Time to wrap up your session at ${setName}:`,
       `• Return all props to where you found them`,
-      `• Take your gear and trash with you`,
-      `• Check out on your booking link when you're packed up`,
+      `• Take all your gear and belongings with you; dispose of any trash`,
+      checkoutLine,
       ``,
       `Please wrap up on time — running over may be charged an extra hour per studio policy.`,
       `Reply STOP to opt out.`,
