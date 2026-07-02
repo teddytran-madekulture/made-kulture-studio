@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 type PortfolioImg = { id: string; url: string; is_mature: boolean }
@@ -52,11 +52,26 @@ function embedUrl(url: string): string | null {
 
 export default function MemberProfilePage() {
   const params = useParams<{ id: string }>()
+  const router = useRouter()
   const [member, setMember] = useState<Member | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [revealMature, setRevealMature] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+
+  const startChat = async () => {
+    if (!member || starting) return
+    setStarting(true)
+    const res = await fetch('/api/messages/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toUserId: member.id }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setStarting(false)
+    if (res.ok && d.conversationId) router.push(`/account/messages/${d.conversationId}`)
+    else setError(d.error ?? 'Could not start a conversation.')
+  }
 
   useEffect(() => {
     fetch(`/api/directory/${params.id}`)
@@ -103,6 +118,13 @@ export default function MemberProfilePage() {
 
       {member.bio && (
         <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, margin: '16px 0' }}>{member.bio}</p>
+      )}
+
+      {!member.is_self && (
+        <button type="button" onClick={startChat} disabled={starting}
+          style={{ background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1, margin: '4px 0 12px' }}>
+          {starting ? 'Opening…' : 'Message'}
+        </button>
       )}
 
       {/* Contact + links */}
