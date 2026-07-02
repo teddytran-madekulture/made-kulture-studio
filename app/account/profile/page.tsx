@@ -8,6 +8,7 @@ import PortfolioManager from '@/components/PortfolioManager'
 type ProfileLink = { label: string; url: string }
 
 interface Profile {
+  id: string
   full_name: string
   email: string
   phone: string
@@ -38,7 +39,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function ProfilePage() {
-  const [form, setForm]     = useState<Profile>({ full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false })
+  const [form, setForm]     = useState<Profile>({ id: '', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -163,7 +164,18 @@ export default function ProfilePage() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, margin: '0 0 32px' }}>PROFILE</h1>
+      <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, margin: '0 0 8px' }}>PROFILE</h1>
+      {form.id && form.directory_opt_in
+        ? (
+          <a href={`/account/directory/${form.id}`} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', textDecoration: 'none', marginBottom: 28 }}>
+            View public profile →
+          </a>
+        ) : (
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 28 }}>
+            Turn on the directory listing below to get a public profile.
+          </div>
+        )}
       <form onSubmit={save} style={{ maxWidth: 480 }}>
         {error && (
           <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b', marginBottom: 20 }}>
