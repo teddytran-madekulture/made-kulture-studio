@@ -595,6 +595,8 @@ export async function POST(req: NextRequest) {
           notes: body.notes || undefined, scheduleLines,
           guestCount: guestCount || undefined,
           doorCode: doorCode || undefined,
+          startISO: primary.startISO, endISO: primary.endISO,
+          checkInToken: checkInToken || undefined,
         }).catch(err => console.error('Email confirmation error (non-fatal):', err)),
 
         sendNewBookingAlert({

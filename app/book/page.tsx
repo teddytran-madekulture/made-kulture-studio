@@ -7,6 +7,7 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 import DatePicker from '@/components/DatePicker'
 import StudioConditions from '@/components/StudioConditions'
 import { shortNoticeActive, todayDateStr, chiTodayStr, chiNowDecimal } from '@/lib/short-notice'
+import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -1236,6 +1237,13 @@ function Row({ label, value }: { label: string; value: string }) {
 function SuccessScreen({ booking, setCart, loggedIn }: { booking: BookingState; setCart: SetCartItem[]; loggedIn: boolean }) {
   const sessions = booking.type === 'set' ? setCart : []
   const signupHref = `/signup?email=${encodeURIComponent(booking.email || '')}&name=${encodeURIComponent(booking.name || '')}&phone=${encodeURIComponent(booking.phone || '')}`
+  const calFirst: any = booking.type === 'set'
+    ? setCart[0]
+    : (booking.startHour != null && booking.endHour != null ? { date: booking.date, startHour: booking.startHour, endHour: booking.endHour, setName: 'Full Studio Takeover' } : null)
+  const isoAt = (d: string, h: number) => { const hh = Math.floor(h), mm = h % 1 ? '30' : '00'; return `${d}T${String(hh).padStart(2, '0')}:${mm}:00-05:00` }
+  const gcal = calFirst
+    ? googleCalUrl({ title: `Made Kulture — ${calFirst.setName}`, startISO: isoAt(calFirst.date, calFirst.startHour), endISO: isoAt(calFirst.date, calFirst.endHour), location: STUDIO_ADDRESS, details: 'Your Made Kulture session. Check your email for the door code and full details.' })
+    : null
   return (
     <div style={{ background: '#080808', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
       <div style={{ maxWidth: 480, textAlign: 'center' }}>
@@ -1255,6 +1263,12 @@ function SuccessScreen({ booking, setCart, loggedIn }: { booking: BookingState; 
         <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, marginBottom: 40 }}>
           Confirmation details will be sent to <strong style={{ color: '#fff' }}>{booking.email}</strong>. You&apos;ll also receive a text at {booking.phone} with everything you need.
         </p>
+        {gcal && (
+          <a href={gcal} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', textDecoration: 'none', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.14em', marginBottom: 24 }}>
+            + ADD TO GOOGLE CALENDAR
+          </a>
+        )}
+
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6, marginBottom: loggedIn ? 48 : 32 }}>
           Questions? Text us at <strong style={{ color: '#fff' }}>(832) 408-1631</strong>
         </p>

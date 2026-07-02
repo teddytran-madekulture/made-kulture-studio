@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 import { createClient } from '@supabase/supabase-js'
 
 // Lazy-initialize so the build doesn't fail when env var isn't available at compile time
@@ -114,13 +115,22 @@ interface BookingConfirmationData {
   scheduleLines?: string[] // multi-set orders: one line per set, e.g. "Set A — Sat Jul 12, 2pm–5pm"
   guestCount?: number      // declared party size (the booked limit)
   doorCode?: string        // per-booking front-door code (igloohome algoPIN)
+  startISO?: string        // primary window start/end (raw ISO) for calendar links
+  endISO?: string
+  checkInToken?: string    // gates the downloadable .ics link
 }
 
 export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode, startISO, endISO, checkInToken } = data
+
+  const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', `Manage: ${APP_URL}/account`].filter(Boolean).join(' ')
+  const gCalLink = (startISO && endISO)
+    ? googleCalUrl({ title: `Made Kulture — ${setName}`, startISO, endISO, location: STUDIO_ADDRESS, details: calDetails })
+    : null
+  const icsLink = (checkInToken) ? `${APP_URL}/api/bookings/${bookingId}/ics?token=${checkInToken}` : null
 
   const body = `
     <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;">Booking Confirmed</h1>
@@ -196,6 +206,18 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
           <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Front-Door Code</p>
           <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCode.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
           <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">front-door</strong> keypad, then press the unlock key. It only works during your booked time. Don't share it.</p>
+        </td>
+      </tr>
+    </table>` : ''}
+
+    ${gCalLink ? `
+    <!-- Add to Calendar -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      <tr>
+        <td align="center">
+          <p style="margin:0 0 10px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Add to your calendar</p>
+          <a href="${gCalLink}" style="display:inline-block;background:#111;border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:12px;text-decoration:none;padding:11px 20px;border-radius:4px;margin:0 4px 8px;">Google Calendar</a>
+          ${icsLink ? `<a href="${icsLink}" style="display:inline-block;background:#111;border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:12px;text-decoration:none;padding:11px 20px;border-radius:4px;margin:0 4px 8px;">Apple / Outlook</a>` : ''}
         </td>
       </tr>
     </table>` : ''}

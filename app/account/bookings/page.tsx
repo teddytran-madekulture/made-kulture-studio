@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 
 interface Booking {
   id: string
@@ -135,6 +136,13 @@ export default function BookingsPage() {
             )}
             {isUpcoming && !canCancel && !isCancelled && (
               <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>Within 48hr window</span>
+            )}
+            {isUpcoming && !isCancelled && (
+              <a href={googleCalUrl({ title: `Made Kulture — ${b.sets?.name ?? 'Studio'}`, startISO: b.start_time, endISO: b.end_time, location: STUDIO_ADDRESS, details: 'Your Made Kulture session.' })}
+                target="_blank" rel="noopener noreferrer"
+                style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.55)', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                + CALENDAR
+              </a>
             )}
             {isUpcoming && gearCart.length > 0 && (
               <button
