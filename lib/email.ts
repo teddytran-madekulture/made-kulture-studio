@@ -484,9 +484,11 @@ export async function sendBookingReminder(data: BookingReminderData) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function formatTimeLabel(hour: number): string {
-  if (hour === 12) return '12pm'
-  if (hour === 0) return '12am'
-  return hour > 12 ? `${hour - 12}pm` : `${hour}am`
+  const h = Math.floor(hour)
+  const m = hour % 1 >= 0.5 ? 30 : 0
+  const ampm = h >= 12 ? 'pm' : 'am'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return m ? `${h12}:${String(m).padStart(2, '0')}${ampm}` : `${h12}${ampm}`
 }
 
 export function formatDateLabel(isoDate: string): string {
