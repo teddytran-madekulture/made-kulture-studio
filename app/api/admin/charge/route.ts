@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
         `💳 $${dollars} charged`,
         ``,
         `4825 Gulf Freeway, Houston TX 77023`,
-        `Questions? Reply to this message.`,
+        `Questions? Text or call (832) 408-1631.`,
       ].join('\n')
 
       await twilioClient.messages.create({
