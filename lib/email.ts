@@ -108,13 +108,14 @@ interface BookingConfirmationData {
   notes?: string
   scheduleLines?: string[] // multi-set orders: one line per set, e.g. "Set A — Sat Jul 12, 2pm–5pm"
   guestCount?: number      // declared party size (the booked limit)
+  doorCode?: string        // per-booking front-door code (igloohome algoPIN)
 }
 
 export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode } = data
 
   const body = `
     <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;">Booking Confirmed</h1>
@@ -181,6 +182,18 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
         </td>
       </tr>
     </table>
+
+    ${doorCode ? `
+    <!-- Door Code -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid ${ACCENT_COLOR};border-radius:6px;padding:20px 24px;margin-bottom:16px;">
+      <tr>
+        <td align="center">
+          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Door Code</p>
+          <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCode}</p>
+          <p style="margin:0;font-size:12px;color:#999;">Enter this on the front-door keypad, then press the unlock key. It only works during your booked time. Don't share it.</p>
+        </td>
+      </tr>
+    </table>` : ''}
 
     <!-- When You Arrive -->
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:16px;">

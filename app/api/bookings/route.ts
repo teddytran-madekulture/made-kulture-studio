@@ -8,6 +8,7 @@ import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
+import { createBookingPin } from '@/lib/igloohome'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -161,7 +162,8 @@ interface OrderLine {
 }
 
 async function sendConfirmationSMS(
-  body: BookingRequest, lines: OrderLine[], totalCents: number, checkInToken?: string | null
+  body: BookingRequest, lines: OrderLine[], totalCents: number, checkInToken?: string | null,
+  doorCode?: string | null
 ) {
   const dollars = (totalCents / 100).toFixed(2)
   const sched = lines.map(l =>
@@ -169,6 +171,7 @@ async function sendConfirmationSMS(
   const guestLine = body.guests ? `👥 ${body.guests} guests — this is your booked limit` : null
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
   const checkInLine = checkInToken ? `📲 Check in when you arrive: ${appUrl}/checkin/${checkInToken}` : null
+  const doorLine = doorCode ? `🔑 Front-door code: ${doorCode} (works during your booked time only)` : null
 
   const message = [
     `✅ Made Kulture — Booking Confirmed!`,
@@ -177,6 +180,7 @@ async function sendConfirmationSMS(
     sched,
     ...(guestLine ? [guestLine] : []),
     `💳 $${dollars} charged`,
+    ...(doorLine ? [``, doorLine] : []),
     ...(checkInLine ? [``, checkInLine] : []),
     ``,
     `4825 Gulf Freeway, Houston TX 77023`,
@@ -530,6 +534,29 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // ── 11b. Front-door code (igloohome algoPIN) ───────────────────────────
+    //     One code on the shared front door, valid from the earliest start to
+    //     the latest end across all set lines. Awaited so the SMS/email below
+    //     can include it, but non-fatal — the booking is already saved.
+    let doorCode: string | null = null
+    try {
+      const startMs = Math.min(...lines.map(l => Date.parse(l.startISO)))
+      const endMs   = Math.max(...lines.map(l => Date.parse(l.endISO)))
+      const pin = await createBookingPin({
+        startISO: new Date(startMs).toISOString(),
+        endISO:   new Date(endMs).toISOString(),
+        accessName: `MK ${body.name} ${primary.date}`,
+      })
+      if (pin) {
+        doorCode = pin.pin
+        await supabase.from('bookings')
+          .update({ door_code: pin.pin, door_code_pin_id: pin.pinId })
+          .in('id', bookingIds)
+      }
+    } catch (err) {
+      console.error('[bookings] door code generation error (non-fatal):', err)
+    }
+
     // ── 12. Flagged customer alert (non-blocking) ──────────────────────────
     if (supabaseCustomerId) {
       checkAndAlertFlaggedCustomer(supabase, supabaseCustomerId, {
@@ -542,7 +569,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 13. Confirmations (SMS + email), non-blocking ──────────────────────
-    sendConfirmationSMS(body, lines, verifiedCents, checkInToken).catch(err =>
+    sendConfirmationSMS(body, lines, verifiedCents, checkInToken, doorCode).catch(err =>
       console.error('SMS error (non-fatal):', err))
 
     if (firstBookingId) {
@@ -559,6 +586,7 @@ export async function POST(req: NextRequest) {
         totalAmount: verifiedCents / 100, bookingId: firstBookingId,
         notes: body.notes || undefined, scheduleLines,
         guestCount: guestCount || undefined,
+        doorCode: doorCode || undefined,
       }).catch(err => console.error('Email confirmation error (non-fatal):', err))
 
       sendNewBookingAlert({
