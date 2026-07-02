@@ -56,6 +56,12 @@ export default function SiteNav({ active }: { active?: string }) {
 
         {isMobile ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {!menuOpen && authed === false && (
+              <Link href="/signup" style={{
+                color: '#fff', textDecoration: 'none',
+                fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', whiteSpace: 'nowrap',
+              }}>SIGN UP</Link>
+            )}
             {!menuOpen && (
               <Link href="/book" style={{
                 background: '#fff', color: '#080808', padding: '11px 18px', textDecoration: 'none',
