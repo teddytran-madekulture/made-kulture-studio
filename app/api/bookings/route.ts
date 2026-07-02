@@ -171,7 +171,8 @@ async function sendConfirmationSMS(
   const guestLine = body.guests ? `👥 ${body.guests} guests — this is your booked limit` : null
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
   const checkInLine = checkInToken ? `📲 Check in when you arrive: ${appUrl}/checkin/${checkInToken}` : null
-  const doorLine = doorCode ? `🔑 Front-door code: ${doorCode} (works during your booked time only)` : null
+  const doorDisplay = doorCode ? doorCode.replace(/(\d{3})(?=\d)/g, '$1 ') : null
+  const doorLine = doorCode ? `🔑 Front-door code: ${doorDisplay} (works during your booked time only)` : null
 
   const message = [
     `✅ Made Kulture — Booking Confirmed!`,
