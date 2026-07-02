@@ -74,6 +74,7 @@ export default function ProfilePage() {
 
   // Minimum profile to be listed/browsable in the directory.
   const isBrand = form.account_type === 'brand'
+  const isCustomer = form.account_type === 'customer'
   const missing: string[] = []
   if (!form.full_name.trim()) missing.push(isBrand ? 'your company name' : 'your name')
   if (!isBrand && form.roles.length === 0) missing.push('at least one role')
@@ -199,15 +200,20 @@ export default function ProfilePage() {
 
         <Field label="ACCOUNT TYPE">
           <div style={{ display: 'flex', gap: 8 }}>
-            {(['creative', 'brand'] as const).map(t => (
+            {([['customer', 'Customer'], ['creative', 'Creative'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
               <button key={t} type="button" onClick={() => setForm(f => ({ ...f, account_type: t }))} style={{
-                flex: 1, padding: '10px', borderRadius: 4, fontFamily: 'Inter', fontSize: 13, cursor: 'pointer',
+                flex: 1, padding: '10px 6px', borderRadius: 4, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
                 background: form.account_type === t ? '#fff' : 'transparent',
                 color: form.account_type === t ? '#080808' : 'rgba(255,255,255,0.6)',
                 border: form.account_type === t ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
-              }}>{t === 'creative' ? 'Creative' : 'Brand / Business'}</button>
+              }}>{lbl}</button>
             ))}
           </div>
+          {isCustomer && (
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginTop: 8 }}>
+              A customer account is just for booking and managing your sessions. Switch to <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Creative</strong> or <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Brand</strong> to add a portfolio, roles, and join the directory.
+            </div>
+          )}
         </Field>
 
         <Field label={isBrand ? 'LOGO' : 'PROFILE PHOTO'}>
@@ -236,6 +242,7 @@ export default function ProfilePage() {
         <Field label="PHONE">
           <input value={form.phone} onChange={set('phone')} placeholder="(832) 000-0000" style={inputStyle} />
         </Field>
+        {!isCustomer && (<>
         <Field label="INSTAGRAM">
           <div style={{ display: 'flex', alignItems: 'center', background: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, overflow: 'hidden' }}>
             <span style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.3)', padding: '14px 0 14px 16px' }}>@</span>
@@ -343,6 +350,7 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+        </>)}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
           <input type="checkbox" id="sms_opt_in" checked={!!form.sms_opt_in} onChange={set('sms_opt_in')} style={{ width: 16, height: 16, cursor: 'pointer' }} />

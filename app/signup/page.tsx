@@ -10,7 +10,7 @@ export default function SignupPage() {
   const router = useRouter()
   const [nextUrl, setNextUrl]  = useState('/account')
   const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '', instagram: '', roles: [] as string[] })
-  const [accountType, setAccountType] = useState<'creative' | 'brand'>('creative')
+  const [accountType, setAccountType] = useState<'customer' | 'creative' | 'brand'>('customer')
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
   const [directoryOptIn, setDirectoryOptIn] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -45,8 +45,10 @@ export default function SignupPage() {
       password: form.password,
       options: {
         data: {
-          full_name: form.full_name, phone: form.phone, roles: accountType === 'brand' ? [] : form.roles,
-          instagram: igHandle || null, directory_opt_in: directoryOptIn, account_type: accountType,
+          full_name: form.full_name, phone: form.phone, roles: accountType === 'creative' ? form.roles : [],
+          instagram: igHandle || null,
+          directory_opt_in: accountType === 'customer' ? false : directoryOptIn,
+          account_type: accountType,
         },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
       },
@@ -127,22 +129,30 @@ export default function SignupPage() {
               {error}
             </div>
           )}
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: -4 }}>What brings you here?</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(['creative', 'brand'] as const).map(t => (
+            {([['customer', 'Just booking'], ['creative', 'Creative'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
               <button key={t} type="button" onClick={() => setAccountType(t)} style={{
-                flex: 1, padding: '10px', borderRadius: 4, fontFamily: 'Inter', fontSize: 13, cursor: 'pointer',
+                flex: 1, padding: '10px 6px', borderRadius: 4, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
                 background: accountType === t ? '#fff' : 'transparent',
                 color: accountType === t ? '#080808' : 'rgba(255,255,255,0.6)',
                 border: accountType === t ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
-              }}>{t === 'creative' ? "I'm a Creative" : "I'm a Brand"}</button>
+              }}>{lbl}</button>
             ))}
           </div>
+          {accountType !== 'customer' && (
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginTop: -4 }}>
+              {accountType === 'creative'
+                ? 'Get listed in the creative directory, build a portfolio, and find collaborations.'
+                : 'List your brand, post castings, and hire creatives from the community.'}
+            </div>
+          )}
           <input placeholder={accountType === 'brand' ? 'Company name' : 'Full name'} value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
           <input type="email" placeholder="Email address" value={form.email} onChange={set('email')} required style={inputStyle} />
           <input placeholder="Phone number" value={form.phone} onChange={set('phone')} style={inputStyle} />
           <input placeholder="Instagram (optional)" value={form.instagram} onChange={set('instagram')} style={inputStyle} />
 
-          {accountType !== 'brand' && (
+          {accountType === 'creative' && (
             <RolePicker
               value={form.roles}
               onChange={roles => setForm(f => ({ ...f, roles }))}
@@ -150,10 +160,12 @@ export default function SignupPage() {
             />
           )}
 
-          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.55 }}>
-            <input type="checkbox" checked={directoryOptIn} onChange={e => setDirectoryOptIn(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
-            <span>Show me in the member directory so other creatives can find me by role. Only your name, roles, and Instagram are shown — never your email or phone. <strong style={{ color: 'rgba(255,255,255,0.85)' }}>If you opt out, you also won&apos;t be able to browse the directory.</strong></span>
-          </label>
+          {accountType !== 'customer' && (
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.55 }}>
+              <input type="checkbox" checked={directoryOptIn} onChange={e => setDirectoryOptIn(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
+              <span>Show me in the member directory so others can find me. Only your name, roles, and Instagram are shown — never your email or phone. <strong style={{ color: 'rgba(255,255,255,0.85)' }}>If you opt out, you also won&apos;t be able to browse the directory.</strong></span>
+            </label>
+          )}
 
           <div style={{ position: 'relative' }}>
             <input type={showPw ? 'text' : 'password'} placeholder="Password (min 6 characters)" value={form.password} onChange={set('password')} required minLength={6} style={{ ...inputStyle, paddingRight: 44 }} />
