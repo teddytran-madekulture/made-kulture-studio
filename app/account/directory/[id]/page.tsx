@@ -154,7 +154,7 @@ export default function MemberProfilePage() {
               return (
                 <div key={img.id}
                   onClick={() => { if (!hidden) setLightbox(img.url) }}
-                  style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414', cursor: hidden ? 'default' : 'zoom-in' }}>
+                  style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414', cursor: hidden ? 'default' : 'zoom-in' }}>
                   <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: hidden ? 'blur(18px)' : 'none' }} />
                   {hidden && (
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
