@@ -47,6 +47,20 @@ export async function PUT(req: NextRequest) {
   if (typeof directory_opt_in === 'boolean') patch.directory_opt_in = directory_opt_in
   if (typeof avatar_url === 'string') patch.avatar_url = avatar_url
   if (typeof body.onboarded === 'boolean') patch.onboarded = body.onboarded
+  if (typeof body.bio === 'string') patch.bio = body.bio.slice(0, 600)
+  if (typeof body.video_url === 'string') patch.video_url = body.video_url.slice(0, 300)
+  if (typeof body.show_email === 'boolean') patch.show_email = body.show_email
+  if (typeof body.show_phone === 'boolean') patch.show_phone = body.show_phone
+  if (Array.isArray(body.links)) {
+    patch.links = body.links
+      .filter((l: unknown): l is { label?: unknown; url?: unknown } =>
+        !!l && typeof (l as { url?: unknown }).url === 'string' && String((l as { url: string }).url).trim() !== '')
+      .slice(0, 8)
+      .map((l: { label?: unknown; url?: unknown }) => ({
+        label: String(l.label ?? '').slice(0, 40),
+        url: String(l.url).slice(0, 300),
+      }))
+  }
 
   const { data, error } = await supabase
     .from('customer_profiles')

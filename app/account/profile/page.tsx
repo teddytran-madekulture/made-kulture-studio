@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { CREATIVE_ROLES } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
+import PortfolioManager from '@/components/PortfolioManager'
+
+type ProfileLink = { label: string; url: string }
 
 interface Profile {
   full_name: string
@@ -13,6 +16,11 @@ interface Profile {
   roles: string[]
   directory_opt_in: boolean
   avatar_url: string | null
+  bio: string
+  links: ProfileLink[]
+  video_url: string
+  show_email: boolean
+  show_phone: boolean
 }
 
 // Defined at module scope (NOT inside the page component) so its identity is
@@ -30,22 +38,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function ProfilePage() {
-  const [form, setForm]     = useState<Profile>({ full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null })
+  const [form, setForm]     = useState<Profile>({ full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
   const [error, setError]     = useState('')
   const [uploading, setUploading] = useState(false)
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
+  const [portfolioCount, setPortfolioCount] = useState(0)
   const supabase = createClient()
 
   useEffect(() => {
     fetch('/api/account/profile')
       .then(r => r.json())
-      .then(d => { if (d.profile) setForm({ ...d.profile, roles: d.profile.roles ?? [], directory_opt_in: !!d.profile.directory_opt_in, avatar_url: d.profile.avatar_url ?? null }); setLoading(false) })
+      .then(d => {
+        if (d.profile) setForm({
+          ...d.profile,
+          roles: d.profile.roles ?? [],
+          directory_opt_in: !!d.profile.directory_opt_in,
+          avatar_url: d.profile.avatar_url ?? null,
+          bio: d.profile.bio ?? '',
+          links: Array.isArray(d.profile.links) ? d.profile.links : [],
+          video_url: d.profile.video_url ?? '',
+          show_email: !!d.profile.show_email,
+          show_phone: !!d.profile.show_phone,
+        })
+        setLoading(false)
+      })
     fetch('/api/roles').then(r => (r.ok ? r.json() : null))
       .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
   }, [])
+
+  // Minimum profile to be listed/browsable in the directory.
+  const missing: string[] = []
+  if (!form.full_name.trim()) missing.push('your name')
+  if (form.roles.length === 0) missing.push('at least one role')
+  if (!form.bio.trim()) missing.push('a short bio')
+  if (portfolioCount === 0 && form.links.length === 0 && !form.instagram.trim())
+    missing.push('a portfolio photo, a link, or Instagram')
 
   // Downscale + compress in the browser before upload. Avatars only ever show
   // at ~44–72px, so capping the longest side at 512px and re-encoding as JPEG
@@ -107,7 +137,7 @@ export default function ProfilePage() {
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url }),
+      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
@@ -143,6 +173,12 @@ export default function ProfilePage() {
         {saved && (
           <div style={{ background: 'rgba(60,255,120,0.1)', border: '1px solid rgba(60,255,120,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#6bffaa', marginBottom: 20 }}>
             Profile saved successfully.
+          </div>
+        )}
+
+        {form.directory_opt_in && missing.length > 0 && (
+          <div style={{ background: 'rgba(230,192,122,0.08)', border: '1px solid rgba(230,192,122,0.3)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', lineHeight: 1.55, marginBottom: 24 }}>
+            <strong>Finish your profile to appear in the directory.</strong> Still needed: {missing.join(', ')}.
           </div>
         )}
 
@@ -185,6 +221,81 @@ export default function ProfilePage() {
             onChange={roles => setForm(f => ({ ...f, roles }))}
             options={roleOptions}
           />
+        </Field>
+
+        <Field label="BIO">
+          <textarea
+            value={form.bio}
+            onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
+            placeholder="A sentence or two about you and your work."
+            maxLength={600}
+            rows={3}
+            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+          />
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6, textAlign: 'right' }}>{form.bio.length}/600</div>
+        </Field>
+
+        <Field label="PORTFOLIO">
+          <PortfolioManager onCountChange={setPortfolioCount} />
+        </Field>
+
+        <Field label="LINKS">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {form.links.map((link, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={link.label}
+                  onChange={e => setForm(f => ({ ...f, links: f.links.map((l, j) => j === i ? { ...l, label: e.target.value } : l) }))}
+                  placeholder="Label (e.g. Website)" maxLength={40}
+                  style={{ ...inputStyle, flex: '0 0 34%', padding: '10px 12px' }}
+                />
+                <input
+                  value={link.url}
+                  onChange={e => setForm(f => ({ ...f, links: f.links.map((l, j) => j === i ? { ...l, url: e.target.value } : l) }))}
+                  placeholder="https://…" maxLength={300}
+                  style={{ ...inputStyle, flex: 1, padding: '10px 12px' }}
+                />
+                <button type="button" onClick={() => setForm(f => ({ ...f, links: f.links.filter((_, j) => j !== i) }))}
+                  title="Remove link"
+                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', borderRadius: 4, width: 40, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+              </div>
+            ))}
+            {form.links.length < 8 && (
+              <button type="button" onClick={() => setForm(f => ({ ...f, links: [...f.links, { label: '', url: '' }] }))}
+                style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px dashed rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', borderRadius: 4, padding: '9px 14px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                + Add link
+              </button>
+            )}
+          </div>
+        </Field>
+
+        <Field label="VIDEO / REEL LINK">
+          <input
+            value={form.video_url}
+            onChange={e => setForm(f => ({ ...f, video_url: e.target.value }))}
+            placeholder="YouTube or Vimeo link (optional)" maxLength={300}
+            style={inputStyle}
+          />
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+            We don&apos;t host video — paste a link and it&apos;ll embed on your profile.
+          </div>
+        </Field>
+
+        {/* Public contact display */}
+        <Field label="CONTACT SHOWN ON YOUR PROFILE">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+              <input type="checkbox" checked={form.show_email} onChange={e => setForm(f => ({ ...f, show_email: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+              Show my email to other members
+            </label>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+              <input type="checkbox" checked={form.show_phone} onChange={e => setForm(f => ({ ...f, show_phone: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+              Show my phone to other members
+            </label>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+              Off by default. These only ever show on your profile to signed-in members.
+            </div>
+          </div>
         </Field>
 
         {/* Directory opt-in */}
