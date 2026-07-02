@@ -56,7 +56,10 @@ export default function ProfilePage() {
       .then(d => {
         if (d.profile) setForm({
           ...d.profile,
-          account_type: d.profile.account_type === 'brand' ? 'brand' : 'creative',
+          account_type: ['customer', 'creative', 'brand'].includes(d.profile.account_type) ? d.profile.account_type : 'customer',
+          full_name: d.profile.full_name ?? '',
+          phone: d.profile.phone ?? '',
+          instagram: d.profile.instagram ?? '',
           roles: d.profile.roles ?? [],
           directory_opt_in: !!d.profile.directory_opt_in,
           avatar_url: d.profile.avatar_url ?? null,
@@ -76,10 +79,10 @@ export default function ProfilePage() {
   const isBrand = form.account_type === 'brand'
   const isCustomer = form.account_type === 'customer'
   const missing: string[] = []
-  if (!form.full_name.trim()) missing.push(isBrand ? 'your company name' : 'your name')
-  if (!isBrand && form.roles.length === 0) missing.push('at least one role')
-  if (!form.bio.trim()) missing.push(isBrand ? 'a short about' : 'a short bio')
-  if (portfolioCount === 0 && form.links.length === 0 && !form.instagram.trim())
+  if (!(form.full_name ?? '').trim()) missing.push(isBrand ? 'your company name' : 'your name')
+  if (!isBrand && (form.roles?.length ?? 0) === 0) missing.push('at least one role')
+  if (!(form.bio ?? '').trim()) missing.push(isBrand ? 'a short about' : 'a short bio')
+  if (portfolioCount === 0 && (form.links?.length ?? 0) === 0 && !(form.instagram ?? '').trim())
     missing.push('a portfolio photo, a link, or Instagram')
 
   // Downscale + compress in the browser before upload. Avatars only ever show
