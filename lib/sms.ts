@@ -30,11 +30,25 @@ export async function sendOwnerSMS(body: string): Promise<void> {
 // ─── Community notification texts (opt-in) ────────────────────────────────────
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
+// Profile phones are stored as raw digits; Twilio needs E.164 (+1XXXXXXXXXX).
+export function toE164(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const d = String(raw).replace(/[^\d]/g, '')
+  if (String(raw).trim().startsWith('+') && d.length >= 11) return '+' + d
+  if (d.length === 10) return '+1' + d
+  if (d.length === 11 && d.startsWith('1')) return '+' + d
+  return null
+}
+
 export async function sendMessageSMS(to: string, fromName: string, conversationId: string): Promise<void> {
-  return sendSMS(to, `${fromName} messaged you on Made Kulture: ${APP_URL}/account/messages/${conversationId} (reply STOP to opt out)`)
+  const num = toE164(to)
+  if (!num) return
+  return sendSMS(num, `${fromName} messaged you on Made Kulture: ${APP_URL}/account/messages/${conversationId} (reply STOP to opt out)`)
 }
 
 export async function sendCastingInterestSMS(to: string, interestedName: string, castingTitle: string, castingId: string): Promise<void> {
+  const num = toE164(to)
+  if (!num) return
   const title = castingTitle.length > 40 ? castingTitle.slice(0, 40) + '…' : castingTitle
-  return sendSMS(to, `${interestedName} is interested in your casting "${title}": ${APP_URL}/account/castings/${castingId} (reply STOP to opt out)`)
+  return sendSMS(num, `${interestedName} is interested in your casting "${title}": ${APP_URL}/account/castings/${castingId} (reply STOP to opt out)`)
 }
