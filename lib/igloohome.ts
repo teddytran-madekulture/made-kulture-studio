@@ -19,11 +19,9 @@ const API_BASE = 'https://api.igloodeveloper.co'
 const PIN_SCOPE = 'igloohomeapi/algopin-hourly'
 
 // hourly algoPIN window limits (per igloohome): 1–672 hours.
-const MIN_WINDOW_MS = 60 * 60 * 1000        // 1 hour
-const MAX_WINDOW_MS = 672 * 60 * 60 * 1000  // 28 days
-// Buffers so the code is live for a 15-min-early arrival and a short grace exit.
-const PRE_BUFFER_MS = 15 * 60 * 1000
-const POST_BUFFER_MS = 15 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
+const MIN_WINDOW_MS = HOUR_MS                // 1 hour
+const MAX_WINDOW_MS = 672 * HOUR_MS          // 28 days
 
 function creds() {
   const clientId = process.env.IGLOOHOME_CLIENT_ID
@@ -84,12 +82,18 @@ export async function createBookingPin(opts: {
   const c = creds()
   if (!c) return null
 
-  let start = Date.parse(opts.startISO) - PRE_BUFFER_MS
-  let end = Date.parse(opts.endISO) + POST_BUFFER_MS
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+  const s0 = Date.parse(opts.startISO)
+  const e0 = Date.parse(opts.endISO)
+  if (!Number.isFinite(s0) || !Number.isFinite(e0) || e0 <= s0) {
     throw new Error(`igloohome: invalid window ${opts.startISO}–${opts.endISO}`)
   }
-  // Clamp to the hourly algoPIN allowed range.
+  // Hourly algoPINs require whole-hour boundaries (minutes/seconds = 00). Floor
+  // the start to the top of the hour and ceil the end up to the next hour — which
+  // also gives the guest a little early-access + grace on either side. (-05:00 is
+  // a whole-hour offset, so flooring the epoch to the hour lands on :00 locally.)
+  let start = Math.floor(s0 / HOUR_MS) * HOUR_MS
+  let end   = Math.ceil(e0 / HOUR_MS) * HOUR_MS
+  // Clamp to the hourly algoPIN allowed range (1–672 hours).
   if (end - start < MIN_WINDOW_MS) end = start + MIN_WINDOW_MS
   if (end - start > MAX_WINDOW_MS) end = start + MAX_WINDOW_MS
 
