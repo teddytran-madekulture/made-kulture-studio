@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ImageCropper from '@/components/ImageCropper'
 
@@ -21,6 +21,14 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   const [cropCross, setCropCross] = useState(false)
   const [cropReplaceId, setCropReplaceId] = useState<string | null>(null)
   const [cropRevoke, setCropRevoke] = useState<string | null>(null)
+
+  // Drag-to-reorder state. dragId drives the visual "lifted" tile; refs hold the
+  // live values the pointer handlers need without stale closures.
+  const [dragId, setDragId] = useState<string | null>(null)
+  const dragIdRef = useRef<string | null>(null)
+  const imagesRef = useRef<Img[]>([])
+  const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  imagesRef.current = images
 
   const sync = (list: Img[]) => { setImages(list); onCountChange?.(list.length) }
 
@@ -121,22 +129,55 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     if (upErr) { setError(upErr.message); sync(images.map(i => (i.id === img.id ? { ...i, is_mature: img.is_mature } : i))) }
   }
 
-  const move = async (index: number, dir: -1 | 1) => {
-    const j = index + dir
-    if (j < 0 || j >= images.length) return
-    const a = images[index], b = images[j]
-    const reordered = [...images]
-    reordered[index] = b; reordered[j] = a
-    sync(reordered)
-    await Promise.allSettled([
-      supabase.from('portfolio_images').update({ sort_order: b.sort_order }).eq('id', a.id),
-      supabase.from('portfolio_images').update({ sort_order: a.sort_order }).eq('id', b.id),
-    ])
-    const swapped = [...reordered]
-    const tmp = swapped[index].sort_order
-    swapped[index] = { ...swapped[index], sort_order: swapped[j].sort_order }
-    swapped[j] = { ...swapped[j], sort_order: tmp }
-    setImages(swapped)
+  // ── Drag to reorder (works with mouse and touch via Pointer Events) ──────────
+  const startDrag = (e: React.PointerEvent, id: string) => {
+    e.preventDefault(); e.stopPropagation()
+    try { (e.currentTarget as Element).setPointerCapture(e.pointerId) } catch {}
+    dragIdRef.current = id
+    setDragId(id)
+  }
+
+  const onDragMove = (e: React.PointerEvent) => {
+    const curId = dragIdRef.current
+    if (!curId) return
+    e.preventDefault()
+    const x = e.clientX, y = e.clientY
+    let overId: string | null = null
+    for (const [id, el] of tileRefs.current) {
+      const r = el.getBoundingClientRect()
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { overId = id; break }
+    }
+    if (!overId || overId === curId) return
+    setImages(prev => {
+      const from = prev.findIndex(i => i.id === curId)
+      const to   = prev.findIndex(i => i.id === overId)
+      if (from < 0 || to < 0 || from === to) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
+
+  const endDrag = (e: React.PointerEvent) => {
+    if (!dragIdRef.current) return
+    try { (e.currentTarget as Element).releasePointerCapture(e.pointerId) } catch {}
+    dragIdRef.current = null
+    setDragId(null)
+    // Persist the final order: write each image's new index as its sort_order,
+    // but only for the rows that actually changed.
+    const list = imagesRef.current
+    const changed = list
+      .map((img, idx) => ({ img, idx }))
+      .filter(({ img, idx }) => img.sort_order !== idx)
+    if (changed.length === 0) return
+    setImages(list.map((img, idx) => ({ ...img, sort_order: idx })))
+    Promise.allSettled(
+      changed.map(({ img, idx }) =>
+        supabase.from('portfolio_images').update({ sort_order: idx }).eq('id', img.id))
+    ).then(results => {
+      if (results.some(r => r.status === 'rejected')) setError('Could not save the new order — refresh and try again.')
+    })
   }
 
   const atMax = images.length >= PORTFOLIO_MAX
@@ -171,34 +212,44 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
       {loading ? (
         <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>Loading…</div>
       ) : (
+        <>
+        <style>{`
+          .pm-controls { opacity: 0; transition: opacity .15s; }
+          .pm-tile:hover .pm-controls { opacity: 1; }
+          .pm-tile.pm-dragging .pm-controls { opacity: 1; }
+          @media (hover: none) { .pm-controls { opacity: 1; } }
+        `}</style>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
-          {images.map((img, i) => (
-            <div key={img.id} style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414' }}>
-              <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: img.is_mature ? 'blur(8px)' : 'none' }} />
+          {images.map((img) => {
+            const active = dragId === img.id
+            return (
+            <div key={img.id}
+              ref={el => { if (el) tileRefs.current.set(img.id, el); else tileRefs.current.delete(img.id) }}
+              className={`pm-tile${active ? ' pm-dragging' : ''}`}
+              style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414', transition: 'transform .12s ease', transform: active ? 'scale(1.04)' : 'none', outline: active ? '2px solid #e6c07a' : 'none', zIndex: active ? 5 : 'auto', opacity: active ? 0.92 : 1 }}>
+              <img src={img.url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: img.is_mature ? 'blur(8px)' : 'none' }} />
               {img.is_mature && (
                 <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: '#e6c07a', fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 5px', borderRadius: 3 }}>18+</div>
               )}
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 5, opacity: 0, transition: 'opacity .15s', background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 30%, transparent 55%, rgba(0,0,0,0.65))' }}
-                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
-              >
+              <div className="pm-controls" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 5, background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 30%, transparent 55%, rgba(0,0,0,0.65))' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <button type="button" onClick={() => openCropForExisting(img)} title="Recompose" style={iconBtn}>⟳</button>
                   <button type="button" onClick={() => removeImage(img)} title="Delete" style={iconBtn}>✕</button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div style={{ display: 'flex', gap: 3 }}>
-                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0} title="Move left"
-                      style={{ ...iconBtn, width: 22, height: 22, opacity: i === 0 ? 0.3 : 1, cursor: i === 0 ? 'default' : 'pointer' }}>←</button>
-                    <button type="button" onClick={() => move(i, 1)} disabled={i === images.length - 1} title="Move right"
-                      style={{ ...iconBtn, width: 22, height: 22, opacity: i === images.length - 1 ? 0.3 : 1, cursor: i === images.length - 1 ? 'default' : 'pointer' }}>→</button>
-                  </div>
+                  <button type="button" title="Drag to reorder"
+                    onPointerDown={e => startDrag(e, img.id)}
+                    onPointerMove={onDragMove}
+                    onPointerUp={endDrag}
+                    onPointerCancel={endDrag}
+                    style={{ ...iconBtn, width: 30, height: 22, cursor: active ? 'grabbing' : 'grab', touchAction: 'none', letterSpacing: '1px' }}>⠿</button>
                   <button type="button" onClick={() => toggleMature(img)} title="Toggle 18+"
                     style={{ background: img.is_mature ? '#e6c07a' : 'rgba(0,0,0,0.65)', color: img.is_mature ? '#080808' : '#fff', border: 'none', borderRadius: 4, padding: '0 6px', height: 22, cursor: 'pointer', fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em' }}>18+</button>
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
 
           {!atMax && (
             <label title={!agreed ? 'Check the box above first' : undefined}
@@ -211,6 +262,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
             </label>
           )}
         </div>
+        </>
       )}
 
       {cropSrc && (
