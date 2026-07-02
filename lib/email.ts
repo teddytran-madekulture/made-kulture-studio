@@ -559,6 +559,32 @@ export async function sendCastingInterestEmail(opts: { to: string; interestedNam
   return sendEmail('casting_interest', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `${opts.interestedName} is interested in "${opts.castingTitle}"`, html: layout(body) })
 }
 
+// Owner alert when a booking is cancelled (not template-gated — you always want to know).
+export async function sendCancellationOwnerAlert(opts: {
+  customerName: string; customerEmail?: string; customerPhone?: string; setName: string; date: string; startTime: string; endTime: string; within48: boolean
+}) {
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">Booking Cancelled</h1>
+    <p style="margin:0 0 24px;font-size:13px;color:#888;">A customer cancelled a booking.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;border-bottom:1px solid #2a2a2a;">
+        <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Customer</span><br/>
+        <span style="font-size:15px;color:#fff;">${esc(opts.customerName)}</span>
+        <span style="font-size:13px;color:#888;">${opts.customerEmail ? ' — ' + esc(opts.customerEmail) : ''}${opts.customerPhone ? ' — ' + esc(opts.customerPhone) : ''}</span>
+      </td></tr>
+      <tr><td style="padding:6px 0;border-bottom:1px solid #2a2a2a;">
+        <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Session</span><br/>
+        <span style="font-size:15px;color:#fff;">${esc(opts.setName)} — ${opts.date}, ${opts.startTime}–${opts.endTime}</span>
+      </td></tr>
+      <tr><td style="padding:6px 0;">
+        <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Timing</span><br/>
+        <span style="font-size:15px;color:${opts.within48 ? '#ff8080' : '#4ade80'};">${opts.within48 ? 'Within 48 hours — no refund' : '48+ hours out — refund applies'}</span>
+      </td></tr>
+    </table>
+  `
+  return sendEmail('cancellation_owner_alert', { from: FROM_EMAIL, to: OWNER_EMAIL, subject: `Cancelled — ${opts.setName} on ${opts.date}`, html: layout(body) })
+}
+
 // ─── Short-notice booking request (to owner) ──────────────────────────────────
 export async function sendShortNoticeRequestAlert(data: {
   customerName: string; customerEmail: string; desiredDate?: string | null; desiredStart?: number | null; note?: string | null; approveUrl: string

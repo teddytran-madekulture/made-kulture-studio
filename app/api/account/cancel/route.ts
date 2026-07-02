@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { sendCancellationEmail, formatTimeLabel, formatDateLabel } from '@/lib/email'
+import { sendCancellationEmail, sendCancellationOwnerAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 
 export async function POST(req: NextRequest) {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   // Fetch the booking — verify it belongs to this user
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, status, acuity_appointment_id, acuity_block_ids, auth_user_id, customers(name, email), sets(name)')
+    .select('id, start_time, end_time, status, acuity_appointment_id, acuity_block_ids, auth_user_id, customers(name, email, phone), sets(name)')
     .eq('id', booking_id)
     .single()
 
@@ -67,17 +67,26 @@ export async function POST(req: NextRequest) {
   // Send cancellation email (non-blocking)
   const startTime2 = new Date(booking.start_time)
   const endTime2   = new Date(booking.end_time)
+  const setName = (booking.sets as any)?.name ?? 'Studio'
+  const dateLabel = formatDateLabel(startTime2.toISOString().slice(0, 10))
+  const startLbl = formatTimeLabel(startTime2.getHours())
+  const endLbl = formatTimeLabel(endTime2.getHours())
+  const customerName = (booking.customers as any)?.name ?? 'there'
+
   if (customerEmail) {
     sendCancellationEmail({
-      customerName:  (booking.customers as any)?.name ?? 'there',
-      customerEmail,
-      setName:   (booking.sets as any)?.name ?? 'Studio',
-      date:      formatDateLabel(startTime2.toISOString().slice(0, 10)),
-      startTime: formatTimeLabel(startTime2.getHours()),
-      endTime:   formatTimeLabel(endTime2.getHours()),
+      customerName, customerEmail, setName,
+      date: dateLabel, startTime: startLbl, endTime: endLbl,
       refundAmount: hoursUntil >= 48 ? undefined : 0,
     }).catch(e => console.error('Cancellation email error:', e))
   }
+
+  // Always alert the owner (not gated by template settings).
+  sendCancellationOwnerAlert({
+    customerName, customerEmail, customerPhone: (booking.customers as any)?.phone ?? undefined,
+    setName, date: dateLabel, startTime: startLbl, endTime: endLbl,
+    within48: hoursUntil < 48,
+  }).catch(e => console.error('Cancellation owner alert error:', e))
 
   return NextResponse.json({ success: true })
 }
