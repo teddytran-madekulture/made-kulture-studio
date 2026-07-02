@@ -21,9 +21,20 @@ type Member = {
 
 // Turn a YouTube/Vimeo watch URL into an embeddable one. Returns null if we
 // can't recognise it (we then just show a plain link).
+
+// Ensure a link has a protocol so href points outward (not to a relative path).
+// e.g. "www.teddytran.com" -> "https://www.teddytran.com".
+function withProtocol(url: string): string {
+  const u = (url || '').trim()
+  if (!u) return u
+  if (/^https?:\/\//i.test(u)) return u
+  if (u.startsWith('//')) return `https:${u}`
+  return `https://${u}`
+}
+
 function embedUrl(url: string): string | null {
   try {
-    const u = new URL(url)
+    const u = new URL(withProtocol(url))
     const host = u.hostname.replace('www.', '')
     if (host === 'youtu.be') return `https://www.youtube.com/embed/${u.pathname.slice(1)}`
     if (host.endsWith('youtube.com')) {
@@ -104,9 +115,9 @@ export default function MemberProfilePage() {
         {member.phone && <a href={`tel:${member.phone}`} style={pillLink}>{member.phone}</a>}
         {member.links.map((l, i) => {
           let host = l.url
-          try { host = new URL(l.url).hostname.replace('www.', '') } catch { /* keep raw */ }
+          try { host = new URL(withProtocol(l.url)).hostname.replace('www.', '') } catch { /* keep raw */ }
           return (
-            <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" style={pillLink}>{l.label || host}</a>
+            <a key={i} href={withProtocol(l.url)} target="_blank" rel="noopener noreferrer" style={pillLink}>{l.label || host}</a>
           )
         })}
       </div>
@@ -120,7 +131,7 @@ export default function MemberProfilePage() {
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} />
             </div>
           ) : (
-            <a href={member.video_url} target="_blank" rel="noopener noreferrer" style={pillLink}>▶ Watch reel</a>
+            <a href={withProtocol(member.video_url)} target="_blank" rel="noopener noreferrer" style={pillLink}>▶ Watch reel</a>
           )}
         </div>
       )}
