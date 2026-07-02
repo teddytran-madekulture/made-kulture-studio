@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendNewMessageEmail } from '@/lib/email'
+import { sendMessageSMS } from '@/lib/sms'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -80,16 +81,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const activeRecently = recipRead && now - new Date(recipRead).getTime() < 2 * 60 * 1000       // in the thread now
     const cooldownOk = !recipNotified || now - new Date(recipNotified).getTime() > 3 * 60 * 60 * 1000 // 3h per convo
     if (!activeRecently && cooldownOk) {
-      const { data: recipProf } = await service.from('customer_profiles').select('notify_email').eq('id', recipientId).maybeSingle()
+      const { data: recipProf } = await service.from('customer_profiles').select('notify_email, notify_sms, phone').eq('id', recipientId).maybeSingle()
+      const { data: senderProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
+      const fromName = senderProf?.full_name || 'A member'
+      let sent = false
       if (recipProf?.notify_email !== false) {
-        const { data: senderProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
         const { data: authUser } = await service.auth.admin.getUserById(recipientId)
         const email = authUser?.user?.email
-        if (email) {
-          await sendNewMessageEmail({ to: email, fromName: senderProf?.full_name || 'A member', conversationId: params.id })
-          const ncol = recipIsA ? 'notified_a_at' : 'notified_b_at'
-          await service.from('conversations').update({ [ncol]: new Date().toISOString() }).eq('id', params.id)
-        }
+        if (email) { await sendNewMessageEmail({ to: email, fromName, conversationId: params.id }); sent = true }
+      }
+      if (recipProf?.notify_sms === true && recipProf?.phone) {
+        await sendMessageSMS(recipProf.phone, fromName, params.id); sent = true
+      }
+      if (sent) {
+        const ncol = recipIsA ? 'notified_a_at' : 'notified_b_at'
+        await service.from('conversations').update({ [ncol]: new Date().toISOString() }).eq('id', params.id)
       }
     }
   } catch { /* notification failures never break sending */ }

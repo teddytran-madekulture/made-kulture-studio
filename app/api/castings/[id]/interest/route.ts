@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendCastingInterestEmail } from '@/lib/email'
+import { sendCastingInterestSMS } from '@/lib/sms'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,13 +53,18 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   // Notify the author on new interest (best-effort; respects opt-out).
   if (isNewInterest) {
     try {
-      const { data: authorProf } = await service.from('customer_profiles').select('notify_email').eq('id', c.author_id).maybeSingle()
+      const { data: authorProf } = await service.from('customer_profiles').select('notify_email, notify_sms, phone').eq('id', c.author_id).maybeSingle()
+      const { data: casting } = await service.from('castings').select('title').eq('id', params.id).maybeSingle()
+      const { data: meProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
+      const interestedName = meProf?.full_name || 'A member'
+      const title = casting?.title || 'your casting'
       if (authorProf?.notify_email !== false) {
-        const { data: casting } = await service.from('castings').select('title').eq('id', params.id).maybeSingle()
-        const { data: meProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
         const { data: authUser } = await service.auth.admin.getUserById(c.author_id)
         const email = authUser?.user?.email
-        if (email) await sendCastingInterestEmail({ to: email, interestedName: meProf?.full_name || 'A member', castingTitle: casting?.title || 'your casting', castingId: params.id })
+        if (email) await sendCastingInterestEmail({ to: email, interestedName, castingTitle: title, castingId: params.id })
+      }
+      if (authorProf?.notify_sms === true && authorProf?.phone) {
+        await sendCastingInterestSMS(authorProf.phone, interestedName, title, params.id)
       }
     } catch { /* notification failures never break interest */ }
   }

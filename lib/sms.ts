@@ -26,3 +26,15 @@ export async function sendSMS(to: string, body: string): Promise<void> {
 export async function sendOwnerSMS(body: string): Promise<void> {
   return sendSMS(OWNER_PHONE, body)
 }
+
+// ─── Community notification texts (opt-in) ────────────────────────────────────
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
+
+export async function sendMessageSMS(to: string, fromName: string, conversationId: string): Promise<void> {
+  return sendSMS(to, `${fromName} messaged you on Made Kulture: ${APP_URL}/account/messages/${conversationId} (reply STOP to opt out)`)
+}
+
+export async function sendCastingInterestSMS(to: string, interestedName: string, castingTitle: string, castingId: string): Promise<void> {
+  const title = castingTitle.length > 40 ? castingTitle.slice(0, 40) + '…' : castingTitle
+  return sendSMS(to, `${interestedName} is interested in your casting "${title}": ${APP_URL}/account/castings/${castingId} (reply STOP to opt out)`)
+}
