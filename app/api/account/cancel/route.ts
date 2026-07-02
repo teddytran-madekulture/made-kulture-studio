@@ -73,20 +73,25 @@ export async function POST(req: NextRequest) {
   const endLbl = formatTimeLabel(endTime2.getHours())
   const customerName = (booking.customers as any)?.name ?? 'there'
 
+  // AWAIT the emails — on Vercel, un-awaited promises get frozen when the
+  // function suspends right after responding, which aborts the Resend request
+  // ("The request could not be resolved"). Each send still .catch()es so a
+  // failure stays non-fatal.
+  const notifications: Promise<any>[] = []
   if (customerEmail) {
-    sendCancellationEmail({
+    notifications.push(sendCancellationEmail({
       customerName, customerEmail, setName,
       date: dateLabel, startTime: startLbl, endTime: endLbl,
       refundAmount: hoursUntil >= 48 ? undefined : 0,
-    }).catch(e => console.error('Cancellation email error:', e))
+    }).catch(e => console.error('Cancellation email error:', e)))
   }
-
   // Always alert the owner (not gated by template settings).
-  sendCancellationOwnerAlert({
+  notifications.push(sendCancellationOwnerAlert({
     customerName, customerEmail, customerPhone: (booking.customers as any)?.phone ?? undefined,
     setName, date: dateLabel, startTime: startLbl, endTime: endLbl,
     within48: hoursUntil < 48,
-  }).catch(e => console.error('Cancellation owner alert error:', e))
+  }).catch(e => console.error('Cancellation owner alert error:', e)))
+  await Promise.allSettled(notifications)
 
   return NextResponse.json({ success: true })
 }
