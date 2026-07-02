@@ -9,10 +9,9 @@ const supabase = createClient(
 const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
 const OWNER_PHONE = '+18324081631'
 
-// Studio location — approx, geocoded from 4825 Gulf Freeway / 77023. Replace with
-// the exact Google-Maps pin (right-click → coordinates) for a tighter geofence.
-const STUDIO_LAT = 29.7133
-const STUDIO_LNG = -95.3137
+// Studio location — exact Google-Maps pin for 4825 Gulf Freeway.
+const STUDIO_LAT = 29.72444224187077
+const STUDIO_LNG = -95.33001395304926
 const ONSITE_RADIUS_M = 350   // within this → "on-site ✓" in the owner alert
 const FAR_LIMIT_M = 2000      // beyond this → clearly not at the studio, block
 
