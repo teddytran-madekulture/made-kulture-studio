@@ -67,7 +67,9 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     for (const file of batch) {
       try {
         if (!file.type.startsWith('image/')) continue
-        if (file.size > 25 * 1024 * 1024) { setError('Skipped an image over 25 MB.'); continue }
+        // We downscale/compress every image below, so accept large high-res
+        // originals; only reject truly enormous files that could crash decode.
+        if (file.size > 60 * 1024 * 1024) { setError('Skipped an image over 60 MB.'); continue }
         let blob: Blob = file
         try { blob = await resizeImage(file) } catch { /* fall back to original */ }
         const path = `${user.id}/${crypto.randomUUID()}.jpg`
