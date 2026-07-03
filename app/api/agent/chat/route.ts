@@ -57,7 +57,12 @@ export async function POST(req: NextRequest) {
   const message = String(body?.message ?? '').trim().slice(0, 1000)
   if (!message) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
   const isKiosk = body?.kiosk === true
-  const page = isKiosk ? 'kiosk' : typeof body?.page === 'string' ? body.page.slice(0, 200) : null
+  const kioskGuest = isKiosk && typeof body?.kioskGuest === 'string'
+    ? body.kioskGuest.replace(/[\r\n]/g, ' ').slice(0, 160)
+    : null
+  const page = isKiosk
+    ? (kioskGuest ? `kiosk (guest at the tablet: ${kioskGuest})` : 'kiosk')
+    : typeof body?.page === 'string' ? body.page.slice(0, 200) : null
 
   // Who's talking? (logged-in members get booking lookup)
   let authUserId: string | null = null

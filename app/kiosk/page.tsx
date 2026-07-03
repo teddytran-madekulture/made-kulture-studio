@@ -77,8 +77,8 @@ export default function KioskPage() {
   }
 
   // ── June chat ────────────────────────────────────────────────────────────
-  const send = async () => {
-    const text = input.trim()
+  const send = async (preset?: string) => {
+    const text = (preset ?? input).trim()
     if (!text || sending) return
     touch()
     setSending(true); setInput('')
@@ -87,7 +87,15 @@ export default function KioskPage() {
     try {
       const r = await fetch('/api/agent/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: chatToken.current ?? undefined, message: text, kiosk: true }),
+        body: JSON.stringify({
+          token: chatToken.current ?? undefined,
+          message: text,
+          kiosk: true,
+          // If they checked in during this kiosk session, June knows who's talking.
+          kioskGuest: ciResult
+            ? `${ciResult.firstName} — checked in, ${ciResult.setName} until ${ciResult.until}`
+            : undefined,
+        }),
       })
       const d = await r.json()
       if (d.token) chatToken.current = d.token
@@ -115,10 +123,13 @@ export default function KioskPage() {
   }
 
   // ── Styles ───────────────────────────────────────────────────────────────
+  // 100dvh = the REAL visible height (Fire/mobile browsers misreport 100vh,
+  // which pushed the chat input off-screen). Falls back to 100vh where dvh
+  // is unsupported.
   const wrap: React.CSSProperties = {
-    background: '#080808', minHeight: '100vh', color: '#fff',
+    background: '#080808', height: '100vh', maxHeight: '100dvh', color: '#fff',
     fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column',
-    userSelect: 'none',
+    userSelect: 'none', overflow: 'hidden',
   }
   const bigBtn: React.CSSProperties = {
     flex: 1, margin: 12, borderRadius: 16, border: '1px solid rgba(255,255,255,0.15)',
@@ -234,16 +245,34 @@ export default function KioskPage() {
         ))}
         {sending && <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)' }}>June is typing…</div>}
       </div>
+      {/* Tap-to-ask — most guests never need the keyboard */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '4px 16px 0', maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        {[
+          '🚻 Where are the restrooms?',
+          '💄 Where can I change or do makeup?',
+          '🛋 How do props work?',
+          '⏰ Can I add more time to my session?',
+          '💡 What lighting comes with my set?',
+          '🎥 Can I rent more gear right now?',
+        ].map(q => (
+          <button key={q} disabled={sending} onClick={() => send(q.replace(/^\S+\s/, ''))} style={{
+            background: 'rgba(212,168,67,0.1)', border: `1px solid rgba(212,168,67,0.4)`, color: GOLD,
+            padding: '10px 14px', borderRadius: 20, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'Inter, sans-serif',
+          }}>{q}</button>
+        ))}
+      </div>
       <div style={{ display: 'flex', gap: 10, padding: 16, maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
         <input
           value={input}
           onChange={e => { setInput(e.target.value); touch() }}
           onKeyDown={e => { if (e.key === 'Enter') send() }}
-          placeholder="Type your question…"
+          onFocus={e => { touch(); setTimeout(() => e.target.scrollIntoView({ block: 'center' }), 350) }}
+          placeholder="Or type your own question…"
           maxLength={1000}
           style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 17, padding: '16px 18px', outline: 'none', borderRadius: 10 }}
         />
-        <button onClick={send} disabled={sending || !input.trim()} style={{
+        <button onClick={() => send()} disabled={sending || !input.trim()} style={{
           background: input.trim() ? GOLD : 'rgba(255,255,255,0.1)', color: input.trim() ? '#080808' : 'rgba(255,255,255,0.3)',
           border: 'none', padding: '0 26px', borderRadius: 10, fontSize: 15, fontWeight: 800, letterSpacing: '0.08em',
           cursor: input.trim() ? 'pointer' : 'default', fontFamily: 'Inter, sans-serif',
