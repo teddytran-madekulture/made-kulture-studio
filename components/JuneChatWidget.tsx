@@ -75,6 +75,25 @@ export default function JuneChatWidget() {
     return () => clearInterval(iv)
   }, [open, poll]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Replace local (optimistic, id-less) messages with the server's canonical
+  // list so polling never duplicates them.
+  const refreshAll = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) return
+    try {
+      const url = new URL('/api/agent/chat', window.location.origin)
+      url.searchParams.set('token', token)
+      const res = await fetch(url.toString())
+      if (!res.ok) return
+      const data = await res.json()
+      setTakeover(!!data.human_takeover)
+      const all: Msg[] = data.messages ?? []
+      setMsgs(all)
+      lastTs.current = all.length ? all[all.length - 1].created_at ?? null : null
+      scrollDown()
+    } catch {}
+  }, [])
+
   const send = async () => {
     const text = input.trim()
     if (!text || sending) return
@@ -94,13 +113,10 @@ export default function JuneChatWidget() {
       })
       const data = await res.json()
       if (data.token) localStorage.setItem(TOKEN_KEY, data.token)
-      if (data.reply) {
-        setMsgs(prev => [...prev, { role: 'agent', content: data.reply }])
-      } else if (data.queued) {
-        setTakeover(true)
-      } else if (data.error) {
-        setMsgs(prev => [...prev, { role: 'system', content: data.error }])
-      }
+      if (data.queued) setTakeover(true)
+      if (data.error) setMsgs(prev => [...prev, { role: 'system', content: data.error }])
+      // Pull the canonical transcript (includes our message + June's reply, with ids).
+      await refreshAll()
     } catch {
       setMsgs(prev => [...prev, { role: 'system', content: 'Connection hiccup — try again.' }])
     }
