@@ -66,6 +66,19 @@ export default function MemberProfilePage() {
   const [following, setFollowing] = useState(false)
   const [followers, setFollowers] = useState(0)
   const [followBusy, setFollowBusy] = useState(false)
+  const [myCastings, setMyCastings] = useState<{ id: string; title: string }[]>([])
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [invitedIds, setInvitedIds] = useState<string[]>([])
+
+  const invite = async (castingId: string) => {
+    if (!member) return
+    const res = await fetch(`/api/castings/${castingId}/invite`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toUserId: member.id }),
+    })
+    if (res.ok) setInvitedIds(prev => (prev.includes(castingId) ? prev : [...prev, castingId]))
+    else { const d = await res.json().catch(() => ({})); setError(d.error ?? 'Could not invite.') }
+  }
 
   const toggleFollow = async () => {
     if (!member || followBusy) return
@@ -107,6 +120,16 @@ export default function MemberProfilePage() {
       })
       .catch(() => { setError('Could not load profile.'); setLoading(false) })
   }, [params.id])
+
+  // Load the viewer's own open castings so they can invite this member to one.
+  useEffect(() => {
+    if (!member || member.is_self) return
+    fetch('/api/castings?mine=1').then(r => (r.ok ? r.json() : null)).then(d => {
+      const now = Date.now()
+      const open = (d?.castings ?? []).filter((c: { status: string; expires_at?: string | null }) => c.status === 'open' && (!c.expires_at || new Date(c.expires_at).getTime() > now))
+      setMyCastings(open.map((c: { id: string; title: string }) => ({ id: c.id, title: c.title })))
+    }).catch(() => {})
+  }, [member])
 
   if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', paddingTop: 40 }}>Loading…</div>
   if (error || !member) return (
@@ -152,17 +175,39 @@ export default function MemberProfilePage() {
       )}
 
       {!member.is_self && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0 12px' }}>
-          <button type="button" onClick={toggleFollow} disabled={followBusy}
-            style={following
-              ? { background: 'transparent', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
-              : { background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
-            {following ? 'Following' : 'Follow'}
-          </button>
-          <button type="button" onClick={startChat} disabled={starting}
-            style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
-            {starting ? 'Opening…' : 'Message'}
-          </button>
+        <div style={{ margin: '4px 0 12px' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button type="button" onClick={toggleFollow} disabled={followBusy}
+              style={following
+                ? { background: 'transparent', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
+                : { background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
+              {following ? 'Following' : 'Follow'}
+            </button>
+            <button type="button" onClick={startChat} disabled={starting}
+              style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
+              {starting ? 'Opening…' : 'Message'}
+            </button>
+            {myCastings.length > 0 && (
+              <button type="button" onClick={() => setInviteOpen(o => !o)}
+                style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
+                Invite {inviteOpen ? '▴' : '▾'}
+              </button>
+            )}
+          </div>
+          {inviteOpen && myCastings.length > 0 && (
+            <div style={{ marginTop: 10, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: 8, maxWidth: 380, background: '#141414' }}>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.4)', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
+              {myCastings.map(c => {
+                const done = invitedIds.includes(c.id)
+                return (
+                  <button key={c.id} type="button" onClick={() => invite(c.id)} disabled={done}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', fontFamily: 'Inter', fontSize: 13, color: done ? '#6bffaa' : '#fff', cursor: done ? 'default' : 'pointer' }}>
+                    {done ? '✓ Invited — ' : ''}{c.title}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
