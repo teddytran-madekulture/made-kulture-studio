@@ -92,6 +92,7 @@ export default function NewCastingPage() {
     setGearSearch('')
   }
   const removeGear = (id: string) => setCart(prev => prev.filter(l => l.id !== id))
+  const resetPlan = () => { setMode('none'); setSetSlug(''); setHours(''); setGuests(''); setCart([]); setShootDate(''); setStartHour('') }
 
   const submit = async () => {
     if (!title.trim()) { setError('Give your casting a title.'); return }
@@ -158,12 +159,24 @@ export default function NewCastingPage() {
         <input type="checkbox" checked={mature} onChange={e => setMature(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, marginTop: 2 }} />
         <span>This casting is <strong style={{ color: '#e6c07a' }}>18+ / mature</strong> — adds an 18+ badge and blurs the mood board until viewers confirm they&apos;re over 18.</span>
       </label>
+      {mature && (
+        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, background: 'rgba(230,192,122,0.06)', border: '1px solid rgba(230,192,122,0.2)', borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>
+          18+ flags mature themes for collaborators — it does <strong style={{ color: '#e6c07a' }}>not</strong> permit open nudity in a shared session. Nude or boudoir shoots require a solo booking or full buyout, and all content must follow the{' '}
+          <a href="/studio-rules" target="_blank" style={{ color: '#e6c07a' }}>studio rules</a> and{' '}
+          <a href="https://madekulture.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }}>content standards</a>.
+        </div>
+      )}
 
       <label style={label}>ROLES YOU NEED</label>
       <RolePicker value={roles} onChange={setRoles} options={roleOptions} max={8} label="Who do you need?" hint="(pick up to 8)" />
 
       <label style={label}>STUDIO PLAN <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(255,255,255,0.25)' }}>— optional, drives the estimate</span></label>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{modeChip('none', 'No studio plan')}{modeChip('set', 'Single set')}{modeChip('buyout', 'Full buyout')}</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {modeChip('none', 'No studio plan')}{modeChip('set', 'Single set')}{modeChip('buyout', 'Full buyout')}
+        {(mode !== 'none' || cart.length > 0 || shootDate || startHour) && (
+          <button type="button" onClick={resetPlan} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Reset plan</button>
+        )}
+      </div>
 
       {mode !== 'none' && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
