@@ -181,12 +181,26 @@ export default function JuneChatWidget() {
           {/* Header */}
           <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: 10, background: '#000' }}>
             <div style={{ width: 34, height: 34, borderRadius: '50%', background: GOLD, color: '#080808', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', fontWeight: 800, fontSize: 16 }}>J</div>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: '#fff' }}>JUNE</div>
               <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>
                 {takeover ? 'Teddy joined the chat' : 'Made Kulture front desk · AI assistant'}
               </div>
             </div>
+            <button
+              onClick={() => {
+                if (msgs.length && !window.confirm('Start a fresh chat? Your current conversation will be cleared.')) return
+                localStorage.removeItem(TOKEN_KEY)
+                lastTs.current = null
+                setMsgs([])
+                setTakeover(false)
+              }}
+              title="Start a new chat"
+              aria-label="Start a new chat"
+              style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 16, padding: 4 }}
+            >
+              ↺
+            </button>
           </div>
 
           {/* Messages */}

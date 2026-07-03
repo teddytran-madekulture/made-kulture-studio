@@ -114,12 +114,16 @@ export async function POST(req: NextRequest) {
   }
 
   // Load recent history (includes the message we just stored).
+  // History for the model: skip 'system' rows (offline/fallback notices — UI
+  // artifacts that only confuse her) and send the most recent turns.
   const { data: historyRows } = await supabase
     .from('agent_messages')
-    .select('role, content')
+    .select('role, content, created_at')
     .eq('conversation_id', convo.id)
-    .order('created_at', { ascending: true })
-    .limit(30)
+    .neq('role', 'system')
+    .order('created_at', { ascending: false })
+    .limit(20)
+    .then((r: any) => ({ ...r, data: (r.data ?? []).reverse() }))
 
   try {
     const result = await runJune({
