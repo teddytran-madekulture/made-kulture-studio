@@ -45,7 +45,7 @@ export default function CastingDetailPage() {
   useEffect(() => {
     load()
     fetch('/api/sets').then(r => r.json()).then(d => setRates({
-      sets: (d.sets ?? []).map((s: { slug: string; name: string; rate_per_hour: number; capacity?: number }) => ({ slug: s.slug, name: s.name, rate_per_hour: Number(s.rate_per_hour), capacity: s.capacity })),
+      sets: (d.sets ?? []).map((s: { slug: string; name: string; rate_per_hour: number; capacity?: number; min_hours?: number }) => ({ slug: s.slug, name: s.name, rate_per_hour: Number(s.rate_per_hour), capacity: s.capacity, min_hours: s.min_hours })),
       buyoutRate: Number(d.buyoutRate) || 400,
       guestPricing: { capacityPerSet: d.guestPricing?.capacityPerSet ?? 5, perPersonFee: d.guestPricing?.perPersonFee ?? 10 },
     })).catch(() => {})

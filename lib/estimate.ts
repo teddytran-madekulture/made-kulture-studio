@@ -15,7 +15,7 @@ export type Plan = {
 }
 
 export type Rates = {
-  sets: { slug: string; name: string; rate_per_hour: number; capacity?: number }[]
+  sets: { slug: string; name: string; rate_per_hour: number; capacity?: number; min_hours?: number }[]
   buyoutRate: number
   guestPricing: { capacityPerSet: number; perPersonFee: number }
 }
@@ -35,16 +35,19 @@ export function estimatePlan(plan: Plan, rates: Rates): Estimate {
   } else if (plan.mode === 'set' && plan.setSlug && hours > 0) {
     const set = rates.sets.find(s => s.slug === plan.setSlug)
     if (set) {
+      // Some sets (e.g. The Watering Hole / The Tank) have a minimum booking length.
+      const minH = Math.max(1, set.min_hours ?? 1)
+      const billHours = Math.max(hours, minH)
       lines.push({
-        label: `${set.name} · ${hours}hr × $${set.rate_per_hour}`,
-        amount: set.rate_per_hour * hours,
+        label: `${set.name} · ${billHours}hr × $${set.rate_per_hour}${billHours > hours ? ` (${minH}hr min)` : ''}`,
+        amount: set.rate_per_hour * billHours,
       })
       const cap = rates.guestPricing.capacityPerSet
       const over = Math.max(0, (Number(plan.guests) || 0) - cap)
       if (over > 0) {
         lines.push({
-          label: `Extra guests · ${over} × $${rates.guestPricing.perPersonFee} × ${hours}hr`,
-          amount: over * rates.guestPricing.perPersonFee * hours,
+          label: `Extra guests · ${over} × $${rates.guestPricing.perPersonFee} × ${billHours}hr`,
+          amount: over * rates.guestPricing.perPersonFee * billHours,
         })
       }
     }

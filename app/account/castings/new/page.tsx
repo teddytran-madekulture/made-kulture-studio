@@ -6,7 +6,7 @@ import { CREATIVE_ROLES } from '@/lib/roles'
 import RolePicker from '@/components/RolePicker'
 import { estimatePlan, type EquipLine, type Rates } from '@/lib/estimate'
 
-type SetRow = { slug: string; name: string; rate_per_hour: number; capacity?: number }
+type SetRow = { slug: string; name: string; rate_per_hour: number; capacity?: number; min_hours?: number }
 type Gear = { id: string; name: string; rate: number; category: string }
 
 export default function NewCastingPage() {
@@ -73,7 +73,7 @@ export default function NewCastingPage() {
   }, [])
 
   const rates: Rates = useMemo(() => ({
-    sets: sets.map(s => ({ slug: s.slug, name: s.name, rate_per_hour: Number(s.rate_per_hour), capacity: s.capacity })),
+    sets: sets.map(s => ({ slug: s.slug, name: s.name, rate_per_hour: Number(s.rate_per_hour), capacity: s.capacity, min_hours: s.min_hours })),
     buyoutRate,
     guestPricing,
   }), [sets, buyoutRate, guestPricing])
@@ -183,7 +183,7 @@ export default function NewCastingPage() {
           {mode === 'set' && (
             <select value={setSlug} onChange={e => setSetSlug(e.target.value)} style={{ ...input, cursor: 'pointer' }}>
               <option value="">Choose a set…</option>
-              {sets.map(s => <option key={s.slug} value={s.slug}>{s.name} — ${s.rate_per_hour}/hr</option>)}
+              {sets.map(s => <option key={s.slug} value={s.slug}>{s.name} — ${s.rate_per_hour}/hr{(s.min_hours ?? 1) > 1 ? ` · ${s.min_hours}hr min` : ''}</option>)}
             </select>
           )}
           <div style={{ display: 'flex', gap: 10 }}>
@@ -198,6 +198,12 @@ export default function NewCastingPage() {
               </div>
             )}
           </div>
+          {mode === 'set' && (() => {
+            const sel = sets.find(s => s.slug === setSlug)
+            return sel && (sel.min_hours ?? 1) > 1
+              ? <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#e6c07a' }}>{sel.name} has a {sel.min_hours}-hour minimum — the estimate bills at least {sel.min_hours} hours.</div>
+              : null
+          })()}
         </div>
       )}
 
