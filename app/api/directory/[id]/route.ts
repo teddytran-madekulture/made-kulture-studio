@@ -46,6 +46,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     email = authUser?.user?.email ?? null
   }
 
+  // Follow counts + whether the viewer already follows this member.
+  const [followersRes, followingRes, mineRes] = await Promise.all([
+    service.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', params.id),
+    service.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', params.id),
+    service.from('follows').select('follower_id').eq('follower_id', user.id).eq('following_id', params.id).maybeSingle(),
+  ])
+
   return NextResponse.json({
     member: {
       id: p.id,
@@ -61,6 +68,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       phone: p.show_phone ? (p.phone ?? null) : null,
       portfolio: (images ?? []).map(i => ({ id: i.id, url: i.url, is_mature: i.is_mature })),
       is_self: p.id === user.id,
+      followers: followersRes.count ?? 0,
+      following: followingRes.count ?? 0,
+      is_following: !!mineRes.data,
     },
   })
 }

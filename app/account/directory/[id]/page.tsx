@@ -18,6 +18,9 @@ type Member = {
   phone: string | null
   portfolio: PortfolioImg[]
   is_self: boolean
+  followers: number
+  following: number
+  is_following: boolean
 }
 
 // Turn a YouTube/Vimeo watch URL into an embeddable one. Returns null if we
@@ -60,6 +63,26 @@ export default function MemberProfilePage() {
   const [revealMature, setRevealMature] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [following, setFollowing] = useState(false)
+  const [followers, setFollowers] = useState(0)
+  const [followBusy, setFollowBusy] = useState(false)
+
+  const toggleFollow = async () => {
+    if (!member || followBusy) return
+    setFollowBusy(true)
+    const next = !following
+    setFollowing(next); setFollowers(c => Math.max(0, c + (next ? 1 : -1))) // optimistic
+    const res = await fetch('/api/follow', {
+      method: next ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetId: member.id }),
+    })
+    setFollowBusy(false)
+    if (!res.ok) {
+      setFollowing(!next); setFollowers(c => Math.max(0, c + (next ? -1 : 1))) // revert
+      const d = await res.json().catch(() => ({}))
+      setError(d.error ?? 'Could not update follow.')
+    }
+  }
 
   const startChat = async () => {
     if (!member || starting) return
@@ -79,7 +102,7 @@ export default function MemberProfilePage() {
       .then(async r => {
         const d = await r.json().catch(() => ({}))
         if (!r.ok) { setError(d.error ?? 'Could not load profile.'); setMember(null) }
-        else setMember(d.member)
+        else { setMember(d.member); setFollowing(!!d.member.is_following); setFollowers(d.member.followers ?? 0) }
         setLoading(false)
       })
       .catch(() => { setError('Could not load profile.'); setLoading(false) })
@@ -117,6 +140,10 @@ export default function MemberProfilePage() {
               <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
             ))}
           </div>
+          <div style={{ display: 'flex', gap: 14, marginTop: 10, fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
+            <span><strong style={{ color: '#fff' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}</span>
+            <span><strong style={{ color: '#fff' }}>{member.following}</strong> following</span>
+          </div>
         </div>
       </div>
 
@@ -125,10 +152,18 @@ export default function MemberProfilePage() {
       )}
 
       {!member.is_self && (
-        <button type="button" onClick={startChat} disabled={starting}
-          style={{ background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1, margin: '4px 0 12px' }}>
-          {starting ? 'Opening…' : 'Message'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0 12px' }}>
+          <button type="button" onClick={toggleFollow} disabled={followBusy}
+            style={following
+              ? { background: 'transparent', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
+              : { background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
+            {following ? 'Following' : 'Follow'}
+          </button>
+          <button type="button" onClick={startChat} disabled={starting}
+            style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
+            {starting ? 'Opening…' : 'Message'}
+          </button>
+        </div>
       )}
 
       {/* Contact + links */}

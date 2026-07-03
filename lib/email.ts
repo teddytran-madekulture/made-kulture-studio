@@ -559,6 +559,18 @@ export async function sendCastingInterestEmail(opts: { to: string; interestedNam
   return sendEmail('casting_interest', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `${opts.interestedName} is interested in "${opts.castingTitle}"`, html: layout(body) })
 }
 
+export async function sendCastingConfirmedEmail(opts: { to: string; castingTitle: string; castingId: string; role?: string | null }) {
+  const link = `${APP_URL}/account/castings/${opts.castingId}`
+  const roleLine = opts.role ? ` as <strong style="color:#fff;">${esc(opts.role)}</strong>` : ''
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">You&rsquo;re confirmed</h1>
+    <p style="margin:0 0 24px;font-size:14px;color:#999;">You&rsquo;ve been added to the team${roleLine} for <strong style="color:#fff;">${esc(opts.castingTitle)}</strong>. See the crew and details on the casting.</p>
+    ${NOTIF_BUTTON(link, 'View casting')}
+    ${NOTIF_FOOTER(`${APP_URL}/account/profile`)}
+  `
+  return sendEmail('casting_confirmed', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `You're confirmed for "${opts.castingTitle}"`, html: layout(body) })
+}
+
 // Owner alert when a booking is cancelled (not template-gated — you always want to know).
 export async function sendCancellationOwnerAlert(opts: {
   customerName: string; customerEmail?: string; customerPhone?: string; setName: string; date: string; startTime: string; endTime: string; within48: boolean

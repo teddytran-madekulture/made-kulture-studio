@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { estimatePlan, type Rates } from '@/lib/estimate'
 
-type Participant = { id: string; status: string; name: string; avatar_url: string | null; roles: string[] }
+type Participant = { id: string; status: string; role: string | null; name: string; avatar_url: string | null; roles: string[] }
 type Casting = {
   id: string; title: string; description: string | null
   compensation_type: 'paid' | 'unpaid' | 'tfp'; roles_needed: string[]
@@ -31,6 +31,7 @@ export default function CastingDetailPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [rates, setRates] = useState<Rates | null>(null)
+  const [roleChoice, setRoleChoice] = useState<Record<string, string>>({}) // per-interested-person role picker
 
   const load = () => fetch(`/api/castings/${id}`).then(async r => {
     const d = await r.json().catch(() => ({}))
@@ -74,9 +75,9 @@ export default function CastingDetailPage() {
     const d = await res.json().catch(() => ({})); setBusy(false)
     if (res.ok && d.conversationId) router.push(`/account/messages/${d.conversationId}`)
   }
-  const setParticipant = async (userId: string, action: string) => {
+  const setParticipant = async (userId: string, action: string, role?: string) => {
     setBusy(true)
-    await fetch(`/api/castings/${id}/participants`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, action }) })
+    await fetch(`/api/castings/${id}/participants`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, action, role }) })
     setBusy(false); load()
   }
   const setStatus = async (status: string) => {
@@ -121,9 +122,11 @@ export default function CastingDetailPage() {
           {p.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.roles.join(' · ')}</div>}
         </div>
       </Link>
+      {p.role && <span style={{ background: 'rgba(230,192,122,0.15)', color: '#e6c07a', fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', padding: '3px 8px', borderRadius: 4, flexShrink: 0 }}>{p.role}</span>}
       {actions}
     </div>
   )
+  const selectStyle: React.CSSProperties = { background: '#0e0e0e', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, padding: '5px 7px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }
   const smallBtn = (txt: string, onClick: () => void, danger = false): React.ReactNode => (
     <button type="button" disabled={busy} onClick={onClick} style={{ background: 'transparent', border: `1px solid ${danger ? 'rgba(255,80,80,0.4)' : 'rgba(255,255,255,0.2)'}`, color: danger ? '#ff8080' : 'rgba(255,255,255,0.8)', borderRadius: 4, padding: '5px 9px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>{txt}</button>
   )
@@ -149,9 +152,21 @@ export default function CastingDetailPage() {
 
       {casting.roles_needed.length > 0 && (
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>ROLES NEEDED</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {casting.roles_needed.map(r => <span key={r} style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '4px 9px' }}>{r}</span>)}
+          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>ROLES</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {casting.roles_needed.map(r => {
+              const fillers = confirmed.filter(p => p.role === r)
+              const filled = fillers.length > 0
+              return (
+                <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'Inter', fontSize: 12 }}>
+                  <span style={{ color: filled ? '#6bffaa' : 'rgba(255,255,255,0.35)', fontSize: 13, width: 14, flexShrink: 0 }}>{filled ? '✓' : '○'}</span>
+                  <span style={{ color: filled ? '#fff' : 'rgba(255,255,255,0.7)', fontWeight: 600, flexShrink: 0 }}>{r}</span>
+                  <span style={{ color: filled ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.3)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {filled ? `— ${fillers.map(f => f.name).join(', ')}` : '— open'}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -201,9 +216,9 @@ export default function CastingDetailPage() {
         <div style={{ marginTop: 6 }}>
           {confirmed.length > 0 && (
             <>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', margin: '0 0 8px' }}>CONFIRMED ({confirmed.length})</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', margin: '0 0 8px' }}>THE TEAM ({confirmed.length})</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-                {confirmed.map(p => pill(p, isAuthor ? <>{smallBtn('Unconfirm', () => setParticipant(p.id, 'unconfirm'))}</> : null))}
+                {confirmed.map(p => pill(p, isAuthor ? <>{smallBtn('Remove', () => setParticipant(p.id, 'unconfirm'))}</> : null))}
               </div>
             </>
           )}
@@ -211,7 +226,18 @@ export default function CastingDetailPage() {
             <>
               <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', margin: '0 0 8px' }}>INTERESTED ({interested.length})</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {interested.map(p => pill(p, isAuthor ? <div style={{ display: 'flex', gap: 6 }}>{smallBtn('Confirm', () => setParticipant(p.id, 'confirm'))}{smallBtn('✕', () => setParticipant(p.id, 'remove'), true)}</div> : null))}
+                {interested.map(p => pill(p, isAuthor ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {casting.roles_needed.length > 0 && (
+                      <select value={roleChoice[p.id] ?? ''} onChange={e => setRoleChoice(s => ({ ...s, [p.id]: e.target.value }))} style={selectStyle}>
+                        <option value="">Role…</option>
+                        {casting.roles_needed.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    )}
+                    {smallBtn('Approve', () => setParticipant(p.id, 'confirm', roleChoice[p.id] || undefined))}
+                    {smallBtn('✕', () => setParticipant(p.id, 'remove'), true)}
+                  </div>
+                ) : null))}
               </div>
             </>
           )}
