@@ -33,6 +33,32 @@ export default function NewCastingPage() {
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [editId, setEditId] = useState<string | null>(null) // set when editing an existing casting
+
+  // Edit mode: ?id=<castingId> pre-fills the form with the casting's current values.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('id')
+    if (!id) return
+    setEditId(id)
+    fetch(`/api/castings/${id}`).then(async r => {
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.casting) { setError(d.error ?? 'Could not load casting.'); return }
+      if (!d.isAuthor) { router.replace(`/account/castings/${id}`); return }
+      const c = d.casting
+      setTitle(c.title ?? '')
+      setDescription(c.description ?? '')
+      setComp(['paid', 'unpaid', 'tfp'].includes(c.compensation_type) ? c.compensation_type : 'tfp')
+      setRoles(Array.isArray(c.roles_needed) ? c.roles_needed : [])
+      setMode(['none', 'set', 'buyout'].includes(c.plan_mode) ? c.plan_mode : 'none')
+      setSetSlug(c.set_slug ?? '')
+      setHours(c.hours != null ? String(c.hours) : '')
+      setGuests(c.guests != null ? String(c.guests) : '')
+      setCart(Array.isArray(c.equipment) ? c.equipment : [])
+      setShootDate(c.shoot_date ?? '')
+      setStartHour(c.start_hour != null ? String(c.start_hour) : '')
+    }).catch(() => setError('Could not load casting.'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     fetch('/api/roles').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
@@ -68,24 +94,25 @@ export default function NewCastingPage() {
   const submit = async () => {
     if (!title.trim()) { setError('Give your casting a title.'); return }
     setSaving(true); setError('')
-    const res = await fetch('/api/castings', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title, description, compensation_type: comp, roles_needed: roles,
-        plan_mode: mode,
-        set_slug: mode === 'set' ? setSlug : null,
-        hours: mode === 'none' ? null : (Number(hours) || null),
-        guests: mode === 'set' ? (Number(guests) || null) : null,
-        equipment: cart,
-        shoot_date: shootDate || null,
-        start_hour: startHour ? Number(startHour) : null,
-        estimated_cost: estimate.total,
-      }),
+    const payload = {
+      title, description, compensation_type: comp, roles_needed: roles,
+      plan_mode: mode,
+      set_slug: mode === 'set' ? setSlug : null,
+      hours: mode === 'none' ? null : (Number(hours) || null),
+      guests: mode === 'set' ? (Number(guests) || null) : null,
+      equipment: cart,
+      shoot_date: shootDate || null,
+      start_hour: startHour ? Number(startHour) : null,
+      estimated_cost: estimate.total,
+    }
+    const res = await fetch(editId ? `/api/castings/${editId}` : '/api/castings', {
+      method: editId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     })
     const d = await res.json().catch(() => ({}))
     setSaving(false)
-    if (res.ok && d.id) router.push(`/account/castings/${d.id}`)
-    else setError(d.error ?? 'Could not post.')
+    if (res.ok) router.push(`/account/castings/${editId ?? d.id}`)
+    else setError(d.error ?? 'Could not save.')
   }
 
   const input: React.CSSProperties = { width: '100%', background: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '12px 14px', fontFamily: 'Inter', fontSize: 14, color: '#fff', outline: 'none', boxSizing: 'border-box' }
@@ -111,7 +138,7 @@ export default function NewCastingPage() {
   return (
     <div style={{ maxWidth: 560 }}>
       <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>← Castings</Link>
-      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '8px 0 4px' }}>POST A CASTING</h1>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '8px 0 4px' }}>{editId ? 'EDIT CASTING' : 'POST A CASTING'}</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', margin: '0 0 8px' }}>Describe the shoot, who you need, and optionally plan the studio time to see an estimate.</p>
 
       {error && <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 6, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b', marginTop: 16 }}>{error}</div>}
@@ -203,7 +230,7 @@ export default function NewCastingPage() {
       )}
 
       <button onClick={submit} disabled={saving} style={{ background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', opacity: saving ? 0.6 : 1, marginTop: 24 }}>
-        {saving ? 'POSTING…' : 'POST CASTING'}
+        {saving ? (editId ? 'SAVING…' : 'POSTING…') : (editId ? 'SAVE CHANGES' : 'POST CASTING')}
       </button>
     </div>
   )

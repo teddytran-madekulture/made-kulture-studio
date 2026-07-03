@@ -204,6 +204,7 @@ export default function CastingDetailPage() {
       {isAuthor && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
           {bookHref && <Link href={bookHref} style={{ background: '#fff', color: '#080808', textDecoration: 'none', borderRadius: 6, padding: '10px 16px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600 }}>Book this →</Link>}
+          <Link href={`/account/castings/new?id=${id}`} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.8)', borderRadius: 4, padding: '6px 12px', fontFamily: 'Inter', fontSize: 11, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Edit</Link>
           {casting.status === 'open'
             ? smallBtn('Close casting', () => setStatus('closed'))
             : smallBtn('Reopen', () => setStatus('open'))}
