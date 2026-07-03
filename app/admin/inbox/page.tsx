@@ -180,6 +180,21 @@ export default function AdminInboxPage() {
   }
 
   const label: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.14em' }
+
+  // Where the conversation came from: website chat, email, (later: sms/instagram)
+  const channelBadge = (c: Convo) => {
+    const [icon, txt, color] =
+      c.channel === 'email' ? ['✉', 'EMAIL', '#7dd3fc'] :
+      c.channel === 'sms' ? ['✆', 'SMS', '#c4b5fd'] :
+      c.channel === 'instagram' ? ['◎', 'IG', '#f9a8d4'] :
+      ['💬', 'WEB CHAT', 'rgba(255,255,255,0.55)']
+    return (
+      <span style={{ ...label, color, border: `1px solid ${color === 'rgba(255,255,255,0.55)' ? 'rgba(255,255,255,0.25)' : color}`, padding: '2px 6px', borderRadius: 3, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 10 }}>{icon}</span>{txt}
+      </span>
+    )
+  }
+
   const statusBadge = (c: Convo) => {
     const [bg, txt, t] =
       c.human_takeover ? ['rgba(212,168,67,0.2)', GOLD, 'YOU'] :
@@ -305,8 +320,14 @@ export default function AdminInboxPage() {
                   <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {c.visitor_name || c.visitor_email || 'Visitor'}
                   </span>
-                  {statusBadge(c)}
+                  <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
+                    {channelBadge(c)}
+                    {statusBadge(c)}
+                  </span>
                 </div>
+                {c.channel === 'email' && c.subject && (
+                  <div style={{ fontSize: 11, color: '#7dd3fc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{c.subject}</div>
+                )}
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.preview}</div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>
                   {new Date(c.last_message_at).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
@@ -325,9 +346,12 @@ export default function AdminInboxPage() {
             ) : (
               <>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {sel.visitor_name || sel.visitor_email || 'Visitor'}
-                    <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}> · {sel.channel}</span>
+                    {channelBadge(sel)}
+                    {sel.channel === 'email' && sel.subject && (
+                      <span style={{ color: '#7dd3fc', fontWeight: 400, fontSize: 12 }}>{sel.subject}</span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button onClick={teachJune} title="Add what June should have known to her knowledge base"
