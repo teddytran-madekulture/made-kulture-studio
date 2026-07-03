@@ -17,7 +17,8 @@
     "square": "^37.0.0",
     "twilio": "^5.2.3",
     "date-fns": "^3.6.0",
-    "resend": "^3.2.0"
+    "resend": "^3.2.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "typescript": "^5",

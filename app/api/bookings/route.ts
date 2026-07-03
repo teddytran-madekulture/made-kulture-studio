@@ -11,6 +11,7 @@ import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin } from '@/lib/igloohome'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
+import { sendOwnerPush } from '@/lib/push'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -642,6 +643,14 @@ export async function POST(req: NextRequest) {
         }).catch(err => console.error('Email alert error (non-fatal):', err)),
       )
     }
+
+    notifications.push(
+      sendOwnerPush({
+        title: '🎉 New booking',
+        body: `${body.name} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}`,
+        url: '/admin/dashboard',
+      }).catch(err => console.error('Owner push error (non-fatal):', err))
+    )
 
     // Ensure the sends finish before the serverless function suspends.
     await Promise.allSettled(notifications)

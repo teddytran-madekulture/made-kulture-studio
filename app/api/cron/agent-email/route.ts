@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js'
 import { fetchNewEmails, markProcessed, juneEmailConfigured } from '@/lib/agent/gmail'
 import { runJune, juneConfigured, JuneTurn } from '@/lib/agent/june'
 import { sendOwnerSMS } from '@/lib/sms'
+import { sendOwnerPush } from '@/lib/push'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -121,6 +122,12 @@ export async function GET(req: NextRequest) {
       await sendOwnerSMS(
         `📬 June drafted ${drafted} email repl${drafted === 1 ? 'y' : 'ies'} — review in Admin → June Inbox.`
       ).catch(e => console.error('[agent-email] owner SMS error:', e))
+      await sendOwnerPush({
+        title: '📬 June drafted a reply',
+        body: `${drafted} email draft${drafted === 1 ? '' : 's'} waiting for your approval.`,
+        url: '/admin/inbox',
+        tag: 'june-email-drafts',
+      })
     }
   } catch (e: any) {
     console.error('[agent-email] poll error:', e)

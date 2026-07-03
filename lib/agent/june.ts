@@ -108,12 +108,22 @@ async function execTool(
         .from('agent_conversations')
         .update({ status: 'needs_teddy' })
         .eq('id', ctx.conversationId)
-      // Owner SMS alert — non-fatal.
+      // Owner SMS + push alerts — non-fatal.
       try {
         const { sendOwnerSMS } = await import('@/lib/sms')
         await sendOwnerSMS(`🔔 June needs you: ${String(input?.reason || 'escalation').slice(0, 120)}\nAdmin → June Inbox to reply.`)
       } catch (e) {
         console.error('[june] escalation SMS error (non-fatal):', e)
+      }
+      try {
+        const { sendOwnerPush } = await import('@/lib/push')
+        await sendOwnerPush({
+          title: '🔔 June needs you',
+          body: String(input?.reason || 'A customer needs a human.').slice(0, 140),
+          url: '/admin/inbox',
+        })
+      } catch (e) {
+        console.error('[june] escalation push error (non-fatal):', e)
       }
       return {
         result: 'Teddy has been notified and will jump into this chat. Tell the visitor he usually responds quickly during studio hours, and they can also text (832) 408-1631.',

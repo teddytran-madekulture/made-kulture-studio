@@ -4,6 +4,7 @@
 // give back, close, and the June on/off kill switch (studio_settings.cs_agent_enabled).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { enablePush } from '@/components/AdminPwa'
 
 const GOLD = '#d4a843'
 
@@ -31,6 +32,16 @@ export default function AdminInboxPage() {
   const [kbBusy, setKbBusy]         = useState<string | null>(null)
   const [newTopic, setNewTopic]     = useState('')
   const [newContent, setNewContent] = useState('')
+  const [pushState, setPushState]   = useState<'idle' | 'busy' | 'ok' | 'denied' | 'unsupported' | 'error'>('idle')
+
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') setPushState('ok')
+  }, [])
+
+  const onEnablePush = async () => {
+    setPushState('busy')
+    setPushState(await enablePush())
+  }
   const [juneOn, setJuneOn]   = useState<boolean | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const selRef = useRef<string | null>(null)
@@ -229,6 +240,21 @@ export default function AdminInboxPage() {
               ))}
             </div>
           </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={onEnablePush} disabled={pushState === 'busy' || pushState === 'ok'} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent',
+            border: `1px solid ${pushState === 'ok' ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.15)'}`,
+            padding: '8px 12px', cursor: pushState === 'ok' ? 'default' : 'pointer', borderRadius: 4,
+          }}>
+            <span style={{ fontSize: 11 }}>🔔</span>
+            <span style={{ ...label, color: pushState === 'ok' ? '#4ade80' : '#fff' }}>
+              {pushState === 'ok' ? 'NOTIFICATIONS ON' :
+               pushState === 'busy' ? '…' :
+               pushState === 'denied' ? 'BLOCKED IN BROWSER' :
+               pushState === 'unsupported' ? 'NOT SUPPORTED HERE' :
+               pushState === 'error' ? 'RETRY NOTIFICATIONS' : 'ENABLE NOTIFICATIONS'}
+            </span>
+          </button>
           <button onClick={toggleJune} disabled={juneOn === null} style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, background: 'transparent',
             border: '1px solid rgba(255,255,255,0.15)', padding: '8px 14px', cursor: 'pointer', borderRadius: 4,
@@ -236,6 +262,7 @@ export default function AdminInboxPage() {
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: juneOn ? '#4ade80' : '#f87171' }} />
             <span style={{ ...label, color: '#fff' }}>{juneOn === null ? '…' : juneOn ? 'JUNE IS ON' : 'JUNE IS OFF'}</span>
           </button>
+          </div>
         </div>
 
         {tab === 'kb' && (
