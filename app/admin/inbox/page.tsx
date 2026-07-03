@@ -35,6 +35,22 @@ export default function AdminInboxPage() {
   const [newTopic, setNewTopic]     = useState('')
   const [newContent, setNewContent] = useState('')
   const [pushState, setPushState]   = useState<'idle' | 'busy' | 'ok' | 'denied' | 'unsupported' | 'error'>('idle')
+  const [tabCounts, setTabCounts]   = useState<{ inbox: number; tours: number }>({ inbox: 0, tours: 0 })
+
+  const loadCounts = useCallback(async () => {
+    try {
+      const r = await fetch('/api/admin/badge')
+      if (!r.ok) return
+      const d = await r.json()
+      setTabCounts({ inbox: d.inbox ?? 0, tours: d.tours ?? 0 })
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    loadCounts()
+    const iv = setInterval(loadCounts, 20000)
+    return () => clearInterval(iv)
+  }, [loadCounts])
 
   useEffect(() => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') setPushState('ok')
@@ -136,7 +152,7 @@ export default function AdminInboxPage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
     })
-    await loadTours()
+    await Promise.all([loadTours(), loadCounts()])
     setTourBusy(null)
   }
 
@@ -147,7 +163,7 @@ export default function AdminInboxPage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ by: 'studio' }),
     })
-    await loadTours()
+    await Promise.all([loadTours(), loadCounts()])
     setTourBusy(null)
   }
 
@@ -214,7 +230,7 @@ export default function AdminInboxPage() {
       alert(d.error || 'Draft action failed')
     }
     setDraftEdits(e => { const { [messageId]: _, ...rest } = e; return rest })
-    await Promise.all([loadConvo(sel.id), loadList()])
+    await Promise.all([loadConvo(sel.id), loadList(), loadCounts()])
     setBusy(false)
   }
 
@@ -268,14 +284,25 @@ export default function AdminInboxPage() {
             <a href="/admin/dashboard" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>← Dashboard</a>
             <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>JUNE</h1>
             <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-              {([['convos', 'INBOX'], ['kb', 'KNOWLEDGE'], ['tours', 'TOURS']] as const).map(([t, lbl]) => (
-                <button key={t} onClick={() => setTab(t)} style={{
-                  ...label, padding: '7px 12px', cursor: 'pointer', borderRadius: 4,
-                  background: tab === t ? 'rgba(212,168,67,0.15)' : 'transparent',
-                  border: tab === t ? `1px solid ${GOLD}` : '1px solid rgba(255,255,255,0.15)',
-                  color: tab === t ? GOLD : 'rgba(255,255,255,0.5)',
-                }}>{lbl}</button>
-              ))}
+              {([['convos', 'INBOX'], ['kb', 'KNOWLEDGE'], ['tours', 'TOURS']] as const).map(([t, lbl]) => {
+                const n = t === 'convos' ? tabCounts.inbox : t === 'tours' ? tabCounts.tours : 0
+                return (
+                  <button key={t} onClick={() => setTab(t)} style={{
+                    ...label, padding: '7px 12px', cursor: 'pointer', borderRadius: 4,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: tab === t ? 'rgba(212,168,67,0.15)' : 'transparent',
+                    border: tab === t ? `1px solid ${GOLD}` : n > 0 ? `1px solid ${GOLD}` : '1px solid rgba(255,255,255,0.15)',
+                    color: tab === t ? GOLD : n > 0 ? GOLD : 'rgba(255,255,255,0.5)',
+                  }}>
+                    {lbl}
+                    {n > 0 && (
+                      <span style={{ background: GOLD, color: '#080808', borderRadius: 9, minWidth: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, padding: '0 4px' }}>
+                        {n}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

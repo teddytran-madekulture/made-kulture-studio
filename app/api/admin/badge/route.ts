@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
     supabase.from('agent_messages').select('id', { count: 'exact', head: true }).eq('role', 'draft'),
     supabase.from('tour_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
-  const count = (convos.count ?? 0) + (drafts.count ?? 0) + (tours.count ?? 0)
-  return NextResponse.json({ count })
+  const inbox = (convos.count ?? 0) + (drafts.count ?? 0)
+  const toursPending = tours.count ?? 0
+  return NextResponse.json({ count: inbox + toursPending, inbox, tours: toursPending })
 }
