@@ -27,6 +27,10 @@ export default function KioskPage() {
   // the truth everywhere.
   const [vh, setVh] = useState<number | null>(null)
   useEffect(() => {
+    // The site's global CSS zooms body 1.25x (design choice for the marketing
+    // pages). On a fixed-height kiosk that inflates the layout 25% past the
+    // screen — kill it here so px measurements match reality.
+    document.body.style.zoom = '1'
     const measure = () => setVh(window.innerHeight)
     measure()
     window.addEventListener('resize', measure)
