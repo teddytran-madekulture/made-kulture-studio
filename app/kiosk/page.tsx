@@ -236,7 +236,7 @@ export default function KioskPage() {
     <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
       <button style={backBtn} onClick={resetToHome}>← BACK</button>
       {header}
-      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '10px 20px', maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+      <div ref={listRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 20px', maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
         {msgs.length === 0 && (
           <div style={{ fontSize: 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, textAlign: 'center', marginTop: 30 }}>
             Hey, I'm June 👋 Ask me anything about the studio — sets, gear, rules, where things are. (I'm an AI assistant; chats are monitored by the team.)
@@ -258,7 +258,7 @@ export default function KioskPage() {
         {sending && <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)' }}>June is typing…</div>}
       </div>
       {/* Tap-to-ask — most guests never need the keyboard */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '4px 16px 0', maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '4px 16px 0', maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box', flexShrink: 0 }}>
         {[
           '🚻 Where are the restrooms?',
           '💄 Where can I change or do makeup?',
@@ -274,7 +274,7 @@ export default function KioskPage() {
           }}>{q}</button>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 10, padding: 16, maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', gap: 10, padding: 16, maxWidth: 760, width: '100%', margin: '0 auto', boxSizing: 'border-box', flexShrink: 0 }}>
         <input
           value={input}
           onChange={e => { setInput(e.target.value); touch() }}
