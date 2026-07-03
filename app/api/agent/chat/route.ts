@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
 
   const message = String(body?.message ?? '').trim().slice(0, 1000)
   if (!message) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
-  const page = typeof body?.page === 'string' ? body.page.slice(0, 200) : null
+  const isKiosk = body?.kiosk === true
+  const page = isKiosk ? 'kiosk' : typeof body?.page === 'string' ? body.page.slice(0, 200) : null
 
   // Who's talking? (logged-in members get booking lookup)
   let authUserId: string | null = null
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     const newToken = randomUUID() + randomUUID().slice(0, 8)
     const { data, error } = await supabase
       .from('agent_conversations')
-      .insert({ token: newToken, channel: 'web', auth_user_id: authUserId, visitor_name: visitorName, visitor_email: visitorEmail, page })
+      .insert({ token: newToken, channel: isKiosk ? 'kiosk' : 'web', auth_user_id: authUserId, visitor_name: visitorName, visitor_email: visitorEmail, page })
       .select('*').single()
     if (error || !data) return NextResponse.json({ error: 'Could not start chat' }, { status: 500 })
     convo = data

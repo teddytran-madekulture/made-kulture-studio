@@ -250,6 +250,7 @@ export default function AdminInboxPage() {
   const channelBadge = (c: Convo) => {
     const [icon, txt, color] =
       c.channel === 'email' ? ['✉', 'EMAIL', '#7dd3fc'] :
+      c.channel === 'kiosk' ? ['📟', 'KIOSK', '#86efac'] :
       c.channel === 'sms' ? ['✆', 'SMS', '#c4b5fd'] :
       c.channel === 'instagram' ? ['◎', 'IG', '#f9a8d4'] :
       ['💬', 'WEB CHAT', 'rgba(255,255,255,0.55)']
