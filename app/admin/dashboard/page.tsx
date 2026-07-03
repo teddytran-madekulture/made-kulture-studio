@@ -2758,6 +2758,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <a href="/admin/inbox" style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.4)', color: '#e6c07a', textDecoration: 'none', padding: '9px 14px', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em' }}>JUNE INBOX →</a>
                 <a href="/admin/signups" style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.4)', color: '#e6c07a', textDecoration: 'none', padding: '9px 14px', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em' }}>RECENT SIGNUPS →</a>
                 <a href="/admin/portfolio" style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.4)', color: '#e6c07a', textDecoration: 'none', padding: '9px 14px', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em' }}>PORTFOLIO MODERATION →</a>
                 <button
