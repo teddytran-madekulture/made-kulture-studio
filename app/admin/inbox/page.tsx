@@ -10,9 +10,11 @@ const GOLD = '#d4a843'
 interface Convo {
   id: string; channel: string; status: string; human_takeover: boolean
   visitor_name: string | null; visitor_email: string | null; page: string | null
+  subject?: string | null
   last_message_at: string; created_at: string; preview: string
 }
 interface Msg { id: string; role: string; content: string; created_at: string }
+interface KbEntry { id: string; topic: string; content: string; enabled: boolean; updated_at: string }
 
 export default function AdminInboxPage() {
   const [unauth, setUnauth]   = useState(false)
@@ -23,6 +25,12 @@ export default function AdminInboxPage() {
   const [reply, setReply]     = useState('')
   const [busy, setBusy]       = useState(false)
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({})
+  const [tab, setTab]               = useState<'convos' | 'kb'>('convos')
+  const [kb, setKb]                 = useState<KbEntry[]>([])
+  const [kbEdits, setKbEdits]       = useState<Record<string, { topic: string; content: string }>>({})
+  const [kbBusy, setKbBusy]         = useState<string | null>(null)
+  const [newTopic, setNewTopic]     = useState('')
+  const [newContent, setNewContent] = useState('')
   const [juneOn, setJuneOn]   = useState<boolean | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const selRef = useRef<string | null>(null)
@@ -85,6 +93,66 @@ export default function AdminInboxPage() {
     setBusy(false)
   }
 
+  const loadKb = useCallback(async () => {
+    const r = await fetch('/api/admin/kb')
+    if (!r.ok) return
+    const d = await r.json()
+    setKb(d.entries ?? [])
+  }, [])
+
+  useEffect(() => { if (tab === 'kb') loadKb() }, [tab, loadKb])
+
+  const saveKb = async (id: string) => {
+    const e = kbEdits[id]
+    if (!e) return
+    setKbBusy(id)
+    await fetch('/api/admin/kb', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, topic: e.topic, content: e.content }),
+    })
+    setKbEdits(d => { const { [id]: _, ...rest } = d; return rest })
+    await loadKb()
+    setKbBusy(null)
+  }
+
+  const toggleKb = async (entry: KbEntry) => {
+    setKbBusy(entry.id)
+    await fetch('/api/admin/kb', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: entry.id, enabled: !entry.enabled }),
+    })
+    await loadKb()
+    setKbBusy(null)
+  }
+
+  const deleteKb = async (entry: KbEntry) => {
+    if (!window.confirm(`Delete "${entry.topic}" from June's knowledge? She won't know this anymore.`)) return
+    setKbBusy(entry.id)
+    await fetch('/api/admin/kb', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: entry.id }),
+    })
+    await loadKb()
+    setKbBusy(null)
+  }
+
+  const addKb = async () => {
+    if (!newTopic.trim() || !newContent.trim()) return
+    setKbBusy('new')
+    const r = await fetch('/api/admin/kb', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: newTopic.trim(), content: newContent.trim() }),
+    })
+    if (r.ok) { setNewTopic(''); setNewContent(''); await loadKb() }
+    setKbBusy(null)
+  }
+
+  const teachJune = () => {
+    setTab('kb')
+    setNewTopic(sel?.subject ? `re: ${sel.subject}`.slice(0, 60) : '')
+    setNewContent('')
+  }
+
   const draftAction = async (messageId: string, action: 'send' | 'discard') => {
     if (!sel || busy) return
     setBusy(true)
@@ -132,9 +200,19 @@ export default function AdminInboxPage() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 20px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <a href="/admin/dashboard" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>← Dashboard</a>
-            <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>JUNE — INBOX</h1>
+            <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>JUNE</h1>
+            <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
+              {([['convos', 'INBOX'], ['kb', "KNOWLEDGE"]] as const).map(([t, lbl]) => (
+                <button key={t} onClick={() => setTab(t)} style={{
+                  ...label, padding: '7px 12px', cursor: 'pointer', borderRadius: 4,
+                  background: tab === t ? 'rgba(212,168,67,0.15)' : 'transparent',
+                  border: tab === t ? `1px solid ${GOLD}` : '1px solid rgba(255,255,255,0.15)',
+                  color: tab === t ? GOLD : 'rgba(255,255,255,0.5)',
+                }}>{lbl}</button>
+              ))}
+            </div>
           </div>
           <button onClick={toggleJune} disabled={juneOn === null} style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, background: 'transparent',
@@ -145,7 +223,72 @@ export default function AdminInboxPage() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        {tab === 'kb' && (
+          <div style={{ maxWidth: 760 }}>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, marginBottom: 20 }}>
+              Everything June knows lives here. Edits apply on her <span style={{ color: GOLD }}>very next message</span> — no deploy needed. She only states what's written below, so keep it accurate.
+            </div>
+
+            {/* Add new entry */}
+            <div style={{ border: `1px dashed ${GOLD}`, borderRadius: 6, padding: 16, marginBottom: 24, background: 'rgba(212,168,67,0.04)' }}>
+              <div style={{ ...label, color: GOLD, marginBottom: 10 }}>+ TEACH JUNE SOMETHING NEW</div>
+              <input
+                value={newTopic} onChange={e => setNewTopic(e.target.value)}
+                placeholder="Topic (e.g. holiday_hours, pets, drone_policy)"
+                style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, padding: '9px 11px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif', marginBottom: 8 }}
+              />
+              <textarea
+                value={newContent} onChange={e => setNewContent(e.target.value)}
+                placeholder="What should June say about this? Write it the way you'd tell a customer."
+                rows={3}
+                style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, lineHeight: 1.5, padding: '9px 11px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif', resize: 'vertical' }}
+              />
+              <button disabled={kbBusy === 'new' || !newTopic.trim() || !newContent.trim()} onClick={addKb}
+                style={{ ...label, marginTop: 8, background: newTopic.trim() && newContent.trim() ? GOLD : 'rgba(255,255,255,0.1)', border: 'none', color: newTopic.trim() && newContent.trim() ? '#080808' : 'rgba(255,255,255,0.3)', padding: '8px 14px', cursor: 'pointer', borderRadius: 4 }}>
+                {kbBusy === 'new' ? 'SAVING…' : 'ADD TO HER KNOWLEDGE'}
+              </button>
+            </div>
+
+            {/* Existing entries */}
+            {kb.map(entry => {
+              const edit = kbEdits[entry.id]
+              const dirty = !!edit && (edit.topic !== entry.topic || edit.content !== entry.content)
+              return (
+                <div key={entry.id} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: 14, marginBottom: 12, opacity: entry.enabled ? 1 : 0.45 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <input
+                      value={edit?.topic ?? entry.topic}
+                      onChange={e => setKbEdits(d => ({ ...d, [entry.id]: { topic: e.target.value, content: d[entry.id]?.content ?? entry.content } }))}
+                      style={{ flex: 1, minWidth: 160, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: GOLD, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', padding: '7px 10px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif' }}
+                    />
+                    {!entry.enabled && <span style={{ ...label, color: 'rgba(255,255,255,0.4)' }}>OFF</span>}
+                    <button disabled={kbBusy === entry.id} onClick={() => toggleKb(entry)} style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '6px 10px', cursor: 'pointer', borderRadius: 4 }}>
+                      {entry.enabled ? 'TURN OFF' : 'TURN ON'}
+                    </button>
+                    <button disabled={kbBusy === entry.id} onClick={() => deleteKb(entry)} style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171', padding: '6px 10px', cursor: 'pointer', borderRadius: 4 }}>
+                      DELETE
+                    </button>
+                  </div>
+                  <textarea
+                    value={edit?.content ?? entry.content}
+                    onChange={e => setKbEdits(d => ({ ...d, [entry.id]: { topic: d[entry.id]?.topic ?? entry.topic, content: e.target.value } }))}
+                    rows={Math.min(10, Math.max(3, (edit?.content ?? entry.content).split('\n').length + 1))}
+                    style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.5, padding: '9px 11px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif', resize: 'vertical' }}
+                  />
+                  {dirty && (
+                    <button disabled={kbBusy === entry.id} onClick={() => saveKb(entry.id)}
+                      style={{ ...label, marginTop: 8, background: GOLD, border: 'none', color: '#080808', padding: '7px 14px', cursor: 'pointer', borderRadius: 4 }}>
+                      {kbBusy === entry.id ? 'SAVING…' : 'SAVE — JUNE KNOWS IT IMMEDIATELY'}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+            {kb.length === 0 && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Loading her knowledge…</div>}
+          </div>
+        )}
+
+        <div style={{ display: tab === 'convos' ? 'flex' : 'none', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* Conversation list */}
           <div style={{ flex: '0 0 340px', maxWidth: '100%', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, overflow: 'hidden' }}>
             {loading && <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Loading…</div>}
@@ -186,7 +329,11 @@ export default function AdminInboxPage() {
                     {sel.visitor_name || sel.visitor_email || 'Visitor'}
                     <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}> · {sel.channel}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button onClick={teachJune} title="Add what June should have known to her knowledge base"
+                      style={{ ...label, background: 'transparent', border: `1px dashed ${GOLD}`, color: GOLD, padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>
+                      TEACH JUNE
+                    </button>
                     {sel.human_takeover ? (
                       <button disabled={busy} onClick={() => act(sel.id, 'release')} style={{ ...label, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>GIVE BACK TO JUNE</button>
                     ) : (

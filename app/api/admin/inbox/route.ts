@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   const { data: convos, error } = await supabase
     .from('agent_conversations')
-    .select('id, channel, status, human_takeover, visitor_name, visitor_email, page, last_message_at, created_at')
+    .select('id, channel, status, human_takeover, visitor_name, visitor_email, page, subject, last_message_at, created_at')
     .order('last_message_at', { ascending: false })
     .limit(100)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
