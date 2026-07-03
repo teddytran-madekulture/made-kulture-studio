@@ -9,6 +9,22 @@ export default function AdminPwa() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { scope: '/admin' }).catch(() => {})
     }
+
+    // Keep the app-icon badge honest: on open/focus, re-count what's pending.
+    const syncBadge = async () => {
+      if (!('setAppBadge' in navigator)) return
+      try {
+        const r = await fetch('/api/admin/badge')
+        if (!r.ok) return
+        const d = await r.json()
+        if (d.count > 0) await (navigator as any).setAppBadge(d.count)
+        else await (navigator as any).clearAppBadge()
+      } catch {}
+    }
+    syncBadge()
+    const onVis = () => { if (document.visibilityState === 'visible') syncBadge() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
   return null
 }

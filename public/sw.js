@@ -14,7 +14,12 @@ self.addEventListener('push', (event) => {
     data: { url: data.url || '/admin/inbox' },
     tag: data.tag || undefined,
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  const work = [self.registration.showNotification(title, options)]
+  // App-icon badge count (iOS 16.4+ installed PWAs, Android, desktop).
+  if (typeof data.badge === 'number' && 'setAppBadge' in self.navigator) {
+    work.push(data.badge > 0 ? self.navigator.setAppBadge(data.badge) : self.navigator.clearAppBadge())
+  }
+  event.waitUntil(Promise.all(work))
 })
 
 self.addEventListener('notificationclick', (event) => {

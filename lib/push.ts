@@ -38,11 +38,23 @@ export async function sendOwnerPush(opts: {
       .from('push_subscriptions').select('id, endpoint, keys')
     if (!subs?.length) return
 
+    // App-icon badge = everything currently waiting on Teddy.
+    let badge = 0
+    try {
+      const [convos, drafts, tours] = await Promise.all([
+        supabase.from('agent_conversations').select('id', { count: 'exact', head: true }).eq('status', 'needs_teddy').eq('human_takeover', false),
+        supabase.from('agent_messages').select('id', { count: 'exact', head: true }).eq('role', 'draft'),
+        supabase.from('tour_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      ])
+      badge = (convos.count ?? 0) + (drafts.count ?? 0) + (tours.count ?? 0)
+    } catch {}
+
     const payload = JSON.stringify({
       title: opts.title,
       body: opts.body,
       url: opts.url ?? '/admin/inbox',
       tag: opts.tag,
+      badge,
     })
 
     await Promise.allSettled(subs.map(async (s: any) => {
