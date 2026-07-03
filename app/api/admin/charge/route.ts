@@ -4,6 +4,8 @@ import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { randomUUID } from 'crypto'
+import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
+import { STUDIO_ADDRESS } from '@/lib/calendar'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -120,6 +122,29 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (bookingError) console.error('Supabase error:', bookingError)
+
+    // 4b. Google Calendar sync (gated on the admin toggle + GCAL_* env; non-fatal)
+    if (booking?.id) {
+      try {
+        if (await gcalSyncEnabled(supabase)) {
+          const eventId = await createCalendarEvent({
+            summary: `${setName} — ${name}`,
+            description: [
+              `Booking ${booking.id}`,
+              `${name} · ${email}${phone ? ` · ${phone}` : ''}`,
+              ...(notes ? [`Notes: ${notes}`] : []),
+            ].join('\n'),
+            location: STUDIO_ADDRESS,
+            startISO, endISO,
+          })
+          if (eventId) {
+            await supabase.from('bookings').update({ gcal_event_id: eventId }).eq('id', booking.id)
+          }
+        }
+      } catch (e) {
+        console.error('[admin/charge] gcal sync error (non-fatal):', e)
+      }
+    }
 
     // 5. Send SMS if requested
     if (sendSms && phone) {

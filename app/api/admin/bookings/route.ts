@@ -5,6 +5,8 @@ import twilio from 'twilio'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
+import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
+import { STUDIO_ADDRESS } from '@/lib/calendar'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -123,6 +125,29 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       console.error('[admin/bookings] Acuity block sync error:', e)
+    }
+  }
+
+  // Google Calendar sync (gated on the admin toggle + GCAL_* env; non-fatal)
+  if (booking?.id) {
+    try {
+      if (await gcalSyncEnabled(supabase)) {
+        const eventId = await createCalendarEvent({
+          summary: `${SLUG_TO_NAME[setSlug] ?? 'Full Studio Takeover'} — ${name}`,
+          description: [
+            `Booking ${booking.id}`,
+            `${name} · ${email}${phone ? ` · ${phone}` : ''}`,
+            ...(notes ? [`Notes: ${notes}`] : []),
+          ].join('\n'),
+          location: STUDIO_ADDRESS,
+          startISO, endISO,
+        })
+        if (eventId) {
+          await supabase.from('bookings').update({ gcal_event_id: eventId }).eq('id', booking.id)
+        }
+      }
+    } catch (e) {
+      console.error('[admin/bookings] gcal sync error (non-fatal):', e)
     }
   }
 
