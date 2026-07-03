@@ -140,6 +140,17 @@ export default function AdminInboxPage() {
     setTourBusy(null)
   }
 
+  const cancelTour = async (t: any) => {
+    if (!window.confirm(`Cancel ${t.name}'s confirmed tour? They'll get a sorry-text with a rebook link.`)) return
+    setTourBusy(t.id)
+    await fetch(`/api/tours/cancel/${t.cancel_token}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ by: 'studio' }),
+    })
+    await loadTours()
+    setTourBusy(null)
+  }
+
   const saveKb = async (id: string) => {
     const e = kbEdits[id]
     if (!e) return
@@ -324,6 +335,14 @@ export default function AdminInboxPage() {
                       <button disabled={tourBusy === t.id} onClick={() => decideTour(t, 'decline')}
                         style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}>
                         DECLINE
+                      </button>
+                    </div>
+                  )}
+                  {t.status === 'approved' && new Date(t.start_time).getTime() > Date.now() && (
+                    <div style={{ marginTop: 10 }}>
+                      <button disabled={tourBusy === t.id} onClick={() => cancelTour(t)}
+                        style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}>
+                        CANCEL TOUR
                       </button>
                     </div>
                   )}

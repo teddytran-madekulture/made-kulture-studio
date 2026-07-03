@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
       start_time: new Date(start).toISOString(),
       end_time: new Date(end).toISOString(),
       decision_token: token,
+      cancel_token: randomUUID().replace(/-/g, '') + randomUUID().slice(0, 8),
       is_custom: isCustom,
     })
     .select('id').single()

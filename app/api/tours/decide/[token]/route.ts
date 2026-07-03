@@ -24,7 +24,7 @@ function centralLabel(iso: string): string {
 async function findRequest(token: string) {
   const { data } = await supabase
     .from('tour_requests')
-    .select('id, name, phone, email, purpose, start_time, end_time, status, is_custom, gcal_event_id')
+    .select('id, name, phone, email, purpose, start_time, end_time, status, is_custom, gcal_event_id, cancel_token')
     .eq('decision_token', token)
     .single()
   return data
@@ -69,9 +69,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       .update({ status: 'approved', gcal_event_id: gcalId })
       .eq('id', r.id)
 
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
     await sendSMS(
       r.phone,
-      `✅ Your Made Kulture tour is confirmed!\n\n📅 ${when}\n📍 4825 Gulf Freeway, Houston TX 77023 (street parking in the rear)\n\nSee you then! Questions? Text (832) 408-1631.`
+      `✅ Your Made Kulture tour is confirmed!\n\n📅 ${when}\n📍 4825 Gulf Freeway, Houston TX 77023 (street parking in the rear)\n\nNeed to cancel? ${appUrl}/tour/cancel/${r.cancel_token}\nQuestions? Text (832) 408-1631.`
     ).catch(e => console.error('[tour approve] SMS error (non-fatal):', e))
 
     return NextResponse.json({ success: true, status: 'approved' })
