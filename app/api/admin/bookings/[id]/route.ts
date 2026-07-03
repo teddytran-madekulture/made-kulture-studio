@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
+import { deleteCalendarEvent, patchCalendarEvent } from '@/lib/gcal'
 import { sendCancellationEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
 
 const supabase = createClient(
@@ -33,13 +34,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.status       !== undefined) updates.status       = body.status
 
   // If cancelling, remove any Acuity blocks this website booking created
+  // and the mirrored Google Calendar event (non-fatal).
   if (body.status === 'cancelled') {
     const { data: existing } = await supabase
-      .from('bookings').select('acuity_block_ids').eq('id', params.id).single()
+      .from('bookings').select('acuity_block_ids, gcal_event_id').eq('id', params.id).single()
     const blockIds = Array.isArray(existing?.acuity_block_ids) ? existing!.acuity_block_ids : []
     if (blockIds.length) {
       await deleteAcuityBlocks(blockIds)
       updates.acuity_block_ids = []
+    }
+    if (existing?.gcal_event_id) {
+      try { await deleteCalendarEvent(existing.gcal_event_id) }
+      catch (e) { console.error('[admin cancel] gcal delete error (non-fatal):', e) }
+      updates.gcal_event_id = null
     }
   }
   if (body.start_time   !== undefined) updates.start_time   = body.start_time
@@ -74,6 +81,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       { error: isConflict ? 'This time slot conflicts with another booking.' : error.message },
       { status: isConflict ? 409 : 500 }
     )
+  }
+
+  // If the time window changed (admin reschedule), move the mirrored Google
+  // Calendar event too. Non-fatal.
+  if (body.status !== 'cancelled' && (body.start_time !== undefined || body.end_time !== undefined)) {
+    try {
+      const { data: bk } = await supabase
+        .from('bookings').select('gcal_event_id, start_time, end_time').eq('id', params.id).single()
+      if (bk?.gcal_event_id) {
+        await patchCalendarEvent(bk.gcal_event_id, { startISO: bk.start_time, endISO: bk.end_time })
+      }
+    } catch (e) {
+      console.error('[admin reschedule] gcal patch error (non-fatal):', e)
+    }
   }
 
   // Optionally notify the customer that their booking was cancelled (opt-in from

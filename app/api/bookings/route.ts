@@ -9,6 +9,8 @@ import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin } from '@/lib/igloohome'
+import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
+import { STUDIO_ADDRESS } from '@/lib/calendar'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -462,6 +464,7 @@ export async function POST(req: NextRequest) {
     const orderGroup = lines.length > 1 ? randomUUID() : null
     const equipDollars = equipCustom
     const bookingIds: string[] = []
+    const gcalRows: { id: string; line: (typeof lines)[number] }[] = []
     let checkInToken: string | null = null
 
     for (let i = 0; i < lines.length; i++) {
@@ -496,6 +499,7 @@ export async function POST(req: NextRequest) {
       }
       if (bookingData?.id) {
         bookingIds.push(bookingData.id)
+        gcalRows.push({ id: bookingData.id, line: l })
         if (i === 0) checkInToken = (bookingData as any).check_in_token ?? null
 
         // Equipment add-ons attach to the first row (charged once).
@@ -556,6 +560,34 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('[bookings] door code generation error (non-fatal):', err)
+    }
+
+    // ── 11c. Google Calendar sync (studio calendar) ────────────────────────
+    //     One event per set line on the madekulture calendar. Gated on the
+    //     admin toggle (studio_settings.gcal_sync_enabled) + GCAL_* env vars.
+    //     Non-fatal — the booking is already saved.
+    try {
+      if (gcalRows.length && await gcalSyncEnabled(supabase)) {
+        for (const r of gcalRows) {
+          const eventId = await createCalendarEvent({
+            summary: `${r.line.setName} — ${body.name}`,
+            description: [
+              `Booking ${r.id}`,
+              `${body.name} · ${body.email}${body.phone ? ` · ${body.phone}` : ''}`,
+              ...(guestCount ? [`Guests: ${guestCount}`] : []),
+              ...(body.notes ? [`Notes: ${body.notes}`] : []),
+            ].join('\n'),
+            location: STUDIO_ADDRESS,
+            startISO: r.line.startISO,
+            endISO: r.line.endISO,
+          }).catch(err => { console.error('[bookings] gcal event error (non-fatal):', err); return null })
+          if (eventId) {
+            await supabase.from('bookings').update({ gcal_event_id: eventId }).eq('id', r.id)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[bookings] gcal sync error (non-fatal):', err)
     }
 
     // ── 12. Flagged customer alert (non-blocking) ──────────────────────────

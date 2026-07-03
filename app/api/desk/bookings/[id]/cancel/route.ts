@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
+import { deleteCalendarEvent } from '@/lib/gcal'
 import { audit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const db = supabaseAdmin()
   const { data: existing } = await db
     .from('bookings')
-    .select('id, status, acuity_block_ids, total_amount, customers ( name )')
+    .select('id, status, acuity_block_ids, gcal_event_id, total_amount, customers ( name )')
     .eq('id', params.id)
     .maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 })
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (blockIds.length) {
     try { await deleteAcuityBlocks(blockIds) } catch (e) { console.error('[desk cancel] acuity block delete failed', e) }
     updates.acuity_block_ids = []
+  }
+  if ((existing as any).gcal_event_id) {
+    try { await deleteCalendarEvent((existing as any).gcal_event_id) } catch (e) { console.error('[desk cancel] gcal delete failed', e) }
+    updates.gcal_event_id = null
   }
 
   const { error } = await db.from('bookings').update(updates).eq('id', params.id)

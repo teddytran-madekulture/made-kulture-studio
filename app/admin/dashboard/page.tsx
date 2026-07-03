@@ -531,6 +531,8 @@ export default function AdminDashboard() {
   const [buyoutSaved,      setBuyoutSaved]       = useState(false)
   const [cleanDefSaving,   setCleanDefSaving]    = useState(false)
   const [cleanDefSaved,    setCleanDefSaved]     = useState(false)
+  const [gcalSyncOn,       setGcalSyncOn]        = useState(true)
+  const [gcalSyncSaving,   setGcalSyncSaving]    = useState(false)
 
   // ── Sets Manager ───────────────────────────────────────────────────────────
   const [setsList,     setSetsList]     = useState<StudioSet[]>([])
@@ -927,6 +929,10 @@ export default function AdminDashboard() {
       fetch('/api/admin/settings?key=buyout_rate')
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.value) setBuyoutRate(String(d.value)) })
+        .catch(() => {})
+      fetch('/api/admin/settings?key=gcal_sync_enabled')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.value != null) setGcalSyncOn(d.value === 'true') })
         .catch(() => {})
     }
   }, [view, fetchSets])
@@ -2270,6 +2276,44 @@ export default function AdminDashboard() {
                 </button>
                 {buyoutSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
               </div>
+            </div>
+
+            {/* Google Calendar sync toggle */}
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '20px 24px', marginBottom: 28 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>📅 GOOGLE CALENDAR SYNC</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 14, lineHeight: 1.5 }}>
+                Mirror confirmed bookings onto the madekulture Google Calendar (one event per set). Cancellations and reschedules update the calendar automatically. Turning this off stops new events — existing ones stay until their booking is cancelled.
+              </div>
+              <button
+                disabled={gcalSyncSaving}
+                onClick={async () => {
+                  const next = !gcalSyncOn
+                  setGcalSyncSaving(true)
+                  const res = await fetch('/api/admin/settings', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'gcal_sync_enabled', value: next ? 'true' : 'false' }),
+                  })
+                  if (res.ok) setGcalSyncOn(next)
+                  setGcalSyncSaving(false)
+                }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 10, cursor: gcalSyncSaving ? 'default' : 'pointer',
+                  background: 'transparent', border: 'none', padding: 0, fontFamily: 'Inter, sans-serif',
+                }}>
+                <span style={{
+                  width: 40, height: 22, borderRadius: 11, position: 'relative', transition: 'background 0.15s',
+                  background: gcalSyncOn ? '#4ade80' : 'rgba(255,255,255,0.15)', display: 'inline-block', flexShrink: 0,
+                }}>
+                  <span style={{
+                    position: 'absolute', top: 2, left: gcalSyncOn ? 20 : 2, width: 18, height: 18,
+                    borderRadius: '50%', background: '#fff', transition: 'left 0.15s',
+                  }} />
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: gcalSyncOn ? '#4ade80' : 'rgba(255,255,255,0.45)' }}>
+                  {gcalSyncSaving ? 'SAVING…' : gcalSyncOn ? 'ON — new bookings sync' : 'OFF — sync paused'}
+                </span>
+              </button>
             </div>
 
             {/* Default cleaning fees (discretionary) */}

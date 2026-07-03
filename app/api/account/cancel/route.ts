@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendCancellationEmail, sendCancellationOwnerAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
+import { deleteCalendarEvent } from '@/lib/gcal'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   // Fetch the booking — verify it belongs to this user
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, status, acuity_appointment_id, acuity_block_ids, auth_user_id, customers(name, email, phone), sets(name)')
+    .select('id, start_time, end_time, status, acuity_appointment_id, acuity_block_ids, gcal_event_id, auth_user_id, customers(name, email, phone), sets(name)')
     .eq('id', booking_id)
     .single()
 
@@ -56,10 +57,18 @@ export async function POST(req: NextRequest) {
   const blockIds = Array.isArray((booking as any).acuity_block_ids) ? (booking as any).acuity_block_ids : []
   if (blockIds.length) await deleteAcuityBlocks(blockIds)
 
+  // Remove the mirrored Google Calendar event, if one was created. Not gated on
+  // the sync toggle — if the event exists it should go, even if sync is now off.
+  const gcalEventId = (booking as any).gcal_event_id
+  if (gcalEventId) {
+    try { await deleteCalendarEvent(gcalEventId) }
+    catch (e) { console.error('[account cancel] gcal delete error (non-fatal):', e) }
+  }
+
   // Update Supabase booking status
   const { error: updateError } = await supabase
     .from('bookings')
-    .update({ status: 'cancelled', acuity_block_ids: [] })
+    .update({ status: 'cancelled', acuity_block_ids: [], gcal_event_id: null })
     .eq('id', booking_id)
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
