@@ -22,6 +22,21 @@ export default function KioskPage() {
     if (k) setKioskKey(k)
   }, [])
 
+  // Real visible height in px — old WebViews (Fire HD) misreport 100vh and
+  // don't support dvh, which pushed the input bar off-screen. innerHeight is
+  // the truth everywhere.
+  const [vh, setVh] = useState<number | null>(null)
+  useEffect(() => {
+    const measure = () => setVh(window.innerHeight)
+    measure()
+    window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
+    }
+  }, [])
+
   const [screen, setScreen]   = useState<Screen>('home')
   const [phone, setPhone]     = useState('')
   const [ciResult, setCi]     = useState<any>(null)
@@ -123,11 +138,8 @@ export default function KioskPage() {
   }
 
   // ── Styles ───────────────────────────────────────────────────────────────
-  // 100dvh = the REAL visible height (Fire/mobile browsers misreport 100vh,
-  // which pushed the chat input off-screen). Falls back to 100vh where dvh
-  // is unsupported.
   const wrap: React.CSSProperties = {
-    background: '#080808', height: '100vh', maxHeight: '100dvh', color: '#fff',
+    background: '#080808', height: vh ? `${vh}px` : '100vh', color: '#fff',
     fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column',
     userSelect: 'none', overflow: 'hidden',
   }
