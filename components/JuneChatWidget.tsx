@@ -177,7 +177,7 @@ export default function JuneChatWidget() {
           <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
             {msgs.length === 0 && (
               <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, padding: '8px 4px' }}>
-                Hey! I'm June 👋 Ask me about sets, pricing, availability, or how booking works. I'm an AI assistant — say the word if you'd rather talk to Teddy.
+                Hey! I'm June 👋 Ask me about sets, pricing, availability, or how booking works. Chats here are monitored by a real member of our team.
               </div>
             )}
             {msgs.map(bubble)}
