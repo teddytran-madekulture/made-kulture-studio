@@ -26,7 +26,9 @@ export default function AdminInboxPage() {
   const [reply, setReply]     = useState('')
   const [busy, setBusy]       = useState(false)
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({})
-  const [tab, setTab]               = useState<'convos' | 'kb'>('convos')
+  const [tab, setTab]               = useState<'convos' | 'kb' | 'tours'>('convos')
+  const [tours, setTours]           = useState<any[]>([])
+  const [tourBusy, setTourBusy]     = useState<string | null>(null)
   const [kb, setKb]                 = useState<KbEntry[]>([])
   const [kbEdits, setKbEdits]       = useState<Record<string, { topic: string; content: string }>>({})
   const [kbBusy, setKbBusy]         = useState<string | null>(null)
@@ -112,6 +114,31 @@ export default function AdminInboxPage() {
   }, [])
 
   useEffect(() => { if (tab === 'kb') loadKb() }, [tab, loadKb])
+
+  const loadTours = useCallback(async () => {
+    const r = await fetch('/api/admin/tours')
+    if (!r.ok) return
+    const d = await r.json()
+    setTours(d.tours ?? [])
+  }, [])
+
+  useEffect(() => {
+    if (tab !== 'tours') return
+    loadTours()
+    const iv = setInterval(loadTours, 15000)
+    return () => clearInterval(iv)
+  }, [tab, loadTours])
+
+  const decideTour = async (t: any, action: 'approve' | 'decline') => {
+    if (action === 'decline' && !window.confirm(`Decline ${t.name}'s tour? They'll get a polite text.`)) return
+    setTourBusy(t.id)
+    await fetch(`/api/tours/decide/${t.decision_token}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    })
+    await loadTours()
+    setTourBusy(null)
+  }
 
   const saveKb = async (id: string) => {
     const e = kbEdits[id]
@@ -230,7 +257,7 @@ export default function AdminInboxPage() {
             <a href="/admin/dashboard" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>← Dashboard</a>
             <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>JUNE</h1>
             <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-              {([['convos', 'INBOX'], ['kb', "KNOWLEDGE"]] as const).map(([t, lbl]) => (
+              {([['convos', 'INBOX'], ['kb', 'KNOWLEDGE'], ['tours', 'TOURS']] as const).map(([t, lbl]) => (
                 <button key={t} onClick={() => setTab(t)} style={{
                   ...label, padding: '7px 12px', cursor: 'pointer', borderRadius: 4,
                   background: tab === t ? 'rgba(212,168,67,0.15)' : 'transparent',
@@ -264,6 +291,47 @@ export default function AdminInboxPage() {
           </button>
           </div>
         </div>
+
+        {tab === 'tours' && (
+          <div style={{ maxWidth: 760 }}>
+            {tours.length === 0 && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No tour requests yet. They'll appear here (and buzz your phone) as they come in.</div>}
+            {tours.map(t => {
+              const when = new Date(t.start_time).toLocaleString('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+              const [bg, color, txt] =
+                t.status === 'pending'  ? ['rgba(212,168,67,0.15)', GOLD, 'PENDING'] :
+                t.status === 'approved' ? ['rgba(74,222,128,0.15)', '#4ade80', 'APPROVED'] :
+                ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.45)', t.status.toUpperCase()]
+              return (
+                <div key={t.id} style={{ border: `1px solid ${t.status === 'pending' ? 'rgba(212,168,67,0.5)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: 14, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700 }}>{when}</span>
+                    <span style={{ display: 'inline-flex', gap: 6 }}>
+                      {t.is_custom && <span style={{ ...label, background: 'rgba(251,191,36,0.15)', color: '#fbbf24', padding: '3px 7px', borderRadius: 3 }}>CUSTOM TIME</span>}
+                      <span style={{ ...label, background: bg, color, padding: '3px 7px', borderRadius: 3 }}>{txt}</span>
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)' }}>{t.name} · {t.phone}{t.email ? ` · ${t.email}` : ''}</div>
+                  {t.purpose && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>Planning: {t.purpose}</div>}
+                  {t.is_custom && t.status === 'pending' && (
+                    <div style={{ fontSize: 11, color: '#fbbf24', marginTop: 6 }}>Outside open shoot hours — approving means opening the studio for this.</div>
+                  )}
+                  {t.status === 'pending' && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button disabled={tourBusy === t.id} onClick={() => decideTour(t, 'approve')}
+                        style={{ ...label, background: '#4ade80', border: 'none', color: '#052e16', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}>
+                        APPROVE
+                      </button>
+                      <button disabled={tourBusy === t.id} onClick={() => decideTour(t, 'decline')}
+                        style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}>
+                        DECLINE
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {tab === 'kb' && (
           <div style={{ maxWidth: 760 }}>

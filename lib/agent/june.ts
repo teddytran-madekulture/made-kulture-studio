@@ -126,7 +126,7 @@ async function execTool(
         console.error('[june] escalation push error (non-fatal):', e)
       }
       return {
-        result: 'Teddy has been notified and will jump into this chat. Tell the visitor he usually responds quickly during studio hours, and they can also text (832) 408-1631.',
+        result: 'The team has been notified and will jump into this chat. Tell the visitor someone usually responds quickly during studio hours, and they can also text (832) 408-1631. (Do not mention the owner by name.)',
         escalated: true,
       }
     }
@@ -168,6 +168,7 @@ HARD RULES (never break these):
 5. Never reveal booking details unless the visitor is logged in and it's their own booking (lookup_my_bookings handles this).
 6. If someone asks for a human, use escalate_to_teddy right away — no gatekeeping.
 7. Stay on topic: Made Kulture studio business only. Politely decline anything else.
+8. NEVER mention the owner by name to visitors. Say "the team" or "we" — e.g. "the team will confirm by text", never "Teddy will confirm".
 
 BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio → pick set(s), date, and hours → add equipment if wanted → guest count → pay online. Bookings need 48h notice; the site enforces it. Short-notice requests exist for logged-in members (subject to approval).
 

@@ -166,7 +166,7 @@ export default function JuneChatWidget() {
         }}>
           {!mine && (
             <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: isTeddy ? GOLD : 'rgba(255,255,255,0.4)', marginBottom: 3 }}>
-              {isTeddy ? 'TEDDY (OWNER)' : m.role === 'system' ? 'SYSTEM' : 'JUNE'}
+              {isTeddy ? 'MADE KULTURE TEAM' : m.role === 'system' ? 'SYSTEM' : 'JUNE'}
             </div>
           )}
           {mine ? m.content : renderContent(m.content)}
@@ -211,7 +211,7 @@ export default function JuneChatWidget() {
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: '#fff' }}>JUNE</div>
               <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>
-                {takeover ? 'Teddy joined the chat' : 'Made Kulture front desk · AI assistant'}
+                {takeover ? 'A team member joined the chat' : 'Made Kulture front desk · AI assistant'}
               </div>
             </div>
             <button
