@@ -59,6 +59,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Team-channel unread flags — only for castings this user is on (author or confirmed).
+  const myTeamIds = new Set<string>()
+  for (const c of list) if (c.author_id === user.id) myTeamIds.add(c.id)
+  if (ids.length) {
+    const { data: myParts } = await service.from('casting_participants')
+      .select('casting_id').eq('user_id', user.id).eq('status', 'confirmed').in('casting_id', ids)
+    for (const p of myParts ?? []) myTeamIds.add(p.casting_id)
+  }
+  const unread: Record<string, boolean> = {}
+  if (myTeamIds.size) {
+    const teamIds = [...myTeamIds]
+    const [readsRes, msgsRes] = await Promise.all([
+      service.from('casting_reads').select('casting_id, last_read_at').eq('user_id', user.id).in('casting_id', teamIds),
+      service.from('casting_messages').select('casting_id, created_at').in('casting_id', teamIds).order('created_at', { ascending: false }),
+    ])
+    const readAt: Record<string, string> = {}
+    for (const r of readsRes.data ?? []) readAt[r.casting_id] = r.last_read_at
+    const latest: Record<string, string> = {}
+    for (const mrow of msgsRes.data ?? []) if (!latest[mrow.casting_id]) latest[mrow.casting_id] = mrow.created_at
+    for (const cid of teamIds) {
+      const lm = latest[cid]
+      if (lm && (!readAt[cid] || new Date(lm) > new Date(readAt[cid]))) unread[cid] = true
+    }
+  }
+
   const castings = list.map(c => ({
     id: c.id,
     title: c.title,
@@ -70,6 +95,7 @@ export async function GET(req: NextRequest) {
     created_at: c.created_at,
     author: { id: c.author_id, name: authors[c.author_id]?.full_name || '(member)', avatar_url: authors[c.author_id]?.avatar_url || null },
     counts: counts[c.id] ?? { interested: 0, confirmed: 0 },
+    has_unread_team: !!unread[c.id],
   }))
   return NextResponse.json({ castings })
 }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { estimatePlan, type Rates } from '@/lib/estimate'
+import CastingTeamChannel from '@/components/CastingTeamChannel'
 
 type Participant = { id: string; status: string; role: string | null; name: string; avatar_url: string | null; roles: string[] }
 type Casting = {
@@ -244,6 +245,8 @@ export default function CastingDetailPage() {
           )}
         </div>
       )}
+
+      {(isAuthor || myStatus === 'confirmed') && <CastingTeamChannel castingId={id} />}
     </div>
   )
 }

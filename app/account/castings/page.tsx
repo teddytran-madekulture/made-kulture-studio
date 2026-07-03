@@ -14,6 +14,7 @@ type Casting = {
   created_at: string
   author: { id: string; name: string; avatar_url: string | null }
   counts: { interested: number; confirmed: number }
+  has_unread_team?: boolean
 }
 
 const COMP_LABEL: Record<string, string> = { paid: 'Paid', unpaid: 'Unpaid', tfp: 'TFP' }
@@ -114,7 +115,10 @@ export default function CastingsPage() {
               <Link key={c.id} href={`/account/castings/${c.id}`}
                 style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '16px 18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-                  <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: '#fff' }}>{c.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    {c.has_unread_team && <span title="New team messages" style={{ width: 8, height: 8, borderRadius: '50%', background: '#e6c07a', flexShrink: 0 }} />}
+                    <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: '#fff' }}>{c.title}</div>
+                  </div>
                   <span style={{ background: cc.bg, color: cc.fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4, flexShrink: 0 }}>{COMP_LABEL[c.compensation_type]}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
