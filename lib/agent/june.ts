@@ -242,6 +242,21 @@ export async function runJune(opts: {
       .map((b: any) => b.text)
       .join('\n')
       .trim()
+    if (!text) {
+      // Log exactly what came back so empty replies are debuggable, then nudge
+      // the model once to answer in plain text.
+      console.error('[june] empty response:', JSON.stringify({
+        stop_reason: data.stop_reason,
+        blockTypes: (data.content ?? []).map((b: any) => b.type),
+        usage: data.usage,
+        round,
+      }))
+      if (round < MAX_TOOL_ROUNDS) {
+        messages.push({ role: 'assistant', content: [{ type: 'text', text: '…' }] })
+        messages.push({ role: 'user', content: '[system: your last reply was empty — please answer the visitor in plain text now]' })
+        continue
+      }
+    }
     return { reply: text || "Sorry — I glitched for a second. Mind asking that again?", escalated }
   }
 
