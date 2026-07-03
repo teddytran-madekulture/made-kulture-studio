@@ -111,9 +111,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data: c } = await service.from('castings').select('author_id').eq('id', params.id).maybeSingle()
+  const { data: c } = await service.from('castings').select('author_id, mood_board').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (c.author_id !== user.id) return NextResponse.json({ error: 'Not your casting.' }, { status: 403 })
+
+  // Clean up mood-board images so deleted castings don't orphan files in storage.
+  const board = Array.isArray((c as { mood_board?: { url?: string }[] }).mood_board) ? (c as { mood_board: { url?: string }[] }).mood_board : []
+  const paths = board.map(x => x?.url?.split('/casting-media/')[1]?.split('?')[0]).filter(Boolean) as string[]
+  if (paths.length) await service.storage.from('casting-media').remove(paths).catch(() => {})
+
   const { error } = await service.from('castings').delete().eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

@@ -35,5 +35,22 @@ export async function GET(req: NextRequest) {
     if (!error) swept++
   }
 
-  return NextResponse.json({ success: true, swept })
+  // Purge castings that lapsed over 90 days ago and were never renewed: remove
+  // their mood-board images from storage, then delete the rows (which cascades
+  // participants, team messages, and reads).
+  const purgeCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: dead } = await supabase
+    .from('castings').select('id, mood_board').lt('expires_at', purgeCutoff)
+  let purged = 0
+  for (const c of dead ?? []) {
+    const board = Array.isArray(c.mood_board) ? c.mood_board : []
+    const paths = board
+      .map((x: { url?: string }) => x?.url?.split('/casting-media/')[1]?.split('?')[0])
+      .filter(Boolean) as string[]
+    if (paths.length) await supabase.storage.from('casting-media').remove(paths).catch(() => {})
+    const { error } = await supabase.from('castings').delete().eq('id', c.id)
+    if (!error) purged++
+  }
+
+  return NextResponse.json({ success: true, swept, purged })
 }
