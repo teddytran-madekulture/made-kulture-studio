@@ -17,19 +17,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Compute tomorrow's date in Houston time (UTC-5, close enough for daily cron)
-  const now = new Date()
-  const houstonOffset = -5 * 60 // minutes
-  const houstonNow = new Date(now.getTime() + (houstonOffset - now.getTimezoneOffset()) * 60_000)
-  const tomorrow = new Date(houstonNow)
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const tomorrowStr = tomorrow.toISOString().slice(0, 10) // YYYY-MM-DD
+  // "Tomorrow" must be computed in HOUSTON time, and bookings bucketed by their
+  // Houston-local calendar date — not UTC. (A 7pm CT booking is already the next
+  // day in UTC, which used to make today's evening bookings get "tomorrow"
+  // reminders with UTC clock times like 12am–2am.)
+  const centralDateStr = (d: Date | string): string =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(d))
+  const centralHourDecimal = (iso: string): number => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date(iso))
+    const hh = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
+    const mm = Number(parts.find(p => p.type === 'minute')?.value ?? 0)
+    return (hh % 24) + (mm >= 30 ? 0.5 : 0)
+  }
 
-  // Query confirmed bookings that start tomorrow
-  const startOfDay = `${tomorrowStr}T00:00:00`
-  const endOfDay   = `${tomorrowStr}T23:59:59`
+  const todayCentral = centralDateStr(new Date())
+  const tomorrowStr = new Date(Date.parse(`${todayCentral}T12:00:00Z`) + 86_400_000)
+    .toISOString().slice(0, 10) // YYYY-MM-DD, Houston's tomorrow
 
-  const { data: bookings, error } = await supabase
+  // Query a generous UTC superset of Houston's tomorrow (covers CST & CDT),
+  // then keep only rows whose Houston-local date is exactly tomorrow.
+  const windowStart = `${tomorrowStr}T00:00:00-07:00`
+  const windowEnd   = `${tomorrowStr}T23:59:59+01:00`
+
+  const { data: rawBookings, error } = await supabase
     .from('bookings')
     .select(`
       id,
@@ -41,8 +53,10 @@ export async function GET(req: NextRequest) {
       customers ( name, email )
     `)
     .eq('status', 'confirmed')
-    .gte('start_time', startOfDay)
-    .lte('start_time', endOfDay)
+    .gte('start_time', windowStart)
+    .lte('start_time', windowEnd)
+
+  const bookings = (rawBookings ?? []).filter(b => centralDateStr(b.start_time) === tomorrowStr)
 
   if (error) {
     console.error('Cron reminders query error:', error)
@@ -62,8 +76,8 @@ export async function GET(req: NextRequest) {
 
     if (!customer?.email || !customer?.name) continue
 
-    const startHour = new Date(booking.start_time).getHours()
-    const endHour   = new Date(booking.end_time).getHours()
+    const startHour = centralHourDecimal(booking.start_time)
+    const endHour   = centralHourDecimal(booking.end_time)
 
     try {
       await sendBookingReminder({
