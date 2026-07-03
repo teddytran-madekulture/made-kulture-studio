@@ -15,6 +15,7 @@ type Casting = {
   author: { id: string; name: string; avatar_url: string | null }
   counts: { interested: number; confirmed: number }
   has_unread_team?: boolean
+  expires_at?: string | null
 }
 
 const COMP_LABEL: Record<string, string> = { paid: 'Paid', unpaid: 'Unpaid', tfp: 'TFP' }
@@ -119,7 +120,10 @@ export default function CastingsPage() {
                     {c.has_unread_team && <span title="New team messages" style={{ width: 8, height: 8, borderRadius: '50%', background: '#e6c07a', flexShrink: 0 }} />}
                     <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: '#fff' }}>{c.title}</div>
                   </div>
-                  <span style={{ background: cc.bg, color: cc.fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4, flexShrink: 0 }}>{COMP_LABEL[c.compensation_type]}</span>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {c.expires_at && new Date(c.expires_at) < new Date() && <span style={{ background: 'rgba(255,120,120,0.12)', color: '#ff9b9b', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>EXPIRED</span>}
+                    <span style={{ background: cc.bg, color: cc.fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>{COMP_LABEL[c.compensation_type]}</span>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
                   <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', background: '#1f1f1f', flexShrink: 0 }}>

@@ -38,9 +38,10 @@ async function notifyConfirmed(castingId: string, userId: string, authorId: stri
   }
   if (convId) {
     const asRole = role ? ` as ${role}` : ''
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
     await service.from('messages').insert({
       conversation_id: convId, sender_id: authorId,
-      body: `You're confirmed${asRole} for "${title}" — looking forward to working with you!`,
+      body: `You're confirmed${asRole} for "${title}" — looking forward to working with you!\n\nOpen the casting: ${appUrl}/account/castings/${castingId}`,
     })
   }
 }

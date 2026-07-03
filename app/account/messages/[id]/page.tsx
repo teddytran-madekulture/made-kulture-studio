@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { linkify } from '@/lib/linkify'
 
 type Msg = { id: string; sender_id: string; body: string; created_at: string }
 type Meta = { id: string; me: string; other: { id: string; name: string; avatar_url: string | null } }
@@ -109,7 +110,7 @@ export default function ThreadPage() {
                 border: mine ? 'none' : '1px solid rgba(255,255,255,0.1)',
                 borderRadius: 14, padding: '9px 13px', fontFamily: 'Inter', fontSize: 14, lineHeight: 1.4,
                 whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              }}>{m.body}</div>
+              }}>{linkify(m.body, mine ? '#1a56db' : '#8ab4f8')}</div>
             </div>
           )
         })}

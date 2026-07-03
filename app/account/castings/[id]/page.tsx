@@ -4,14 +4,16 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { estimatePlan, type Rates } from '@/lib/estimate'
 import CastingTeamChannel from '@/components/CastingTeamChannel'
+import MoodBoard from '@/components/MoodBoard'
 
-type Participant = { id: string; status: string; role: string | null; name: string; avatar_url: string | null; roles: string[] }
+type Participant = { id: string; status: string; role: string | null; pledge_type?: string; pledge_value?: number | null; name: string; avatar_url: string | null; roles: string[] }
 type Casting = {
   id: string; title: string; description: string | null
   compensation_type: 'paid' | 'unpaid' | 'tfp'; roles_needed: string[]
   plan_mode: 'none' | 'set' | 'buyout'; set_slug: string | null; hours: number | null; guests: number | null
   equipment: { id: string; name: string; rate: number; quantity: number }[]
   shoot_date: string | null; start_hour: number | null; estimated_cost: number | null; status: string
+  mood_board?: { url: string }[]; expires_at?: string | null
   author: { id: string; name: string; avatar_url: string | null }
 }
 
@@ -33,11 +35,16 @@ export default function CastingDetailPage() {
   const [busy, setBusy] = useState(false)
   const [rates, setRates] = useState<Rates | null>(null)
   const [roleChoice, setRoleChoice] = useState<Record<string, string>>({}) // per-interested-person role picker
+  const [me, setMe] = useState<string | null>(null)
+  const [pledgeType, setPledgeType] = useState('none')
+  const [pledgeVal, setPledgeVal] = useState('')
 
   const load = () => fetch(`/api/castings/${id}`).then(async r => {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setError(d.error ?? 'Could not load.'); setLoading(false); return }
-    setCasting(d.casting); setParticipants(d.participants ?? []); setIsAuthor(d.isAuthor); setMyStatus(d.myStatus); setLoading(false)
+    setCasting(d.casting); setParticipants(d.participants ?? []); setIsAuthor(d.isAuthor); setMyStatus(d.myStatus); setMe(d.me ?? null); setLoading(false)
+    const mine = (d.participants ?? []).find((p: Participant) => p.id === d.me)
+    if (mine) { setPledgeType(mine.pledge_type ?? 'none'); setPledgeVal(mine.pledge_value != null ? String(mine.pledge_value) : '') }
   }).catch(() => { setError('Could not load.'); setLoading(false) })
 
   useEffect(() => {
@@ -58,8 +65,17 @@ export default function CastingDetailPage() {
   const confirmed = participants.filter(p => p.status === 'confirmed')
   const interested = participants.filter(p => p.status === 'interested')
   const total = estimate?.total ?? casting?.estimated_cost ?? 0
-  const splitBy = confirmed.length + 1
-  const perPerson = total > 0 ? Math.ceil(total / splitBy) : 0
+  const expired = !!casting?.expires_at && new Date(casting.expires_at).getTime() < Date.now()
+  const active = casting?.status === 'open' && !expired
+  const contributory = (casting?.compensation_type === 'unpaid' || casting?.compensation_type === 'tfp') && total > 0
+
+  const pledgeDollars = (p: Participant) =>
+    p.pledge_type === 'amount' ? Number(p.pledge_value) || 0
+      : p.pledge_type === 'percent' ? Math.round(((Number(p.pledge_value) || 0) / 100) * total)
+        : 0
+  const pledgers = confirmed.filter(p => p.pledge_type && p.pledge_type !== 'none' && Number(p.pledge_value) > 0)
+  const totalPledged = Math.min(total, pledgers.reduce((s, p) => s + pledgeDollars(p), 0))
+  const remaining = Math.max(0, total - totalPledged)
 
   const interestClick = async () => {
     setBusy(true)
@@ -91,6 +107,19 @@ export default function CastingDetailPage() {
     setBusy(true)
     const res = await fetch(`/api/castings/${id}`, { method: 'DELETE' })
     if (res.ok) router.push('/account/castings'); else setBusy(false)
+  }
+  const renew = async () => {
+    setBusy(true)
+    await fetch(`/api/castings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ renew: true }) })
+    setBusy(false); load()
+  }
+  const savePledge = async () => {
+    setBusy(true)
+    await fetch(`/api/castings/${id}/pledge`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pledgeType, pledgeValue: pledgeType === 'none' ? null : Number(pledgeVal) }),
+    })
+    setBusy(false); load()
   }
 
   const bookHref = (() => {
@@ -140,7 +169,11 @@ export default function CastingDetailPage() {
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 30, margin: 0, lineHeight: 1.1 }}>{casting.title}</h1>
         <span style={{ background: cc.bg, color: cc.fg, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 4, flexShrink: 0 }}>{cc.label}</span>
       </div>
-      {casting.status === 'closed' && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff9b9b', marginBottom: 8 }}>This casting is closed.</div>}
+      {(casting.status === 'closed' || expired) && (
+        <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff9b9b', marginBottom: 8 }}>
+          {expired ? 'This casting has expired — renew it to put it back on the board.' : 'This casting is closed.'}
+        </div>
+      )}
 
       <Link href={`/account/directory/${casting.author.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'inherit', marginBottom: 14 }}>
         <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', background: '#1f1f1f' }}>
@@ -150,6 +183,9 @@ export default function CastingDetailPage() {
       </Link>
 
       {casting.description && <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: '0 0 16px' }}>{casting.description}</p>}
+
+      <MoodBoard castingId={id} canEdit={isAuthor} initial={casting.mood_board ?? []} />
+
 
       {casting.roles_needed.length > 0 && (
         <div style={{ marginBottom: 18 }}>
@@ -173,7 +209,7 @@ export default function CastingDetailPage() {
       )}
 
       {/* Not the author — interest / message */}
-      {!isAuthor && casting.status === 'open' && (
+      {!isAuthor && active && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
           {myStatus == null
             ? <button onClick={interestClick} disabled={busy} style={{ background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '11px 20px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>I&apos;m interested</button>
@@ -194,10 +230,49 @@ export default function CastingDetailPage() {
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}><span>{l.label}</span><span>${l.amount}</span></div>
           ))}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 15, fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8, marginTop: 6 }}><span>Estimate</span><span>${total}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: '#e6c07a', marginTop: 8 }}>
-            <span>Split {splitBy} way{splitBy > 1 ? 's' : ''} (you + {confirmed.length} confirmed)</span><span>≈ ${perPerson} each</span>
+
+          {contributory ? (
+            <>
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 8, lineHeight: 1.5 }}>
+                {casting.author.name.split(' ')[0]} (organizer) covers the studio by default. Confirmed members can chip in voluntarily.
+              </div>
+              {pledgers.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  {pledgers.map(p => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 3 }}>
+                      <span>{p.name}</span>
+                      <span>{p.pledge_type === 'percent' ? `${p.pledge_value}% · ` : ''}${pledgeDollars(p)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: '#e6c07a', marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}><span>Pledged by team</span><span>${totalPledged}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 3 }}><span>On organizer</span><span>${remaining}</span></div>
+            </>
+          ) : null}
+
+          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+            {contributory ? 'Contributions are voluntary and settled between members — the studio is booked & paid by the organizer.' : 'Estimate only. The organizer books & pays the studio.'}
           </div>
-          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>Estimate + suggested split only. The organizer books & pays the studio; settle shares amongst yourselves.</div>
+        </div>
+      )}
+
+      {/* Your voluntary contribution (confirmed members, unpaid/TFP) */}
+      {contributory && myStatus === 'confirmed' && !isAuthor && (
+        <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '14px 16px', marginBottom: 18 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>YOUR CONTRIBUTION — OPTIONAL</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={pledgeType} onChange={e => setPledgeType(e.target.value)} style={{ ...selectStyle, fontSize: 13, padding: '8px 10px' }}>
+              <option value="none">Not contributing</option>
+              <option value="amount">A dollar amount</option>
+              <option value="percent">A percentage</option>
+            </select>
+            {pledgeType !== 'none' && (
+              <input type="number" min={1} value={pledgeVal} onChange={e => setPledgeVal(e.target.value)} placeholder={pledgeType === 'percent' ? '%' : '$'}
+                style={{ width: 90, background: '#0e0e0e', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, padding: '8px 10px', fontFamily: 'Inter', fontSize: 13, color: '#fff', outline: 'none' }} />
+            )}
+            {smallBtn('Save', savePledge)}
+          </div>
         </div>
       )}
 
@@ -209,6 +284,7 @@ export default function CastingDetailPage() {
           {casting.status === 'open'
             ? smallBtn('Close casting', () => setStatus('closed'))
             : smallBtn('Reopen', () => setStatus('open'))}
+          {expired && smallBtn('Renew (30 days)', renew)}
           {smallBtn('Delete', del, true)}
         </div>
       )}

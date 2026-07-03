@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
   let query = service.from('castings').select('*')
   if (mine === '1') query = query.eq('author_id', user.id)
-  else query = query.eq('status', 'open')
+  else query = query.eq('status', 'open').gt('expires_at', new Date().toISOString()) // hide expired from the board
   if (comp) query = query.eq('compensation_type', comp)
   if (role) query = query.contains('roles_needed', [role])
   if (q) query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`)
@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
     author: { id: c.author_id, name: authors[c.author_id]?.full_name || '(member)', avatar_url: authors[c.author_id]?.avatar_url || null },
     counts: counts[c.id] ?? { interested: 0, confirmed: 0 },
     has_unread_team: !!unread[c.id],
+    expires_at: c.expires_at ?? null,
   }))
   return NextResponse.json({ castings })
 }
@@ -107,6 +108,14 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!(await requireMember(user.id))) {
     return NextResponse.json({ error: 'Join the directory to post castings.' }, { status: 403 })
+  }
+
+  // Cap active castings per member (open + not expired).
+  const { count: activeCount } = await service
+    .from('castings').select('id', { count: 'exact', head: true })
+    .eq('author_id', user.id).eq('status', 'open').gt('expires_at', new Date().toISOString())
+  if ((activeCount ?? 0) >= 3) {
+    return NextResponse.json({ error: 'You can have up to 3 active castings at once. Close or let one expire before posting another.' }, { status: 400 })
   }
 
   const b = await req.json().catch(() => ({}))
@@ -139,6 +148,7 @@ export async function POST(req: NextRequest) {
     start_hour: b.start_hour != null ? Number(b.start_hour) : null,
     estimated_cost: b.estimated_cost != null ? Number(b.estimated_cost) : null,
     status: 'open',
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
   }
 
   const { data, error } = await service.from('castings').insert(row).select('id').single()

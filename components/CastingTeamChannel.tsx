@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { linkify } from '@/lib/linkify'
 
 type Msg = { id: string; sender_id: string; body: string; reply_to_id: string | null; created_at: string }
 type Member = { id: string; name: string; avatar_url: string | null; is_author: boolean }
@@ -12,6 +13,8 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [replyTo, setReplyTo] = useState<Msg | null>(null)
+  const [pinnedId, setPinnedId] = useState<string | null>(null)
+  const [amAuthor, setAmAuthor] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -30,7 +33,8 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
       .then(async r => {
         const d = await r.json().catch(() => ({}))
         if (!r.ok) { setError(d.error ?? 'Could not load the channel.'); setLoading(false); return }
-        setMe(d.me); setMembers(d.members ?? []); setMessages(d.messages ?? []); setLoading(false)
+        setMe(d.me); setMembers(d.members ?? []); setMessages(d.messages ?? [])
+        setPinnedId(d.pinned_message_id ?? null); setAmAuthor(!!d.am_author); setLoading(false)
       })
       .catch(() => { setError('Could not load the channel.'); setLoading(false) })
   }
@@ -64,6 +68,14 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
     setInput(''); setReplyTo(null); setSending(false)
   }
 
+  const setPin = async (messageId: string | null) => {
+    setPinnedId(messageId) // optimistic
+    await fetch(`/api/castings/${castingId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned_message_id: messageId }),
+    }).catch(() => {})
+  }
+
   const excerpt = (s: string) => (s.length > 60 ? s.slice(0, 60) + '…' : s)
 
   return (
@@ -77,6 +89,19 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
         <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', padding: '12px 0' }}>Loading…</div>
       ) : (
         <>
+          {pinnedId && (() => {
+            const pm = messages.find(x => x.id === pinnedId)
+            if (!pm) return null
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(230,192,122,0.08)', border: '1px solid rgba(230,192,122,0.25)', borderRadius: 6, padding: '8px 10px', marginTop: 10 }}>
+                <span style={{ flexShrink: 0, fontSize: 12 }}>📌</span>
+                <div style={{ minWidth: 0, flex: 1, fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <strong style={{ color: '#fff' }}>{nameOf(pm.sender_id)}:</strong> {pm.body}
+                </div>
+                {amAuthor && <button type="button" onClick={() => setPin(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>Unpin</button>}
+              </div>
+            )
+          })()}
           <div ref={listRef} style={{ maxHeight: 'min(52vh, 440px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 4px 4px' }}>
             {messages.length === 0 && (
               <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center', margin: '16px 0' }}>
@@ -95,9 +120,12 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
                         <span style={{ fontWeight: 600 }}>{nameOf(parent.sender_id)}</span>: {excerpt(parent.body)}
                       </div>
                     )}
-                    {m.body}
+                    {linkify(m.body, mine ? '#1a56db' : '#8ab4f8')}
                   </div>
-                  <button type="button" onClick={() => setReplyTo(m)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.35)', fontFamily: 'Inter', fontSize: 10, cursor: 'pointer', padding: '2px 4px', margin: '1px 2px 0' }}>Reply</button>
+                  <div style={{ display: 'flex', gap: 4, margin: '1px 2px 0' }}>
+                    <button type="button" onClick={() => setReplyTo(m)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.35)', fontFamily: 'Inter', fontSize: 10, cursor: 'pointer', padding: '2px 4px' }}>Reply</button>
+                    {amAuthor && <button type="button" onClick={() => setPin(pinnedId === m.id ? null : m.id)} style={{ background: 'transparent', border: 'none', color: pinnedId === m.id ? '#e6c07a' : 'rgba(255,255,255,0.35)', fontFamily: 'Inter', fontSize: 10, cursor: 'pointer', padding: '2px 4px' }}>{pinnedId === m.id ? 'Unpin' : 'Pin'}</button>}
+                  </div>
                 </div>
               )
             })}

@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .from('customer_profiles').select('id, full_name, avatar_url').eq('id', c.author_id).maybeSingle()
 
   const { data: parts } = await service
-    .from('casting_participants').select('user_id, status, role, created_at')
+    .from('casting_participants').select('user_id, status, role, pledge_type, pledge_value, created_at')
     .eq('casting_id', params.id).order('created_at', { ascending: true })
 
   const partIds = (parts ?? []).map(p => p.user_id)
@@ -42,6 +42,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     id: p.user_id,
     status: p.status,
     role: p.role ?? null,
+    pledge_type: p.pledge_type ?? 'none',
+    pledge_value: p.pledge_value ?? null,
     name: profs[p.user_id]?.full_name || '(member)',
     avatar_url: profs[p.user_id]?.avatar_url || null,
     roles: profs[p.user_id]?.roles || [],
@@ -56,6 +58,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     participants,
     isAuthor: c.author_id === user.id,
     myStatus,
+    me: user.id,
   })
 }
 
@@ -88,6 +91,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       id: String(e.id), name: String(e.name ?? '').slice(0, 80), rate: Number(e.rate) || 0, quantity: Math.max(1, Number(e.quantity) || 1),
     })).slice(0, 30)
   }
+  if (Array.isArray(b.mood_board)) {
+    patch.mood_board = b.mood_board.filter((x: { url?: unknown }) => x && x.url).map((x: { url: unknown }) => ({ url: String(x.url) })).slice(0, 6)
+  }
+  // Renew: back on the board for another 30 days (also reopens if it was closed).
+  if (b.renew === true) {
+    patch.expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    patch.status = 'open'
+  }
+  if ('pinned_message_id' in b) patch.pinned_message_id = b.pinned_message_id || null
 
   const { error } = await service.from('castings').update(patch).eq('id', params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

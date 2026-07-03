@@ -50,12 +50,18 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .select('id, sender_id, body, reply_to_id, created_at')
     .eq('casting_id', params.id).order('created_at', { ascending: true }).limit(300)
 
+  const { data: cRow } = await service.from('castings').select('pinned_message_id').eq('id', params.id).maybeSingle()
+
   // Mark read.
   await service.from('casting_reads')
     .upsert({ casting_id: params.id, user_id: user.id, last_read_at: new Date().toISOString() },
       { onConflict: 'casting_id,user_id' })
 
-  return NextResponse.json({ me: user.id, members, messages: messages ?? [] })
+  return NextResponse.json({
+    me: user.id, members, messages: messages ?? [],
+    pinned_message_id: cRow?.pinned_message_id ?? null,
+    am_author: m.authorId === user.id,
+  })
 }
 
 // POST { body, replyToId? } — send a message to the team channel.
