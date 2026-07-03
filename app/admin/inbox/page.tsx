@@ -22,6 +22,7 @@ export default function AdminInboxPage() {
   const [msgs, setMsgs]       = useState<Msg[]>([])
   const [reply, setReply]     = useState('')
   const [busy, setBusy]       = useState(false)
+  const [draftEdits, setDraftEdits] = useState<Record<string, string>>({})
   const [juneOn, setJuneOn]   = useState<boolean | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const selRef = useRef<string | null>(null)
@@ -81,6 +82,22 @@ export default function AdminInboxPage() {
       body: JSON.stringify({ message: reply.trim() }),
     })
     if (r.ok) { setReply(''); await loadConvo(sel.id); await loadList() }
+    setBusy(false)
+  }
+
+  const draftAction = async (messageId: string, action: 'send' | 'discard') => {
+    if (!sel || busy) return
+    setBusy(true)
+    const res = await fetch(`/api/admin/inbox/${sel.id}/draft`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId, action, content: draftEdits[messageId] }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      alert(d.error || 'Draft action failed')
+    }
+    setDraftEdits(e => { const { [messageId]: _, ...rest } = e; return rest })
+    await Promise.all([loadConvo(sel.id), loadList()])
     setBusy(false)
   }
 
@@ -185,6 +202,29 @@ export default function AdminInboxPage() {
 
                 <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: 16, maxHeight: 520 }}>
                   {msgs.map(m => {
+                    if (m.role === 'draft') {
+                      return (
+                        <div key={m.id} style={{ marginBottom: 12, border: `1px dashed ${GOLD}`, borderRadius: 8, padding: 12, background: 'rgba(212,168,67,0.05)' }}>
+                          <div style={{ ...label, color: GOLD, marginBottom: 8 }}>✉️ JUNE'S DRAFT — NOT SENT YET</div>
+                          <textarea
+                            value={draftEdits[m.id] ?? m.content}
+                            onChange={e => setDraftEdits(d => ({ ...d, [m.id]: e.target.value }))}
+                            rows={Math.min(14, Math.max(5, (draftEdits[m.id] ?? m.content).split('\n').length + 1))}
+                            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, lineHeight: 1.5, padding: 10, outline: 'none', borderRadius: 6, fontFamily: 'Inter, sans-serif', resize: 'vertical' }}
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button disabled={busy} onClick={() => draftAction(m.id, 'send')}
+                              style={{ ...label, background: GOLD, border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', borderRadius: 4 }}>
+                              APPROVE & SEND
+                            </button>
+                            <button disabled={busy} onClick={() => { if (window.confirm('Discard this draft?')) draftAction(m.id, 'discard') }}
+                              style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '8px 14px', cursor: 'pointer', borderRadius: 4 }}>
+                              DISCARD
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    }
                     const mine = m.role === 'teddy'
                     const user = m.role === 'user'
                     return (
@@ -207,6 +247,11 @@ export default function AdminInboxPage() {
                   })}
                 </div>
 
+                {sel.channel === 'email' ? (
+                  <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                    Email thread — approve or edit June's draft above. (To write your own reply, edit her draft before sending, or reply from your mailbox.)
+                  </div>
+                ) : (
                 <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: 8 }}>
                   <input
                     value={reply}
@@ -217,6 +262,7 @@ export default function AdminInboxPage() {
                   />
                   <button onClick={sendReply} disabled={busy || !reply.trim()} style={{ ...label, background: reply.trim() ? '#fff' : 'rgba(255,255,255,0.1)', color: reply.trim() ? '#080808' : 'rgba(255,255,255,0.3)', border: 'none', padding: '0 16px', cursor: reply.trim() ? 'pointer' : 'default', borderRadius: 4 }}>SEND</button>
                 </div>
+                )}
               </>
             )}
           </div>
