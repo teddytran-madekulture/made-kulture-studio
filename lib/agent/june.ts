@@ -108,13 +108,8 @@ async function execTool(
         .from('agent_conversations')
         .update({ status: 'needs_teddy' })
         .eq('id', ctx.conversationId)
-      // Owner SMS + push alerts — non-fatal.
-      try {
-        const { sendOwnerSMS } = await import('@/lib/sms')
-        await sendOwnerSMS(`🔔 June needs you: ${String(input?.reason || 'escalation').slice(0, 120)}\nAdmin → June Inbox to reply.`)
-      } catch (e) {
-        console.error('[june] escalation SMS error (non-fatal):', e)
-      }
+      // Owner push alert — non-fatal. (Owner SMS dropped 2026-07-03: push covers
+      // it free; customer-facing SMS unaffected.)
       try {
         const { sendOwnerPush } = await import('@/lib/push')
         await sendOwnerPush({

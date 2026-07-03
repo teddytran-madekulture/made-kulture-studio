@@ -12,7 +12,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { fetchNewEmails, markProcessed, juneEmailConfigured } from '@/lib/agent/gmail'
 import { runJune, juneConfigured, JuneTurn } from '@/lib/agent/june'
-import { sendOwnerSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 
 const supabase = createClient(
@@ -119,9 +118,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (drafted > 0) {
-      await sendOwnerSMS(
-        `📬 June drafted ${drafted} email repl${drafted === 1 ? 'y' : 'ies'} — review in Admin → June Inbox.`
-      ).catch(e => console.error('[agent-email] owner SMS error:', e))
+      // Owner SMS dropped 2026-07-03 — push covers it free.
       await sendOwnerPush({
         title: '📬 June drafted a reply',
         body: `${drafted} email draft${drafted === 1 ? '' : 's'} waiting for your approval.`,

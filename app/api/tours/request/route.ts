@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
-import { sendOwnerSMS, toE164 } from '@/lib/sms'
+import { toE164 } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 
 const supabase = createClient(
@@ -96,17 +96,14 @@ export async function POST(req: NextRequest) {
   const when = centralLabel(start)
   const decideUrl = `${APP_URL}/tour-admin/${token}`
 
-  // Notify Teddy — non-fatal. Custom = outside open hours, he'd have to come in.
-  const kind = isCustom ? '🚶 CUSTOM tour request (studio not otherwise open)' : '🚶 Tour request (during open shoot hours)'
-  await Promise.allSettled([
-    sendOwnerSMS(`${kind}: ${when} — ${name} (${phone})${purpose ? ` · ${purpose}` : ''}\nApprove/decline: ${decideUrl}`),
-    sendOwnerPush({
-      title: isCustom ? '🚶 CUSTOM tour request' : '🚶 Tour request',
-      body: `${when} — ${name}${purpose ? ` · ${purpose}` : ''}`,
-      url: `/tour-admin/${token}`,
-      tag: `tour-${created.id}`,
-    }),
-  ])
+  // Notify Teddy — push only (owner SMS dropped 2026-07-03; push is free).
+  void decideUrl
+  await sendOwnerPush({
+    title: isCustom ? '🚶 CUSTOM tour request' : '🚶 Tour request',
+    body: `${when} — ${name}${purpose ? ` · ${purpose}` : ''}`,
+    url: `/tour-admin/${token}`,
+    tag: `tour-${created.id}`,
+  }).catch(e => console.error('[tours] owner push error (non-fatal):', e))
 
   return NextResponse.json({
     success: true,
