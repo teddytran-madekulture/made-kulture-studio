@@ -1461,6 +1461,13 @@ export default function AdminDashboard() {
           }}>
             <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: 800 }}>J</span>June Inbox
           </a>
+          <a href="/admin/stack" style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+          }}>
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>⚙</span>Services & Stack
+          </a>
 
           {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['props', '🛋', 'Props']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
