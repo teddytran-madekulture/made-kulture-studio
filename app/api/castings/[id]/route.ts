@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .from('customer_profiles').select('id, full_name, avatar_url').eq('id', c.author_id).maybeSingle()
 
   const { data: parts } = await service
-    .from('casting_participants').select('user_id, status, role, pledge_type, pledge_value, created_at')
+    .from('casting_participants').select('user_id, status, role, created_at')
     .eq('casting_id', params.id).order('created_at', { ascending: true })
 
   const partIds = (parts ?? []).map(p => p.user_id)

@@ -6,7 +6,7 @@ import { estimatePlan, type Rates } from '@/lib/estimate'
 import CastingTeamChannel from '@/components/CastingTeamChannel'
 import MoodBoard from '@/components/MoodBoard'
 
-type Participant = { id: string; status: string; role: string | null; pledge_type?: string; pledge_value?: number | null; name: string; avatar_url: string | null; roles: string[] }
+type Participant = { id: string; status: string; role: string | null; name: string; avatar_url: string | null; roles: string[] }
 type Casting = {
   id: string; title: string; description: string | null
   compensation_type: 'paid' | 'unpaid' | 'tfp'; roles_needed: string[]
@@ -35,16 +35,11 @@ export default function CastingDetailPage() {
   const [busy, setBusy] = useState(false)
   const [rates, setRates] = useState<Rates | null>(null)
   const [roleChoice, setRoleChoice] = useState<Record<string, string>>({}) // per-interested-person role picker
-  const [me, setMe] = useState<string | null>(null)
-  const [pledgeType, setPledgeType] = useState('none')
-  const [pledgeVal, setPledgeVal] = useState('')
 
   const load = () => fetch(`/api/castings/${id}`).then(async r => {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setError(d.error ?? 'Could not load.'); setLoading(false); return }
-    setCasting(d.casting); setParticipants(d.participants ?? []); setIsAuthor(d.isAuthor); setMyStatus(d.myStatus); setMe(d.me ?? null); setLoading(false)
-    const mine = (d.participants ?? []).find((p: Participant) => p.id === d.me)
-    if (mine) { setPledgeType(mine.pledge_type ?? 'none'); setPledgeVal(mine.pledge_value != null ? String(mine.pledge_value) : '') }
+    setCasting(d.casting); setParticipants(d.participants ?? []); setIsAuthor(d.isAuthor); setMyStatus(d.myStatus); setLoading(false)
   }).catch(() => { setError('Could not load.'); setLoading(false) })
 
   useEffect(() => {
@@ -67,15 +62,6 @@ export default function CastingDetailPage() {
   const total = estimate?.total ?? casting?.estimated_cost ?? 0
   const expired = !!casting?.expires_at && new Date(casting.expires_at).getTime() < Date.now()
   const active = casting?.status === 'open' && !expired
-  const contributory = (casting?.compensation_type === 'unpaid' || casting?.compensation_type === 'tfp') && total > 0
-
-  const pledgeDollars = (p: Participant) =>
-    p.pledge_type === 'amount' ? Number(p.pledge_value) || 0
-      : p.pledge_type === 'percent' ? Math.round(((Number(p.pledge_value) || 0) / 100) * total)
-        : 0
-  const pledgers = confirmed.filter(p => p.pledge_type && p.pledge_type !== 'none' && Number(p.pledge_value) > 0)
-  const totalPledged = Math.min(total, pledgers.reduce((s, p) => s + pledgeDollars(p), 0))
-  const remaining = Math.max(0, total - totalPledged)
 
   const interestClick = async () => {
     setBusy(true)
@@ -111,14 +97,6 @@ export default function CastingDetailPage() {
   const renew = async () => {
     setBusy(true)
     await fetch(`/api/castings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ renew: true }) })
-    setBusy(false); load()
-  }
-  const savePledge = async () => {
-    setBusy(true)
-    await fetch(`/api/castings/${id}/pledge`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pledgeType, pledgeValue: pledgeType === 'none' ? null : Number(pledgeVal) }),
-    })
     setBusy(false); load()
   }
 
@@ -230,49 +208,7 @@ export default function CastingDetailPage() {
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}><span>{l.label}</span><span>${l.amount}</span></div>
           ))}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 15, fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8, marginTop: 6 }}><span>Estimate</span><span>${total}</span></div>
-
-          {contributory ? (
-            <>
-              <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 8, lineHeight: 1.5 }}>
-                {casting.author.name.split(' ')[0]} (organizer) covers the studio by default. Confirmed members can chip in voluntarily.
-              </div>
-              {pledgers.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  {pledgers.map(p => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 3 }}>
-                      <span>{p.name}</span>
-                      <span>{p.pledge_type === 'percent' ? `${p.pledge_value}% · ` : ''}${pledgeDollars(p)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: '#e6c07a', marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}><span>Pledged by team</span><span>${totalPledged}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 3 }}><span>On organizer</span><span>${remaining}</span></div>
-            </>
-          ) : null}
-
-          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
-            {contributory ? 'Contributions are voluntary and settled between members — the studio is booked & paid by the organizer.' : 'Estimate only. The organizer books & pays the studio.'}
-          </div>
-        </div>
-      )}
-
-      {/* Your voluntary contribution (confirmed members, unpaid/TFP) */}
-      {contributory && myStatus === 'confirmed' && !isAuthor && (
-        <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '14px 16px', marginBottom: 18 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>YOUR CONTRIBUTION — OPTIONAL</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <select value={pledgeType} onChange={e => setPledgeType(e.target.value)} style={{ ...selectStyle, fontSize: 13, padding: '8px 10px' }}>
-              <option value="none">Not contributing</option>
-              <option value="amount">A dollar amount</option>
-              <option value="percent">A percentage</option>
-            </select>
-            {pledgeType !== 'none' && (
-              <input type="number" min={1} value={pledgeVal} onChange={e => setPledgeVal(e.target.value)} placeholder={pledgeType === 'percent' ? '%' : '$'}
-                style={{ width: 90, background: '#0e0e0e', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, padding: '8px 10px', fontFamily: 'Inter', fontSize: 13, color: '#fff', outline: 'none' }} />
-            )}
-            {smallBtn('Save', savePledge)}
-          </div>
+          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>Estimate only. The organizer books &amp; pays the studio.</div>
         </div>
       )}
 

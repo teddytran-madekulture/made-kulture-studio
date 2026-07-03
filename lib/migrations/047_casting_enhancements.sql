@@ -11,10 +11,6 @@ alter table castings add column if not exists mood_board jsonb not null default 
 -- Pinned team-channel message (author-set).
 alter table castings add column if not exists pinned_message_id uuid references casting_messages(id) on delete set null;
 
--- Voluntary pledges from confirmed members (display-only — no payments handled).
-alter table casting_participants add column if not exists pledge_type  text not null default 'none'; -- none | amount | percent
-alter table casting_participants add column if not exists pledge_value numeric;
-
 -- Storage bucket for mood-board images (public read, per-user-folder writes).
 insert into storage.buckets (id, name, public)
   values ('casting-media', 'casting-media', true)
