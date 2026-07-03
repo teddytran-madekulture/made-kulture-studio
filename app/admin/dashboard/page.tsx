@@ -1453,6 +1453,15 @@ export default function AdminDashboard() {
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
 
+          {/* June Inbox — separate page, styled like a nav item with her gold accent */}
+          <a href="/admin/inbox" style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#d4a843',
+          }}>
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: 800 }}>J</span>June Inbox
+          </a>
+
           {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['props', '🛋', 'Props']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
