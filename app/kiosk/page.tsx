@@ -144,6 +144,7 @@ export default function KioskPage() {
           kioskGuest: ciResult
             ? `${ciResult.firstName} — checked in, ${ciResult.setName} until ${ciResult.until}`
             : undefined,
+          kioskBookingId: ciResult?.bookingId ?? undefined,
         }),
       })
       const d = await r.json()

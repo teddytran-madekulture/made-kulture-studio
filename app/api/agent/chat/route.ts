@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
   const kioskGuest = isKiosk && typeof body?.kioskGuest === 'string'
     ? body.kioskGuest.replace(/[\r\n]/g, ' ').slice(0, 160)
     : null
+  const kioskBookingId = isKiosk && typeof body?.kioskBookingId === 'string' &&
+    /^[0-9a-f-]{36}$/i.test(body.kioskBookingId) ? body.kioskBookingId : null
   const page = isKiosk
     ? (kioskGuest ? `kiosk (guest at the tablet: ${kioskGuest})` : 'kiosk')
     : typeof body?.page === 'string' ? body.page.slice(0, 200) : null
@@ -139,6 +141,7 @@ export async function POST(req: NextRequest) {
       authUserId: convo.auth_user_id ?? authUserId,
       visitorName: convo.visitor_name ?? visitorName,
       page,
+      kioskBookingId,
     })
     await supabase.from('agent_messages').insert({ conversation_id: convo.id, role: 'agent', content: result.reply })
     await supabase.from('agent_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', convo.id)

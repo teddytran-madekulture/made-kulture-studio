@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     success: true,
     alreadyCheckedIn: alreadyIn,
+    bookingId: active.id,
     firstName: (cust?.name ?? 'there').split(' ')[0],
     setName: set?.name ?? 'Full Studio',
     until: centralTimeLabel(active.end_time),

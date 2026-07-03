@@ -47,6 +47,18 @@ const TOOLS = [
     input_schema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'request_extension',
+    description: 'KIOSK ONLY: start a session extension (+1 or +2 hours) for the booking happening right now. This NEVER charges anyone directly — it texts a secure confirm-and-pay link to the phone number on the booking, and only that phone can approve the charge. Use when a checked-in guest asks for more time. If the guest is not the checked-in one, ask for the phone number on the booking and pass it as phone.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        hours: { type: 'integer', description: '1 or 2' },
+        phone: { type: 'string', description: 'Phone number on the booking — only needed if there is no checked-in guest context' },
+      },
+      required: ['hours'],
+    },
+  },
+  {
     name: 'escalate_to_teddy',
     description: 'Flag this conversation for Teddy (the owner). Use for: refund/cancellation exceptions, complaints, custom or messy-concept requests, pricing negotiations, anything not covered by your knowledge, or when the visitor asks for a human. Teddy gets notified immediately.',
     input_schema: {
@@ -62,9 +74,71 @@ const TOOLS = [
 async function execTool(
   name: string,
   input: any,
-  ctx: { supabase: any; conversationId: string; authUserId: string | null }
+  ctx: { supabase: any; conversationId: string; authUserId: string | null; kiosk?: boolean; kioskBookingId?: string | null }
 ): Promise<{ result: string; escalated?: boolean }> {
   try {
+    if (name === 'request_extension') {
+      if (!ctx.kiosk) return { result: 'Extensions can only be started from the in-studio kiosk. Tell the visitor to use the front-desk tablet at the studio, or text (832) 408-1631.' }
+      const hours = Number(input?.hours)
+      if (hours !== 1 && hours !== 2) return { result: 'Only 1 or 2 extra hours can be added this way.' }
+
+      const { planExtension, findActiveBookingByPhone } = await import('@/lib/extensions')
+      let bookingId: string | null = ctx.kioskBookingId ?? null
+      if (!bookingId && input?.phone) bookingId = await findActiveBookingByPhone(String(input.phone))
+      if (!bookingId) return { result: 'No booking identified. Ask the guest for the phone number on the booking, then call this tool again with it.' }
+
+      const p = await planExtension(bookingId, hours)
+      if ('error' in p) return { result: p.error }
+      if (p.conflict) return { result: `The set is booked right after this session — the extra ${hours} hour(s) are not available. Suggest they text (832) 408-1631 to see other options.` }
+      if (!p.hasCardOnFile) return { result: 'There is no card on file for this booking, so it cannot be self-paid. Tell them to tap GET THE TEAM or text (832) 408-1631 to arrange it.' }
+      if (!p.customerPhone) return { result: 'No phone number on this booking — tell them to text (832) 408-1631.' }
+
+      // One live request per booking: reuse a pending unexpired one, else create.
+      const { randomUUID } = await import('crypto')
+      const nowISO = new Date().toISOString()
+      const { data: existing } = await ctx.supabase
+        .from('extension_requests')
+        .select('id, confirm_token, hours')
+        .eq('booking_id', bookingId).eq('status', 'pending')
+        .gt('expires_at', nowISO)
+        .maybeSingle()
+
+      let token: string
+      if (existing && existing.hours === hours) {
+        token = existing.confirm_token
+      } else {
+        if (existing) {
+          await ctx.supabase.from('extension_requests').update({ status: 'cancelled' }).eq('id', existing.id)
+        }
+        token = randomUUID().replace(/-/g, '') + randomUUID().slice(0, 8)
+        const { error } = await ctx.supabase.from('extension_requests').insert({
+          booking_id: bookingId,
+          hours,
+          amount_cents: p.priceCents,
+          confirm_token: token,
+          expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        })
+        if (error) return { result: 'Could not create the extension request — tell them to text (832) 408-1631.' }
+      }
+
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
+      try {
+        const { sendSMS } = await import('@/lib/sms')
+        await sendSMS(
+          p.customerPhone,
+          `Made Kulture: add ${hours} hour${hours > 1 ? 's' : ''} on ${p.setName} for $${(p.priceCents / 100).toFixed(2)}?\nConfirm & pay (card on file): ${appUrl}/extend/${token}\nLink expires in 15 min. Didn't ask for this? Just ignore it.`
+        )
+      } catch (e) {
+        console.error('[june] extension SMS error:', e)
+        return { result: 'Could not send the confirmation text — tell them to text (832) 408-1631.' }
+      }
+
+      const last4 = p.customerPhone.replace(/\D/g, '').slice(-4)
+      return {
+        result: `Confirmation text sent to the phone on the booking (ending ${last4}). It is $${(p.priceCents / 100).toFixed(2)} for ${hours} extra hour(s) on ${p.setName}, charged to the card on file ONLY if they tap confirm on their own phone within 15 minutes. Tell the guest to check that phone.`,
+      }
+    }
+
     if (name === 'get_sets_and_pricing') {
       const [setsRes, buyout] = await Promise.all([
         fetch(`${APP_URL}/api/sets`).then(r => r.json()).catch(() => null),
@@ -155,7 +229,8 @@ LINK BUTTONS: When you point a visitor to a page, ALWAYS write it as a markdown 
 CURRENT TIME (Houston): ${centralNow()}
 VISITOR: ${opts.loggedIn ? `logged in${opts.visitorName ? ` as ${opts.visitorName}` : ''}` : 'not logged in'}${opts.page ? ` · currently on page: ${opts.page}` : ''}
 ${opts.page === 'kiosk' ? `
-KIOSK MODE: This visitor is PHYSICALLY AT THE STUDIO right now, talking to you on the wall tablet. Adjust accordingly: give in-person directions (where things are in the building) when your knowledge covers it, remind them to check in on this tablet if they're here for a booking, and for anything hands-on (unlock something, equipment help, spills, emergencies) use escalate_to_teddy or tell them to tap "GET THE TEAM" on this screen. Don't send them to website links for things they can do at the tablet.` : ''}
+KIOSK MODE: This visitor is PHYSICALLY AT THE STUDIO right now, talking to you on the wall tablet. Adjust accordingly: give in-person directions (where things are in the building) when your knowledge covers it, remind them to check in on this tablet if they're here for a booking, and for anything hands-on (unlock something, equipment help, spills, emergencies) use escalate_to_teddy or tell them to tap "GET THE TEAM" on this screen. Don't send them to website links for things they can do at the tablet.
+EXTENSIONS AT THE KIOSK: If a guest wants extra time on their CURRENT session, use request_extension (1-2 hours). It never charges from this tablet — a confirm-and-pay text goes to the phone number on the booking, and only that phone can approve. If there's no checked-in guest context, ask for the booking's phone number first. Never promise the extension is done until they confirm on their phone.` : ''}
 
 HARD RULES (never break these):
 1. Only state policies, prices, and rules that appear in your KNOWLEDGE section or come back from your tools. If it's not there, say you'll check — and use escalate_to_teddy.
@@ -192,6 +267,7 @@ export async function runJune(opts: {
   authUserId?: string | null
   visitorName?: string | null
   page?: string | null
+  kioskBookingId?: string | null   // set when a kiosk guest checked in this session
 }): Promise<JuneResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('June is not configured (ANTHROPIC_API_KEY missing)')
@@ -239,6 +315,8 @@ export async function runJune(opts: {
           supabase: opts.supabase,
           conversationId: opts.conversationId,
           authUserId: opts.authUserId ?? null,
+          kiosk: opts.page?.startsWith('kiosk') ?? false,
+          kioskBookingId: opts.kioskBookingId ?? null,
         })
         if (out.escalated) escalated = true
         results.push({ type: 'tool_result', tool_use_id: block.id, content: out.result })
