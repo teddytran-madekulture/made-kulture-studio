@@ -91,8 +91,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       id: String(e.id), name: String(e.name ?? '').slice(0, 80), rate: Number(e.rate) || 0, quantity: Math.max(1, Number(e.quantity) || 1),
     })).slice(0, 30)
   }
+  if (typeof b.mature === 'boolean') patch.mature = b.mature
   if (Array.isArray(b.mood_board)) {
-    patch.mood_board = b.mood_board.filter((x: { url?: unknown }) => x && x.url).map((x: { url: unknown }) => ({ url: String(x.url) })).slice(0, 6)
+    patch.mood_board = b.mood_board.filter((x: { url?: unknown }) => x && x.url).map((x: { url: unknown; mature?: unknown }) => ({ url: String(x.url), mature: !!x.mature })).slice(0, 6)
   }
   // Renew: back on the board for another 30 days (also reopens if it was closed).
   if (b.renew === true) {

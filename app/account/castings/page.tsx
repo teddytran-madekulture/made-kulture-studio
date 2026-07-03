@@ -16,6 +16,7 @@ type Casting = {
   counts: { interested: number; confirmed: number }
   has_unread_team?: boolean
   expires_at?: string | null
+  mature?: boolean
 }
 
 const COMP_LABEL: Record<string, string> = { paid: 'Paid', unpaid: 'Unpaid', tfp: 'TFP' }
@@ -122,6 +123,7 @@ export default function CastingsPage() {
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     {c.expires_at && new Date(c.expires_at) < new Date() && <span style={{ background: 'rgba(255,120,120,0.12)', color: '#ff9b9b', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>EXPIRED</span>}
+                    {c.mature && <span style={{ background: 'rgba(230,192,122,0.15)', color: '#e6c07a', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>18+</span>}
                     <span style={{ background: cc.bg, color: cc.fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>{COMP_LABEL[c.compensation_type]}</span>
                   </div>
                 </div>

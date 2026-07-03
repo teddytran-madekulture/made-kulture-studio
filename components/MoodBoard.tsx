@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-type Img = { url: string }
+type Img = { url: string; mature?: boolean }
 const MAX = 6
 
 // Downscale to a sane size before upload (keeps aspect ratio).
@@ -28,12 +28,17 @@ function resizeToBlob(file: File, maxDim = 1600, quality = 0.85): Promise<Blob> 
   })
 }
 
-export default function MoodBoard({ castingId, canEdit, initial }: { castingId: string; canEdit: boolean; initial: Img[] }) {
+export default function MoodBoard({ castingId, canEdit, initial, castingMature = false }: { castingId: string; canEdit: boolean; initial: Img[]; castingMature?: boolean }) {
   const supabase = createClient()
   const [images, setImages] = useState<Img[]>(initial ?? [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const [revealMature, setRevealMature] = useState(false)
+
+  const toggleMature = (url: string) => persist(images.map(i => (i.url === url ? { ...i, mature: !i.mature } : i)))
+  const gated = (img: Img) => !canEdit && (castingMature || !!img.mature) && !revealMature
+  const hasGateable = castingMature || images.some(i => i.mature)
 
   const persist = async (next: Img[]) => {
     setImages(next)
@@ -72,18 +77,36 @@ export default function MoodBoard({ castingId, canEdit, initial }: { castingId: 
 
   return (
     <div style={{ marginBottom: 18 }}>
-      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>MOOD BOARD</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)' }}>MOOD BOARD</div>
+        {!canEdit && hasGateable && !revealMature && (
+          <button type="button" onClick={() => setRevealMature(true)}
+            style={{ background: 'transparent', border: '1px solid rgba(230,192,122,0.5)', color: '#e6c07a', borderRadius: 4, padding: '5px 10px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer' }}>Reveal 18+ — I&apos;m over 18</button>
+        )}
+      </div>
       {error && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginBottom: 8 }}>{error}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
-        {images.map(img => (
+        {images.map(img => {
+          const isGated = gated(img)
+          return (
           <div key={img.url} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414' }}>
-            <img src={img.url} alt="" onClick={() => setLightbox(img.url)} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} />
+            <img src={img.url} alt="" onClick={() => { if (!isGated) setLightbox(img.url) }} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: isGated ? 'default' : 'zoom-in', filter: isGated ? 'blur(16px)' : 'none' }} />
+            {isGated && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', pointerEvents: 'none' }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, color: '#e6c07a', border: '1px solid rgba(230,192,122,0.5)', borderRadius: 4, padding: '3px 6px' }}>18+</span>
+              </div>
+            )}
             {canEdit && (
-              <button type="button" onClick={() => remove(img.url)} title="Remove"
-                style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 4, width: 22, height: 22, cursor: 'pointer', fontSize: 12 }}>✕</button>
+              <>
+                <button type="button" onClick={() => remove(img.url)} title="Remove"
+                  style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 4, width: 22, height: 22, cursor: 'pointer', fontSize: 12 }}>✕</button>
+                <button type="button" onClick={() => toggleMature(img.url)} title="Mark 18+"
+                  style={{ position: 'absolute', bottom: 5, left: 5, background: img.mature ? '#e6c07a' : 'rgba(0,0,0,0.65)', color: img.mature ? '#080808' : '#fff', border: 'none', borderRadius: 4, padding: '0 6px', height: 20, cursor: 'pointer', fontFamily: 'Inter', fontSize: 9, fontWeight: 700 }}>18+</button>
+              </>
             )}
           </div>
-        ))}
+          )
+        })}
         {canEdit && images.length < MAX && (
           <label style={{ aspectRatio: '1 / 1', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: busy ? 'default' : 'pointer', color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.02)' }}>
             <span style={{ fontSize: 20, lineHeight: 1 }}>{busy ? '…' : '+'}</span>

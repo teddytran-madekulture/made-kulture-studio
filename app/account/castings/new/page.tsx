@@ -14,6 +14,7 @@ export default function NewCastingPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [comp, setComp] = useState<'paid' | 'unpaid' | 'tfp'>('tfp')
+  const [mature, setMature] = useState(false)
   const [roles, setRoles] = useState<string[]>([])
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
 
@@ -48,6 +49,7 @@ export default function NewCastingPage() {
       setTitle(c.title ?? '')
       setDescription(c.description ?? '')
       setComp(['paid', 'unpaid', 'tfp'].includes(c.compensation_type) ? c.compensation_type : 'tfp')
+      setMature(!!c.mature)
       setRoles(Array.isArray(c.roles_needed) ? c.roles_needed : [])
       setMode(['none', 'set', 'buyout'].includes(c.plan_mode) ? c.plan_mode : 'none')
       setSetSlug(c.set_slug ?? '')
@@ -95,7 +97,7 @@ export default function NewCastingPage() {
     if (!title.trim()) { setError('Give your casting a title.'); return }
     setSaving(true); setError('')
     const payload = {
-      title, description, compensation_type: comp, roles_needed: roles,
+      title, description, compensation_type: comp, roles_needed: roles, mature,
       plan_mode: mode,
       set_slug: mode === 'set' ? setSlug : null,
       hours: mode === 'none' ? null : (Number(hours) || null),
@@ -151,6 +153,11 @@ export default function NewCastingPage() {
 
       <label style={label}>COMPENSATION</label>
       <div style={{ display: 'flex', gap: 8 }}>{compChip('paid', 'Paid')}{compChip('unpaid', 'Unpaid')}{compChip('tfp', 'TFP (trade)')}</div>
+
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginTop: 18, fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+        <input type="checkbox" checked={mature} onChange={e => setMature(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, marginTop: 2 }} />
+        <span>This casting is <strong style={{ color: '#e6c07a' }}>18+ / mature</strong> — adds an 18+ badge and blurs the mood board until viewers confirm they&apos;re over 18.</span>
+      </label>
 
       <label style={label}>ROLES YOU NEED</label>
       <RolePicker value={roles} onChange={setRoles} options={roleOptions} max={8} label="Who do you need?" hint="(pick up to 8)" />

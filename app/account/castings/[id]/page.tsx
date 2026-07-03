@@ -13,7 +13,7 @@ type Casting = {
   plan_mode: 'none' | 'set' | 'buyout'; set_slug: string | null; hours: number | null; guests: number | null
   equipment: { id: string; name: string; rate: number; quantity: number }[]
   shoot_date: string | null; start_hour: number | null; estimated_cost: number | null; status: string
-  mood_board?: { url: string }[]; expires_at?: string | null
+  mood_board?: { url: string; mature?: boolean }[]; expires_at?: string | null; mature?: boolean
   author: { id: string; name: string; avatar_url: string | null }
 }
 
@@ -145,7 +145,10 @@ export default function CastingDetailPage() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, margin: '14px 0 6px' }}>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 30, margin: 0, lineHeight: 1.1 }}>{casting.title}</h1>
-        <span style={{ background: cc.bg, color: cc.fg, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 4, flexShrink: 0 }}>{cc.label}</span>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          {casting.mature && <span style={{ background: 'rgba(230,192,122,0.15)', color: '#e6c07a', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 4 }}>18+</span>}
+          <span style={{ background: cc.bg, color: cc.fg, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 4 }}>{cc.label}</span>
+        </div>
       </div>
       {(casting.status === 'closed' || expired) && (
         <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff9b9b', marginBottom: 8 }}>
@@ -162,7 +165,7 @@ export default function CastingDetailPage() {
 
       {casting.description && <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: '0 0 16px' }}>{casting.description}</p>}
 
-      <MoodBoard castingId={id} canEdit={isAuthor} initial={casting.mood_board ?? []} />
+      <MoodBoard castingId={id} canEdit={isAuthor} initial={casting.mood_board ?? []} castingMature={!!casting.mature} />
 
 
       {casting.roles_needed.length > 0 && (

@@ -97,6 +97,7 @@ export async function GET(req: NextRequest) {
     counts: counts[c.id] ?? { interested: 0, confirmed: 0 },
     has_unread_team: !!unread[c.id],
     expires_at: c.expires_at ?? null,
+    mature: !!c.mature,
   }))
   return NextResponse.json({ castings })
 }
@@ -148,6 +149,7 @@ export async function POST(req: NextRequest) {
     start_hour: b.start_hour != null ? Number(b.start_hour) : null,
     estimated_cost: b.estimated_cost != null ? Number(b.estimated_cost) : null,
     status: 'open',
+    mature: !!b.mature,
     expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
   }
 
