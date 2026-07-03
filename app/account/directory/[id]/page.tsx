@@ -69,6 +69,17 @@ export default function MemberProfilePage() {
   const [myCastings, setMyCastings] = useState<{ id: string; title: string }[]>([])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [invitedIds, setInvitedIds] = useState<string[]>([])
+  const [listOpen, setListOpen] = useState<null | 'followers' | 'following'>(null)
+  const [listMembers, setListMembers] = useState<{ id: string; name: string; avatar_url: string | null; roles: string[] }[]>([])
+  const [listLoading, setListLoading] = useState(false)
+
+  const openList = (type: 'followers' | 'following') => {
+    if (!member) return
+    setListOpen(type); setListLoading(true); setListMembers([])
+    fetch(`/api/follows/${member.id}?type=${type}`).then(r => (r.ok ? r.json() : null)).then(d => {
+      setListMembers(d?.members ?? []); setListLoading(false)
+    }).catch(() => setListLoading(false))
+  }
 
   const invite = async (castingId: string) => {
     if (!member) return
@@ -163,9 +174,13 @@ export default function MemberProfilePage() {
               <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 14, marginTop: 10, fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
-            <span><strong style={{ color: '#fff' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}</span>
-            <span><strong style={{ color: '#fff' }}>{member.following}</strong> following</span>
+          <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
+            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(255,255,255,0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+              <strong style={{ color: '#fff' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}
+            </button>
+            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(255,255,255,0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+              <strong style={{ color: '#fff' }}>{member.following}</strong> following
+            </button>
           </div>
         </div>
       </div>
@@ -285,6 +300,38 @@ export default function MemberProfilePage() {
         <div onClick={() => setLightbox(null)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100, cursor: 'zoom-out' }}>
           <img src={lightbox} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 6 }} />
+        </div>
+      )}
+
+      {/* Followers / following list */}
+      {listOpen && (
+        <div onClick={() => setListOpen(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#0e0e0e', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, width: '100%', maxWidth: 380, maxHeight: '70vh', overflowY: 'auto', padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.03em' }}>{listOpen === 'followers' ? 'FOLLOWERS' : 'FOLLOWING'}</div>
+              <button type="button" onClick={() => setListOpen(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            {listLoading ? (
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', padding: '12px 0' }}>Loading…</div>
+            ) : listMembers.length === 0 ? (
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', padding: '12px 0' }}>{listOpen === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {listMembers.map(m => (
+                  <Link key={m.id} href={`/account/directory/${m.id}`} onClick={() => setListOpen(null)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', padding: '8px 6px', borderRadius: 6 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: '#1f1f1f', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {m.avatar_url ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>{m.name.charAt(0).toUpperCase()}</span>}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#fff' }}>{m.name}</div>
+                      {m.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.roles.join(' · ')}</div>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
