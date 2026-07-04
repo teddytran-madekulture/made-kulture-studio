@@ -955,9 +955,9 @@ function BookingWizard() {
                 </div>
                 <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
                   I agree to receive text messages from Made Kulture at the number above, including booking confirmations and reminders. Msg &amp; data rates may apply. Reply STOP to opt out.{' '}
-                  <a href="https://madekulture.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Terms</a>
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Terms</a>
                   {' '}·{' '}
-                  <a href="https://madekulture.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
+                  <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
                 </p>
               </div>
 
@@ -1523,6 +1523,29 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           // Google Pay not available on this device/browser — card form is the fallback
         }
 
+        // Apple Pay — appears in Safari once madekulture.com is registered with Square.
+        // Stays hidden (fails gracefully) until then.
+        try {
+          const apReq = payments.paymentRequest({
+            countryCode: 'US', currencyCode: 'USD',
+            total: { amount: grandTotalRef.current.toFixed(2), label: 'Made Kulture Studio' },
+          })
+          const applePay = await payments.applePay(apReq)
+          const btn = document.getElementById('apple-pay-button')
+          if (btn) {
+            btn.style.display = 'block'
+            btn.addEventListener('click', async () => {
+              try {
+                const tok = await applePay.tokenize()
+                if (tok.status === 'OK') submitBooking(tok.token)
+                else setPayError(tok.errors?.[0]?.message || 'Apple Pay failed')
+              } catch { setPayError('Apple Pay failed — try a card.') }
+            })
+          }
+        } catch {
+          // Apple Pay unavailable (non-Safari) or domain not yet registered
+        }
+
         if (mounted) setSdkReady(true)
       })
       .catch(err => { if (mounted) setSdkError(err.message) })
@@ -1621,6 +1644,8 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           </div>
         ) : (
           <>
+            {/* Apple Pay button — hidden until the domain is registered with Square (Safari only) */}
+            <div id="apple-pay-button" style={{ display: 'none', height: 48, marginBottom: 12, WebkitAppearance: '-apple-pay-button', borderRadius: 4, overflow: 'hidden', cursor: 'pointer' } as any} />
             {/* Google Pay button (auto-hides if unsupported) */}
             <div ref={googlePayContainerRef} style={{ marginBottom: googlePayReady ? 16 : 0 }}>
               <div id="google-pay-button" />

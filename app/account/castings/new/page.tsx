@@ -163,7 +163,7 @@ export default function NewCastingPage() {
         <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, background: 'rgba(230,192,122,0.06)', border: '1px solid rgba(230,192,122,0.2)', borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>
           18+ flags mature themes for collaborators — it does <strong style={{ color: '#e6c07a' }}>not</strong> permit open nudity in a shared session. Nude or boudoir shoots require a solo booking or full buyout, and all content must follow the{' '}
           <a href="/studio-rules" target="_blank" style={{ color: '#e6c07a' }}>studio rules</a> and{' '}
-          <a href="https://madekulture.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }}>content standards</a>.
+          <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }}>content standards</a>.
         </div>
       )}
 

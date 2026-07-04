@@ -373,8 +373,8 @@ export default function ProfilePage() {
             <input type="checkbox" id="notify_sms" checked={!!form.notify_sms} onChange={e => setForm(f => ({ ...f, notify_sms: e.target.checked }))} style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0, cursor: 'pointer' }} />
             <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55 }}>
               Text me about new messages and casting interest. By checking this you agree to receive recurring automated text messages from <strong style={{ color: 'rgba(255,255,255,0.7)' }}>Made Kulture</strong>. Message frequency varies. Message &amp; data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
-              <a href="https://madekulture.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Terms</a> and{' '}
-              <a href="https://madekulture.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>.
+              <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Terms</a> and{' '}
+              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>.
             </span>
           </label>
         )}
