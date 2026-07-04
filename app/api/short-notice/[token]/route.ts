@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   // Notify the customer — non-fatal.
   await Promise.allSettled([
     sendShortNoticeApprovedEmail({ customerName: reqRow.customer_name || '', customerEmail: reqRow.customer_email, grantedUntil: until }),
-    reqRow.customer_phone ? sendSMS(reqRow.customer_phone, `✅ Made Kulture: you're approved to book short-notice through ${until}. Book at https://made-kulture-studio.vercel.app/availability`) : Promise.resolve(),
+    reqRow.customer_phone ? sendSMS(reqRow.customer_phone, `✅ Made Kulture: you're approved to book short-notice through ${until}. Book at ${(process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')}/availability`) : Promise.resolve(),
   ])
 
   return NextResponse.json({ ok: true, status: 'approved', granted_until: until })

@@ -339,7 +339,7 @@ export async function sendNewBookingAlert(data: NewBookingAlertData) {
       </td></tr>` : ''}
     </table>
 
-    <a href="https://made-kulture-studio.vercel.app/admin/dashboard" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:12px 24px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">View in Dashboard</a>
+    <a href="${APP_URL}/admin/dashboard" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:12px 24px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">View in Dashboard</a>
 
     <p style="margin:20px 0 0;font-size:11px;color:#555;">Booking ID: ${bookingId}</p>
   `
@@ -632,7 +632,7 @@ export async function sendShortNoticeApprovedEmail(data: {
   const body = `
     <h1 style="margin:0 0 8px;font-size:20px;color:#fff;">You're cleared to book short-notice</h1>
     <p style="margin:0 0 20px;font-size:14px;color:#aaa;line-height:1.6;">Hi ${esc(first)} — you can now book inside the 48-hour window through <strong style="color:#fff;">${formatDateLabel(data.grantedUntil)}</strong>. Head to availability and grab your time.</p>
-    <a href="https://made-kulture-studio.vercel.app/availability" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">Book now</a>
+    <a href="${APP_URL}/availability" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">Book now</a>
   `
   return sendEmail('short_notice_approved', {
     from: FROM_EMAIL,

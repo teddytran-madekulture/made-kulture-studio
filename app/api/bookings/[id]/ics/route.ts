@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const details = [
     `Your Made Kulture session: ${setName}.`,
     (b as any).door_code ? `Front-door code: ${(b as any).door_code} (works during your booked time).` : '',
-    'Manage your booking at https://made-kulture-studio.vercel.app/account',
+    `Manage your booking at ${(process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')}/account`,
   ].filter(Boolean).join('\n')
 
   const ev: CalEvent = {

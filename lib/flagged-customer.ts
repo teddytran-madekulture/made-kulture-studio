@@ -3,6 +3,7 @@ import twilio from 'twilio'
 
 const OWNER_PHONE = '+18324081631'
 const OWNER_EMAIL = 'teddytran@madekulture.com'
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
 // ─── Pre-booking ban check ────────────────────────────────────────────────────
 // Call this BEFORE charging the customer. Returns { banned: true } if they
@@ -78,7 +79,7 @@ export async function checkBannedAndAlert(
             <tr><td style="padding:10px 0;color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.1em;">TIME</td>
                 <td style="padding:10px 0;font-size:14px;">${attempt.startTime} – ${attempt.endTime}</td></tr>
           </table>
-          <a href="https://made-kulture-studio.vercel.app/admin" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 28px;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.1em;">VIEW IN ADMIN →</a>
+          <a href="${APP_URL}/admin" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 28px;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.1em;">VIEW IN ADMIN →</a>
         </div>
       `,
     })
@@ -155,7 +156,7 @@ export async function checkAndAlertFlaggedCustomer(
       `📍 ${booking.setName}`,
       `📅 ${booking.date} · ${booking.startTime}–${booking.endTime}`,
       ``,
-      `Review at made-kulture-studio.vercel.app/admin`,
+      `Review at ${APP_URL.replace(/^https?:\/\//, '')}/admin`,
     ].join('\n')
 
     await twilioClient.messages.create({
@@ -201,7 +202,7 @@ export async function checkAndAlertFlaggedCustomer(
                 <td style="padding:10px 0;font-size:14px;">${booking.startTime} – ${booking.endTime}</td></tr>
           </table>
 
-          <a href="https://made-kulture-studio.vercel.app/admin"
+          <a href="${APP_URL}/admin"
              style="display:inline-block;background:${accentColor};color:#000;padding:12px 28px;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.1em;">
             VIEW IN ADMIN →
           </a>
