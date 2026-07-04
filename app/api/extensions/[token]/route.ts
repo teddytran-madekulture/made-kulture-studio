@@ -74,19 +74,37 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
   const b = p.booking as any
   const customer = b.customers as any
 
-  // Resolve the card: the booking's own card on file, else the customer's
-  // saved cards in Square (first enabled one).
-  let sourceCardId: string | null = b.square_card_on_file_id ?? null
-  if (!sourceCardId) {
-    try {
-      const { result } = await square.cardsApi.listCards(undefined, customer.square_customer_id)
-      const card = (result.cards ?? []).find((c: any) => c.enabled !== false)
-      sourceCardId = card?.id ?? null
-    } catch (e) {
-      console.error('[extension] card lookup failed', e)
+  // Resolve the card. Saved cards can live on EITHER Square customer identity:
+  // the guest "customers" record (booking flow) or the logged-in account
+  // profile (customer_profiles). Check both.
+  let sourceCardId: string | null = null
+  let chargeCustomerId: string | null = null
+
+  if (b.square_card_on_file_id && customer?.square_customer_id) {
+    sourceCardId = b.square_card_on_file_id
+    chargeCustomerId = customer.square_customer_id
+  } else {
+    const candidates: string[] = []
+    if (customer?.square_customer_id) candidates.push(customer.square_customer_id)
+    if (b.auth_user_id) {
+      const { data: prof } = await db
+        .from('customer_profiles').select('square_customer_id').eq('id', b.auth_user_id).maybeSingle()
+      if (prof?.square_customer_id && !candidates.includes(prof.square_customer_id)) {
+        candidates.push(prof.square_customer_id)
+      }
+    }
+    for (const cid of candidates) {
+      try {
+        const { result } = await square.cardsApi.listCards(undefined, cid)
+        const card = (result.cards ?? []).find((c: any) => c.enabled !== false)
+        if (card?.id) { sourceCardId = card.id; chargeCustomerId = cid; break }
+      } catch (e) {
+        console.error('[extension] card lookup failed for customer', cid, e)
+      }
     }
   }
-  if (!sourceCardId) {
+
+  if (!sourceCardId || !chargeCustomerId) {
     return NextResponse.json({ error: 'No saved card found on your account — text (832) 408-1631 and we\'ll sort it out.' }, { status: 400 })
   }
 
