@@ -366,6 +366,11 @@ function BookingWizard() {
   // studio buyouts not surcharged). Must mirror the server so the total matches.
   const totalSetHours = booking.type === 'studio' ? 0 : setCart.reduce((s, it) => s + (it.endHour - it.startHour), 0)
   const guestSurcharge = loggedIn ? 0 : guestSurchargePerHour * totalSetHours
+  // Displayed set-rate range reflecting the visitor's rate (guest vs member).
+  const guestAdd = loggedIn ? 0 : guestSurchargePerHour
+  const setBasePrices = sets.map(s => s.price)
+  const minSetRate = (setBasePrices.length ? Math.min(...setBasePrices) : 40) + guestAdd
+  const maxSetRate = (setBasePrices.length ? Math.max(...setBasePrices) : 75) + guestAdd
 
   const grandTotal   = spaceTotal + discountedEquipTotal + guestFee + guestSurcharge
 
@@ -560,7 +565,7 @@ function BookingWizard() {
           <StepWrapper title="HOW WOULD YOU LIKE TO BOOK?">
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
               {[
-                { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: 'Reserve one set by the hour. $40–$75/hr.',  limit: 'Up to 5 people per set', price: 'FROM $40/HR' },
+                { type: 'set' as BookingType,    label: 'INDIVIDUAL SET',        sub: `Reserve one set by the hour. $${minSetRate}–$${maxSetRate}/hr.`,  limit: 'Up to 5 people per set', price: `FROM $${minSetRate}/HR` },
                 { type: 'studio' as BookingType, label: 'FULL STUDIO TAKEOVER',  sub: 'Entire warehouse — all sets, private.',       limit: 'Up to 30 people',       price: ratesLoaded ? `$${buyoutRate}/HR · ${STUDIO_MIN_HOURS}HR MIN` : 'LOADING RATE…' },
               ].map(opt => (
                 <button key={opt.type} onClick={() => { setBooking(b => ({ ...b, type: opt.type })); if (opt.type === 'studio') setStep(2) }}
@@ -631,7 +636,7 @@ function BookingWizard() {
                   onMouseLeave={e => { if (booking.setId !== s.id) (e.currentTarget as HTMLButtonElement).style.background = '#0d0d0d' }}
                 >
                   <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: booking.setId === s.id ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', marginBottom: 10 }}>
-                    ${s.price}/HR {s.minHours > 1 ? `· ${s.minHours}HR MIN` : ''}
+                    ${s.price + (loggedIn ? 0 : guestSurchargePerHour)}/HR{!loggedIn && guestSurchargePerHour > 0 ? ` · members $${s.price}` : ''} {s.minHours > 1 ? `· ${s.minHours}HR MIN` : ''}
                   </div>
                   <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, color: booking.setId === s.id ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 6 }}>
                     {s.name.toUpperCase()}

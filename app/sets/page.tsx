@@ -169,12 +169,20 @@ export default function SetsPage() {
   const isMobile = useIsMobile()
   const [sets, setSets] = useState<ApiSet[]>([])
   const [buyoutRate, setBuyoutRate] = useState(400)
+  const [surcharge, setSurcharge] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch('/api/sets')
       .then(r => r.json())
-      .then(d => { setSets(d.sets ?? []); if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate)); setLoading(false) })
+      .then(d => {
+        const s = d.guestSurchargePerHour != null ? Number(d.guestSurchargePerHour) : 10
+        setSurcharge(s)
+        // Catalog shows the guest rate; members save the surcharge (see banner).
+        setSets((d.sets ?? []).map((x: any) => ({ ...x, rate_per_hour: Number(x.rate_per_hour) + s })))
+        if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [])
 
@@ -192,6 +200,12 @@ export default function SetsPage() {
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
       <SiteNav active="sets" />
+
+      {surcharge > 0 && (
+        <div style={{ background: 'rgba(201,178,126,0.08)', borderBottom: '1px solid rgba(201,178,126,0.25)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#c9b27e' }}>
+          Rates shown are guest prices. <strong>Members save ${surcharge}/hr</strong> — <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>make a free account</a> or <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>sign in</a>.
+        </div>
+      )}
 
       {/* Hero */}
       <section style={{ paddingTop: isMobile ? 104 : 160, paddingBottom: isMobile ? 52 : 80, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
