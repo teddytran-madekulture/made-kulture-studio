@@ -14,6 +14,7 @@ import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendOwnerPush } from '@/lib/push'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
+import { validatePromo, recordPromoRedemption } from '@/lib/promo'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,9 @@ interface BookingRequest {
   notes: string
 
   guests?: number | null   // declared party size
+
+  promoCode?: string       // optional discount code (validated server-side)
+  applyCredit?: boolean    // default true — apply the account's store credit
 
   totalCents: number
 }
@@ -399,23 +403,36 @@ export async function POST(req: NextRequest) {
     //     and any total > 0 always requires a card token.
     const compNoCard = !!customerPricingOverrides?.comp_no_card
 
+    // ── 8a. Promo code (validated server-side against the subtotal) ─────────
+    //     Client sends the PRE-promo total for the tamper check + the code; the
+    //     server owns the discount so it can't be faked.
+    let promoId: string | null = null
+    let promoDiscountCents = 0
+    if (body.promoCode) {
+      const pr = await validatePromo(body.promoCode, { subtotalCents: verifiedCents, email: body.email })
+      if (!pr.ok) return NextResponse.json({ error: pr.error }, { status: 400 })
+      promoId = pr.promoId
+      promoDiscountCents = pr.discountCents
+    }
+    const afterPromoCents = verifiedCents - promoDiscountCents
+
     // ── 8b. Account credit (verified session user only) ─────────────────────
     //     Resolve WHO is booking from the session cookie, never the email field —
     //     otherwise anyone could drain another account's credit by typing their
-    //     email. Credit applies first; the card covers only the remainder.
+    //     email. Applied AFTER promo; the card covers only the remainder.
     let creditUserId: string | null = null
     let creditAppliedCents = 0
-    if (body.applyCredit !== false && verifiedCents > 0) {
+    if (body.applyCredit !== false && afterPromoCents > 0) {
       try {
         const ssb = createServerClient()
         const { data: { user: sessionUser } } = await ssb.auth.getUser()
         if (sessionUser?.id) {
           const bal = await getCreditBalance(sessionUser.id)
-          if (bal > 0) { creditUserId = sessionUser.id; creditAppliedCents = Math.min(bal, verifiedCents) }
+          if (bal > 0) { creditUserId = sessionUser.id; creditAppliedCents = Math.min(bal, afterPromoCents) }
         }
       } catch (e) { console.error('[bookings] credit lookup error (non-fatal):', e) }
     }
-    const chargeCents = verifiedCents - creditAppliedCents
+    const chargeCents = afterPromoCents - creditAppliedCents
 
     if (chargeCents > 0 && !body.sourceId) {
       return NextResponse.json({ error: 'Payment information is required.' }, { status: 400 })
@@ -491,7 +508,9 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
-      const rowTotal = l.spaceDollars + (i === 0 ? equipDollars + guestFeeDollars : 0)
+      // Promo discount lands on the first row (like equipment/guest fees) so the
+      // stored total reflects the post-promo price.
+      const rowTotal = Math.max(0, l.spaceDollars + (i === 0 ? equipDollars + guestFeeDollars - promoDiscountCents / 100 : 0))
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
         .insert({
@@ -573,6 +592,11 @@ export async function POST(req: NextRequest) {
       if (appliedCents !== creditAppliedCents) {
         console.error('[bookings] credit redemption mismatch', { creditUserId, wanted: creditAppliedCents, applied: appliedCents })
       }
+    }
+
+    // Record the promo redemption (bumps the use count + logs it).
+    if (promoId && promoDiscountCents > 0) {
+      await recordPromoRedemption(promoId, { email: body.email, bookingId: firstBookingId, amountCents: promoDiscountCents })
     }
 
     // ── 11b. Front-door code (igloohome algoPIN) ───────────────────────────

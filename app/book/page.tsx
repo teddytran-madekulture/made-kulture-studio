@@ -1388,8 +1388,32 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   const [delegateError, setDelegateError] = useState<string | null>(null)
   const [sent,          setSent]          = useState<{ token: string; expiresAt: string; payerContact: string; holdMinutes: number; amount: string } | null>(null)
   const [remaining,     setRemaining]     = useState(0)
+  // Promo code
+  const [promo,         setPromo]         = useState('')
+  const [promoApplied,  setPromoApplied]  = useState<{ code: string; discountCents: number } | null>(null)
+  const [promoErr,      setPromoErr]      = useState<string | null>(null)
+  const [promoBusy,     setPromoBusy]     = useState(false)
 
   useEffect(() => { grandTotalRef.current = grandTotal }, [grandTotal])
+
+  const promoDiscount = promoApplied?.discountCents ?? 0
+  const payCents = Math.max(0, grandTotal * 100 - promoDiscount)
+  const payDollars = (payCents / 100).toFixed(2)
+
+  const applyPromo = async () => {
+    if (!promo.trim() || promoBusy) return
+    setPromoBusy(true); setPromoErr(null)
+    try {
+      const r = await fetch('/api/promo/validate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promo.trim(), subtotalCents: grandTotalRef.current * 100, email: booking.email }),
+      })
+      const d = await r.json()
+      if (d.ok) { setPromoApplied({ code: d.code, discountCents: d.discountCents }); setPromoErr(null) }
+      else { setPromoApplied(null); setPromoErr(d.error || 'That code isn’t valid.') }
+    } catch { setPromoErr('Could not check that code — try again.') }
+    setPromoBusy(false)
+  }
 
   // The order fields shared by the normal checkout and the delegated hold.
   const bookingPayload = () => ({
@@ -1407,6 +1431,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
     phone:      booking.phone,
     notes:      booking.notes,
     guests:     booking.guests,
+    promoCode:  promoApplied?.code,
     totalCents: grandTotalRef.current * 100,
   })
 
@@ -1675,8 +1700,28 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
               </div>
             )}
 
+            {/* Promo code */}
+            <div style={{ marginBottom: 16 }}>
+              {promoApplied ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontFamily: 'Inter', fontSize: 12, color: '#c9b27e', border: '1px solid rgba(201,178,126,0.35)', background: 'rgba(201,178,126,0.08)', padding: '10px 14px' }}>
+                  <span>Code <strong>{promoApplied.code}</strong> applied — −${(promoApplied.discountCents / 100).toFixed(2)}</span>
+                  <button onClick={() => { setPromoApplied(null); setPromo(''); setPromoErr(null) }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.1em' }}>REMOVE</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={promo} onChange={e => { setPromo(e.target.value); setPromoErr(null) }} onKeyDown={e => e.key === 'Enter' && applyPromo()} placeholder="Promo code"
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.14)', color: '#fff', fontFamily: 'Inter', fontSize: 13, padding: '10px 12px', outline: 'none', textTransform: 'uppercase' }} />
+                  <button onClick={applyPromo} disabled={!promo.trim() || promoBusy}
+                    style={{ background: promo.trim() ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)', color: promo.trim() ? '#080808' : 'rgba(255,255,255,0.4)', border: 'none', padding: '0 18px', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', cursor: promo.trim() ? 'pointer' : 'default' }}>
+                    {promoBusy ? '…' : 'APPLY'}
+                  </button>
+                </div>
+              )}
+              {promoErr && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginTop: 8 }}>{promoErr}</div>}
+            </div>
+
             <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', marginBottom: 20 }}>
-              YOUR CARD WILL BE CHARGED ${grandTotal} AND SAVED ON FILE FOR ANY OVERAGES.
+              YOUR CARD WILL BE CHARGED ${payDollars} AND SAVED ON FILE FOR ANY OVERAGES.
             </div>
 
             <button
@@ -1690,7 +1735,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
                 transition: 'background 0.2s',
               }}
             >
-              {paying ? 'PROCESSING...' : `CONFIRM & PAY $${grandTotal}`}
+              {paying ? 'PROCESSING...' : `CONFIRM & PAY $${payDollars}`}
             </button>
           </>
         )}
