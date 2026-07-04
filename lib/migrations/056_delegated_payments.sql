@@ -36,6 +36,17 @@ create index if not exists payment_delegations_status_idx
 -- extension_requests (migration 055).
 alter table payment_delegations enable row level security;
 
+-- Widen the bookings CHECK constraints so the held-row insert is allowed.
+-- (Applied live 2026-07-04.) status gains 'pending_payment'; source gains
+-- 'website-delegated'. Existing values preserved — this only ADDS values.
+alter table bookings drop constraint if exists bookings_status_check;
+alter table bookings add constraint bookings_status_check
+  check (status = any (array['pending','confirmed','completed','cancelled','no_show','pending_payment']::text[]));
+
+alter table bookings drop constraint if exists bookings_source_check;
+alter table bookings add constraint bookings_source_check
+  check (source = any (array['website','acuity','peerspace','manual','website-delegated']::text[]));
+
 -- Admin-editable knobs (upsert; safe to re-run).
 insert into studio_settings (key, value)
 values ('delegated_hold_minutes', '30')

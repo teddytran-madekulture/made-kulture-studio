@@ -48,6 +48,7 @@ export default function PayPage({ params }: { params: { token: string } }) {
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const [gpayReady, setGpayReady] = useState(false)
   const cardRef = useRef<any>(null)
   const cardBox = useRef<HTMLDivElement>(null)
 
@@ -82,9 +83,27 @@ export default function PayPage({ params }: { params: { token: string } }) {
   const showExpired = req && (req.status === 'expired' || (req.status === 'pending' && remaining <= 0)) && !done
   const showPaid = done || req?.status === 'paid'
 
-  // Mount the Square card form once we know it's payable.
+  // Shared: send a Square token (card OR Google/Apple Pay) to the pay endpoint.
+  const submitToken = async (token: string) => {
+    setPaying(true); setPayError(null)
+    try {
+      const r = await fetch(`/api/pay/${params.token}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: token }),
+      })
+      const d = await r.json()
+      if (r.ok && d.success) { setDone(true) }
+      else { setPayError(d.error || 'Payment failed — try again.'); setPaying(false) }
+    } catch {
+      setPayError('Something went wrong. Please try again.')
+      setPaying(false)
+    }
+  }
+
+  // Mount the Square card form + Google Pay (and Apple Pay once the domain is
+  // registered) once we know it's payable.
   useEffect(() => {
-    if (!isPending) return
+    if (!isPending || !req) return
     let mounted = true
     loadSquareScript().then(async () => {
       if (!mounted) return
@@ -93,18 +112,55 @@ export default function PayPage({ params }: { params: { token: string } }) {
       if (!appId || !locationId) { setSdkError('Payments aren’t configured.'); return }
       try {
         const payments = window.Square.payments(appId, locationId)
+
+        // Card
         if (cardBox.current && !cardRef.current) {
           const card = await payments.card()
           await card.attach(cardBox.current)
           cardRef.current = card
         }
         if (mounted) setSdkReady(true)
+
+        // Digital wallets — one paymentRequest drives both Google Pay and Apple Pay.
+        const paymentRequest = payments.paymentRequest({
+          countryCode: 'US', currencyCode: 'USD',
+          total: { amount: req.amount, label: 'Made Kulture' },
+        })
+
+        // Google Pay (silently skipped where unsupported).
+        try {
+          const googlePay = await payments.googlePay(paymentRequest)
+          await googlePay.attach('#pay-google')
+          if (mounted) setGpayReady(true)
+          googlePay.addEventListener('ontokenization', (event: any) => {
+            const { tokenResult } = event.detail
+            if (tokenResult.status === 'OK') submitToken(tokenResult.token)
+            else setPayError(tokenResult.errors?.[0]?.message || 'Google Pay failed.')
+          })
+        } catch { /* Google Pay unavailable on this device/browser */ }
+
+        // Apple Pay — only appears in Safari once the domain is registered with
+        // Square (madekulture.com). Fails gracefully (button stays hidden) until then.
+        try {
+          const applePay = await payments.applePay(paymentRequest)
+          const btn = document.getElementById('pay-apple')
+          if (btn) {
+            btn.style.display = 'block'
+            btn.addEventListener('click', async () => {
+              try {
+                const tok = await applePay.tokenize()
+                if (tok.status === 'OK') submitToken(tok.token)
+                else setPayError(tok.errors?.[0]?.message || 'Apple Pay failed.')
+              } catch { setPayError('Apple Pay failed — try a card.') }
+            })
+          }
+        } catch { /* Apple Pay unavailable / domain not yet registered */ }
       } catch (e: any) {
         setSdkError(e?.message || 'Couldn’t load the card form.')
       }
     }).catch(e => setSdkError(e.message))
     return () => { mounted = false }
-  }, [isPending])
+  }, [isPending, req])
 
   const pay = async () => {
     if (!cardRef.current || paying) return
@@ -115,13 +171,7 @@ export default function PayPage({ params }: { params: { token: string } }) {
         setPayError(tok.errors?.[0]?.message || 'Please check your card details.')
         setPaying(false); return
       }
-      const r = await fetch(`/api/pay/${params.token}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId: tok.token }),
-      })
-      const d = await r.json()
-      if (r.ok && d.success) { setDone(true) }
-      else { setPayError(d.error || 'Payment failed — try again.'); setPaying(false) }
+      await submitToken(tok.token)
     } catch {
       setPayError('Something went wrong. Please try again.')
       setPaying(false)
@@ -224,6 +274,18 @@ export default function PayPage({ params }: { params: { token: string } }) {
             Slot held — {mmss} left to pay
           </span>
         </div>
+
+        {/* Digital wallets — Google Pay shows where supported; Apple Pay appears in
+            Safari once madekulture.com is registered with Square (stays hidden until then). */}
+        <div id="pay-apple" style={{ display: 'none', marginTop: 14, height: 48, WebkitAppearance: '-apple-pay-button', borderRadius: 10, overflow: 'hidden', cursor: 'pointer' } as any} />
+        <div id="pay-google" style={{ marginTop: 14 }} />
+        {gpayReady && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '14px 0 2px' }}>
+            <div style={{ flex: 1, height: 1, background: HAIR }} />
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em' }}>OR PAY WITH CARD</span>
+            <div style={{ flex: 1, height: 1, background: HAIR }} />
+          </div>
+        )}
 
         {sdkError && <div style={{ color: '#e6b8a0', fontSize: 13, margin: '10px 0' }}>{sdkError}</div>}
         <div ref={cardBox} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 12, padding: 12, minHeight: 52, marginTop: 8 }} />
