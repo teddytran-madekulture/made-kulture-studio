@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 import { deleteCalendarEvent, patchCalendarEvent } from '@/lib/gcal'
 import { sendCancellationEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
+import { refundPayment } from '@/lib/square-refund'
+import { notifyDelegatedRefund } from '@/lib/refund-notify'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,9 +37,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   // If cancelling, remove any Acuity blocks this website booking created
   // and the mirrored Google Calendar event (non-fatal).
+  let cancelPaymentId: string | null = null
+  let cancelTotalCents = 0
   if (body.status === 'cancelled') {
     const { data: existing } = await supabase
-      .from('bookings').select('acuity_block_ids, gcal_event_id').eq('id', params.id).single()
+      .from('bookings').select('acuity_block_ids, gcal_event_id, square_payment_id, total_amount').eq('id', params.id).single()
     const blockIds = Array.isArray(existing?.acuity_block_ids) ? existing!.acuity_block_ids : []
     if (blockIds.length) {
       await deleteAcuityBlocks(blockIds)
@@ -48,6 +52,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       catch (e) { console.error('[admin cancel] gcal delete error (non-fatal):', e) }
       updates.gcal_event_id = null
     }
+    cancelPaymentId = (existing as any)?.square_payment_id ?? null
+    cancelTotalCents = Math.round(Number((existing as any)?.total_amount || 0) * 100)
   }
   if (body.start_time   !== undefined) updates.start_time   = body.start_time
   if (body.end_time     !== undefined) updates.end_time     = body.end_time
@@ -81,6 +87,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       { error: isConflict ? 'This time slot conflicts with another booking.' : error.message },
       { status: isConflict ? 409 : 500 }
     )
+  }
+
+  // Optional refund on cancel (money OUT — only when the admin explicitly opts in).
+  // For a delegated "someone else pays" booking, also notifies the payer.
+  let refundResult: { ok: boolean; amountCents?: number; error?: string } | null = null
+  if (body.status === 'cancelled' && body.refund) {
+    if (!cancelPaymentId) {
+      refundResult = { ok: false, error: 'No Square payment on file for this booking — refund manually in Square if needed.' }
+    } else if (cancelTotalCents < 1) {
+      refundResult = { ok: false, error: 'Nothing to refund on this booking.' }
+    } else {
+      try {
+        await refundPayment({ paymentId: cancelPaymentId, amountCents: cancelTotalCents, reason: 'Made Kulture booking cancelled' })
+        refundResult = { ok: true, amountCents: cancelTotalCents }
+        await notifyDelegatedRefund(params.id, cancelTotalCents)
+      } catch (e: any) {
+        console.error('[admin cancel] refund failed', e)
+        refundResult = { ok: false, error: e?.errors?.[0]?.detail || 'Refund failed — issue it in Square directly.' }
+      }
+    }
   }
 
   // If the time window changed (admin reschedule), move the mirrored Google
@@ -122,5 +148,5 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, refund: refundResult })
 }

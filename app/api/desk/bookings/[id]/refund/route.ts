@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
 import { refundPayment } from '@/lib/square-refund'
+import { notifyDelegatedRefund } from '@/lib/refund-notify'
 import { audit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       entityType: 'booking', entityId: params.id, amountCents,
       details: { reason: body.reason ?? null, refundId: refund.id, customer: (b.customers as any)?.name ?? null },
     })
+    // If a third party paid (delegated "someone else pays"), tell them.
+    await notifyDelegatedRefund(params.id, amountCents)
     return NextResponse.json({ success: true, amountCents, refundId: refund.id })
   } catch (e: any) {
     console.error('[booking refund] failed', e)

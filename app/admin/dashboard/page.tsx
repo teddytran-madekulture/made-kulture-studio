@@ -1197,13 +1197,19 @@ export default function AdminDashboard() {
 
   const handleCancel = async (id: string) => {
     if (!confirm('Cancel this booking?')) return
+    const refund = confirm('Refund the payment to the card?\n\nOK = refund the full amount now\nCancel = cancel without refunding')
     const notifyCustomer = confirm('Email the customer to let them know it was cancelled?\n\nOK = send the cancellation email\nCancel = cancel quietly (no email)')
     setCancelling(id)
-    await fetch(`/api/admin/bookings/${id}`, {
+    const res = await fetch(`/api/admin/bookings/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'cancelled', notifyCustomer }),
+      body: JSON.stringify({ status: 'cancelled', notifyCustomer, refund }),
     })
+    const data = await res.json().catch(() => ({}))
     setCancelling(null)
+    if (refund && data?.refund) {
+      if (data.refund.ok) alert(`Refunded $${((data.refund.amountCents || 0) / 100).toFixed(2)} to the card. If someone else paid, they've been notified.`)
+      else alert(`Booking cancelled, but the refund didn't go through: ${data.refund.error || 'unknown error'}. Issue it in Square directly.`)
+    }
     fetchBookings()
     if (detailBooking?.id === id) setDetailBooking(null)
   }
