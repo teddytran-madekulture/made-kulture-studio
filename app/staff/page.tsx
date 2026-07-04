@@ -102,12 +102,22 @@ function Bootstrap({ onDone }: { onDone: () => void }) {
 function Login({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('')
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
   const submit = async () => {
-    setBusy(true); setErr('')
+    setBusy(true); setErr(''); setNotice('')
     const r = await fetch('/api/staff/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
     const d = await r.json(); setBusy(false)
     if (!r.ok) return setErr(d.error ?? 'Login failed.')
     onDone()
+  }
+  const forgot = async () => {
+    if (!email) { setErr('Enter your email above first, then tap “Forgot password?”'); return }
+    setBusy(true); setErr(''); setNotice('')
+    try {
+      await fetch('/api/staff/auth/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
+      setNotice('If that email is on a staff account, a one-time sign-in link is on its way. Check your inbox — it expires in 30 minutes. Once in, hit “Reset PW” on your row.')
+    } catch { setErr('Could not send the link — try again.') }
+    setBusy(false)
   }
   return (
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 28, maxWidth: 400, margin: '0 auto' }}>
@@ -115,7 +125,11 @@ function Login({ onDone }: { onDone: () => void }) {
       <Field label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
       <Field label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
       {err && <p style={{ color: C.accent, fontSize: 13 }}>{err}</p>}
+      {notice && <p style={{ color: '#c9b27e', fontSize: 13, lineHeight: 1.5 }}>{notice}</p>}
       <button style={{ ...btn(), width: '100%', marginTop: 8 }} disabled={busy} onClick={submit}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      <button onClick={forgot} disabled={busy} style={{ background: 'none', border: 'none', color: C.dim, fontSize: 12, cursor: 'pointer', marginTop: 14, width: '100%', textDecoration: 'underline' }}>
+        Forgot password?
+      </button>
     </div>
   )
 }
