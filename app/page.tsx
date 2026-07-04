@@ -17,6 +17,7 @@ const SETS = [
 ]
 
 const FAQS = [
+  { q: 'Can I walk in, or do I need to book?', a: 'Made Kulture is by appointment only — there are no walk-ins. Every session is booked online in advance (at least 48 hours ahead), and the studio is only staffed when there’s a booking. Even during listed hours, we’re not open to the public without a reservation.' },
   { q: 'What is the max occupancy?', a: 'Individual sets hold up to 5 people total — that includes photographers, models, stylists, assistants, and clients. Full studio buyout allows up to 30 people.' },
   { q: 'How does overtime work?', a: 'Sessions running more than 15 minutes past your booked end time are automatically charged an additional hour. A card is required on file at booking to cover any overages.' },
   { q: 'What is your cancellation policy?', a: 'Full refund if cancelled 48+ hours before your booking start time. No refund for cancellations within 48 hours.' },
@@ -286,17 +287,18 @@ export default function Home() {
           <div>
             <div className="label" style={{ marginBottom:24 }}>VISIT</div>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', lineHeight:1.8 }}>
-              4825 Gulf Fwy.<br />Houston, TX 77023<br /><br />Mon — Sun · 9am–10pm
+              4825 Gulf Fwy.<br />Houston, TX 77023<br /><br />Mon — Sun · 9am–10pm<br />
+              <strong style={{ color:'#c9b27e' }}>By appointment only</strong> — <span style={{ color:'rgba(255,255,255,0.5)' }}>book online in advance. No walk-ins.</span>
             </p>
           </div>
           <div>
             <div className="label" style={{ marginBottom:24 }}>CONTACT</div>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', lineHeight:1.8 }}>
-              teddytran@madekulture.com<br />(832) 408-1631<br /><span style={{fontSize:12}}>Text only</span>
+              <a href="mailto:info@madekulture.com" style={{ color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>info@madekulture.com</a><br />(832) 408-1631<br /><span style={{fontSize:12}}>Text only</span>
             </p>
             <div style={{ display:'flex', gap:16, marginTop:24 }}>
               <a href="https://www.instagram.com/madekulture/" target="_blank" rel="noreferrer"
-                style={{ fontSize:11, color:'rgba(255,255,255,0.4)', letterSpacing:'0.1em', textDecoration:'none' }}>IG</a>
+                style={{ fontSize:11, color:'#c9b27e', letterSpacing:'0.12em', textDecoration:'none' }}>INSTAGRAM ↗</a>
             </div>
           </div>
         </div>
