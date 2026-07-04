@@ -33,7 +33,9 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading]   = useState(true)
   const [cancelling, setCancelling] = useState<string | null>(null)
+  const [rescheduling, setRescheduling] = useState<string | null>(null)
   const [error, setError]       = useState('')
+  const [notice, setNotice]     = useState('')
   const [gearCart, setGearCart] = useState<GearLine[]>([])
   const [addingTo, setAddingTo] = useState<string | null>(null)
 
@@ -61,6 +63,20 @@ export default function BookingsPage() {
       setError('Something went wrong adding gear.')
     }
     setAddingTo(null)
+  }
+
+  const rescheduleCredit = async (id: string) => {
+    if (!confirm('Reschedule later?\n\nThis releases your session and banks its full value as studio credit on your account. Credit never expires and applies automatically when you rebook — pick a new date whenever you’re ready.')) return
+    setRescheduling(id); setError(''); setNotice('')
+    const res = await fetch('/api/account/reschedule-credit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ booking_id: id }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error ?? 'Something went wrong'); setRescheduling(null); return }
+    setBookings(bs => bs.map(b => b.id === id ? { ...b, status: 'cancelled' } : b))
+    setNotice(`$${((data.creditCents || 0) / 100).toFixed(2)} added to your account as studio credit — it applies automatically next time you book.`)
+    setRescheduling(null)
   }
 
   const cancel = async (id: string) => {
@@ -127,8 +143,18 @@ export default function BookingsPage() {
             </span>
             {canCancel && (
               <button
+                onClick={() => rescheduleCredit(b.id)}
+                disabled={rescheduling === b.id || cancelling === b.id}
+                title="Release this session and bank its value as studio credit to use later"
+                style={{ background: 'linear-gradient(135deg, rgba(201,178,126,0.16), rgba(201,178,126,0.05))', border: '1px solid rgba(201,178,126,0.4)', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: '#c9b27e', cursor: 'pointer', opacity: rescheduling === b.id ? 0.5 : 1, whiteSpace: 'nowrap' }}
+              >
+                {rescheduling === b.id ? 'BANKING…' : 'RESCHEDULE → CREDIT'}
+              </button>
+            )}
+            {canCancel && (
+              <button
                 onClick={() => cancel(b.id)}
-                disabled={cancelling === b.id}
+                disabled={cancelling === b.id || rescheduling === b.id}
                 style={{ background: 'none', border: '1px solid rgba(255,60,60,0.3)', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: '#ff6b6b', cursor: 'pointer', opacity: cancelling === b.id ? 0.5 : 1 }}
               >
                 {cancelling === b.id ? 'CANCELLING...' : 'CANCEL'}
@@ -171,6 +197,12 @@ export default function BookingsPage() {
       {error && (
         <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b', marginBottom: 16 }}>
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div style={{ background: 'linear-gradient(135deg, rgba(201,178,126,0.14), rgba(201,178,126,0.04))', border: '1px solid rgba(201,178,126,0.35)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#c9b27e', marginBottom: 16 }}>
+          {notice}
         </div>
       )}
 
