@@ -85,6 +85,9 @@ export default function Home() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
           </div>
+          <div style={{ marginTop:20, fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:11, letterSpacing:'0.18em', color:'rgba(255,255,255,0.4)', textTransform:'uppercase' }}>
+            By appointment only · Book online in advance · No walk-ins
+          </div>
         </div>
       </section>
 

@@ -140,14 +140,13 @@ async function execTool(
     }
 
     if (name === 'get_sets_and_pricing') {
-      const [setsRes, buyout] = await Promise.all([
-        fetch(`${APP_URL}/api/sets`).then(r => r.json()).catch(() => null),
-        ctx.supabase.from('studio_settings').select('value').eq('key', 'buyout_rate').single(),
-      ])
+      const setsRes = await fetch(`${APP_URL}/api/sets`).then(r => r.json()).catch(() => null)
+      const surcharge = setsRes?.guestSurchargePerHour ?? 10
       return {
         result: JSON.stringify({
-          sets: setsRes?.sets ?? setsRes ?? 'unavailable',
-          full_studio_buyout_per_hour: buyout?.data?.value ?? 'see booking page',
+          sets: setsRes?.sets ?? 'unavailable',
+          full_studio_buyout_per_hour: setsRes?.buyoutRate ?? 'see booking page',
+          member_vs_guest: `rate_per_hour on each set is the MEMBER price (free account). Guests who aren't signed in pay $${surcharge}/hr MORE per set — e.g. a $40 set is $40 for members, $${40 + surcharge} for guests. Anyone can get the member rate by making a free account. Always mention the free-account member rate when quoting a price. The studio buyout is a flat rate and is NOT surcharged.`,
         }),
       }
     }
@@ -242,6 +241,8 @@ HARD RULES (never break these):
 8. NEVER mention the owner by name to visitors. Say "the team" or "we" — e.g. "the team will confirm by text", never "Teddy will confirm".
 
 BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio → pick set(s), date, and hours → add equipment if wanted → guest count → pay online. Bookings need 48h notice; the site enforces it. Short-notice requests exist for logged-in members (subject to approval).
+
+PRICING (member vs guest): Set rates are MEMBER prices. Guests who aren't signed in pay a per-hour surcharge per set, so ALWAYS mention that making a free account gets the lower member rate. Use get_sets_and_pricing for the live numbers and the exact surcharge — don't quote prices from memory. The full-studio buyout is a flat rate and is not surcharged. Booking is BY APPOINTMENT ONLY — online in advance, no walk-ins.
 
 KNOWLEDGE:
 ${kbText}`
