@@ -74,50 +74,53 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
   const b = p.booking as any
   const customer = b.customers as any
 
-  // Resolve the card. Saved cards can live on EITHER Square customer identity:
-  // the guest "customers" record (booking flow) or the logged-in account
-  // profile (customer_profiles). Check both.
-  let sourceCardId: string | null = null
-  let chargeCustomerId: string | null = null
+  // Resolve the card + its OWNING Square customer. Saved cards can live on
+  // either identity (guest "customers" record or the account profile), and a
+  // booking's stored card id may belong to the OTHER identity than the guest
+  // record — Square rejects mismatched pairs with "Payment on file not found".
+  // So: list cards on every candidate customer and pair by actual ownership.
+  const candidates: string[] = []
+  if (customer?.square_customer_id) candidates.push(customer.square_customer_id)
 
-  if (b.square_card_on_file_id && customer?.square_customer_id) {
-    sourceCardId = b.square_card_on_file_id
-    chargeCustomerId = customer.square_customer_id
-  } else {
-    const candidates: string[] = []
-    if (customer?.square_customer_id) candidates.push(customer.square_customer_id)
-
-    // Account profile via the booking's login…
-    let profileUserId: string | null = b.auth_user_id ?? null
-    // …or, when the booking wasn't made logged-in, via the auth account that
-    // shares the booking's email (same lookup the checkout flow uses).
-    if (!profileUserId && customer?.email) {
-      try {
-        const { data: authUsers } = await (db as any).auth.admin.listUsers()
-        const match = authUsers?.users?.find((u: any) => u.email?.toLowerCase() === String(customer.email).toLowerCase())
-        profileUserId = match?.id ?? null
-      } catch (e) {
-        console.error('[extension] auth email lookup failed', e)
-      }
-    }
-    if (profileUserId) {
-      const { data: prof } = await db
-        .from('customer_profiles').select('square_customer_id').eq('id', profileUserId).maybeSingle()
-      if (prof?.square_customer_id && !candidates.includes(prof.square_customer_id)) {
-        candidates.push(prof.square_customer_id)
-      }
-    }
-    console.log('[extension] card candidates:', candidates.length, 'authUser:', !!b.auth_user_id, 'emailPath:', !b.auth_user_id && !!customer?.email)
-    for (const cid of candidates) {
-      try {
-        const { result } = await square.cardsApi.listCards(undefined, cid)
-        const card = (result.cards ?? []).find((c: any) => c.enabled !== false)
-        if (card?.id) { sourceCardId = card.id; chargeCustomerId = cid; break }
-      } catch (e) {
-        console.error('[extension] card lookup failed for customer', cid, e)
-      }
+  let profileUserId: string | null = b.auth_user_id ?? null
+  if (!profileUserId && customer?.email) {
+    try {
+      const { data: authUsers } = await (db as any).auth.admin.listUsers()
+      const match = authUsers?.users?.find((u: any) => u.email?.toLowerCase() === String(customer.email).toLowerCase())
+      profileUserId = match?.id ?? null
+    } catch (e) {
+      console.error('[extension] auth email lookup failed', e)
     }
   }
+  if (profileUserId) {
+    const { data: prof } = await db
+      .from('customer_profiles').select('square_customer_id').eq('id', profileUserId).maybeSingle()
+    if (prof?.square_customer_id && !candidates.includes(prof.square_customer_id)) {
+      candidates.push(prof.square_customer_id)
+    }
+  }
+
+  let sourceCardId: string | null = null
+  let chargeCustomerId: string | null = null
+  let fallbackCard: { cardId: string; customerId: string } | null = null
+
+  for (const cid of candidates) {
+    try {
+      const { result } = await square.cardsApi.listCards(undefined, cid)
+      const cards = (result.cards ?? []).filter((c: any) => c.enabled !== false)
+      // Best case: this customer owns the exact card stored on the booking.
+      const bookingCard = b.square_card_on_file_id ? cards.find((c: any) => c.id === b.square_card_on_file_id) : null
+      if (bookingCard) { sourceCardId = bookingCard.id!; chargeCustomerId = cid; break }
+      if (!fallbackCard && cards[0]?.id) fallbackCard = { cardId: cards[0].id, customerId: cid }
+    } catch (e) {
+      console.error('[extension] card lookup failed for customer', cid, e)
+    }
+  }
+  if (!sourceCardId && fallbackCard) {
+    sourceCardId = fallbackCard.cardId
+    chargeCustomerId = fallbackCard.customerId
+  }
+  console.log('[extension] candidates:', candidates.length, 'matchedBookingCard:', !!(sourceCardId && b.square_card_on_file_id === sourceCardId), 'usedFallback:', !!(sourceCardId && fallbackCard && sourceCardId === fallbackCard.cardId))
 
   if (!sourceCardId || !chargeCustomerId) {
     return NextResponse.json({ error: 'No saved card found on your account — text (832) 408-1631 and we\'ll sort it out.' }, { status: 400 })
@@ -130,7 +133,7 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
       sourceId: sourceCardId,
       idempotencyKey: r.id, // one charge per request, even on double-tap
       amountMoney: { amount: BigInt(r.amount_cents), currency: 'USD' },
-      customerId: customer.square_customer_id,
+      customerId: chargeCustomerId,
       locationId: process.env.SQUARE_LOCATION_ID!,
       note: `Made Kulture — +${r.hours}hr ${p.setName} (self-serve extension)`,
       buyerEmailAddress: customer?.email || undefined,
