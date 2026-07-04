@@ -215,22 +215,21 @@ function centralNow(): string {
   }).format(new Date())
 }
 
-async function buildSystemPrompt(supabase: any, opts: { visitorName?: string | null; loggedIn: boolean; page?: string | null }): Promise<string> {
+// Returns the system prompt in two parts:
+//  - staticPart:  identical across every request (instructions + KB) → CACHEABLE.
+//  - dynamicPart: changes per request (time, visitor, page) → not cached.
+// Keeping the volatile bits (esp. the current time) OUT of the cached block is
+// what lets prompt caching actually hit — otherwise the timestamp busts it every call.
+async function buildSystemPrompt(supabase: any, opts: { visitorName?: string | null; loggedIn: boolean; page?: string | null }): Promise<{ staticPart: string; dynamicPart: string }> {
   const { data: kb } = await supabase
     .from('agent_kb').select('topic, content').eq('enabled', true).order('topic')
   const kbText = (kb ?? []).map((r: any) => `### ${r.topic}\n${r.content}`).join('\n\n')
 
-  return `You are June, the front-desk assistant at Made Kulture — a creative studio rental space in Houston, TX. You chat with visitors on the studio's website.
+  const staticPart = `You are June, the front-desk assistant at Made Kulture — a creative studio rental space in Houston, TX. You chat with visitors on the studio's website.
 
 PERSONALITY: Warm, quick, and helpful. You know every corner of the studio. Friendly-professional with light humor. Keep replies SHORT — this is a chat widget, not email. 1-3 sentences for simple questions. Never use markdown headers or bullet walls; plain conversational text.
 
 LINK BUTTONS: When you point a visitor to a page, ALWAYS write it as a markdown link — the chat renders it as a tappable button. Examples: [Book a set](/book) · [Book a tour](/tour) · [See the sets](/sets) · [Check availability](/availability) · [Gear rentals](/gear) · [Props](/props) · [Studio rules](/studio-rules). Never paste a bare path like "/tour" — always the [label](path) form, at the END of your message.
-
-CURRENT TIME (Houston): ${centralNow()}
-VISITOR: ${opts.loggedIn ? `logged in${opts.visitorName ? ` as ${opts.visitorName}` : ''}` : 'not logged in'}${opts.page ? ` · currently on page: ${opts.page}` : ''}
-${opts.page === 'kiosk' ? `
-KIOSK MODE: This visitor is PHYSICALLY AT THE STUDIO right now, talking to you on the wall tablet. Adjust accordingly: give in-person directions (where things are in the building) when your knowledge covers it, remind them to check in on this tablet if they're here for a booking, and for anything hands-on (unlock something, equipment help, spills, emergencies) use escalate_to_teddy or tell them to tap "GET THE TEAM" on this screen. Don't send them to website links for things they can do at the tablet.
-EXTENSIONS AT THE KIOSK: If a guest wants extra time on their CURRENT session, use request_extension (1-2 hours). It never charges from this tablet — a confirm-and-pay text goes to the phone number on the booking, and only that phone can approve. If there's no checked-in guest context, ask for the booking's phone number first. Never promise the extension is done until they confirm on their phone. When the tool returns a refusal (no active booking, set booked next, no saved card), RELAY THAT EXACT REASON plainly — never call it a system error or hiccup.` : ''}
 
 HARD RULES (never break these):
 1. Only state policies, prices, and rules that appear in your KNOWLEDGE section or come back from your tools. If it's not there, say you'll check — and use escalate_to_teddy.
@@ -246,6 +245,14 @@ BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio �
 
 KNOWLEDGE:
 ${kbText}`
+
+  const dynamicPart = `CURRENT TIME (Houston): ${centralNow()}
+VISITOR: ${opts.loggedIn ? `logged in${opts.visitorName ? ` as ${opts.visitorName}` : ''}` : 'not logged in'}${opts.page ? ` · currently on page: ${opts.page}` : ''}
+${opts.page === 'kiosk' ? `
+KIOSK MODE: This visitor is PHYSICALLY AT THE STUDIO right now, talking to you on the wall tablet. Adjust accordingly: give in-person directions (where things are in the building) when your knowledge covers it, remind them to check in on this tablet if they're here for a booking, and for anything hands-on (unlock something, equipment help, spills, emergencies) use escalate_to_teddy or tell them to tap "GET THE TEAM" on this screen. Don't send them to website links for things they can do at the tablet.
+EXTENSIONS AT THE KIOSK: If a guest wants extra time on their CURRENT session, use request_extension (1-2 hours). It never charges from this tablet — a confirm-and-pay text goes to the phone number on the booking, and only that phone can approve. If there's no checked-in guest context, ask for the booking's phone number first. Never promise the extension is done until they confirm on their phone. When the tool returns a refusal (no active booking, set booked next, no saved card), RELAY THAT EXACT REASON plainly — never call it a system error or hiccup.` : ''}`
+
+  return { staticPart, dynamicPart }
 }
 
 // ── Main entry ─────────────────────────────────────────────────────────────────
@@ -272,11 +279,18 @@ export async function runJune(opts: {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('June is not configured (ANTHROPIC_API_KEY missing)')
 
-  const system = await buildSystemPrompt(opts.supabase, {
+  const { staticPart, dynamicPart } = await buildSystemPrompt(opts.supabase, {
     visitorName: opts.visitorName,
     loggedIn: !!opts.authUserId,
     page: opts.page,
   })
+  // Cache the static instructions + KB (identical across every request and every
+  // tool round) so they're billed at ~10% on repeats. The volatile bits (time,
+  // visitor, page) sit in an un-cached block after the breakpoint.
+  const system = [
+    { type: 'text', text: staticPart, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: dynamicPart },
+  ]
 
   // Map stored roles → API roles. Teddy's messages appear as assistant turns
   // prefixed so June knows the human owner said it.
