@@ -82,7 +82,10 @@ export async function planExtension(bookingId: string, hours: number): Promise<E
     priceCents,
     newEndISO: newEnd.toISOString(),
     conflict: !!(clash && clash.length),
-    hasCardOnFile: !!(b.square_card_on_file_id && customer?.square_customer_id),
+    // Optimistic: a Square customer profile can hold saved cards even when this
+    // particular booking wasn't paid with one. The confirm endpoint resolves the
+    // actual card (booking's card → else customer's saved cards) before charging.
+    hasCardOnFile: !!customer?.square_customer_id,
   }
 }
 

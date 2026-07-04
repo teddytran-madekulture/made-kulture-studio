@@ -74,11 +74,27 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
   const b = p.booking as any
   const customer = b.customers as any
 
+  // Resolve the card: the booking's own card on file, else the customer's
+  // saved cards in Square (first enabled one).
+  let sourceCardId: string | null = b.square_card_on_file_id ?? null
+  if (!sourceCardId) {
+    try {
+      const { result } = await square.cardsApi.listCards(undefined, customer.square_customer_id)
+      const card = (result.cards ?? []).find((c: any) => c.enabled !== false)
+      sourceCardId = card?.id ?? null
+    } catch (e) {
+      console.error('[extension] card lookup failed', e)
+    }
+  }
+  if (!sourceCardId) {
+    return NextResponse.json({ error: 'No saved card found on your account — text (832) 408-1631 and we\'ll sort it out.' }, { status: 400 })
+  }
+
   // Charge the card on file (price locked at request time).
   let paymentId: string | null = null
   try {
     const { result } = await square.paymentsApi.createPayment({
-      sourceId: b.square_card_on_file_id,
+      sourceId: sourceCardId,
       idempotencyKey: r.id, // one charge per request, even on double-tap
       amountMoney: { amount: BigInt(r.amount_cents), currency: 'USD' },
       customerId: customer.square_customer_id,
