@@ -147,7 +147,6 @@ export default function Desk() {
     alert(`✓ $${(d.amountCents / 100).toFixed(2)} refunded.`)
     load()
   }
-  const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 
   if (loading) return <Shell><p style={{ color: C.dim }}>Loading…</p></Shell>
   if (!me?.staff) return (
@@ -175,7 +174,7 @@ export default function Desk() {
           {/* Staff/Admin links intentionally removed: the desk is a shared terminal, so
               it must not offer a one-tap path into admin. Reach /admin or /staff by URL
               (each has its own auth). */}
-          <button style={btn('ghost')} onClick={signOut}>Lock</button>
+          <button style={btn('ghost')} onClick={() => window.dispatchEvent(new Event('mk-lock'))}>Lock</button>
         </div>
       </div>
 

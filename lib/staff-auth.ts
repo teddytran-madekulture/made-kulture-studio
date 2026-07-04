@@ -89,6 +89,37 @@ export function clearStaffCookie(res: NextResponse): NextResponse {
   return res
 }
 
+// ── Locked state ───────────────────────────────────────────────────────────────
+// The idle auto-lock SUSPENDS the session: the full session cookie is cleared and
+// this identity-only cookie is set. getStaffFromRequest ignores it, so while
+// locked every page (desk, staff, admin) sees no session — you can't URL-hop
+// around the lock. The PIN unlock reads it, verifies, and restores the full session.
+
+const LOCK_COOKIE = 'mk_staff_locked'
+
+export function setLockedCookie(res: NextResponse, staff: { id: string; role: StaffRole; name: string }): NextResponse {
+  const token = signSession({ sid: staff.id, role: staff.role, name: staff.name, iat: Math.floor(Date.now() / 1000) })
+  res.cookies.set(LOCK_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: MAX_AGE_SECONDS,
+    path: '/',
+  })
+  return res
+}
+
+export function getLockedStaff(req: NextRequest): StaffContext | null {
+  const session = verifySession(req.cookies.get(LOCK_COOKIE)?.value)
+  if (!session) return null
+  return { staffId: session.sid, role: session.role, name: session.name }
+}
+
+export function clearLockedCookie(res: NextResponse): NextResponse {
+  res.cookies.set(LOCK_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 })
+  return res
+}
+
 export type StaffContext = { staffId: string; role: StaffRole; name: string }
 
 // Read + verify the staff session from the request cookie.

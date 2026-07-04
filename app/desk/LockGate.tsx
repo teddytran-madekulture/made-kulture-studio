@@ -15,16 +15,25 @@ export default function LockGate({ staffName }: { staffName: string }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    // Actually SUSPEND the session server-side (clears the full cookie), so no
+    // URL — /staff, /admin — can be opened around the lock. PIN restores it.
+    const doLock = async () => {
+      try { await fetch('/api/staff/lock', { method: 'POST' }) } catch { /* still show the overlay */ }
+      setLocked(true)
+    }
     const arm = () => {
       if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => setLocked(true), IDLE_MS)
+      timer.current = setTimeout(doLock, IDLE_MS)
     }
     const onActivity = () => { if (!locked) arm() }
+    const onManualLock = () => { doLock() } // fired by the header "Lock" button
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'] as const
     events.forEach(e => window.addEventListener(e, onActivity, { passive: true }))
+    window.addEventListener('mk-lock', onManualLock)
     arm()
     return () => {
       events.forEach(e => window.removeEventListener(e, onActivity))
+      window.removeEventListener('mk-lock', onManualLock)
       if (timer.current) clearTimeout(timer.current)
     }
   }, [locked])

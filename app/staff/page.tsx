@@ -65,6 +65,28 @@ function Field(props: React.InputHTMLAttributes<HTMLInputElement> & { label: str
   )
 }
 
+// Password field with a show/hide eye toggle.
+function PasswordField(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+  const { label, ...rest } = props
+  const [show, setShow] = useState(false)
+  return (
+    <label style={{ display: 'block', marginBottom: 12 }}>
+      <span style={{ display: 'block', fontSize: 12, color: C.dim, marginBottom: 4, letterSpacing: '.04em', textTransform: 'uppercase' }}>{label}</span>
+      <div style={{ position: 'relative' }}>
+        <input {...rest} type={show ? 'text' : 'password'} style={{ width: '100%', padding: '10px 44px 10px 12px', background: C.input, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text, fontSize: 15, boxSizing: 'border-box' }} />
+        <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'Hide password' : 'Show password'}
+          style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: C.dim, padding: 6, display: 'flex', alignItems: 'center' }}>
+          {show ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 1 12s4 7 11 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          )}
+        </button>
+      </div>
+    </label>
+  )
+}
+
 const btn = (primary = true): React.CSSProperties => ({
   padding: '10px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
   background: primary ? C.accent : 'transparent', color: primary ? '#fff' : C.dim,
@@ -123,7 +145,7 @@ function Login({ onDone }: { onDone: () => void }) {
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 28, maxWidth: 400, margin: '0 auto' }}>
       <h1 style={{ fontFamily: 'Anton, sans-serif', fontSize: 28, margin: '0 0 16px' }}>MADE KULTURE — FRONT DESK</h1>
       <Field label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
-      <Field label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
+      <PasswordField label="Password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
       {err && <p style={{ color: C.accent, fontSize: 13 }}>{err}</p>}
       {notice && <p style={{ color: '#c9b27e', fontSize: 13, lineHeight: 1.5 }}>{notice}</p>}
       <button style={{ ...btn(), width: '100%', marginTop: 8 }} disabled={busy} onClick={submit}>{busy ? 'Signing in…' : 'Sign in'}</button>
