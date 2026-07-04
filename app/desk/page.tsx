@@ -172,8 +172,9 @@ export default function Desk() {
           <div style={{ color: C.dim, fontSize: 14 }}>{me.staff.name} · <span style={{ color: C.accent }}>{ROLE_LABELS[me.staff.role]}</span></div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {me.permissions?.['admin.access'] && <a href="/staff" style={{ ...btn('ghost'), textDecoration: 'none' }}>Staff →</a>}
-          {me.permissions?.['admin.access'] && <a href="/admin/dashboard" style={{ ...btn('ghost'), textDecoration: 'none' }}>Admin →</a>}
+          {/* Staff/Admin links intentionally removed: the desk is a shared terminal, so
+              it must not offer a one-tap path into admin. Reach /admin or /staff by URL
+              (each has its own auth). */}
           <button style={btn('ghost')} onClick={signOut}>Lock</button>
         </div>
       </div>
