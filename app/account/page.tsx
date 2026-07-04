@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { shortNoticeViewActive } from '@/lib/short-notice'
 import ShortNoticeRequest from '@/components/ShortNoticeRequest'
+import { getCreditBalance } from '@/lib/credits'
 
 export default async function AccountDashboard() {
   const supabase = createClient()
@@ -36,6 +37,8 @@ export default async function AccountDashboard() {
     .gte('start_time', new Date().toISOString())
     .neq('status', 'cancelled')
 
+  const creditCents = await getCreditBalance(user!.id)
+
   const firstName = profile?.full_name?.split(' ')[0] ?? user!.email?.split('@')[0]
 
   return (
@@ -52,6 +55,10 @@ export default async function AccountDashboard() {
         <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '20px 24px' }}>
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, lineHeight: 1 }}>{upcoming?.length ?? 0}</div>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Upcoming bookings</div>
+        </div>
+        <div style={{ background: creditCents > 0 ? 'linear-gradient(135deg, rgba(201,178,126,0.14), rgba(201,178,126,0.03))' : '#141414', border: `1px solid ${creditCents > 0 ? 'rgba(201,178,126,0.35)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 8, padding: '20px 24px' }}>
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, lineHeight: 1, color: creditCents > 0 ? '#c9b27e' : '#fff' }}>${(creditCents / 100).toFixed(2)}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Studio credit{creditCents > 0 ? ' · applies automatically at checkout' : ''}</div>
         </div>
       </div>
 

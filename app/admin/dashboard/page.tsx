@@ -1197,16 +1197,21 @@ export default function AdminDashboard() {
 
   const handleCancel = async (id: string) => {
     if (!confirm('Cancel this booking?')) return
-    const refund = confirm('Refund the payment to the card?\n\nOK = refund the full amount now\nCancel = cancel without refunding')
+    // Money resolution: credit first (refund-avoidance), else refund, else neither.
+    const credit = confirm('Add the booking amount to their account as studio credit?\n\nOK = issue non-expiring studio credit (no refund)\nCancel = don’t credit (you can choose refund next)')
+    const refund = credit ? false : confirm('Refund the payment to the card instead?\n\nOK = refund the full amount now\nCancel = neither (cancel only)')
     const notifyCustomer = confirm('Email the customer to let them know it was cancelled?\n\nOK = send the cancellation email\nCancel = cancel quietly (no email)')
     setCancelling(id)
     const res = await fetch(`/api/admin/bookings/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'cancelled', notifyCustomer, refund }),
+      body: JSON.stringify({ status: 'cancelled', notifyCustomer, refund, credit }),
     })
     const data = await res.json().catch(() => ({}))
     setCancelling(null)
-    if (refund && data?.refund) {
+    if (credit && data?.credit) {
+      if (data.credit.ok) alert(`$${((data.credit.amountCents || 0) / 100).toFixed(2)} added to their account as studio credit (never expires, auto-applies at their next booking).`)
+      else alert(`Booking cancelled, but credit wasn't added: ${data.credit.error || 'unknown error'}`)
+    } else if (refund && data?.refund) {
       if (data.refund.ok) alert(`Refunded $${((data.refund.amountCents || 0) / 100).toFixed(2)} to the card. If someone else paid, they've been notified.`)
       else alert(`Booking cancelled, but the refund didn't go through: ${data.refund.error || 'unknown error'}. Issue it in Square directly.`)
     }

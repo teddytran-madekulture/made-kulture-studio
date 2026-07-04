@@ -12,6 +12,8 @@ import { createBookingPin } from '@/lib/igloohome'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendOwnerPush } from '@/lib/push'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getCreditBalance, redeemCredit } from '@/lib/credits'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -396,12 +398,31 @@ export async function POST(req: NextRequest) {
     //     Security: a $0 total with no card is only allowed for comp customers,
     //     and any total > 0 always requires a card token.
     const compNoCard = !!customerPricingOverrides?.comp_no_card
-    const isFree = verifiedCents === 0
 
-    if (!isFree && !body.sourceId) {
+    // ── 8b. Account credit (verified session user only) ─────────────────────
+    //     Resolve WHO is booking from the session cookie, never the email field —
+    //     otherwise anyone could drain another account's credit by typing their
+    //     email. Credit applies first; the card covers only the remainder.
+    let creditUserId: string | null = null
+    let creditAppliedCents = 0
+    if (body.applyCredit !== false && verifiedCents > 0) {
+      try {
+        const ssb = createServerClient()
+        const { data: { user: sessionUser } } = await ssb.auth.getUser()
+        if (sessionUser?.id) {
+          const bal = await getCreditBalance(sessionUser.id)
+          if (bal > 0) { creditUserId = sessionUser.id; creditAppliedCents = Math.min(bal, verifiedCents) }
+        }
+      } catch (e) { console.error('[bookings] credit lookup error (non-fatal):', e) }
+    }
+    const chargeCents = verifiedCents - creditAppliedCents
+
+    if (chargeCents > 0 && !body.sourceId) {
       return NextResponse.json({ error: 'Payment information is required.' }, { status: 400 })
     }
-    if (isFree && !body.sourceId && !compNoCard) {
+    // Nothing to charge and no credit covering it → a truly $0 booking still
+    // needs a card on file (for overages) unless the customer is comp-no-card.
+    if (chargeCents === 0 && creditAppliedCents === 0 && !body.sourceId && !compNoCard) {
       return NextResponse.json({ error: 'A card is required to hold this booking.' }, { status: 400 })
     }
 
@@ -431,13 +452,13 @@ export async function POST(req: NextRequest) {
       })
       savedCardId = cardResult.card!.id!
 
-      if (!isFree) {
+      if (chargeCents > 0) {
         const payNote = lines.length > 1
           ? `Made Kulture — ${lines.length} sets — ${body.name}`
           : `Made Kulture — ${primary.setName} — ${primary.date} ${fmt12(primary.startHour)}–${fmt12(primary.endHour)}`
         const { result: paymentResult } = await square.paymentsApi.createPayment({
           sourceId: savedCardId, idempotencyKey: randomUUID(),
-          amountMoney: { amount: BigInt(verifiedCents), currency: 'USD' },
+          amountMoney: { amount: BigInt(chargeCents), currency: 'USD' },
           customerId: customerId!, locationId: process.env.SQUARE_LOCATION_ID!,
           note: payNote, buyerEmailAddress: body.email,
         })
@@ -490,7 +511,7 @@ export async function POST(req: NextRequest) {
           order_group:            orderGroup,
           source:                 'website',
           notes:                  body.notes,
-          ...(isFree ? { payment_status: 'paid' } : {}),
+          ...(chargeCents === 0 ? { payment_status: 'paid' } : {}),
         })
         .select('id, check_in_token').single()
 
@@ -538,6 +559,20 @@ export async function POST(req: NextRequest) {
         { error: 'Your payment may have processed but we could not save the booking. Please text (832) 408-1631 right away so we can sort it out.' },
         { status: 500 }
       )
+    }
+
+    // ── 11a. Redeem account credit (record the ledger entry) ───────────────
+    //     The charge above was already reduced by creditAppliedCents. Now write
+    //     the negative ledger row so the balance drops. Non-fatal: a failure here
+    //     means the customer got the booking cheaper than they should have, which
+    //     is logged for reconciliation rather than blocking the booking.
+    if (creditUserId && creditAppliedCents > 0) {
+      const { appliedCents } = await redeemCredit(creditUserId, creditAppliedCents, {
+        bookingId: firstBookingId, reason: `Applied to booking ${primary.setName} ${primary.date}`,
+      })
+      if (appliedCents !== creditAppliedCents) {
+        console.error('[bookings] credit redemption mismatch', { creditUserId, wanted: creditAppliedCents, applied: appliedCents })
+      }
     }
 
     // ── 11b. Front-door code (igloohome algoPIN) ───────────────────────────
@@ -608,7 +643,7 @@ export async function POST(req: NextRequest) {
     //     right after responding, delaying the email/SMS by minutes. Each send
     //     still .catch()es so a failure stays non-fatal.
     const notifications: Promise<any>[] = [
-      sendConfirmationSMS(body, lines, verifiedCents, checkInToken, doorCode)
+      sendConfirmationSMS(body, lines, chargeCents, checkInToken, doorCode)
         .catch(err => console.error('SMS error (non-fatal):', err)),
     ]
 
