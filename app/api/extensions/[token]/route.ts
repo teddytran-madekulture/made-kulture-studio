@@ -86,13 +86,28 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
   } else {
     const candidates: string[] = []
     if (customer?.square_customer_id) candidates.push(customer.square_customer_id)
-    if (b.auth_user_id) {
+
+    // Account profile via the booking's login…
+    let profileUserId: string | null = b.auth_user_id ?? null
+    // …or, when the booking wasn't made logged-in, via the auth account that
+    // shares the booking's email (same lookup the checkout flow uses).
+    if (!profileUserId && customer?.email) {
+      try {
+        const { data: authUsers } = await (db as any).auth.admin.listUsers()
+        const match = authUsers?.users?.find((u: any) => u.email?.toLowerCase() === String(customer.email).toLowerCase())
+        profileUserId = match?.id ?? null
+      } catch (e) {
+        console.error('[extension] auth email lookup failed', e)
+      }
+    }
+    if (profileUserId) {
       const { data: prof } = await db
-        .from('customer_profiles').select('square_customer_id').eq('id', b.auth_user_id).maybeSingle()
+        .from('customer_profiles').select('square_customer_id').eq('id', profileUserId).maybeSingle()
       if (prof?.square_customer_id && !candidates.includes(prof.square_customer_id)) {
         candidates.push(prof.square_customer_id)
       }
     }
+    console.log('[extension] card candidates:', candidates.length, 'authUser:', !!b.auth_user_id, 'emailPath:', !b.auth_user_id && !!customer?.email)
     for (const cid of candidates) {
       try {
         const { result } = await square.cardsApi.listCards(undefined, cid)
