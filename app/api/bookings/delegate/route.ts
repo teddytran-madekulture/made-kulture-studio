@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { validateAndPriceOrder, normalizePhone, fmt12, type BookingCoreInput } from '@/lib/booking-core'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/sms'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendOwnerPush } from '@/lib/push'
@@ -59,10 +60,12 @@ export async function POST(req: NextRequest) {
     }
     const channel = body.payerChannel || inferChannel(body.payerContact)
 
-    // 1. Validate + price (shared with checkout).
-    const v = await validateAndPriceOrder(supabase, body)
+    // 1. Validate + price (shared with checkout). Booker's login = member rate.
+    let isMember = false
+    try { const { data } = await createServerClient().auth.getUser(); isMember = !!data.user } catch { /* guest */ }
+    const v = await validateAndPriceOrder(supabase, body, { isMember })
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: v.status })
-    const { lines, verifiedCents, guestCount, guestFeeDollars, equipRates } = v.order
+    const { lines, verifiedCents, guestCount, guestFeeDollars, guestSurchargeDollars, equipRates } = v.order
 
     if (verifiedCents <= 0) {
       return NextResponse.json({ error: 'This order is $0 — just book it directly, no payment link needed.' }, { status: 400 })
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
     const bookingIds: string[] = []
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
-      const rowTotal = l.spaceDollars + (i === 0 ? equipTotal + guestFeeDollars : 0)
+      const rowTotal = l.spaceDollars + (i === 0 ? equipTotal + guestFeeDollars + guestSurchargeDollars : 0)
       const { data: row, error: insErr } = await supabase
         .from('bookings')
         .insert({

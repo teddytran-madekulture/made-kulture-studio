@@ -216,6 +216,15 @@ export async function POST(req: NextRequest) {
   try {
     const body: BookingRequest = await req.json()
 
+    // ── 0. Membership (verified session, not the email field) ──────────────
+    //     Logged-in = member rate; everyone else pays the guest surcharge.
+    let sessionUser: { id: string } | null = null
+    try {
+      const { data } = await createServerClient().auth.getUser()
+      sessionUser = data.user ? { id: data.user.id } : null
+    } catch { /* guest */ }
+    const isMember = !!sessionUser
+
     // ── 1. Customer pricing overrides ──────────────────────────────────────
     let customerPricingOverrides: any = null
     if (body.email) {
@@ -231,13 +240,15 @@ export async function POST(req: NextRequest) {
     const { data: settingRows } = await supabase
       .from('studio_settings')
       .select('key, value')
-      .in('key', ['buyout_rate', 'guest_capacity_per_set', 'per_person_fee', 'max_guests_per_set'])
+      .in('key', ['buyout_rate', 'guest_capacity_per_set', 'per_person_fee', 'max_guests_per_set', 'guest_surcharge_per_hour'])
     const settingMap: Record<string, string> = {}
     for (const s of settingRows ?? []) settingMap[s.key] = s.value
     const buyoutRate     = Number(settingMap['buyout_rate']) || 400
     const guestCapacity  = Number(settingMap['guest_capacity_per_set']) || 5
     const perPersonFee   = Number(settingMap['per_person_fee']) || 10
     const maxGuestsPerSet= Number(settingMap['max_guests_per_set']) || 7
+    const guestSurchargePerHour = settingMap['guest_surcharge_per_hour'] != null
+      ? Number(settingMap['guest_surcharge_per_hour']) : 10
 
     // ── 3. Normalize the requested set line items ──────────────────────────
     //     Studio = one line; otherwise use sets[] if present, else the legacy
@@ -362,13 +373,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── 6b. Non-member (guest) surcharge — per set-hour, members exempt.
+    //       Studio buyouts are a flat rate and are not surcharged.
+    const setHours = body.type === 'studio' ? 0 : lines.reduce((s, l) => s + (l.endHour - l.startHour), 0)
+    const guestSurchargeDollars = isMember ? 0 : guestSurchargePerHour * setHours
+
     // ── 7. Verify price server-side (prevent tampering) ────────────────────
     const equipCustom = equipmentDollars(body.equipment, equipRates, customerPricingOverrides)
     const equipStd    = equipmentDollars(body.equipment, equipRates)
     const spaceCustom = lines.reduce((s, l) => s + l.spaceDollars, 0)
     const spaceStd    = lines.reduce((s, l) => s + l.stdSpaceDollars, 0)
-    const customCents   = Math.round((spaceCustom + equipCustom + guestFeeDollars) * 100)
-    const standardCents = Math.round((spaceStd + equipStd + guestFeeDollars) * 100)
+    const customCents   = Math.round((spaceCustom + equipCustom + guestFeeDollars + guestSurchargeDollars) * 100)
+    const standardCents = Math.round((spaceStd + equipStd + guestFeeDollars + guestSurchargeDollars) * 100)
     const verifiedCents = customCents
 
     if (body.totalCents !== standardCents && body.totalCents !== customCents) {
@@ -422,14 +438,10 @@ export async function POST(req: NextRequest) {
     //     email. Applied AFTER promo; the card covers only the remainder.
     let creditUserId: string | null = null
     let creditAppliedCents = 0
-    if (body.applyCredit !== false && afterPromoCents > 0) {
+    if (body.applyCredit !== false && afterPromoCents > 0 && sessionUser?.id) {
       try {
-        const ssb = createServerClient()
-        const { data: { user: sessionUser } } = await ssb.auth.getUser()
-        if (sessionUser?.id) {
-          const bal = await getCreditBalance(sessionUser.id)
-          if (bal > 0) { creditUserId = sessionUser.id; creditAppliedCents = Math.min(bal, afterPromoCents) }
-        }
+        const bal = await getCreditBalance(sessionUser.id)
+        if (bal > 0) { creditUserId = sessionUser.id; creditAppliedCents = Math.min(bal, afterPromoCents) }
       } catch (e) { console.error('[bookings] credit lookup error (non-fatal):', e) }
     }
     const chargeCents = afterPromoCents - creditAppliedCents
@@ -510,7 +522,7 @@ export async function POST(req: NextRequest) {
       const l = lines[i]
       // Promo discount lands on the first row (like equipment/guest fees) so the
       // stored total reflects the post-promo price.
-      const rowTotal = Math.max(0, l.spaceDollars + (i === 0 ? equipDollars + guestFeeDollars - promoDiscountCents / 100 : 0))
+      const rowTotal = Math.max(0, l.spaceDollars + (i === 0 ? equipDollars + guestFeeDollars + guestSurchargeDollars - promoDiscountCents / 100 : 0))
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
         .insert({

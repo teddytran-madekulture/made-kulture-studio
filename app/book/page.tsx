@@ -199,6 +199,7 @@ function BookingWizard() {
   const [buyoutRate, setBuyoutRate] = useState(STUDIO_PRICE)
   const [ratesLoaded, setRatesLoaded] = useState(false)
   const [guestPricing, setGuestPricing] = useState<GuestPricing>(DEFAULT_GUEST_PRICING)
+  const [guestSurchargePerHour, setGuestSurchargePerHour] = useState(10)
   useEffect(() => {
     fetch('/api/sets').then(r => r.json()).then(d => {
       setSets(
@@ -212,6 +213,7 @@ function BookingWizard() {
       )
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
       if (d.guestPricing) setGuestPricing({ ...DEFAULT_GUEST_PRICING, ...d.guestPricing })
+      if (d.guestSurchargePerHour != null) setGuestSurchargePerHour(Number(d.guestSurchargePerHour))
     }).catch(() => {}).finally(() => setRatesLoaded(true))
   }, [])
 
@@ -360,7 +362,12 @@ function BookingWizard() {
   })()
   const guestFee = guestFeeLines.reduce((s, l) => s + l.amount, 0)
 
-  const grandTotal   = spaceTotal + discountedEquipTotal + guestFee
+  // Non-member surcharge: +$X per set-hour for guests (logged-in members exempt;
+  // studio buyouts not surcharged). Must mirror the server so the total matches.
+  const totalSetHours = booking.type === 'studio' ? 0 : setCart.reduce((s, it) => s + (it.endHour - it.startHour), 0)
+  const guestSurcharge = loggedIn ? 0 : guestSurchargePerHour * totalSetHours
+
+  const grandTotal   = spaceTotal + discountedEquipTotal + guestFee + guestSurcharge
 
   // Comp customers flagged "no card required" skip the card form when total is $0.
   const compNoCard   = !!pricingOverrides?.comp_no_card
@@ -1074,10 +1081,16 @@ function BookingWizard() {
                       ? <Row label={`EQUIPMENT (${equipDiscount}% off)`} value={`$${discountedEquipTotal}`} />
                       : <Row label="EQUIPMENT" value={`$${equipTotal}`} />
                   )}
+                  {guestSurcharge > 0 && <Row label={`NON-MEMBER RATE (+$${guestSurchargePerHour}/hr)`} value={`$${guestSurcharge}`} />}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                     <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', letterSpacing: '0.05em' }}>TOTAL</span>
                     <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff' }}>${grandTotal}</span>
                   </div>
+                  {guestSurcharge > 0 && (
+                    <div style={{ marginTop: 10, fontFamily: 'Inter', fontSize: 12, color: '#c9b27e', border: '1px solid rgba(201,178,126,0.3)', background: 'rgba(201,178,126,0.06)', padding: '9px 12px' }}>
+                      Members save ${guestSurchargePerHour}/hr. <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>Sign in</a> or <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>make a free account</a> to get the member rate.
+                    </div>
+                  )}
                 </div>
               </div>
 

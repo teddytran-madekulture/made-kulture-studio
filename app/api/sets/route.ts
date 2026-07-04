@@ -39,6 +39,7 @@ export async function GET() {
       'max_guests_per_set',
       'max_sets_before_buyout',
       'guest_penalty_per_head',
+      'guest_surcharge_per_hour',
     ])
   const settings: Record<string, string> = {}
   for (const r of settingRows ?? []) settings[r.key] = r.value
@@ -52,5 +53,8 @@ export async function GET() {
     penaltyPerHead:     Number(settings['guest_penalty_per_head']) || 50,
   }
 
-  return NextResponse.json({ sets: data ?? [], buyoutRate, guestPricing })
+  const guestSurchargePerHour = settings['guest_surcharge_per_hour'] != null
+    ? Number(settings['guest_surcharge_per_hour']) : 10
+
+  return NextResponse.json({ sets: data ?? [], buyoutRate, guestPricing, guestSurchargePerHour })
 }

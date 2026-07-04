@@ -63,6 +63,7 @@ export interface PricedOrder {
   verifiedCents: number
   guestCount:   number
   guestFeeDollars: number
+  guestSurchargeDollars: number
   equipRates:   Record<string, number>
   customerPricingOverrides: any
   primary:      OrderLine
@@ -153,7 +154,8 @@ export type ValidateResult =
 
 export async function validateAndPriceOrder(
   supabase: SupabaseClient,
-  body: BookingCoreInput
+  body: BookingCoreInput,
+  opts: { isMember?: boolean } = {}
 ): Promise<ValidateResult> {
   // 1. Customer pricing overrides
   let customerPricingOverrides: any = null
@@ -167,13 +169,16 @@ export async function validateAndPriceOrder(
   // 2. Settings
   const { data: settingRows } = await supabase
     .from('studio_settings').select('key, value')
-    .in('key', ['buyout_rate', 'guest_capacity_per_set', 'per_person_fee', 'max_guests_per_set'])
+    .in('key', ['buyout_rate', 'guest_capacity_per_set', 'per_person_fee', 'max_guests_per_set', 'guest_surcharge_per_hour'])
   const settingMap: Record<string, string> = {}
   for (const s of settingRows ?? []) settingMap[s.key] = s.value
   const buyoutRate      = Number(settingMap['buyout_rate']) || 400
   const guestCapacity   = Number(settingMap['guest_capacity_per_set']) || 5
   const perPersonFee    = Number(settingMap['per_person_fee']) || 10
   const maxGuestsPerSet = Number(settingMap['max_guests_per_set']) || 7
+  // Non-members pay a surcharge per set-hour; logged-in members pay the base rate.
+  const guestSurchargePerHour = settingMap['guest_surcharge_per_hour'] != null
+    ? Number(settingMap['guest_surcharge_per_hour']) : 10
 
   // 3. Normalize lines
   const rawLines: SetLine[] =
@@ -273,13 +278,18 @@ export async function validateAndPriceOrder(
     if (!ok) return { ok: false, error: conflicts.map(c => c.reason).join(' '), status: 409 }
   }
 
+  // 6b. Non-member (guest) surcharge — per set-hour, members exempt. Studio
+  //     buyouts are a flat rate and are not surcharged.
+  const setHours = body.type === 'studio' ? 0 : lines.reduce((s, l) => s + (l.endHour - l.startHour), 0)
+  const guestSurchargeDollars = opts.isMember ? 0 : guestSurchargePerHour * setHours
+
   // 7. Server-side price verification
   const equipCustom = equipmentDollars(body.equipment, equipRates, customerPricingOverrides)
   const equipStd    = equipmentDollars(body.equipment, equipRates)
   const spaceCustom = lines.reduce((s, l) => s + l.spaceDollars, 0)
   const spaceStd    = lines.reduce((s, l) => s + l.stdSpaceDollars, 0)
-  const customCents   = Math.round((spaceCustom + equipCustom + guestFeeDollars) * 100)
-  const standardCents = Math.round((spaceStd + equipStd + guestFeeDollars) * 100)
+  const customCents   = Math.round((spaceCustom + equipCustom + guestFeeDollars + guestSurchargeDollars) * 100)
+  const standardCents = Math.round((spaceStd + equipStd + guestFeeDollars + guestSurchargeDollars) * 100)
   const verifiedCents = customCents
 
   if (body.totalCents !== standardCents && body.totalCents !== customCents) {
@@ -307,7 +317,7 @@ export async function validateAndPriceOrder(
 
   return {
     ok: true,
-    order: { lines, verifiedCents, guestCount, guestFeeDollars, equipRates, customerPricingOverrides, primary },
+    order: { lines, verifiedCents, guestCount, guestFeeDollars, guestSurchargeDollars, equipRates, customerPricingOverrides, primary },
   }
 }
 
