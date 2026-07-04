@@ -1380,7 +1380,35 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   const [paying,         setPaying]         = useState(false)
   const [payError,       setPayError]       = useState<string | null>(null)
 
+  // "Someone else pays" mode
+  const [mode,          setMode]          = useState<'self' | 'delegate'>('self')
+  const [payerName,     setPayerName]     = useState('')
+  const [payerContact,  setPayerContact]  = useState('')
+  const [delegating,    setDelegating]    = useState(false)
+  const [delegateError, setDelegateError] = useState<string | null>(null)
+  const [sent,          setSent]          = useState<{ token: string; expiresAt: string; payerContact: string; holdMinutes: number; amount: string } | null>(null)
+  const [remaining,     setRemaining]     = useState(0)
+
   useEffect(() => { grandTotalRef.current = grandTotal }, [grandTotal])
+
+  // The order fields shared by the normal checkout and the delegated hold.
+  const bookingPayload = () => ({
+    type:       booking.type,
+    sets:       booking.type === 'set'
+                  ? setCart.map(it => ({ setSlug: it.setId, date: it.date, startHour: it.startHour, endHour: it.endHour }))
+                  : undefined,
+    setSlug:    booking.setId,
+    date:       booking.date,
+    startHour:  booking.startHour,
+    endHour:    booking.endHour,
+    equipment:  booking.equipment.map(l => ({ equipment_id: l.id, quantity: l.quantity })),
+    name:       booking.name,
+    email:      booking.email,
+    phone:      booking.phone,
+    notes:      booking.notes,
+    guests:     booking.guests,
+    totalCents: grandTotalRef.current * 100,
+  })
 
   // Shared booking submission used by both card and Google Pay
   const submitBooking = async (sourceId: string) => {
@@ -1390,26 +1418,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceId,
-          type:       booking.type,
-          // Multi-set order: one line item per set, each with its own date/time.
-          sets:       booking.type === 'set'
-                        ? setCart.map(it => ({ setSlug: it.setId, date: it.date, startHour: it.startHour, endHour: it.endHour }))
-                        : undefined,
-          // Legacy single-set / studio fields (studio uses these):
-          setSlug:    booking.setId,
-          date:       booking.date,
-          startHour:  booking.startHour,
-          endHour:    booking.endHour,
-          equipment:  booking.equipment.map(l => ({ equipment_id: l.id, quantity: l.quantity })),
-          name:       booking.name,
-          email:      booking.email,
-          phone:      booking.phone,
-          notes:      booking.notes,
-          guests:     booking.guests,
-          totalCents: grandTotalRef.current * 100,
-        }),
+        body: JSON.stringify({ sourceId, ...bookingPayload() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -1423,6 +1432,53 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
       setPayError('Something went wrong. Please try again.')
       setPaying(false)
     }
+  }
+
+  // Send a payment link to someone else (creates a 30-min hold).
+  const sendDelegate = async () => {
+    if (!payerContact.trim() || delegating) return
+    setDelegating(true); setDelegateError(null)
+    try {
+      const res = await fetch('/api/bookings/delegate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...bookingPayload(), payerName: payerName.trim() || undefined, payerContact: payerContact.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        setDelegateError(data.error || 'Could not send the payment link. Please try again.')
+        setDelegating(false)
+        return
+      }
+      try { localStorage.removeItem('mk_gear_cart') } catch {}
+      setSent({ token: data.token, expiresAt: data.expiresAt, payerContact: data.payerContact, holdMinutes: data.holdMinutes, amount: data.amount })
+    } catch {
+      setDelegateError('Something went wrong. Please try again.')
+    }
+    setDelegating(false)
+  }
+
+  // Live countdown for the "link sent" waiting screen.
+  useEffect(() => {
+    if (!sent?.expiresAt) return
+    const tick = () => setRemaining(Math.max(0, Math.floor((Date.parse(sent.expiresAt) - Date.now()) / 1000)))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [sent?.expiresAt])
+
+  // "Pay it myself instead" — release the hold, then fall back to the card form.
+  const payMyself = async () => {
+    if (sent?.token) {
+      // Cancel the outstanding hold so it doesn't block the card charge.
+      try {
+        await fetch('/api/bookings/delegate', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: sent.token }),
+        })
+      } catch {}
+    }
+    setSent(null); setMode('self'); setDelegateError(null)
   }
 
   // Load Square SDK, mount card + Google Pay
@@ -1495,6 +1551,66 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   return (
     <div>
       <div style={{ border: '1px solid rgba(255,255,255,0.1)', padding: isMobile ? 18 : 32 }}>
+
+        {/* Waiting screen — link sent, hold ticking down */}
+        {sent && (
+          <div>
+            <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 20 }}>
+              PAYMENT LINK SENT
+            </div>
+            <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, color: '#fff', letterSpacing: '0.02em', marginBottom: 14, wordBreak: 'break-word' }}>
+              WAITING ON {sent.payerContact}
+            </div>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, marginBottom: 20 }}>
+              We sent a ${sent.amount} payment link. This slot is held for them — we&rsquo;ll text you the moment they pay. If the timer runs out, the slot reopens.
+            </div>
+            <div style={{ display: 'inline-block', border: '1px solid rgba(255,255,255,0.15)', padding: '14px 22px', marginBottom: 24 }}>
+              <span style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.35)' }}>HELD FOR </span>
+              <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: remaining <= 300 ? '#e6b8a0' : '#fff', letterSpacing: '0.05em' }}>
+                {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
+              </span>
+            </div>
+            <button onClick={payMyself}
+              style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', padding: '15px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.7)' }}>
+              PAY IT MYSELF INSTEAD
+            </button>
+          </div>
+        )}
+
+        {/* Mode toggle — hidden once a link is sent */}
+        <div style={{ display: sent ? 'none' : 'flex', gap: 8, marginBottom: 24 }}>
+          {(['self', 'delegate'] as const).map(m => (
+            <button key={m} onClick={() => { setMode(m); setDelegateError(null); setPayError(null) }}
+              style={{ flex: 1, padding: '12px', cursor: 'pointer', background: mode === m ? '#fff' : 'transparent',
+                border: '1px solid rgba(255,255,255,0.18)', color: mode === m ? '#080808' : 'rgba(255,255,255,0.6)',
+                fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em' }}>
+              {m === 'self' ? 'PAY NOW' : 'SOMEONE ELSE PAYS'}
+            </button>
+          ))}
+        </div>
+
+        {/* Delegate form — shown only in delegate mode before a link is sent */}
+        <div style={{ display: (!sent && mode === 'delegate') ? 'block' : 'none' }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, marginBottom: 18 }}>
+            Send a ${grandTotal} payment link to whoever&rsquo;s covering the bill. We&rsquo;ll hold this slot for 30 minutes while they pay.
+          </div>
+          <input value={payerName} onChange={e => setPayerName(e.target.value)} placeholder="Their name (optional)"
+            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontFamily: 'Inter', fontSize: 14, padding: '13px 15px', marginBottom: 10, outline: 'none' }} />
+          <input value={payerContact} onChange={e => setPayerContact(e.target.value)} placeholder="Their phone or email"
+            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontFamily: 'Inter', fontSize: 14, padding: '13px 15px', marginBottom: 16, outline: 'none' }} />
+          {delegateError && (
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginBottom: 16, padding: '10px 14px', border: '1px solid rgba(255,100,100,0.2)', background: 'rgba(255,100,100,0.05)' }}>
+              {delegateError}
+            </div>
+          )}
+          <button onClick={sendDelegate} disabled={!payerContact.trim() || delegating}
+            style={{ width: '100%', background: (!payerContact.trim() || delegating) ? 'rgba(255,255,255,0.5)' : '#fff', border: 'none', padding: '16px', cursor: (!payerContact.trim() || delegating) ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: '#080808' }}>
+            {delegating ? 'SENDING…' : `SEND PAYMENT LINK — $${grandTotal}`}
+          </button>
+        </div>
+
+        {/* Self-pay block — ALWAYS mounted so the Square card stays attached; only shown in self mode */}
+        <div style={{ display: (!sent && mode === 'self') ? 'block' : 'none' }}>
         <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 24 }}>
           PAYMENT — SECURED BY SQUARE
         </div>
@@ -1553,11 +1669,14 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
             </button>
           </>
         )}
+        </div>{/* /self-pay block */}
       </div>
 
-      <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', marginTop: 16, fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)' }}>
-        ← BACK
-      </button>
+      {!sent && (
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', marginTop: 16, fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)' }}>
+          ← BACK
+        </button>
+      )}
     </div>
   )
 }

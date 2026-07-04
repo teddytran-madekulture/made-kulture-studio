@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Statuses that occupy a set's calendar.
-const ACTIVE_STATUSES = ['pending', 'confirmed']
+// 'pending_payment' = a delegated ("someone else pays") hold; it reserves the
+// slot for the 30-min window while the payer completes payment.
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'pending_payment']
 
 export interface SetWindow {
   setId: string

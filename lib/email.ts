@@ -642,3 +642,33 @@ export async function sendShortNoticeApprovedEmail(data: {
     html: layout(body),
   })
 }
+
+// ─── Generic branded notice (used by the delegated-payment flow) ─────────────
+export async function sendSimpleEmail(opts: {
+  to: string
+  subject: string
+  heading: string
+  paragraphs: string[]
+  ctaText?: string
+  ctaUrl?: string
+  label?: string
+}) {
+  const paras = opts.paragraphs
+    .map(p => `<p style="margin:0 0 16px;font-size:14px;color:#aaa;line-height:1.6;">${p}</p>`)
+    .join('')
+  const cta = opts.ctaText && opts.ctaUrl
+    ? `<a href="${opts.ctaUrl}" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">${esc(opts.ctaText)}</a>`
+    : ''
+  const body = `
+    <h1 style="margin:0 0 12px;font-size:20px;color:#fff;">${esc(opts.heading)}</h1>
+    ${paras}
+    ${cta}
+  `
+  return sendEmail(opts.label ?? 'simple_notice', {
+    from: FROM_EMAIL,
+    reply_to: REPLY_TO,
+    to: opts.to,
+    subject: opts.subject,
+    html: layout(body),
+  })
+}

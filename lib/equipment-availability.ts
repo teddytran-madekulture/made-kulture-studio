@@ -1,7 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 // Bookings in these states hold equipment; cancelled/completed do not reserve gear.
-const ACTIVE_STATUSES = ['confirmed', 'pending']
+// 'pending_payment' = delegated ("someone else pays") hold — reserves gear during
+// the payment window so a held booking's equipment can't be double-booked.
+const ACTIVE_STATUSES = ['confirmed', 'pending', 'pending_payment']
 
 /**
  * Sum the equipment units reserved across all active bookings that overlap the
