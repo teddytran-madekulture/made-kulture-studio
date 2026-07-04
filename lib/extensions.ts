@@ -29,7 +29,7 @@ function rateFor(setName: string | undefined, overrides: any): number {
 
 const SELECT = `
   id, start_time, end_time, status, set_id, total_amount, customer_id, auth_user_id, gcal_event_id,
-  square_card_on_file_id,
+  square_card_on_file_id, door_code,
   sets ( name ),
   customers ( name, email, phone, square_customer_id, pricing_overrides )
 `

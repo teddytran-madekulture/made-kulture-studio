@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { planExtension } from '@/lib/extensions'
 import { patchCalendarEvent } from '@/lib/gcal'
+import { createBookingPin } from '@/lib/igloohome'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 
@@ -165,16 +166,40 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
     .update({ status: 'confirmed', payment_id: paymentId })
     .eq('id', r.id)
 
-  // Calendar + receipt + owner ping — all non-fatal.
+  // Calendar + door code + receipt + owner ping — all non-fatal.
   if (b.gcal_event_id) {
     try { await patchCalendarEvent(b.gcal_event_id, { endISO: p.newEndISO }) }
     catch (e) { console.error('[extension] gcal patch error:', e) }
   }
+
+  // Door code: the original algoPIN expires at the old end time — mint a fresh
+  // one covering the extended window so the guest can still get back in.
+  let newDoorCode: string | null = null
+  if (b.door_code) {
+    try {
+      const pin = await createBookingPin({
+        startISO: b.start_time,
+        endISO: p.newEndISO,
+        accessName: `MK ext ${p.customerName}`.slice(0, 40),
+      })
+      if (pin) {
+        newDoorCode = pin.pin
+        await db.from('bookings')
+          .update({ door_code: pin.pin, door_code_pin_id: pin.pinId })
+          .eq('id', r.booking_id)
+      }
+    } catch (e) {
+      console.error('[extension] door code refresh error (non-fatal):', e)
+    }
+  }
+
   const untilLabel = centralLabel(p.newEndISO)
   if (p.customerPhone) {
     await sendSMS(
       p.customerPhone,
-      `✅ Done! ${p.setName} is yours until ${untilLabel}. $${(r.amount_cents / 100).toFixed(2)} charged to your card on file. — Made Kulture`
+      `✅ Done! ${p.setName} is yours until ${untilLabel}. $${(r.amount_cents / 100).toFixed(2)} charged to your card on file.` +
+      (newDoorCode ? `\n🔑 Updated door code (valid to ${untilLabel}): ${newDoorCode}` : '') +
+      `\n— Made Kulture`
     ).catch(e => console.error('[extension] receipt SMS error:', e))
   }
   await sendOwnerPush({
