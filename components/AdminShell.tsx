@@ -54,6 +54,7 @@ function SidebarInner() {
 
         <div style={sectionHdr}>STUDIO</div>
         <Item href="/admin/homepage" icon="🏠" label="Home Page" active={on('/admin/homepage')} />
+        <Item href="/admin/content" icon="✍️" label="Site Content" active={on('/admin/content')} />
         <Item href={`${D}sets`} icon="▦" label="Sets" />
         <Item href={`${D}equipment`} icon="🎥" label="Equipment" />
         <Item href={`${D}props`} icon="🛋" label="Props" />

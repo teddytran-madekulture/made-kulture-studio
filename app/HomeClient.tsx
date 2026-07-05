@@ -5,6 +5,10 @@ import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { SiteImages } from '@/lib/site-images'
 import { SITE_SETTINGS_DEFAULTS, type SiteSettings } from '@/lib/site-settings'
+import type { PageContent } from '@/lib/site-content'
+
+// Render a \n-delimited string with <br/> between lines.
+const nl = (s: string) => (s ?? '').split('\n').flatMap((line, i) => i === 0 ? [line] : [<br key={i} />, line])
 
 const SETS = [
   { num: '01', slug: 'set-a',         name: 'Set A',             price: '$50', desc: '12×15ft white cinderblock walls, large windows',      photo: '/images/sets/set-a.jpg',           gradient: 'linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)' },
@@ -28,9 +32,10 @@ const FAQS = [
   { q: 'Can I use fog or haze machines?', a: 'Special effects like fog and haze are only available during full buyouts or when your party is the only booking in the studio.' },
 ]
 
-export default function HomeClient({ images = {}, settings }: { images?: SiteImages; settings?: SiteSettings }) {
+export default function HomeClient({ images = {}, settings, content = {} }: { images?: SiteImages; settings?: SiteSettings; content?: PageContent }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const isMobile = useIsMobile()
+  const c = content
 
   const heroHeightVh = settings?.heroHeightVh ?? SITE_SETTINGS_DEFAULTS.heroHeightVh
 
@@ -104,32 +109,32 @@ export default function HomeClient({ images = {}, settings }: { images?: SiteIma
         <div ref={heroContentRef} style={{ position:'relative', zIndex:1, maxWidth:700, transform: isMobile ? undefined : `scale(${heroScale})`, transformOrigin: 'left bottom' }}>
           <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24 }}>
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
-            <span className="label">A CREATIVE SPACE DESIGNED FOR VISIONARIES</span>
+            <span className="label">{c.heroEyebrow}</span>
           </div>
           <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:28, lineHeight:0.9, letterSpacing:'0.005em', textTransform:'uppercase' }}>
-            CREATE<br />WITHOUT<br />LIMITS
+            {nl(c.heroHeadline)}
           </h1>
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
-            Madekulture is a multi-set creative studio built for photographers, videographers, brands, and creators. Bring your ideas to life.
+            {nl(c.heroParagraph)}
           </p>
           <div style={{ display:'flex', gap:12, flexDirection: isMobile ? 'column' : 'row' }}>
-            <Link href="/book?type=set" style={{
+            <Link href={c.heroPrimaryHref} style={{
               display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
               background:'#fff', color:'#080808', padding:'16px 24px', textDecoration:'none',
             }}>
-              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>Book a Set</span>
+              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroPrimaryLabel}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
-            <Link href="/book?type=studio" style={{
+            <Link href={c.heroSecondaryHref} style={{
               display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
               background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.18)', padding:'16px 24px', textDecoration:'none',
             }}>
-              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>Full Studio Takeover</span>
+              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroSecondaryLabel}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
           </div>
           <div style={{ marginTop:20, fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:11, letterSpacing:'0.18em', color:'rgba(255,255,255,0.4)', textTransform:'uppercase' }}>
-            By appointment only · Book online in advance · No walk-ins
+            {c.heroFinePrint}
           </div>
         </div>
       </section>
@@ -155,12 +160,12 @@ export default function HomeClient({ images = {}, settings }: { images?: SiteIma
       <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
         <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom: isMobile ? 40 : 64, flexWrap:'wrap', gap:24 }}>
           <div>
-            <div className="label" style={{ marginBottom:20 }}>EXPLORE OUR SETS</div>
+            <div className="label" style={{ marginBottom:20 }}>{c.setsEyebrow}</div>
             <h2 style={{ fontSize:'clamp(48px, 7vw, 90px)', color:'#fff', lineHeight:0.9 }}>
-              MULTIPLE SETS.<br />ENDLESS POSSIBILITIES.
+              {nl(c.setsHeading)}
             </h2>
             <div style={{ marginTop:16, fontFamily:'Inter', fontSize:13, color:'#c9b27e' }}>
-              Rates shown are guest prices — <strong>members save $10/hr</strong> with a free account.
+              {c.setsNote}
             </div>
           </div>
           <Link href="/sets" className="btn">VIEW ALL SETS ↗</Link>
@@ -315,9 +320,9 @@ export default function HomeClient({ images = {}, settings }: { images?: SiteIma
 
       {/* CTA */}
       <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
-        <div className="label" style={{ marginBottom:20 }}>MADEKULTURE / HOUSTON</div>
-        <h2 style={{ fontSize:'clamp(64px, 12vw, 160px)', color:'#fff', marginBottom:60 }}>LET'S<br />MAKE IT.</h2>
-        <Link href="/book" className="btn">BOOK THE STUDIO ↗</Link>
+        <div className="label" style={{ marginBottom:20 }}>{c.ctaEyebrow}</div>
+        <h2 style={{ fontSize:'clamp(64px, 12vw, 160px)', color:'#fff', marginBottom:60 }}>{nl(c.ctaHeading)}</h2>
+        <Link href={c.ctaButtonHref} className="btn">{c.ctaButtonLabel}</Link>
       </section>
 
       {/* FOOTER */}
@@ -325,7 +330,7 @@ export default function HomeClient({ images = {}, settings }: { images?: SiteIma
         <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '2fr 1fr 1fr 1fr', gap: isMobile ? 24 : 40, marginBottom:60 }}>
           <div>
             <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:22, letterSpacing:'0.05em', color:'#fff', lineHeight:1, marginBottom:20 }}>MADE<br />KULTURE</div>
-            <p style={{ fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.7, maxWidth:260 }}>A multi-set creative studio in Houston built for photographers, videographers, brands, and creators.</p>
+            <p style={{ fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.7, maxWidth:260 }}>{nl(c.footerBlurb)}</p>
           </div>
           <div>
             <div className="label" style={{ marginBottom:24 }}>STUDIO</div>
@@ -338,14 +343,14 @@ export default function HomeClient({ images = {}, settings }: { images?: SiteIma
           <div>
             <div className="label" style={{ marginBottom:24 }}>VISIT</div>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', lineHeight:1.8 }}>
-              4825 Gulf Fwy.<br />Houston, TX 77023<br /><br />Mon — Sun · 9am–10pm<br />
+              {nl(c.footerAddress)}<br /><br />Mon — Sun · 9am–10pm<br />
               <strong style={{ color:'#c9b27e' }}>By appointment only</strong> — <span style={{ color:'rgba(255,255,255,0.5)' }}>book online in advance. No walk-ins.</span>
             </p>
           </div>
           <div>
             <div className="label" style={{ marginBottom:24 }}>CONTACT</div>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', lineHeight:1.8 }}>
-              <a href="mailto:info@madekulture.com" style={{ color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>info@madekulture.com</a><br />(832) 408-1631<br /><span style={{fontSize:12}}>Text only</span>
+              <a href={`mailto:${c.footerEmail}`} style={{ color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>{c.footerEmail}</a><br />{c.footerPhone}<br /><span style={{fontSize:12}}>Text only</span>
             </p>
             <div style={{ display:'flex', gap:16, marginTop:24 }}>
               <a href="https://www.instagram.com/madekulture/" target="_blank" rel="noreferrer"
