@@ -12,6 +12,10 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
+  // PRE-LAUNCH: keep the whole site out of Google's index until we migrate to
+  // madekulture.com and are ready to launch. DELETE this `robots` block at launch,
+  // then submit the sitemap to Search Console so all the SEO work goes live.
+  robots: { index: false, follow: false },
   title: {
     default: 'Made Kulture — Photography Studio Rental in Houston, TX',
     template: '%s | Made Kulture — Houston Studio Rental',
