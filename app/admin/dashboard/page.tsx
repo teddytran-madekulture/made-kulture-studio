@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from '@/lib/agreements'
 import { useIsMobile } from '@/lib/use-is-mobile'
+import ReviewSettingsCard from '@/components/ReviewSettingsCard'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1767,6 +1768,8 @@ export default function AdminDashboard() {
                 Email bodies are branded templates — contact your developer to change the HTML layout.
               </p>
             </div>
+
+            <ReviewSettingsCard />
 
             {/* Ban message */}
             <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', padding: '20px 24px', marginBottom: 32 }}>

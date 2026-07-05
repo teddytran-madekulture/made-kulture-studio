@@ -672,3 +672,46 @@ export async function sendSimpleEmail(opts: {
     html: layout(body),
   })
 }
+// ─── Google review request (to customer, after their session) ─────────────────
+// Sent by /api/cron/review-requests 2-3 hours after a session ends. The link
+// goes through /review/[bookingId] so clicks are recorded before redirecting to
+// the Google review page (URL configured in Admin -> Settings -> Emails).
+
+export async function sendReviewRequestEmail(opts: { to: string; customerName: string; bookingId: string }) {
+  const firstName = opts.customerName?.split(' ')[0] || 'there'
+  const link = `${APP_URL}/review/${opts.bookingId}`
+  const html = layout(`
+    <h2 style="margin:0 0 16px;font-size:20px;color:#fff;">How was your session, ${firstName}?</h2>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#bbb;">
+      Thanks for shooting at Made Kulture today. If you had a good experience, a quick
+      Google review makes a huge difference for a small studio &mdash; it takes about
+      30 seconds and helps other creators find the space.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td style="background:${ACCENT_COLOR};border-radius:4px;">
+      <a href="${link}" style="display:inline-block;padding:14px 28px;font-size:13px;font-weight:700;letter-spacing:0.08em;color:#080808;text-decoration:none;">LEAVE A REVIEW</a>
+    </td></tr></table>
+    <p style="margin:0;font-size:12px;line-height:1.6;color:#777;">
+      Something not right about your visit? Just reply to this email or text us at (832) 408-1631 &mdash; we read everything.
+    </p>
+  `)
+  return sendEmail('review-request', { from: FROM_EMAIL, to: opts.to, subject: 'How was your session at Made Kulture?', html })
+}
+
+export async function sendReviewFollowupEmail(opts: { to: string; customerName: string; bookingId: string }) {
+  const firstName = opts.customerName?.split(' ')[0] || 'there'
+  const link = `${APP_URL}/review/${opts.bookingId}`
+  const html = layout(`
+    <h2 style="margin:0 0 16px;font-size:20px;color:#fff;">One quick favor, ${firstName}?</h2>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#bbb;">
+      Hope your shots from Made Kulture came out great. If you have 30 seconds, a Google
+      review from you would mean a lot &mdash; reviews are how most creators find us.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td style="background:${ACCENT_COLOR};border-radius:4px;">
+      <a href="${link}" style="display:inline-block;padding:14px 28px;font-size:13px;font-weight:700;letter-spacing:0.08em;color:#080808;text-decoration:none;">LEAVE A REVIEW</a>
+    </td></tr></table>
+    <p style="margin:0;font-size:12px;line-height:1.6;color:#777;">
+      This is the only reminder we&rsquo;ll send. Questions or feedback? Text (832) 408-1631.
+    </p>
+  `)
+  return sendEmail('review-followup', { from: FROM_EMAIL, to: opts.to, subject: 'One quick favor?', html })
+}

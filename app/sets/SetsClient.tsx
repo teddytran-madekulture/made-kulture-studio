@@ -51,8 +51,8 @@ function SetCard({ set, num }: { set: ApiSet; num: string }) {
       onMouseLeave={() => setHovered(false)}
       style={{ display: 'flex', flexDirection: 'column', background: '#0a0a0a', position: 'relative', overflow: 'hidden' }}
     >
-      {/* Photo / gradient */}
-      <div style={{ position: 'relative', aspectRatio: '4/3', background: gradient, overflow: 'hidden' }}>
+      {/* Photo / gradient — links to the set's landing page */}
+      <Link href={`/sets/${set.slug}`} style={{ position: 'relative', aspectRatio: '4/3', background: gradient, overflow: 'hidden', display: 'block' }}>
         {set.photo_url && (
           <img
             src={set.photo_url}
@@ -68,14 +68,14 @@ function SetCard({ set, num }: { set: ApiSet; num: string }) {
         <div style={{ position: 'absolute', top: 20, right: 24, fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: '#fff' }}>
           ${set.rate_per_hour}<span style={{ fontSize: 11, fontFamily: 'Inter', fontWeight: 400, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)', marginLeft: 3 }}>/HR</span>
         </div>
-      </div>
+      </Link>
 
       {/* Info */}
       <div style={{ padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
         <div>
-          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, letterSpacing: '0.03em', color: '#fff', lineHeight: 1, marginBottom: 6 }}>
+          <Link href={`/sets/${set.slug}`} style={{ display: 'block', fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, letterSpacing: '0.03em', color: '#fff', lineHeight: 1, marginBottom: 6, textDecoration: 'none' }}>
             {set.name.toUpperCase()}
-          </div>
+          </Link>
           {set.dimensions && (
             <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>
               {set.dimensions}
