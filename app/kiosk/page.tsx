@@ -18,7 +18,7 @@ const HAIR = 'rgba(201,178,126,0.22)'
 const INK = '#0b0b0d'
 
 type Screen = 'home' | 'checkin' | 'june' | 'team'
-interface Msg { role: string; content: string }
+interface Msg { id?: string; role: string; content: string; created_at?: string }
 
 const QUICK_QUESTIONS = [
   'Where are the restrooms?',
@@ -83,6 +83,7 @@ export default function KioskPage() {
   const [sending, setSending] = useState(false)
   const [summoned, setSummoned] = useState(false)
   const chatToken = useRef<string | null>(null)
+  const lastTs = useRef<string | null>(null)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -90,6 +91,7 @@ export default function KioskPage() {
     setScreen('home'); setPhone(''); setCi(null); setCiError('')
     setMsgs([]); setInput(''); setSummoned(false)
     chatToken.current = null
+    lastTs.current = null
   }, [])
 
   const touch = useCallback(() => {
@@ -149,14 +151,70 @@ export default function KioskPage() {
       })
       const d = await r.json()
       if (d.token) chatToken.current = d.token
-      if (d.reply) setMsgs(prev => [...prev, { role: 'agent', content: d.reply }])
-      else if (d.error) setMsgs(prev => [...prev, { role: 'system', content: d.error }])
+      if (d.error) setMsgs(prev => [...prev, { role: 'system', content: d.error }])
+      // Pull the canonical transcript (our message + June's reply — or just our
+      // message if Teddy has taken over, in which case his reply arrives via poll).
+      await refreshAll()
     } catch {
       setMsgs(prev => [...prev, { role: 'system', content: 'Connection hiccup — try again.' }])
     }
     setSending(false)
     requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight })
   }
+
+  // Pull the whole transcript from the server (canonical rows, with ids/timestamps).
+  const refreshAll = useCallback(async () => {
+    const token = chatToken.current
+    if (!token) return
+    try {
+      const url = new URL('/api/agent/chat', window.location.origin)
+      url.searchParams.set('token', token)
+      const res = await fetch(url.toString())
+      if (!res.ok) return
+      const data = await res.json()
+      const all: Msg[] = data.messages ?? []
+      setMsgs(all)
+      lastTs.current = all.length ? (all[all.length - 1].created_at ?? null) : null
+      requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight })
+    } catch {}
+  }, [])
+
+  // Poll for async replies — most importantly a human takeover from the inbox,
+  // which arrives as role 'teddy' with no synchronous response.
+  const poll = useCallback(async () => {
+    const token = chatToken.current
+    if (!token) return
+    try {
+      const url = new URL('/api/agent/chat', window.location.origin)
+      url.searchParams.set('token', token)
+      if (lastTs.current) url.searchParams.set('after', lastTs.current)
+      const res = await fetch(url.toString())
+      if (!res.ok) return
+      const data = await res.json()
+      const all: Msg[] = data.messages ?? []
+      if (!all.length) return
+      let fresh = false
+      setMsgs(prev => {
+        const seen = new Set(prev.map(p => p.id).filter(Boolean))
+        const add = all.filter(m => m.id && !seen.has(m.id))
+        if (!add.length) return prev
+        fresh = true
+        return [...prev, ...add]
+      })
+      lastTs.current = all[all.length - 1].created_at ?? lastTs.current
+      if (fresh) {
+        touch() // an incoming reply keeps the kiosk awake past the idle wipe
+        requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight })
+      }
+    } catch {}
+  }, [touch])
+
+  // While the June chat is open, poll every 4s so takeover replies show up live.
+  useEffect(() => {
+    if (screen !== 'june') return
+    const iv = setInterval(poll, 4000)
+    return () => clearInterval(iv)
+  }, [screen, poll])
 
   // ── Get the team ─────────────────────────────────────────────────────────
   const summon = async () => {
@@ -297,7 +355,10 @@ export default function KioskPage() {
           </div>
         )}
         {msgs.map((m, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
+            {m.role === 'teddy' && (
+              <div style={{ fontSize: 10, letterSpacing: '0.14em', color: CHAMP_DIM, marginBottom: 4, marginLeft: 4 }}>MADE KULTURE TEAM</div>
+            )}
             <div style={{
               maxWidth: '80%', padding: '13px 17px', fontSize: 16, lineHeight: 1.6, whiteSpace: 'pre-wrap',
               background: m.role === 'user'
