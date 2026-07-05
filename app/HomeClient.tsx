@@ -39,7 +39,8 @@ export default function HomeClient({ images = {} }: { images?: SiteImages }) {
 
       {/* HERO */}
       <section style={{
-        position: 'relative', minHeight: '85vh', display: 'flex', alignItems: 'flex-end',
+        position: 'relative', display: 'flex', alignItems: 'flex-end',
+        ...(isMobile ? { minHeight: '85vh' } : { height: '45vh' }),
         padding: isMobile ? '96px 20px 48px' : '84px 40px 60px', border: 'none', overflow: 'hidden',
       }}>
         {/* Background — editable at /admin/homepage (slot: hero) */}
