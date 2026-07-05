@@ -16,7 +16,7 @@ export type SiteImageSlot = {
 }
 
 export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
-  { slug: 'hero',         label: 'Hero background', group: 'Hero',   aspect: 16 / 9, outWidth: 2400, hint: 'Full-screen image behind “Create Without Limits”.' },
+  { slug: 'hero',         label: 'Hero background', group: 'Hero',   aspect: 16 / 9, outWidth: 3840, hint: 'Full-screen image behind “Create Without Limits”. Upload your full-resolution file for max sharpness.' },
   { slug: 'set-a',        label: 'Set A',            group: 'Sets',   aspect: 4 / 3 },
   { slug: 'set-b',        label: 'Set B',            group: 'Sets',   aspect: 4 / 3 },
   { slug: 'set-c',        label: 'Set C',            group: 'Sets',   aspect: 4 / 3 },
