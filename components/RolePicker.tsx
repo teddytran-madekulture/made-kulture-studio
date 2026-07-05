@@ -7,9 +7,8 @@ import { ROLE_CATEGORIES, MAX_ROLES } from '@/lib/roles'
  * - Searchable list of the full (categorized) role set + any owner-approved extras.
  * - Selected roles show as removable chips.
  * - Enforces a hard cap (MAX_ROLES by default).
- * - A typed role that matches nothing can be added as a custom "Other" — pages
- *   queue those to /api/roles/suggest on submit (a custom role is any value not
- *   present in `options`).
+ * - Roles are admin-curated: users pick only from `options`. There is no custom /
+ *   "suggest a role" path — the studio populates the role list itself.
  */
 export default function RolePicker({
   value,
@@ -50,9 +49,6 @@ export default function RolePicker({
   const known = new Set(ROLE_CATEGORIES.flatMap(c => c.roles).map(r => r.toLowerCase()))
   const extra = available.filter(r => !known.has(r.toLowerCase()))
   if (extra.length) groups.push({ label: 'More', roles: extra })
-
-  const exactExists = options.some(r => r.toLowerCase() === q) || has(q)
-  const canAddCustom = q.length > 1 && !exactExists
 
   const chip = (on: boolean): React.CSSProperties => ({
     background: on ? '#fff' : 'transparent',
@@ -102,7 +98,6 @@ export default function RolePicker({
               if (e.key === 'Enter') {
                 e.preventDefault()
                 if (available.length === 1) add(available[0])
-                else if (canAddCustom) add(query.trim())
               }
             }}
             placeholder="Search roles (e.g. Singer, Retoucher, Dancer…)"
@@ -138,17 +133,7 @@ export default function RolePicker({
               </div>
             ))}
 
-            {canAddCustom && (
-              <button
-                type="button"
-                onClick={() => add(query.trim())}
-                style={{ ...chip(false), alignSelf: 'flex-start', borderStyle: 'dashed' }}
-              >
-                + Add &ldquo;{query.trim()}&rdquo;
-              </button>
-            )}
-
-            {groups.length === 0 && !canAddCustom && (
+            {groups.length === 0 && (
               <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
                 No matches.
               </div>

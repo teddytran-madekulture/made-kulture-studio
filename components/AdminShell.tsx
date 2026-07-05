@@ -55,7 +55,6 @@ function Sidebar() {
 
         <div style={sectionHdr}>CUSTOMERS</div>
         <Item href={`${D}customers`} icon="👤" label="Client List" />
-        <Item href="/admin/roles" icon="🛡" label="Roles" active={on('/admin/roles')} />
         <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
 
         <div style={sectionHdr}>MARKETING</div>
