@@ -758,6 +758,14 @@ export default function AdminDashboard() {
     if (view === 'customers') fetchCustomers(custSearch, custFilter, custPage)
   }, [view, custPage, custFilter]) // eslint-disable-line
 
+  // Deep-link support: /admin/dashboard?view=customers lands on that view (used by
+  // the shared admin sidebar when navigating in from a standalone page).
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('view')
+    const allowed = ['list', 'calendar', 'emails', 'profile', 'customers', 'sets', 'equipment', 'usage', 'legal', 'props']
+    if (v && allowed.includes(v)) setView(v as any)
+  }, [])
+
   const fetchCustomerDetail = useCallback(async (id: string) => {
     setCustDetailLoading(true)
     const res = await fetch(`/api/admin/customers/${id}`)
