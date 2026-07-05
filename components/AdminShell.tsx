@@ -16,13 +16,13 @@ import type { ReactNode, CSSProperties } from 'react'
 const DIM = 'rgba(255,255,255,0.45)'
 const sectionHdr: CSSProperties = { padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }
 
-function Item({ href, icon, label, active, color }: { href: string; icon: string; label: string; active?: boolean; color?: string }) {
+function Item({ href, icon, label, active, color, indent }: { href: string; icon: string; label: string; active?: boolean; color?: string; indent?: boolean }) {
   return (
     <a href={href} style={{
       width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box',
       background: active ? 'rgba(255,255,255,0.07)' : 'transparent', textDecoration: 'none',
       borderLeft: active ? '2px solid #fff' : '2px solid transparent',
-      padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13,
+      padding: indent ? '9px 12px 9px 30px' : '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13,
       color: active ? '#fff' : (color || DIM),
     }}>
       <span style={{ width: 16, textAlign: 'center', flexShrink: 0, fontWeight: label === 'June Inbox' ? 800 : undefined }}>{icon}</span>{label}
@@ -34,6 +34,7 @@ function SidebarInner() {
   const pathname = usePathname() || ''
   const router = useRouter()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [websiteOpen, setWebsiteOpen] = useState(true)
   const on = (p: string) => pathname === p || pathname.startsWith(p + '/')
   const logout = async () => { await fetch('/api/admin/auth', { method: 'DELETE' }); router.push('/admin') }
   const D = '/admin/dashboard?view='
@@ -52,9 +53,17 @@ function SidebarInner() {
         <Item href={`${D}calendar`} icon="⊡" label="Calendar" />
         <Item href="/admin/inbox" icon="J" label="June Inbox" active={on('/admin/inbox')} color="#d4a843" />
 
+        <button onClick={() => setWebsiteOpen(o => !o)} style={{ ...sectionHdr, display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          WEBSITE <span style={{ fontSize: 8 }}>{websiteOpen ? '▲' : '▼'}</span>
+        </button>
+        {websiteOpen && (
+          <>
+            <Item href="/admin/homepage" icon="🏠" label="Home Page" active={on('/admin/homepage')} indent />
+            <Item href="/admin/content" icon="✍️" label="Site Content" active={on('/admin/content')} indent />
+          </>
+        )}
+
         <div style={sectionHdr}>STUDIO</div>
-        <Item href="/admin/homepage" icon="🏠" label="Home Page" active={on('/admin/homepage')} />
-        <Item href="/admin/content" icon="✍️" label="Site Content" active={on('/admin/content')} />
         <Item href={`${D}sets`} icon="▦" label="Sets" />
         <Item href={`${D}equipment`} icon="🎥" label="Equipment" />
         <Item href={`${D}props`} icon="🛋" label="Props" />

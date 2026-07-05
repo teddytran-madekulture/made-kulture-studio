@@ -1478,6 +1478,18 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* WEBSITE */}
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>WEBSITE</div>
+          {([['/admin/homepage', '🏠', 'Home Page'], ['/admin/content', '✍️', 'Site Content']] as const).map(([href, icon, label]) => (
+            <a key={href} href={href} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+              background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+              padding: '9px 12px 9px 30px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+            }}>
+              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
+            </a>
+          ))}
+
           {/* STUDIO */}
           <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>STUDIO</div>
           {([['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['props', '🛋', 'Props']] as const).map(([v, icon, label]) => (
