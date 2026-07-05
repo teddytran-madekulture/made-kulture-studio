@@ -329,6 +329,8 @@ export default function AdminDashboard() {
 
   const [bookings,  setBookings]  = useState<Booking[]>([])
   const [loading,   setLoading]   = useState(true)
+  // Square-sourced collected revenue, keyed "YYYY-MM" → { gross, net, count }. Null until loaded.
+  const [revenue,   setRevenue]   = useState<Record<string, { gross: number; net: number; count: number }> | null>(null)
   // Guest overage charging (per-row)
   const [guestPenalty,  setGuestPenalty]  = useState(50)
   const [overageFor,    setOverageFor]    = useState<string | null>(null)
@@ -348,7 +350,7 @@ export default function AdminDashboard() {
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
-  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'usage' | 'legal'>('list')
+  const [view,          setView]          = useState<'list' | 'calendar' | 'emails' | 'profile' | 'customers' | 'sets' | 'usage' | 'legal' | 'revenue'>('list')
   const [usage,         setUsage]         = useState<any | null>(null)
   const [usageLoading,  setUsageLoading]  = useState(false)
 
@@ -526,8 +528,17 @@ export default function AdminDashboard() {
   // the shared admin sidebar when navigating in from a standalone page).
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get('view')
-    const allowed = ['list', 'calendar', 'emails', 'profile', 'customers', 'sets', 'usage', 'legal']
+    const allowed = ['list', 'calendar', 'emails', 'profile', 'customers', 'sets', 'usage', 'legal', 'revenue']
     if (v && allowed.includes(v)) setView(v as any)
+  }, [])
+
+  // Pull true collected revenue from Square (net of refunds) for the stat cards
+  // and the Revenue view. Cached server-side, so this is cheap.
+  useEffect(() => {
+    fetch('/api/admin/revenue', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.months) setRevenue(d.months) })
+      .catch(() => {})
   }, [])
 
   const fetchCustomerDetail = useCallback(async (id: string) => {
@@ -1041,6 +1052,24 @@ export default function AdminDashboard() {
   const revenueTotal      = confirmed.reduce((s, b) => s + (b.total_amount || 0), 0)
   const revenueThisMonth  = thisMonth.reduce((s, b)  => s + (b.total_amount || 0), 0)
 
+  // ── Square-sourced collected revenue (money actually in the account) ──────────
+  const rev: Record<string, { gross: number; net: number; count: number }> = revenue || {}
+  const ymKey = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`
+  const curY = now.getFullYear(), curM = now.getMonth()
+  const prevM = new Date(curY, curM - 1, 1)
+  const sumYearThrough = (y: number, throughM: number) => {
+    let s = 0
+    for (let m = 0; m <= throughM; m++) s += rev[ymKey(y, m)]?.net || 0
+    return s
+  }
+  const sqThisMonth     = rev[ymKey(curY, curM)]?.net || 0
+  const sqLastMonth     = rev[ymKey(prevM.getFullYear(), prevM.getMonth())]?.net || 0
+  const sqThisYear      = sumYearThrough(curY, curM)
+  const sqLastYearSame  = sumYearThrough(curY - 1, curM)
+  const sqYoyPct        = sqLastYearSame ? ((sqThisYear - sqLastYearSame) / sqLastYearSame) * 100 : null
+  const revLoaded       = revenue !== null
+  const money0          = (n: number) => `$${Math.round(n).toLocaleString()}`
+
   const submitLabel = submitSuccess ? 'BOOKING ADDED'
     : submitting ? 'PROCESSING...'
     : chargeMode === 'card-on-file' && selectedCard
@@ -1160,7 +1189,7 @@ export default function AdminDashboard() {
 
           {/* STUDIO */}
           <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>STUDIO</div>
-          {([['sets', '▦', 'Products & Pricing']] as const).map(([v, icon, label]) => (
+          {([['revenue', '📈', 'Revenue'], ['sets', '▦', 'Products & Pricing']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -1274,12 +1303,13 @@ export default function AdminDashboard() {
       <div style={{ maxWidth: view === 'calendar' ? '100%' : 1200, margin: '0 auto', padding: isMobile ? '70px 14px 0' : '40px 40px 0' }}>
 
         {/* Stats */}
+        {view !== 'revenue' && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 1, background: 'rgba(255,255,255,0.05)', marginBottom: isMobile ? 24 : 40 }}>
           {[
-            { label: 'ALL-TIME REVENUE', value: `$${revenueTotal.toLocaleString()}` },
-            { label: 'THIS MONTH',       value: `$${revenueThisMonth.toLocaleString()}` },
-            { label: 'TOTAL BOOKINGS',   value: confirmed.length.toString() },
-            { label: 'UPCOMING',         value: upcoming.length.toString() },
+            { label: 'COLLECTED THIS MONTH', value: revLoaded ? money0(sqThisMonth) : '—' },
+            { label: 'LAST MONTH',           value: revLoaded ? money0(sqLastMonth) : '—' },
+            { label: sqYoyPct != null ? `THIS YEAR (${sqYoyPct >= 0 ? '+' : ''}${sqYoyPct.toFixed(0)}% YoY)` : 'THIS YEAR', value: revLoaded ? money0(sqThisYear) : '—' },
+            { label: 'UPCOMING',             value: upcoming.length.toString() },
           ].map(s => (
             <div key={s.label} style={{ background: '#0d0d0d', padding: '24px 28px' }}>
               <div style={{ ...labelStyle, marginBottom: 10 }}>{s.label}</div>
@@ -1287,6 +1317,123 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+        )}
+
+        {/* ── REVENUE ───────────────────────────────────────────────────── */}
+        {view === 'revenue' && (() => {
+          const yA = curY - 1, yB = curY
+          const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          const arrA = Array.from({ length: 12 }, (_, m) => rev[ymKey(yA, m)]?.net || 0)
+          const arrB = Array.from({ length: 12 }, (_, m) => rev[ymKey(yB, m)]?.net || 0)
+          const hasA = Array.from({ length: 12 }, (_, m) => !!rev[ymKey(yA, m)])
+          const hasB = Array.from({ length: 12 }, (_, m) => !!rev[ymKey(yB, m)])
+          const cntB = Array.from({ length: 12 }, (_, m) => rev[ymKey(yB, m)]?.count || 0)
+          const yearCount = cntB.reduce((s, n) => s + n, 0)
+          const aov = yearCount ? sqThisYear / yearCount : 0
+          const max = Math.max(1, ...arrA, ...arrB)
+          // chart geometry
+          const W = 720, baseY = 224, topY = 12, gw = 56, x0 = 34, barW = 22
+          const h = (v: number) => (v / max) * (baseY - topY)
+          const kpi = (label: string, value: string, sub?: string, subColor?: string) => (
+            <div style={{ background: '#0d0d0d', padding: '20px 22px' }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>{label}</div>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: '#fff', letterSpacing: '0.02em' }}>{value}</div>
+              {sub && <div style={{ fontSize: 11, marginTop: 4, color: subColor || 'rgba(255,255,255,0.4)' }}>{sub}</div>}
+            </div>
+          )
+          return (
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em' }}>REVENUE</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Collected via Square · net of refunds</div>
+              </div>
+
+              {!revLoaded ? (
+                <div style={{ padding: 60, textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading from Square…</div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 28 }}>
+                    {kpi('COLLECTED THIS MONTH', money0(sqThisMonth))}
+                    {kpi('LAST MONTH', money0(sqLastMonth))}
+                    {kpi(`THIS YEAR (${yB})`, money0(sqThisYear),
+                      sqYoyPct != null ? `${sqYoyPct >= 0 ? '▲' : '▼'} ${Math.abs(sqYoyPct).toFixed(0)}% vs ${yA} (same period)` : undefined,
+                      sqYoyPct == null ? undefined : sqYoyPct >= 0 ? '#5cc98a' : '#e07a7a')}
+                    {kpi('AVG / BOOKING', money0(aov), `${yearCount} bookings ${yB}`)}
+                  </div>
+
+                  {/* Monthly bar chart */}
+                  <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)', padding: '18px 16px 10px', marginBottom: 24 }}>
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 8, paddingLeft: 6 }}>
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(255,255,255,0.3)', marginRight: 5, verticalAlign: 'middle' }} />{yA}</span>
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}><span style={{ display: 'inline-block', width: 10, height: 10, background: '#d4a843', marginRight: 5, verticalAlign: 'middle' }} />{yB}</span>
+                    </div>
+                    <svg viewBox={`0 0 ${W} 250`} style={{ width: '100%', height: 'auto' }}>
+                      {[0.25, 0.5, 0.75, 1].map(f => (
+                        <g key={f}>
+                          <line x1={x0} x2={W - 10} y1={baseY - f * (baseY - topY)} y2={baseY - f * (baseY - topY)} stroke="rgba(255,255,255,0.06)" />
+                          <text x={2} y={baseY - f * (baseY - topY) + 3} fill="rgba(255,255,255,0.3)" fontSize="8">${Math.round(max * f / 1000)}k</text>
+                        </g>
+                      ))}
+                      <line x1={x0} x2={W - 10} y1={baseY} y2={baseY} stroke="rgba(255,255,255,0.15)" />
+                      {MN.map((mn, m) => {
+                        const gx = x0 + m * gw
+                        return (
+                          <g key={mn}>
+                            {hasA[m] && <rect x={gx + 3} y={baseY - h(arrA[m])} width={barW} height={h(arrA[m])} fill="rgba(255,255,255,0.3)" rx={2}><title>{`${mn} ${yA}: ${money0(arrA[m])}`}</title></rect>}
+                            {hasB[m] && <rect x={gx + 3 + barW + 3} y={baseY - h(arrB[m])} width={barW} height={h(arrB[m])} fill="#d4a843" rx={2}><title>{`${mn} ${yB}: ${money0(arrB[m])}`}</title></rect>}
+                            <text x={gx + 3 + barW + 3} y={baseY + 14} fill="rgba(255,255,255,0.4)" fontSize="9" textAnchor="middle">{mn}</text>
+                          </g>
+                        )
+                      })}
+                    </svg>
+                  </div>
+
+                  {/* Month-by-month table */}
+                  <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, letterSpacing: '0.1em' }}>
+                          <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600 }}>MONTH</th>
+                          <th style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600 }}>{yA}</th>
+                          <th style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600 }}>{yB}</th>
+                          <th style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600 }}>YOY</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {MN.map((mn, m) => {
+                          if (!hasA[m] && !hasB[m]) return null
+                          const partial = (m === curM)
+                          let yoy = '—'; let yc = 'rgba(255,255,255,0.3)'
+                          if (hasA[m] && hasB[m] && arrA[m] > 0) {
+                            const p = (arrB[m] - arrA[m]) / arrA[m] * 100
+                            yoy = `${p >= 0 ? '+' : ''}${p.toFixed(0)}%`; yc = p >= 0 ? '#5cc98a' : '#e07a7a'
+                          }
+                          return (
+                            <tr key={mn} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', color: partial ? 'rgba(255,255,255,0.55)' : '#fff' }}>
+                              <td style={{ padding: '9px 14px' }}>{mn}{partial ? ' *' : ''}</td>
+                              <td style={{ padding: '9px 14px', textAlign: 'right' }}>{hasA[m] ? money0(arrA[m]) : '—'}</td>
+                              <td style={{ padding: '9px 14px', textAlign: 'right' }}>{hasB[m] ? money0(arrB[m]) : '—'}</td>
+                              <td style={{ padding: '9px 14px', textAlign: 'right', color: yc, fontWeight: 600 }}>{yoy}</td>
+                            </tr>
+                          )
+                        })}
+                        <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)', fontWeight: 700 }}>
+                          <td style={{ padding: '11px 14px' }}>{`Jan–${MN[curM]} ${yB}`}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right' }}>{money0(sqLastYearSame)}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right' }}>{money0(sqThisYear)}</td>
+                          <td style={{ padding: '11px 14px', textAlign: 'right', color: sqYoyPct != null && sqYoyPct >= 0 ? '#5cc98a' : '#e07a7a' }}>{sqYoyPct != null ? `${sqYoyPct >= 0 ? '+' : ''}${sqYoyPct.toFixed(1)}%` : '—'}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 12, lineHeight: 1.5 }}>
+                    * current month is still in progress. Figures are money collected through Square, net of refunds — they match your Square dashboard. Updates within ~10 min of a new payment.
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ── SHORT-NOTICE REQUESTS (shown on every view when pending) ──────── */}
         {shortReqs.length > 0 && (
