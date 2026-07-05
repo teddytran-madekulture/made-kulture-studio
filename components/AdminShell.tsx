@@ -53,6 +53,7 @@ function SidebarInner() {
         <Item href="/admin/inbox" icon="J" label="June Inbox" active={on('/admin/inbox')} color="#d4a843" />
 
         <div style={sectionHdr}>STUDIO</div>
+        <Item href="/admin/homepage" icon="🏠" label="Home Page" active={on('/admin/homepage')} />
         <Item href={`${D}sets`} icon="▦" label="Sets" />
         <Item href={`${D}equipment`} icon="🎥" label="Equipment" />
         <Item href={`${D}props`} icon="🛋" label="Props" />
