@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
 
 // Shared admin sidebar for the standalone admin pages (marketing, promos, roles,
@@ -30,6 +31,7 @@ function Item({ href, icon, label, active, color }: { href: string; icon: string
 function Sidebar() {
   const pathname = usePathname() || ''
   const router = useRouter()
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const on = (p: string) => pathname === p || pathname.startsWith(p + '/')
   const logout = async () => { await fetch('/api/admin/auth', { method: 'DELETE' }); router.push('/admin') }
   const D = '/admin/dashboard?view='
@@ -61,12 +63,18 @@ function Sidebar() {
         <Item href="/admin/marketing" icon="📣" label="Email Campaign" active={on('/admin/marketing')} />
         <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
 
-        <div style={sectionHdr}>SETTINGS</div>
-        <Item href={`${D}emails`} icon="✉" label="Emails" />
-        <Item href={`${D}usage`} icon="📊" label="Usage" />
-        <Item href={`${D}legal`} icon="§" label="Legal" />
-        <Item href={`${D}profile`} icon="⊙" label="Account" />
-        <Item href="/admin/stack" icon="⚙" label="Services & Stack" active={on('/admin/stack')} />
+        <button onClick={() => setSettingsOpen(o => !o)} style={{ ...sectionHdr, display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          SETTINGS <span style={{ fontSize: 8 }}>{settingsOpen ? '▲' : '▼'}</span>
+        </button>
+        {settingsOpen && (
+          <>
+            <Item href={`${D}emails`} icon="✉" label="Emails" />
+            <Item href={`${D}usage`} icon="📊" label="Usage" />
+            <Item href={`${D}legal`} icon="§" label="Legal" />
+            <Item href={`${D}profile`} icon="⊙" label="Account" />
+            <Item href="/admin/stack" icon="⚙" label="Services & Stack" active={on('/admin/stack')} />
+          </>
+        )}
       </nav>
 
       <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>

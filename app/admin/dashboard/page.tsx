@@ -515,6 +515,7 @@ export default function AdminDashboard() {
   const custSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [bookingsOpen,     setBookingsOpen]     = useState(true)
+  const [settingsOpen,     setSettingsOpen]     = useState(false)
 
   const [emailSettings,    setEmailSettings]    = useState<EmailSetting[]>([])
   const [emailLoading,     setEmailLoading]     = useState(false)
@@ -1526,27 +1527,38 @@ export default function AdminDashboard() {
             </a>
           ))}
 
-          {/* SETTINGS */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>SETTINGS</div>
-          {([['emails', '✉', 'Emails'], ['usage', '📊', 'Usage'], ['legal', '§', 'Legal'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
-            <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-              background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
-              borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
-              padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
-              fontFamily: 'Inter, sans-serif', fontSize: 13,
-              color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
-            }}>
-              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
-            </button>
-          ))}
-          <a href="/admin/stack" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+          {/* SETTINGS (collapsible — rarely needed) */}
+          <button onClick={() => setSettingsOpen(o => !o)} style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)',
+            fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em',
           }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>⚙</span>Services & Stack
-          </a>
+            SETTINGS <span style={{ fontSize: 8 }}>{settingsOpen ? '▲' : '▼'}</span>
+          </button>
+          {settingsOpen && (
+            <div>
+              {([['emails', '✉', 'Emails'], ['usage', '📊', 'Usage'], ['legal', '§', 'Legal'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
+                <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
+                  borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
+                  padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
+                  fontFamily: 'Inter, sans-serif', fontSize: 13,
+                  color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
+                }}>
+                  <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
+                </button>
+              ))}
+              <a href="/admin/stack" style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+                background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+                padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+              }}>
+                <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>⚙</span>Services & Stack
+              </a>
+            </div>
+          )}
         </nav>
 
         {/* Bottom actions */}
