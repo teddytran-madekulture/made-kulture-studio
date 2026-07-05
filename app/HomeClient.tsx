@@ -39,8 +39,8 @@ export default function HomeClient({ images = {} }: { images?: SiteImages }) {
 
       {/* HERO */}
       <section style={{
-        position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'flex-end',
-        padding: isMobile ? '110px 20px 60px' : '130px 40px 80px', border: 'none', overflow: 'hidden',
+        position: 'relative', minHeight: '85vh', display: 'flex', alignItems: 'flex-end',
+        padding: isMobile ? '96px 20px 48px' : '84px 40px 60px', border: 'none', overflow: 'hidden',
       }}>
         {/* Background — editable at /admin/homepage (slot: hero) */}
         <div style={{
@@ -67,7 +67,7 @@ export default function HomeClient({ images = {} }: { images?: SiteImages }) {
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
             <span className="label">A CREATIVE SPACE DESIGNED FOR VISIONARIES</span>
           </div>
-          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:32, lineHeight:0.9, letterSpacing:'0.005em', textTransform:'uppercase' }}>
+          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:28, lineHeight:0.9, letterSpacing:'0.005em', textTransform:'uppercase' }}>
             CREATE<br />WITHOUT<br />LIMITS
           </h1>
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
