@@ -1,6 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { TEMPLATES, renderTemplateEmail } from '@/lib/email-templates'
+
+type FormState = { name: string; segment_key: string; subject: string; template_id: string; values: Record<string, string>; promo_id: string }
+const blankForm = (): FormState => ({ name: '', segment_key: 'all', subject: '', template_id: TEMPLATES[0].id, values: { ...TEMPLATES[0].defaults }, promo_id: '' })
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
 
@@ -41,8 +45,18 @@ export default function MarketingPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [f, setF] = useState({ name: '', segment_key: 'all', subject: '', body_html: '', promo_id: '' })
+  const [f, setF] = useState<FormState>(blankForm())
   const [supps, setSupps] = useState<Suppression[] | null>(null)
+
+  const template = TEMPLATES.find(t => t.id === f.template_id) ?? TEMPLATES[0]
+  const promoCode = promos.find(p => p.id === f.promo_id)?.code
+  // Switching template resets its fields to that template's starter copy.
+  const pickTemplate = (id: string) => {
+    const t = TEMPLATES.find(x => x.id === id) ?? TEMPLATES[0]
+    setF({ ...f, template_id: id, values: { ...t.defaults, ...f.values } })
+  }
+  const setVal = (key: string, val: string) => setF({ ...f, values: { ...f.values, [key]: val } })
+  const payload = () => ({ name: f.name, segment_key: f.segment_key, subject: f.subject, template_id: f.template_id, template_data: f.values, promo_id: f.promo_id })
 
   const loadSupps = async () => {
     if (supps) { setSupps(null); return } // toggle closed
@@ -64,10 +78,10 @@ export default function MarketingPage() {
 
   const create = async () => {
     setErr(''); setBusy(true)
-    const r = await fetch('/api/admin/marketing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const r = await fetch('/api/admin/marketing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) })
     const d = await r.json(); setBusy(false)
     if (!r.ok) { setErr(d.error || 'Could not create.'); return }
-    setF({ name: '', segment_key: 'all', subject: '', body_html: '', promo_id: '' })
+    setF(blankForm())
     load()
   }
 
@@ -89,17 +103,17 @@ export default function MarketingPage() {
 
   // Save the current draft and immediately fire a test to an address you enter — one step, no need to hunt for a button.
   const saveAndTest = async () => {
-    if (!f.name || !f.subject || !f.body_html) { setErr('Add a name, subject, and body first.'); return }
+    if (!f.name || !f.subject) { setErr('Add a campaign name and subject first.'); return }
     const to = prompt('Send a test to which email address?')
     if (!to) return
     setErr(''); setBusy(true)
-    const r = await fetch('/api/admin/marketing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const r = await fetch('/api/admin/marketing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) })
     const d = await r.json()
     if (!r.ok) { setBusy(false); setErr(d.error || 'Could not save draft.'); return }
     const t = await fetch(`/api/admin/marketing/${d.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true, testEmail: to }) })
     const td = await t.json(); setBusy(false)
     alert(t.ok ? `Draft saved and test sent to ${to}. Check it, then hit SEND → on the draft below.` : `Draft saved, but the test failed: ${td.error}`)
-    setF({ name: '', segment_key: 'all', subject: '', body_html: '', promo_id: '' })
+    setF(blankForm())
     load()
   }
 
@@ -108,7 +122,7 @@ export default function MarketingPage() {
 
   return (
     <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
-      <div style={{ maxWidth: 860, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>MARKETING</h1>
           <Link href="/admin/dashboard" style={{ color: C.dim, fontSize: 13, textDecoration: 'none' }}>← Admin</Link>
@@ -132,12 +146,48 @@ export default function MarketingPage() {
                 </div>
               </div>
               <div style={{ marginBottom: 14 }}><span style={lbl}>Subject</span><input style={inp} value={f.subject} onChange={e => setF({ ...f, subject: e.target.value })} placeholder="20% off your next shoot 🎬" /></div>
-              <div style={{ marginBottom: 14 }}><span style={lbl}>Body (HTML ok — links, bold, etc.)</span><textarea style={{ ...inp, minHeight: 140, resize: 'vertical' }} value={f.body_html} onChange={e => setF({ ...f, body_html: e.target.value })} placeholder="Hey! We just dropped a new set..." /></div>
-              <div style={{ marginBottom: 14, maxWidth: 300 }}><span style={lbl}>Attach promo code (optional)</span>
-                <select style={inp} value={f.promo_id} onChange={e => setF({ ...f, promo_id: e.target.value })}>
-                  <option value="">None</option>
-                  {promos.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
-                </select>
+
+              {/* Template picker */}
+              <div style={{ marginBottom: 16 }}>
+                <span style={lbl}>Template</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                  {TEMPLATES.map(t => {
+                    const active = t.id === f.template_id
+                    return (
+                      <button key={t.id} onClick={() => pickTemplate(t.id)} style={{ textAlign: 'left', cursor: 'pointer', background: active ? 'rgba(201,178,126,0.1)' : 'rgba(255,255,255,0.03)', border: `1px solid ${active ? C.accent : C.line}`, borderRadius: 8, padding: '11px 13px' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: active ? C.accent : C.text }}>{t.name}</div>
+                        <div style={{ fontSize: 11, color: C.dim, marginTop: 3, lineHeight: 1.4 }}>{t.blurb}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Layout: fields + live preview */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 14 }}>
+                <div>
+                  {template.fields.map(fld => (
+                    <div key={fld.key} style={{ marginBottom: 12 }}>
+                      <span style={lbl}>{fld.label}</span>
+                      {fld.type === 'textarea'
+                        ? <textarea style={{ ...inp, minHeight: 90, resize: 'vertical' }} value={f.values[fld.key] ?? ''} onChange={e => setVal(fld.key, e.target.value)} placeholder={fld.placeholder} />
+                        : <input style={inp} value={f.values[fld.key] ?? ''} onChange={e => setVal(fld.key, e.target.value)} placeholder={fld.placeholder} />}
+                    </div>
+                  ))}
+                  <div style={{ marginBottom: 4 }}><span style={lbl}>Attach promo code (optional)</span>
+                    <select style={inp} value={f.promo_id} onChange={e => setF({ ...f, promo_id: e.target.value })}>
+                      <option value="">None</option>
+                      {promos.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <span style={lbl}>Live preview</span>
+                  <div style={{ border: `1px solid ${C.line}`, borderRadius: 8, overflow: 'hidden', background: '#0a0a0b' }}>
+                    <iframe title="preview" style={{ width: '100%', height: 520, border: 'none', display: 'block' }} srcDoc={renderTemplateEmail(f.template_id, f.values, promoCode)} />
+                  </div>
+                  <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Header, address & unsubscribe are added to every send automatically.</div>
+                </div>
               </div>
               {err && <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{err}</div>}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getSegmentRecipients, sendCampaignEmails, type SegmentKey } from '@/lib/marketing'
+import { renderTemplateBody } from '@/lib/email-templates'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,14 +16,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const db = supabaseAdmin()
   const { data: c } = await db.from('marketing_campaigns')
-    .select('id, subject, body_html, segment_key, status, promo_id').eq('id', params.id).maybeSingle()
+    .select('id, subject, body_html, template_id, template_data, segment_key, status, promo_id').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Campaign not found.' }, { status: 404 })
 
-  // Append the attached promo code as a callout so recipients know how to use it.
-  let body = c.body_html as string
+  // Resolve the attached promo code (rendered inside the template's promo block).
+  let promoCode: string | undefined
   if (c.promo_id) {
     const { data: p } = await db.from('promo_codes').select('code').eq('id', c.promo_id).maybeSingle()
-    if (p?.code) body += `<p style="margin:20px 0 0;font-size:16px;">Use code <strong style="color:#c9b27e;">${p.code}</strong> at checkout.</p>`
+    promoCode = p?.code || undefined
+  }
+
+  // Template campaign → render branded HTML; legacy campaign → raw body_html (+ promo line).
+  let body: string
+  if (c.template_id) {
+    body = renderTemplateBody(c.template_id as string, (c.template_data as any) || {}, promoCode)
+  } else {
+    body = (c.body_html as string) || ''
+    if (promoCode) body += `<p style="margin:20px 0 0;font-size:16px;">Use code <strong style="color:#c9b27e;">${promoCode}</strong> at checkout.</p>`
   }
 
   // Test send — one email, no status change.

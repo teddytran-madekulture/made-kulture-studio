@@ -65,11 +65,15 @@ export async function POST(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   let b: any
   try { b = await req.json() } catch { return NextResponse.json({ error: 'Bad request.' }, { status: 400 }) }
-  if (!b.name || !b.subject || !b.body_html) return NextResponse.json({ error: 'Name, subject, and body are required.' }, { status: 400 })
+  if (!b.name || !b.subject) return NextResponse.json({ error: 'Name and subject are required.' }, { status: 400 })
+  if (!b.template_id && !b.body_html) return NextResponse.json({ error: 'Pick a template or provide HTML.' }, { status: 400 })
   const segment_key = ['all', 'members', 'guests', 'lapsed', 'recent'].includes(b.segment_key) ? b.segment_key : 'all'
 
   const { data, error } = await supabaseAdmin().from('marketing_campaigns').insert({
-    name: b.name, segment_key, subject: b.subject, body_html: b.body_html,
+    name: b.name, segment_key, subject: b.subject,
+    body_html: b.body_html || null,
+    template_id: b.template_id || null,
+    template_data: b.template_data || null,
     promo_id: b.promo_id || null, status: 'draft',
   }).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -6,11 +6,11 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase'
+import { renderShell } from '@/lib/email-templates'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 // Keep marketing OFF the transactional sender to protect booking-email deliverability.
 const MARKETING_FROM = process.env.MARKETING_FROM || process.env.EMAIL_FROM || 'Made Kulture <bookings@madekulture.com>'
-const STUDIO_ADDRESS_LINE = '4825 Gulf Freeway, Houston TX 77023'
 
 export type SegmentKey = 'all' | 'members' | 'guests' | 'lapsed' | 'recent'
 export interface Recipient { email: string; name: string | null }
@@ -92,20 +92,6 @@ export async function getSegmentCounts(): Promise<Record<SegmentKey, number>> {
 }
 
 // ── Send ──────────────────────────────────────────────────────────────────────
-function wrapHtml(bodyHtml: string, unsubUrl: string): string {
-  return `<!DOCTYPE html><html><body style="margin:0;background:#111;font-family:Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;padding:32px 16px;"><tr><td align="center">
-    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#1a1a1a;border-radius:8px;overflow:hidden;">
-      <tr><td style="background:#000;padding:18px 28px;border-bottom:2px solid #c9b27e;"><span style="font-family:'Courier New',monospace;font-size:18px;font-weight:700;letter-spacing:0.15em;color:#fff;">MADE KULTURE</span></td></tr>
-      <tr><td style="padding:28px;color:#ddd;font-size:15px;line-height:1.7;">${bodyHtml}</td></tr>
-      <tr><td style="padding:18px 28px;border-top:1px solid #333;color:#666;font-size:11px;line-height:1.6;">
-        Made Kulture · ${STUDIO_ADDRESS_LINE}<br/>
-        You're receiving this because you've booked with us. <a href="${unsubUrl}" style="color:#999;">Unsubscribe</a>.
-      </td></tr>
-    </table>
-  </td></tr></table></body></html>`
-}
-
 // Build the unsubscribe URL, optionally tagged with the campaign that drove it
 // (the campaign id isn't secret — the email is still signed inside the token).
 function unsubUrl(email: string, campaignId?: string): string {
@@ -128,7 +114,7 @@ export async function sendCampaignEmails(
       from: MARKETING_FROM,
       to: r.email,
       subject,
-      html: wrapHtml(bodyHtml, unsubUrl(r.email, campaignId)),
+      html: renderShell(bodyHtml, unsubUrl(r.email, campaignId)),
       headers: { 'List-Unsubscribe': `<${unsubUrl(r.email, campaignId)}>` },
       ...(campaignId ? { tags: [{ name: 'campaign_id', value: campaignId }] } : {}),
     }))
