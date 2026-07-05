@@ -6,6 +6,7 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 import type { SiteImages } from '@/lib/site-images'
 import { SITE_SETTINGS_DEFAULTS, type SiteSettings } from '@/lib/site-settings'
 import type { PageContent } from '@/lib/site-content'
+import { parseList } from '@/lib/content-list'
 
 // Render a \n-delimited string with <br/> between lines.
 const nl = (s: string) => (s ?? '').split('\n').flatMap((line, i) => i === 0 ? [line] : [<br key={i} />, line])
@@ -36,6 +37,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const isMobile = useIsMobile()
   const c = content
+  const tiles = parseList(c.featureTiles)
 
   const heroHeightVh = settings?.heroHeightVh ?? SITE_SETTINGS_DEFAULTS.heroHeightVh
 
@@ -139,15 +141,9 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
         </div>
       </section>
 
-      {/* FEATURES BAR */}
-      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(5,1fr)' }}>
-        {[
-          { icon:'⊞', title:'MULTIPLE SETS', desc:'Centrally located 4825 Gulf Fwy. Houston TX 77023' },
-          { icon:'◎', title:'PRIVATE OR SHARED', desc:'Book a single set or take over the studio.' },
-          { icon:'◷', title:'FLEXIBLE HOURS', desc:'By the hour. Stay as long as you need.' },
-          { icon:'◈', title:'PROPS & EQUIPMENT', desc:'Everything on hand. Nothing to lug in.' },
-          { icon:'◉', title:'EASY ACCESS', desc:'Centrally located in Houston, TX.' },
-        ].map((f, i) => (
+      {/* FEATURES BAR — tiles are editable at /admin/website/pages/home */}
+      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${Math.max(tiles.length, 1)},1fr)` }}>
+        {tiles.map((f, i) => (
           <div key={i} style={{ padding:'40px 28px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
             <div style={{ fontSize:20, marginBottom:16, color:'rgba(255,255,255,0.4)' }}>{f.icon}</div>
             <div className="label" style={{ color:'#fff', marginBottom:10 }}>{f.title}</div>

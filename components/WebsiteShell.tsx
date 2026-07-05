@@ -43,7 +43,11 @@ function SidebarInner() {
 
       <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
         <div style={sectionHdr}>PAGES</div>
-        <Item href="/admin/website/home" icon="🏠" label="Home Page" active={on('/admin/website/home')} />
+        <Item href="/admin/website/pages/home" icon="🏠" label="Home Page" active={on('/admin/website/pages/home') || on('/admin/website/home')} />
+        <Item href="/admin/website/pages/sets" icon="▦" label="Sets Page" active={on('/admin/website/pages/sets')} />
+        <Item href="/admin/website/pages/studio-rules" icon="§" label="Studio Rules" active={on('/admin/website/pages/studio-rules')} />
+        <Item href="/admin/website/pages/props" icon="🛋" label="Props Page" active={on('/admin/website/pages/props')} />
+        <Item href="/admin/website/pages/gear" icon="🎥" label="Gear Page" active={on('/admin/website/pages/gear')} />
 
         <div style={sectionHdr}>CATALOG</div>
         <Item href="/admin/website/equipment" icon="🎥" label="Equipment" active={on('/admin/website/equipment')} />
