@@ -1,15 +1,17 @@
 'use client'
-import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
 
-// Shared admin sidebar for the standalone admin pages (marketing, promos, roles,
-// signups, portfolio, inbox, stack, add-prop). It's a faithful visual match of the
-// sidebar built into /admin/dashboard, so navigation feels continuous. The dashboard
-// keeps its own inline sidebar (with instant in-page view switching); here the
-// "view" items deep-link into the dashboard via ?view=. Login (/admin) and the
-// dashboard render bare — this wrapper only adds the sidebar elsewhere.
+// Shared admin sidebar for the standalone admin pages (marketing, promos, portfolio,
+// inbox, stack, add-prop). It's a faithful visual match of the sidebar built into
+// /admin/dashboard, so navigation feels continuous. The dashboard keeps its own
+// inline sidebar (with instant in-page view switching); here the "view" items
+// deep-link into the dashboard via ?view=. Login (/admin) and the dashboard render
+// bare — this wrapper only adds the sidebar elsewhere.
+//
+// Responsive: on phones the sidebar is off-canvas (hamburger to open, tap-away to
+// close); tapping a link navigates to a fresh page where it starts collapsed.
 
 const DIM = 'rgba(255,255,255,0.45)'
 const sectionHdr: CSSProperties = { padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }
@@ -28,7 +30,7 @@ function Item({ href, icon, label, active, color }: { href: string; icon: string
   )
 }
 
-function Sidebar() {
+function SidebarInner() {
   const pathname = usePathname() || ''
   const router = useRouter()
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -37,7 +39,7 @@ function Sidebar() {
   const D = '/admin/dashboard?view='
 
   return (
-    <div style={{ position: 'fixed', left: 0, top: 0, bottom: 0, width: 220, background: '#080808', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', zIndex: 60 }}>
+    <>
       <div style={{ padding: '28px 24px 24px' }}>
         <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff', lineHeight: 1 }}>MADE KULTURE</div>
         <div style={{ fontSize: 10, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)', marginTop: 3 }}>/ ADMIN</div>
@@ -83,19 +85,46 @@ function Sidebar() {
         <a href="/staff" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px', fontFamily: 'Inter, sans-serif', fontSize: 11, textAlign: 'center', textDecoration: 'none', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)' }}>STAFF →</a>
         <button onClick={logout} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.35)' }}>LOG OUT</button>
       </div>
-    </div>
+    </>
   )
 }
 
 export default function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || ''
-  // Login and the dashboard render bare (dashboard has its own sidebar).
+  const [isMobile, setIsMobile] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
+  // Login and the dashboard render bare (dashboard has its own sidebar + mobile nav).
   const bare = pathname === '/admin' || pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')
   if (bare) return <>{children}</>
+
+  const hidden = isMobile && !open
+
   return (
     <>
-      <Sidebar />
-      <div style={{ marginLeft: 220 }}>{children}</div>
+      {isMobile && !open && (
+        <button onClick={() => setOpen(true)} aria-label="Open menu" style={{ position: 'fixed', top: 10, left: 10, zIndex: 70, width: 42, height: 42, background: '#141416', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 8, color: '#fff', fontSize: 18, cursor: 'pointer' }}>☰</button>
+      )}
+      {isMobile && open && (
+        <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 61 }} />
+      )}
+      <aside style={{
+        position: 'fixed', left: 0, top: 0, bottom: 0, width: 220, background: '#080808',
+        borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', zIndex: 62,
+        transform: hidden ? 'translateX(-100%)' : 'translateX(0)', transition: 'transform 0.25s ease',
+        boxShadow: isMobile && open ? '0 0 40px rgba(0,0,0,0.6)' : 'none',
+      }}>
+        <SidebarInner />
+      </aside>
+      <div style={{ marginLeft: isMobile ? 0 : 220, paddingTop: isMobile ? 52 : 0, minHeight: '100vh' }}>{children}</div>
     </>
   )
 }
