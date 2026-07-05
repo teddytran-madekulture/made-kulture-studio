@@ -46,27 +46,29 @@ function Sidebar() {
         <div style={sectionHdr}>BOOKINGS</div>
         <Item href={`${D}list`} icon="≡" label="List View" />
         <Item href={`${D}calendar`} icon="⊡" label="Calendar" />
-
-        <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
         <Item href="/admin/inbox" icon="J" label="June Inbox" active={on('/admin/inbox')} color="#d4a843" />
-        <Item href="/admin/stack" icon="⚙" label="Services & Stack" active={on('/admin/stack')} />
-        <Item href={`${D}customers`} icon="👤" label="Customers" />
+
+        <div style={sectionHdr}>STUDIO</div>
         <Item href={`${D}sets`} icon="▦" label="Sets" />
         <Item href={`${D}equipment`} icon="🎥" label="Equipment" />
         <Item href={`${D}props`} icon="🛋" label="Props" />
 
-        <div style={sectionHdr}>GROWTH</div>
+        <div style={sectionHdr}>PEOPLE</div>
+        <Item href={`${D}customers`} icon="👤" label="Customers" />
+        <Item href="/admin/signups" icon="✚" label="Signups" active={on('/admin/signups')} />
+        <Item href="/admin/roles" icon="🛡" label="Roles" active={on('/admin/roles')} />
+        <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
+
+        <div style={sectionHdr}>MARKETING</div>
         <Item href="/admin/marketing" icon="📣" label="Marketing" active={on('/admin/marketing')} />
         <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
-        <Item href="/admin/roles" icon="🛡" label="Roles" active={on('/admin/roles')} />
-        <Item href="/admin/signups" icon="✚" label="Signups" active={on('/admin/signups')} />
-        <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
 
         <div style={sectionHdr}>SETTINGS</div>
         <Item href={`${D}emails`} icon="✉" label="Emails" />
         <Item href={`${D}usage`} icon="📊" label="Usage" />
         <Item href={`${D}legal`} icon="§" label="Legal" />
         <Item href={`${D}profile`} icon="⊙" label="Account" />
+        <Item href="/admin/stack" icon="⚙" label="Services & Stack" active={on('/admin/stack')} />
       </nav>
 
       <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>

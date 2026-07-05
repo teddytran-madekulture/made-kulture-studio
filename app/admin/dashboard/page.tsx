@@ -1467,28 +1467,19 @@ export default function AdminDashboard() {
                   <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
                 </button>
               ))}
+              <a href="/admin/inbox" style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+                background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+                padding: '9px 12px 9px 22px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#d4a843',
+              }}>
+                <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: 800 }}>J</span>June Inbox
+              </a>
             </div>
           )}
 
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '12px 0' }} />
-
-          {/* June Inbox — separate page, styled like a nav item with her gold accent */}
-          <a href="/admin/inbox" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#d4a843',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: 800 }}>J</span>June Inbox
-          </a>
-          <a href="/admin/stack" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>⚙</span>Services & Stack
-          </a>
-
-          {([['customers', '👤', 'Customers'], ['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['props', '🛋', 'Props']] as const).map(([v, icon, label]) => (
+          {/* STUDIO */}
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>STUDIO</div>
+          {([['sets', '▦', 'Sets'], ['equipment', '🎥', 'Equipment'], ['props', '🛋', 'Props']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
               background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -1497,13 +1488,23 @@ export default function AdminDashboard() {
               fontFamily: 'Inter, sans-serif', fontSize: 13,
               color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
             }}>
-              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: v === 'customers' ? 12 : undefined }}>{icon}</span>{label}
+              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
             </button>
           ))}
 
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>GROWTH</div>
-
-          {([['/admin/marketing', '📣', 'Marketing'], ['/admin/promos', '🏷', 'Promo Codes'], ['/admin/roles', '🛡', 'Roles'], ['/admin/signups', '✚', 'Signups'], ['/admin/portfolio', '🖼', 'Portfolio']] as const).map(([href, icon, label]) => (
+          {/* PEOPLE */}
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>PEOPLE</div>
+          <button onClick={() => { setView('customers'); if (isMobile) setSidebarOpen(false) }} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            background: view === 'customers' ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
+            borderLeft: view === 'customers' ? '2px solid #fff' : '2px solid transparent',
+            padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
+            fontFamily: 'Inter, sans-serif', fontSize: 13,
+            color: view === 'customers' ? '#fff' : 'rgba(255,255,255,0.45)',
+          }}>
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: 12 }}>👤</span>Customers
+          </button>
+          {([['/admin/signups', '✚', 'Signups'], ['/admin/roles', '🛡', 'Roles'], ['/admin/portfolio', '🖼', 'Portfolio']] as const).map(([href, icon, label]) => (
             <a key={href} href={href} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
               background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
@@ -1513,8 +1514,20 @@ export default function AdminDashboard() {
             </a>
           ))}
 
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>SETTINGS</div>
+          {/* MARKETING */}
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>MARKETING</div>
+          {([['/admin/marketing', '📣', 'Marketing'], ['/admin/promos', '🏷', 'Promo Codes']] as const).map(([href, icon, label]) => (
+            <a key={href} href={href} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+              background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+              padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+            }}>
+              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
+            </a>
+          ))}
 
+          {/* SETTINGS */}
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>SETTINGS</div>
           {([['emails', '✉', 'Emails'], ['usage', '📊', 'Usage'], ['legal', '§', 'Legal'], ['profile', '⊙', 'Account']] as const).map(([v, icon, label]) => (
             <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10,
@@ -1527,6 +1540,13 @@ export default function AdminDashboard() {
               <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
             </button>
           ))}
+          <a href="/admin/stack" style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+          }}>
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>⚙</span>Services & Stack
+          </a>
         </nav>
 
         {/* Bottom actions */}
