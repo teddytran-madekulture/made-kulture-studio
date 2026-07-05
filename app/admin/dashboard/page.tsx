@@ -1331,6 +1331,20 @@ export default function AdminDashboard() {
           const yearCount = cntB.reduce((s, n) => s + n, 0)
           const aov = yearCount ? sqThisYear / yearCount : 0
           const max = Math.max(1, ...arrA, ...arrB)
+          // Bookings-by-set for the current year — the bookings table is the only
+          // place set info lives. Booked value (not Square-collected), for set mix.
+          const setMap: Record<string, { count: number; amount: number }> = {}
+          for (const b of bookings) {
+            if (b.status === 'cancelled') continue
+            if (new Date(b.start_time).getFullYear() !== yB) continue
+            const name = b.sets?.name || 'Unknown'
+            const e = (setMap[name] ||= { count: 0, amount: 0 })
+            e.count++; e.amount += b.total_amount || 0
+          }
+          const setStats = Object.entries(setMap)
+            .map(([name, v]) => ({ name, count: v.count, amount: v.amount }))
+            .sort((a, b) => b.amount - a.amount)
+          const setMax = Math.max(1, ...setStats.map(s => s.amount))
           // chart geometry
           const W = 720, baseY = 224, topY = 12, gw = 56, x0 = 34, barW = 22
           const h = (v: number) => (v / max) * (baseY - topY)
@@ -1428,6 +1442,32 @@ export default function AdminDashboard() {
                   </div>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 12, lineHeight: 1.5 }}>
                     * current month is still in progress. Figures are money collected through Square, net of refunds — they match your Square dashboard. Updates within ~10 min of a new payment.
+                  </div>
+
+                  {/* Bookings by set */}
+                  <div style={{ marginTop: 30 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                      <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>BOOKINGS BY SET · {yB}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>from your booking calendar</div>
+                    </div>
+                    <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      {setStats.length === 0 ? (
+                        <div style={{ padding: 24, textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>No bookings yet this year.</div>
+                      ) : setStats.map(s => (
+                        <div key={s.name} style={{ padding: '11px 16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                            <span style={{ color: '#fff' }}>{s.name}</span>
+                            <span style={{ color: 'rgba(255,255,255,0.6)' }}>{money0(s.amount)} · {s.count} booking{s.count !== 1 ? 's' : ''}</span>
+                          </div>
+                          <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${(s.amount / setMax) * 100}%`, height: '100%', background: '#d4a843' }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 10, lineHeight: 1.5 }}>
+                      Booked value from your calendar (not Square-collected), so it won't match the totals above to the dollar — use it for which sets get booked and how they stack up.
+                    </div>
                   </div>
                 </>
               )}
