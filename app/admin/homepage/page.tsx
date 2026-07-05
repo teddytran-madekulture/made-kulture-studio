@@ -13,9 +13,9 @@ export default function HomepageEditor() {
   const [unauth, setUnauth] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
-  const [crop, setCrop] = useState<{ slug: string; aspect: number; src: string } | null>(null)
+  const [crop, setCrop] = useState<{ slug: string; aspect: number; src: string; outWidth: number } | null>(null)
   const fileInput = useRef<HTMLInputElement | null>(null)
-  const pending = useRef<{ slug: string; aspect: number } | null>(null)
+  const pending = useRef<{ slug: string; aspect: number; outWidth: number } | null>(null)
 
   const load = async () => {
     const r = await fetch('/api/admin/site-images', { credentials: 'include' })
@@ -27,7 +27,7 @@ export default function HomepageEditor() {
   // Step 1: user picks a slot → open the file picker.
   const pick = (slot: SiteImageSlot) => {
     setErr('')
-    pending.current = { slug: slot.slug, aspect: slot.aspect }
+    pending.current = { slug: slot.slug, aspect: slot.aspect, outWidth: slot.outWidth ?? 1000 }
     fileInput.current?.click()
   }
 
@@ -36,7 +36,7 @@ export default function HomepageEditor() {
     const f = e.target.files?.[0]
     e.target.value = ''
     if (!f || !pending.current) return
-    setCrop({ slug: pending.current.slug, aspect: pending.current.aspect, src: URL.createObjectURL(f) })
+    setCrop({ slug: pending.current.slug, aspect: pending.current.aspect, outWidth: pending.current.outWidth, src: URL.createObjectURL(f) })
   }
 
   // Step 3: cropped blob → upload.
@@ -128,6 +128,7 @@ export default function HomepageEditor() {
         <ImageCropper
           src={crop.src}
           aspect={crop.aspect}
+          outWidth={crop.outWidth}
           onCancel={() => setCrop(null)}
           onCropped={onCropped}
         />

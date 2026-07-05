@@ -11,11 +11,12 @@ export type SiteImageSlot = {
   label: string
   group: 'Hero' | 'Sets' | 'Studio'
   aspect: number      // width / height, for the cropper + preview
+  outWidth?: number   // exported JPEG width (defaults to 1000); larger for full-bleed slots
   hint?: string
 }
 
 export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
-  { slug: 'hero',         label: 'Hero background', group: 'Hero',   aspect: 16 / 9, hint: 'Full-screen image behind “Create Without Limits”.' },
+  { slug: 'hero',         label: 'Hero background', group: 'Hero',   aspect: 16 / 9, outWidth: 2400, hint: 'Full-screen image behind “Create Without Limits”.' },
   { slug: 'set-a',        label: 'Set A',            group: 'Sets',   aspect: 4 / 3 },
   { slug: 'set-b',        label: 'Set B',            group: 'Sets',   aspect: 4 / 3 },
   { slug: 'set-c',        label: 'Set C',            group: 'Sets',   aspect: 4 / 3 },
@@ -25,7 +26,7 @@ export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
   { slug: 'cottage',      label: 'Cottage',          group: 'Sets',   aspect: 4 / 3 },
   { slug: 'watering-hole',label: 'The Watering Hole',group: 'Sets',   aspect: 4 / 3 },
   { slug: 'studio-one',   label: 'Studio One',       group: 'Sets',   aspect: 4 / 3 },
-  { slug: 'studio-photo', label: 'Studio photo',     group: 'Studio', aspect: 4 / 5, hint: 'Tall photo in the “Built for the Obsessed” section.' },
+  { slug: 'studio-photo', label: 'Studio photo',     group: 'Studio', aspect: 4 / 5, outWidth: 1600, hint: 'Tall photo in the “Built for the Obsessed” section.' },
 ]
 
 export const SITE_IMAGE_SLUGS = SITE_IMAGE_SLOTS.map(s => s.slug)

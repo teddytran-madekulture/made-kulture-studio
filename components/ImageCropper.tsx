@@ -15,12 +15,14 @@ export default function ImageCropper({
   src,
   aspect,
   crossOrigin = false,
+  outWidth = 1000,
   onCancel,
   onCropped,
 }: {
   src: string
   aspect: number
   crossOrigin?: boolean
+  outWidth?: number
   onCancel: () => void
   onCropped: (blob: Blob) => void
 }) {
@@ -96,7 +98,7 @@ export default function ImageCropper({
       const sy = -offset.y / s
       const sW = FRAME_W / s
       const sH = FRAME_H / s
-      const outW = 1000
+      const outW = outWidth
       const outH = Math.round(outW / aspect)
       const canvas = document.createElement('canvas')
       canvas.width = outW; canvas.height = outH
