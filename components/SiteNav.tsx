@@ -50,6 +50,15 @@ export default function SiteNav({ active }: { active?: string }) {
         borderBottom: scrolled ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
         transition: 'background 0.3s ease, border-color 0.3s ease, padding 0.3s ease',
       }}>
+        {/* Readability scrim at the top of the page: a soft dark fade behind the
+            nav so links stay legible over bright hero images. Fades out once the
+            solid scrolled background takes over. */}
+        <div aria-hidden style={{
+          position: 'absolute', left: 0, right: 0, top: 0, height: '230%',
+          background: 'linear-gradient(to bottom, rgba(8,8,8,0.8) 0%, rgba(8,8,8,0.45) 45%, rgba(8,8,8,0) 100%)',
+          opacity: (scrolled || (isMobile && menuOpen)) ? 0 : 1,
+          transition: 'opacity 0.3s ease', pointerEvents: 'none', zIndex: -1,
+        }} />
         <Link href="/" style={{ textDecoration: 'none' }}>
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.04em', color: '#fff', lineHeight: 1 }}>
             MADE<br />KULTURE
