@@ -39,9 +39,9 @@ const HOME_FIELDS: ContentField[] = [
   { key: 'heroFinePrint',     label: 'Fine print under buttons',  type: 'text',      group: 'Hero', default: 'By appointment only · Book online in advance · No walk-ins' },
 
   // Sets section
-  { key: 'setsEyebrow', label: 'Eyebrow',         type: 'text',      group: 'Sets section', default: 'EXPLORE OUR SETS' },
-  { key: 'setsHeading', label: 'Heading',         type: 'multiline', group: 'Sets section', default: 'MULTIPLE SETS.\nENDLESS POSSIBILITIES.' },
-  { key: 'setsNote',    label: 'Note under heading', type: 'text',   group: 'Sets section', default: 'Rates shown are guest prices — members save $10/hr with a free account.' },
+  { key: 'setsEyebrow', label: 'Eyebrow',         type: 'text',      group: 'Sets', default: 'EXPLORE OUR SETS' },
+  { key: 'setsHeading', label: 'Heading',         type: 'multiline', group: 'Sets', default: 'MULTIPLE SETS.\nENDLESS POSSIBILITIES.' },
+  { key: 'setsNote',    label: 'Note under heading', type: 'text',   group: 'Sets', default: 'Rates shown are guest prices — members save $10/hr with a free account.' },
 
   // Closing CTA
   { key: 'ctaEyebrow',     label: 'Eyebrow',       type: 'text',      group: 'Closing CTA', default: 'MADEKULTURE / HOUSTON' },

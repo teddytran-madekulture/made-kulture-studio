@@ -58,8 +58,7 @@ function SidebarInner() {
         </button>
         {websiteOpen && (
           <>
-            <Item href="/admin/homepage" icon="🏠" label="Home Page" active={on('/admin/homepage')} indent />
-            <Item href="/admin/content" icon="✍️" label="Site Content" active={on('/admin/content')} indent />
+            <Item href="/admin/content" icon="🏠" label="Home Page" active={on('/admin/content') || on('/admin/homepage')} indent />
           </>
         )}
 

@@ -1480,7 +1480,7 @@ export default function AdminDashboard() {
 
           {/* WEBSITE */}
           <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>WEBSITE</div>
-          {([['/admin/homepage', '🏠', 'Home Page'], ['/admin/content', '✍️', 'Site Content']] as const).map(([href, icon, label]) => (
+          {([['/admin/content', '🏠', 'Home Page']] as const).map(([href, icon, label]) => (
             <a key={href} href={href} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
               background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
