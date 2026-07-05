@@ -122,7 +122,7 @@ export default function MarketingPage() {
 
   return (
     <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
-      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1320, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>MARKETING</h1>
           <Link href="/admin/dashboard" style={{ color: C.dim, fontSize: 13, textDecoration: 'none' }}>← Admin</Link>
@@ -184,7 +184,7 @@ export default function MarketingPage() {
                 <div>
                   <span style={lbl}>Live preview</span>
                   <div style={{ border: `1px solid ${C.line}`, borderRadius: 8, overflow: 'hidden', background: '#0a0a0b' }}>
-                    <iframe title="preview" style={{ width: '100%', height: 520, border: 'none', display: 'block' }} srcDoc={renderTemplateEmail(f.template_id, f.values, promoCode)} />
+                    <iframe title="preview" style={{ width: '100%', height: 640, border: 'none', display: 'block' }} srcDoc={renderTemplateEmail(f.template_id, f.values, promoCode)} />
                   </div>
                   <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Header, address & unsubscribe are added to every send automatically.</div>
                 </div>
