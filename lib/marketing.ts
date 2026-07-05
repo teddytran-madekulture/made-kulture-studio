@@ -106,9 +106,18 @@ function wrapHtml(bodyHtml: string, unsubUrl: string): string {
   </td></tr></table></body></html>`
 }
 
+// Build the unsubscribe URL, optionally tagged with the campaign that drove it
+// (the campaign id isn't secret — the email is still signed inside the token).
+function unsubUrl(email: string, campaignId?: string): string {
+  const base = `${APP_URL}/api/unsubscribe?t=${makeUnsubToken(email)}`
+  return campaignId ? `${base}&c=${campaignId}` : base
+}
+
 // Send to a list. Chunks of 100 via Resend batch. Returns count actually queued.
+// campaignId (when sending a real campaign) tags each email so the Resend webhook
+// can attribute opens/clicks back to the campaign.
 export async function sendCampaignEmails(
-  subject: string, bodyHtml: string, recipients: Recipient[]
+  subject: string, bodyHtml: string, recipients: Recipient[], campaignId?: string
 ): Promise<{ sent: number; error?: string }> {
   if (!process.env.RESEND_API_KEY) return { sent: 0, error: 'RESEND_API_KEY not set.' }
   const resend = new Resend(process.env.RESEND_API_KEY)
@@ -119,8 +128,9 @@ export async function sendCampaignEmails(
       from: MARKETING_FROM,
       to: r.email,
       subject,
-      html: wrapHtml(bodyHtml, `${APP_URL}/api/unsubscribe?t=${makeUnsubToken(r.email)}`),
-      headers: { 'List-Unsubscribe': `<${APP_URL}/api/unsubscribe?t=${makeUnsubToken(r.email)}>` },
+      html: wrapHtml(bodyHtml, unsubUrl(r.email, campaignId)),
+      headers: { 'List-Unsubscribe': `<${unsubUrl(r.email, campaignId)}>` },
+      ...(campaignId ? { tags: [{ name: 'campaign_id', value: campaignId }] } : {}),
     }))
     try {
       const { error } = await resend.batch.send(batch as any)

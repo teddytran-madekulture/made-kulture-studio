@@ -15,13 +15,20 @@ function page(msg: string): NextResponse {
   )
 }
 
-// GET /api/unsubscribe?t=<token> — add the email to the do-not-email list.
+// GET /api/unsubscribe?t=<token>&c=<campaignId> — add the email to the do-not-email
+// list, attributing the opt-out to the campaign whose email drove it (c, optional).
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('t') ?? ''
+  const campaignId = req.nextUrl.searchParams.get('c') || null
   const email = readUnsubToken(token)
   if (!email) return page('That unsubscribe link isn’t valid. Reply STOP to any text, or contact us at (832) 408-1631.')
+  const clean = email.toLowerCase().trim()
   try {
-    await supabaseAdmin().from('email_suppressions').upsert({ email: email.toLowerCase().trim(), reason: 'unsubscribe' }, { onConflict: 'email' })
+    const db = supabaseAdmin()
+    await db.from('email_suppressions').upsert({ email: clean, reason: 'unsubscribe', campaign_id: campaignId }, { onConflict: 'email' })
+    if (campaignId) {
+      await db.from('marketing_events').insert({ campaign_id: campaignId, email: clean, type: 'unsubscribed' })
+    }
   } catch (e) {
     console.error('[unsubscribe] failed', e)
     return page('Something went wrong. Please email info@madekulture.com to be removed.')

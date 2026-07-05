@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const recipients = await getSegmentRecipients(c.segment_key as SegmentKey)
   if (recipients.length === 0) return NextResponse.json({ error: 'No recipients in that segment.' }, { status: 400 })
 
-  const r = await sendCampaignEmails(c.subject, body, recipients)
+  const r = await sendCampaignEmails(c.subject, body, recipients, c.id)
   if (r.error && r.sent === 0) return NextResponse.json({ error: r.error }, { status: 502 })
 
   await db.from('marketing_campaigns')

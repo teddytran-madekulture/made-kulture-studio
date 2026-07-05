@@ -7,8 +7,23 @@ const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text:
 interface Campaign {
   id: string; name: string; segment_key: string; subject: string; status: string
   recipient_count: number; sent_at: string | null; code: string | null; redemptions: number
+  opened: number; clicked: number; unsubscribed: number; bounced: number
 }
 interface Promo { id: string; code: string; active: boolean }
+interface Suppression { email: string; reason: string; created_at: string; campaign: string | null }
+
+const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0)
+
+function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+  return (
+    <div style={{ minWidth: 56 }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: accent ? '#c9b27e' : '#f4f4f5' }}>{value}</div>
+      <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>
+        {label}{sub ? ` · ${sub}` : ''}
+      </div>
+    </div>
+  )
+}
 
 const SEGMENTS: { key: string; label: string }[] = [
   { key: 'all', label: 'All customers' },
@@ -27,6 +42,14 @@ export default function MarketingPage() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [f, setF] = useState({ name: '', segment_key: 'all', subject: '', body_html: '', promo_id: '' })
+  const [supps, setSupps] = useState<Suppression[] | null>(null)
+
+  const loadSupps = async () => {
+    if (supps) { setSupps(null); return } // toggle closed
+    const r = await fetch('/api/admin/marketing?suppressions=1')
+    const d = await r.json()
+    setSupps(d.suppressions ?? [])
+  }
 
   const load = async () => {
     const r = await fetch('/api/admin/marketing')
@@ -64,7 +87,23 @@ export default function MarketingPage() {
     load()
   }
 
-  const inp: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontFamily: 'Inter, sans-serif', fontSize: 14, padding: '10px 12px', outline: 'none', borderRadius: 6, width: '100%', boxSizing: 'border-box' }
+  // Save the current draft and immediately fire a test to an address you enter — one step, no need to hunt for a button.
+  const saveAndTest = async () => {
+    if (!f.name || !f.subject || !f.body_html) { setErr('Add a name, subject, and body first.'); return }
+    const to = prompt('Send a test to which email address?')
+    if (!to) return
+    setErr(''); setBusy(true)
+    const r = await fetch('/api/admin/marketing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    const d = await r.json()
+    if (!r.ok) { setBusy(false); setErr(d.error || 'Could not save draft.'); return }
+    const t = await fetch(`/api/admin/marketing/${d.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test: true, testEmail: to }) })
+    const td = await t.json(); setBusy(false)
+    alert(t.ok ? `Draft saved and test sent to ${to}. Check it, then hit SEND → on the draft below.` : `Draft saved, but the test failed: ${td.error}`)
+    setF({ name: '', segment_key: 'all', subject: '', body_html: '', promo_id: '' })
+    load()
+  }
+
+  const inp: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontFamily: 'Inter, sans-serif', fontSize: 14, padding: '10px 12px', outline: 'none', borderRadius: 6, width: '100%', boxSizing: 'border-box', colorScheme: 'dark' }
   const lbl: React.CSSProperties = { display: 'block', fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.dim, marginBottom: 4, letterSpacing: '0.06em', textTransform: 'uppercase' }
 
   return (
@@ -101,9 +140,14 @@ export default function MarketingPage() {
                 </select>
               </div>
               {err && <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{err}</div>}
-              <button onClick={create} disabled={busy} style={{ background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '11px 22px', fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer' }}>
-                {busy ? 'SAVING…' : '+ SAVE DRAFT'}
-              </button>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={create} disabled={busy} style={{ background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '11px 22px', fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer' }}>
+                  {busy ? 'SAVING…' : '+ SAVE DRAFT'}
+                </button>
+                <button onClick={saveAndTest} disabled={busy} style={{ background: 'none', color: C.accent, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '11px 22px', fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer' }}>
+                  SAVE &amp; SEND TEST TO ME
+                </button>
+              </div>
             </div>
 
             {/* List */}
@@ -118,9 +162,7 @@ export default function MarketingPage() {
                         <div style={{ fontSize: 15, fontWeight: 600 }}>{c.name}</div>
                         <div style={{ fontSize: 12, color: C.dim, marginTop: 3 }}>
                           {c.subject} · {c.segment_key}{c.code ? ` · code ${c.code}` : ''}
-                          {c.status === 'sent'
-                            ? ` · sent to ${c.recipient_count}${c.code ? ` · ${c.redemptions} redeemed` : ''}`
-                            : ` · draft`}
+                          {c.status === 'sent' ? ` · sent to ${c.recipient_count}` : ` · draft`}
                         </div>
                       </div>
                       {c.status === 'sent'
@@ -132,10 +174,40 @@ export default function MarketingPage() {
                           </div>
                         )}
                     </div>
+                    {c.status === 'sent' && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+                        <Stat label="Opened" value={`${pct(c.opened, c.recipient_count)}%`} sub={`${c.opened}`} />
+                        <Stat label="Clicked" value={`${pct(c.clicked, c.recipient_count)}%`} sub={`${c.clicked}`} />
+                        {c.code && <Stat label="Redeemed" value={`${c.redemptions}`} accent />}
+                        <Stat label="Unsub" value={`${c.unsubscribed}`} />
+                        <Stat label="Bounced" value={`${c.bounced}`} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
+
+            {/* Do-not-email list */}
+            <div style={{ marginTop: 28 }}>
+              <button onClick={loadSupps} style={{ background: 'none', border: `1px solid ${C.line}`, color: C.dim, borderRadius: 6, padding: '9px 16px', fontSize: 12, letterSpacing: '0.06em', cursor: 'pointer' }}>
+                {supps ? 'HIDE UNSUBSCRIBES ▲' : 'WHO UNSUBSCRIBED ▾'}
+              </button>
+              {supps && (
+                <div style={{ marginTop: 12, background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, overflow: 'hidden' }}>
+                  {supps.length === 0 ? (
+                    <div style={{ padding: 18, color: C.dim, fontSize: 13 }}>Nobody has unsubscribed or bounced yet.</div>
+                  ) : supps.map((s, i) => (
+                    <div key={s.email} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '11px 16px', borderTop: i ? `1px solid ${C.line}` : 'none', fontSize: 13 }}>
+                      <span>{s.email}</span>
+                      <span style={{ color: C.dim, fontSize: 12, whiteSpace: 'nowrap' }}>
+                        {s.reason}{s.campaign ? ` · ${s.campaign}` : ''} · {new Date(s.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
