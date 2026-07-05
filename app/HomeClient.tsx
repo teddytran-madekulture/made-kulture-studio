@@ -1,9 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { SiteImages } from '@/lib/site-images'
+import { SITE_SETTINGS_DEFAULTS, type SiteSettings } from '@/lib/site-settings'
 
 const SETS = [
   { num: '01', slug: 'set-a',         name: 'Set A',             price: '$50', desc: '12×15ft white cinderblock walls, large windows',      photo: '/images/sets/set-a.jpg',           gradient: 'linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)' },
@@ -27,9 +28,46 @@ const FAQS = [
   { q: 'Can I use fog or haze machines?', a: 'Special effects like fog and haze are only available during full buyouts or when your party is the only booking in the studio.' },
 ]
 
-export default function HomeClient({ images = {} }: { images?: SiteImages }) {
+export default function HomeClient({ images = {}, settings }: { images?: SiteImages; settings?: SiteSettings }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const isMobile = useIsMobile()
+
+  const heroHeightVh = settings?.heroHeightVh ?? SITE_SETTINGS_DEFAULTS.heroHeightVh
+
+  // Fixed-height hero on desktop: scale the content to fit the chosen band height
+  // so the headline/buttons are never clipped, however short the band is. The
+  // content is anchored bottom-left; we shrink from that corner. Mobile is left
+  // untouched (flexible min-height, scale = 1).
+  const heroContentRef = useRef<HTMLDivElement | null>(null)
+  const [heroScale, setHeroScale] = useState(1)
+
+  useEffect(() => {
+    if (isMobile) { setHeroScale(1); return }
+    const el = heroContentRef.current
+    if (!el) return
+    const section = el.closest('section') as HTMLElement | null
+    if (!section) return
+
+    const fit = () => {
+      const cs = getComputedStyle(section)
+      const padTop = parseFloat(cs.paddingTop) || 0
+      const padBot = parseFloat(cs.paddingBottom) || 0
+      const avail = section.clientHeight - padTop - padBot
+      // offsetHeight is the natural (pre-transform) height — transforms don't
+      // change layout box size, so this is stable regardless of the current scale.
+      const natural = el.offsetHeight
+      if (avail > 0 && natural > 0) setHeroScale(Math.min(1, avail / natural))
+    }
+
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(section)
+    ro.observe(el)
+    window.addEventListener('resize', fit)
+    // Re-fit once the display font (Anton) has loaded and changed the metrics.
+    ;(document as any).fonts?.ready?.then(fit).catch(() => {})
+    return () => { ro.disconnect(); window.removeEventListener('resize', fit) }
+  }, [isMobile, heroHeightVh])
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
@@ -40,7 +78,7 @@ export default function HomeClient({ images = {} }: { images?: SiteImages }) {
       {/* HERO */}
       <section style={{
         position: 'relative', display: 'flex', alignItems: 'flex-end',
-        ...(isMobile ? { minHeight: '85vh' } : { height: '45vh' }),
+        ...(isMobile ? { minHeight: '85vh' } : { height: `${heroHeightVh}vh` }),
         padding: isMobile ? '96px 20px 48px' : '84px 40px 60px', border: 'none', overflow: 'hidden',
       }}>
         {/* Background — editable at /admin/homepage (slot: hero) */}
@@ -63,7 +101,7 @@ export default function HomeClient({ images = {} }: { images?: SiteImages }) {
           </div>
         )}
 
-        <div style={{ position:'relative', zIndex:1, maxWidth:700 }}>
+        <div ref={heroContentRef} style={{ position:'relative', zIndex:1, maxWidth:700, transform: isMobile ? undefined : `scale(${heroScale})`, transformOrigin: 'left bottom' }}>
           <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24 }}>
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
             <span className="label">A CREATIVE SPACE DESIGNED FOR VISIONARIES</span>

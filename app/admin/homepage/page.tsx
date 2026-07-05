@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ImageCropper from '@/components/ImageCropper'
 import { SITE_IMAGE_SLOTS, type SiteImageSlot } from '@/lib/site-images'
+import { SITE_SETTINGS_DEFAULTS, HERO_HEIGHT_MIN, HERO_HEIGHT_MAX } from '@/lib/site-settings'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
 
@@ -17,12 +18,38 @@ export default function HomepageEditor() {
   const fileInput = useRef<HTMLInputElement | null>(null)
   const pending = useRef<{ slug: string; aspect: number; outWidth: number } | null>(null)
 
+  const [heroH, setHeroH] = useState<number>(SITE_SETTINGS_DEFAULTS.heroHeightVh)
+  const [heroStatus, setHeroStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const heroTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const load = async () => {
     const r = await fetch('/api/admin/site-images', { credentials: 'include' })
     if (r.status === 401) { setUnauth(true); setLoading(false); return }
-    const d = await r.json(); setImages(d.images ?? {}); setLoading(false)
+    const d = await r.json(); setImages(d.images ?? {})
+    try {
+      const rs = await fetch('/api/admin/site-settings', { credentials: 'include' })
+      if (rs.ok) { const ds = await rs.json(); if (ds.settings?.heroHeightVh) setHeroH(ds.settings.heroHeightVh) }
+    } catch {}
+    setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // Live-save the hero height (debounced) as the slider moves.
+  const onHeroH = (v: number) => {
+    setHeroH(v)
+    setHeroStatus('saving')
+    if (heroTimer.current) clearTimeout(heroTimer.current)
+    heroTimer.current = setTimeout(async () => {
+      try {
+        const r = await fetch('/api/admin/site-settings', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ heroHeightVh: v }),
+        })
+        setHeroStatus(r.ok ? 'saved' : 'idle')
+      } catch { setHeroStatus('idle') }
+    }, 400)
+  }
 
   // Step 1: user picks a slot → open the file picker.
   const pick = (slot: SiteImageSlot) => {
@@ -82,6 +109,34 @@ export default function HomepageEditor() {
         </p>
 
         {err && <div style={{ background: 'rgba(220,80,80,0.12)', border: '1px solid rgba(220,80,80,0.4)', color: '#f2b8b8', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 20 }}>{err}</div>}
+
+        <section style={{ marginBottom: 36 }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.14em', color: C.dim, textTransform: 'uppercase', marginBottom: 14 }}>Hero layout</div>
+          <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '18px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Hero height</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 18, color: C.text }}>{heroH}vh</span>
+                <span style={{ fontSize: 11, color: heroStatus === 'saved' ? C.accent : C.dim, minWidth: 48 }}>
+                  {heroStatus === 'saving' ? 'Saving…' : heroStatus === 'saved' ? 'Saved ✓' : ''}
+                </span>
+              </div>
+            </div>
+            <input
+              type="range" min={HERO_HEIGHT_MIN} max={HERO_HEIGHT_MAX} step={1} value={heroH}
+              onChange={e => onHeroH(Number(e.target.value))}
+              style={{ width: '100%', accentColor: C.accent, cursor: 'pointer' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.dim, marginTop: 2 }}>
+              <span>Shorter</span><span>Taller</span>
+            </div>
+            <p style={{ fontSize: 12, color: C.dim, lineHeight: 1.6, margin: '12px 0 0' }}>
+              Sets the height of the hero band on desktop. The headline and buttons auto-scale to fit,
+              so nothing ever gets cut off — go as short as you like. Mobile is unaffected.
+              Changes are live; refresh the home page to see them.
+            </p>
+          </div>
+        </section>
 
         {GROUPS.map(group => {
           const slots = SITE_IMAGE_SLOTS.filter(s => s.group === group)
