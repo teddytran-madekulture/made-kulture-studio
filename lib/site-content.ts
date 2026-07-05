@@ -202,12 +202,33 @@ const GEAR_FIELDS: ContentField[] = [
   { key: 'ctaHref',  label: 'Button link',     type: 'url',       group: 'Header', default: '/book' },
 ]
 
+// ── Book flow fields (step 1 copy + header) ──────────────────────────────────
+// Tokens: {min} / {max} = live set rate range, {rate} = live buyout rate.
+const BOOK_FIELDS: ContentField[] = [
+  { key: 'headerLabel',     label: 'Top-bar label',            type: 'text', group: 'Header', default: 'BOOK A SESSION' },
+  { key: 'setCardTitle',    label: 'Individual set \u2014 title',   type: 'text', group: 'Booking type cards', default: 'INDIVIDUAL SET' },
+  { key: 'setCardSub',      label: 'Individual set \u2014 subline', type: 'text', group: 'Booking type cards', default: 'Reserve one set by the hour. ${min}\u2013${max}/hr.', hint: '{min} and {max} are the live set rate range.' },
+  { key: 'setCardLimit',    label: 'Individual set \u2014 limit line', type: 'text', group: 'Booking type cards', default: 'Up to 5 people per set' },
+  { key: 'studioCardTitle', label: 'Full studio \u2014 title',      type: 'text', group: 'Booking type cards', default: 'FULL STUDIO TAKEOVER' },
+  { key: 'studioCardSub',   label: 'Full studio \u2014 subline',    type: 'text', group: 'Booking type cards', default: 'Entire warehouse \u2014 all sets, private.' },
+  { key: 'studioCardLimit', label: 'Full studio \u2014 limit line', type: 'text', group: 'Booking type cards', default: 'Up to 30 people' },
+]
+
+// ── Tour page fields ──────────────────────────────────────────────────────────
+const TOUR_FIELDS: ContentField[] = [
+  { key: 'headline', label: 'Headline',        type: 'text',      group: 'Header', default: 'TOUR THE STUDIO' },
+  { key: 'intro',    label: 'Intro paragraph', type: 'multiline', group: 'Header', default: 'Free 30-minute walkthrough of all nine sets. Pick a time below \u2014 we confirm every tour by text, usually fast.' },
+  { key: 'footnote', label: 'Fine print under the button', type: 'text', group: 'Header', default: 'Tours are confirmed by text. Questions? Text (832) 408-1631.' },
+]
+
 export const CONTENT_PAGES: ContentPage[] = [
   { slug: 'home',         label: 'Home page',    fields: HOME_FIELDS },
   { slug: 'sets',         label: 'Sets page',    fields: SETS_FIELDS },
   { slug: 'studio-rules', label: 'Studio Rules', fields: STUDIO_RULES_FIELDS },
   { slug: 'props',        label: 'Props page',   fields: PROPS_FIELDS },
   { slug: 'gear',         label: 'Gear page',    fields: GEAR_FIELDS },
+  { slug: 'book',         label: 'Book flow',    fields: BOOK_FIELDS },
+  { slug: 'tour',         label: 'Tour page',    fields: TOUR_FIELDS },
 ]
 
 export function getContentPage(slug: string): ContentPage | undefined {

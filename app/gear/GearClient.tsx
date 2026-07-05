@@ -4,9 +4,8 @@ import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
+import { fmt as nl } from '@/lib/fmt'
 
-// Render a \n-delimited string with <br/> between lines.
-const nl = (s: string) => (s ?? '').split('\n').flatMap((line, i) => i === 0 ? [line] : [<br key={i} />, line])
 
 interface Gear {
   id: string

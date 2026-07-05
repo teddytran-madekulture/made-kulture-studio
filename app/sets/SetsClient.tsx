@@ -5,9 +5,8 @@ import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
+import { fmt as nl } from '@/lib/fmt'
 
-// Render a \n-delimited string with <br/> between lines.
-const nl = (s: string) => (s ?? '').split('\n').flatMap((line, i) => i === 0 ? [line] : [<br key={i} />, line])
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -233,7 +232,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
           </div>
           <div style={{ maxWidth: 360 }}>
             <p style={{ fontFamily: 'Inter', fontSize: 15, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, margin: '0 0 24px' }}>
-              {c.heroParagraph}
+              {nl(c.heroParagraph)}
             </p>
             <div style={{ display: 'flex', gap: 12 }}>
               <Link href={c.heroPrimaryHref || '/book?type=set'} style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '12px 20px', textDecoration: 'none' }}>
@@ -308,7 +307,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, margin: 0 }}>
-                  {c.buyoutDesc}
+                  {nl(c.buyoutDesc)}
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   {[

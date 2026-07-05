@@ -6,9 +6,8 @@ import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
+import { fmt as nl } from '@/lib/fmt'
 
-// Render a \n-delimited string with <br/> between lines.
-const nl = (s: string) => (s ?? '').split('\n').flatMap((line, i) => i === 0 ? [line] : [<br key={i} />, line])
 
 function Nav() {
   return <SiteNav active="studio rules" />
@@ -30,7 +29,7 @@ function AccordionItem({ q, a }: { q: string; a: string }) {
       </button>
       {open && (
         <div style={{ paddingBottom: 24, paddingRight: 48 }}>
-          <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, margin: 0 }}>{a}</p>
+          <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.75, margin: 0 }}>{nl(a)}</p>
         </div>
       )}
     </div>
@@ -59,7 +58,7 @@ export default function StudioRulesClient({ content = {} }: { content?: PageCont
             {nl(c.headline)}
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: 15, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, maxWidth: 520, margin: 0 }}>
-            {c.intro}
+            {nl(c.intro)}
           </p>
         </div>
       </section>
@@ -84,7 +83,7 @@ export default function StudioRulesClient({ content = {} }: { content?: PageCont
         <div>
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 32, color: '#fff', letterSpacing: '0.02em', marginBottom: 8 }}>{c.ctaHeading}</div>
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
-            {c.ctaSub}
+            {nl(c.ctaSub)}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

@@ -295,7 +295,7 @@ export default function PageEditor({ slug }: { slug: string }) {
           <a href="/" target="_blank" rel="noreferrer" style={{ fontSize: 12, letterSpacing: '0.1em', color: C.accent, textDecoration: 'none' }}>VIEW LIVE SITE ↗</a>
         </div>
         <p style={{ color: C.dim, fontSize: 14, lineHeight: 1.6, marginTop: 6, marginBottom: 24, maxWidth: 640 }}>
-          Photos and words for each page, together. Everything saves automatically and goes live immediately — no publishing step. Reset returns any item to its original.
+          Photos and words for each page, together. Everything saves automatically and goes live immediately — no publishing step. Reset returns any item to its original. Wrap words in **double asterisks** to make them bold.
         </p>
 
         {err && <div style={{ background: 'rgba(220,80,80,0.12)', border: '1px solid rgba(220,80,80,0.4)', color: '#f2b8b8', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 20 }}>{err}</div>}

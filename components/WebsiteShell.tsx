@@ -48,6 +48,8 @@ function SidebarInner() {
         <Item href="/admin/website/pages/studio-rules" icon="§" label="Studio Rules" active={on('/admin/website/pages/studio-rules')} />
         <Item href="/admin/website/pages/props" icon="🛋" label="Props Page" active={on('/admin/website/pages/props')} />
         <Item href="/admin/website/pages/gear" icon="🎥" label="Gear Page" active={on('/admin/website/pages/gear')} />
+        <Item href="/admin/website/pages/book" icon="📅" label="Book Flow" active={on('/admin/website/pages/book')} />
+        <Item href="/admin/website/pages/tour" icon="🚪" label="Tour Page" active={on('/admin/website/pages/tour')} />
 
         <div style={sectionHdr}>CATALOG</div>
         <Item href="/admin/website/equipment" icon="🎥" label="Equipment" active={on('/admin/website/equipment')} />

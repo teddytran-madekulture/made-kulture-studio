@@ -7,9 +7,8 @@ import type { SiteImages } from '@/lib/site-images'
 import { SITE_SETTINGS_DEFAULTS, type SiteSettings } from '@/lib/site-settings'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
+import { fmt as nl } from '@/lib/fmt'
 
-// Render a \n-delimited string with <br/> between lines.
-const nl = (s: string) => (s ?? '').split('\n').flatMap((line, i) => i === 0 ? [line] : [<br key={i} />, line])
 
 const SETS = [
   { num: '01', slug: 'set-a',         name: 'Set A',             price: '$50', desc: '12×15ft white cinderblock walls, large windows',      photo: '/images/sets/set-a.jpg',           gradient: 'linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)' },
@@ -136,7 +135,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
             </Link>
           </div>
           <div style={{ marginTop:20, fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:11, letterSpacing:'0.18em', color:'rgba(255,255,255,0.4)', textTransform:'uppercase' }}>
-            {c.heroFinePrint}
+            {nl(c.heroFinePrint)}
           </div>
         </div>
       </section>
@@ -161,7 +160,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
               {nl(c.setsHeading)}
             </h2>
             <div style={{ marginTop:16, fontFamily:'Inter', fontSize:13, color:'#c9b27e' }}>
-              {c.setsNote}
+              {nl(c.setsNote)}
             </div>
           </div>
           <Link href="/sets" className="btn">VIEW ALL SETS ↗</Link>
