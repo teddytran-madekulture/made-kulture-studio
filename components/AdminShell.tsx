@@ -34,7 +34,6 @@ function SidebarInner() {
   const pathname = usePathname() || ''
   const router = useRouter()
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [websiteOpen, setWebsiteOpen] = useState(true)
   const on = (p: string) => pathname === p || pathname.startsWith(p + '/')
   const logout = async () => { await fetch('/api/admin/auth', { method: 'DELETE' }); router.push('/admin') }
   const D = '/admin/dashboard?view='
@@ -53,19 +52,11 @@ function SidebarInner() {
         <Item href={`${D}calendar`} icon="⊡" label="Calendar" />
         <Item href="/admin/inbox" icon="J" label="June Inbox" active={on('/admin/inbox')} color="#d4a843" />
 
-        <button onClick={() => setWebsiteOpen(o => !o)} style={{ ...sectionHdr, display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-          WEBSITE <span style={{ fontSize: 8 }}>{websiteOpen ? '▲' : '▼'}</span>
-        </button>
-        {websiteOpen && (
-          <>
-            <Item href="/admin/content" icon="🏠" label="Home Page" active={on('/admin/content') || on('/admin/homepage')} indent />
-          </>
-        )}
+        <div style={sectionHdr}>WEBSITE</div>
+        <Item href="/admin/website" icon="🌐" label="Website Editor →" color="#d4a843" />
 
         <div style={sectionHdr}>STUDIO</div>
-        <Item href={`${D}sets`} icon="▦" label="Sets" />
-        <Item href={`${D}equipment`} icon="🎥" label="Equipment" />
-        <Item href={`${D}props`} icon="🛋" label="Props" />
+        <Item href={`${D}sets`} icon="▦" label="Products & Pricing" />
 
         <div style={sectionHdr}>CUSTOMERS</div>
         <Item href={`${D}customers`} icon="👤" label="Client List" />
@@ -112,8 +103,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', update)
   }, [])
 
-  // Login and the dashboard render bare (dashboard has its own sidebar + mobile nav).
-  const bare = pathname === '/admin' || pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')
+  // Login and the dashboard render bare (dashboard has its own sidebar + mobile
+  // nav); the Website workspace renders bare too (it has its own WebsiteShell).
+  const bare = pathname === '/admin' || pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/') || pathname === '/admin/website' || pathname.startsWith('/admin/website/')
   if (bare) return <>{children}</>
 
   const hidden = isMobile && !open

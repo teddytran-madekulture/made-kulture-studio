@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // ── Editable marketing-site text content (the CMS layer) ──────────────────────
 // A schema-driven content store. Each editable field is declared once in
-// CONTENT_SCHEMA (label, type, group, default). The editor at /admin/content
+// CONTENT_SCHEMA (label, type, group, default). The editor at /admin/website/home
 // renders inputs from the schema; the pages read resolved values (override or
 // default). Adding a new editable field = add one entry here + read it in the
 // page. See migration 065.
