@@ -38,7 +38,13 @@ export async function getSiteImages(): Promise<SiteImages> {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: { persistSession: false },
+        // Bypass Next.js's Data Cache so freshly uploaded images appear
+        // immediately instead of serving a stale (empty) cached read.
+        global: { fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }) },
+      }
     )
     const { data, error } = await supabase.from('site_images').select('slug, url')
     if (error || !data) return {}
