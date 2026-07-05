@@ -1492,8 +1492,8 @@ export default function AdminDashboard() {
             </button>
           ))}
 
-          {/* PEOPLE */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>PEOPLE</div>
+          {/* CUSTOMERS */}
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>CUSTOMERS</div>
           <button onClick={() => { setView('customers'); if (isMobile) setSidebarOpen(false) }} style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: 10,
             background: view === 'customers' ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
@@ -1502,9 +1502,9 @@ export default function AdminDashboard() {
             fontFamily: 'Inter, sans-serif', fontSize: 13,
             color: view === 'customers' ? '#fff' : 'rgba(255,255,255,0.45)',
           }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: 12 }}>👤</span>Customers
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: 12 }}>👤</span>Client List
           </button>
-          {([['/admin/signups', '✚', 'Signups'], ['/admin/roles', '🛡', 'Roles'], ['/admin/portfolio', '🖼', 'Portfolio']] as const).map(([href, icon, label]) => (
+          {([['/admin/roles', '🛡', 'Roles'], ['/admin/portfolio', '🖼', 'Portfolio']] as const).map(([href, icon, label]) => (
             <a key={href} href={href} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
               background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
@@ -1516,7 +1516,7 @@ export default function AdminDashboard() {
 
           {/* MARKETING */}
           <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>MARKETING</div>
-          {([['/admin/marketing', '📣', 'Marketing'], ['/admin/promos', '🏷', 'Promo Codes']] as const).map(([href, icon, label]) => (
+          {([['/admin/marketing', '📣', 'Email Campaign'], ['/admin/promos', '🏷', 'Promo Codes']] as const).map(([href, icon, label]) => (
             <a key={href} href={href} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
               background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',

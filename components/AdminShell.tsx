@@ -53,14 +53,13 @@ function Sidebar() {
         <Item href={`${D}equipment`} icon="🎥" label="Equipment" />
         <Item href={`${D}props`} icon="🛋" label="Props" />
 
-        <div style={sectionHdr}>PEOPLE</div>
-        <Item href={`${D}customers`} icon="👤" label="Customers" />
-        <Item href="/admin/signups" icon="✚" label="Signups" active={on('/admin/signups')} />
+        <div style={sectionHdr}>CUSTOMERS</div>
+        <Item href={`${D}customers`} icon="👤" label="Client List" />
         <Item href="/admin/roles" icon="🛡" label="Roles" active={on('/admin/roles')} />
         <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
 
         <div style={sectionHdr}>MARKETING</div>
-        <Item href="/admin/marketing" icon="📣" label="Marketing" active={on('/admin/marketing')} />
+        <Item href="/admin/marketing" icon="📣" label="Email Campaign" active={on('/admin/marketing')} />
         <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
 
         <div style={sectionHdr}>SETTINGS</div>
