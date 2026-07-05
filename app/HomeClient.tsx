@@ -48,7 +48,7 @@ export default function HomeClient({ images = {} }: { images?: SiteImages }) {
           background: 'linear-gradient(135deg, #1a0a0a 0%, #0d0d0d 40%, #1a1208 100%)',
         }}>
           {images.hero && (
-            <img src={images.hero} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
+            <img src={images.hero} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center bottom' }} />
           )}
           {/* Mood/legibility scrim — anchors the headline without dimming the whole image (image stays full opacity) */}
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(8,8,8,0.9) 0%, rgba(8,8,8,0.25) 55%, transparent 100%)' }} />
