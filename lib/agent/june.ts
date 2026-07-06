@@ -53,8 +53,14 @@ const TOOLS = [
   },
   {
     name: 'get_props',
-    description: "The studio's live catalog of props available to style shoots, grouped by category. Props are included free with any booking, first-come-first-serve during shared hours. Use when a visitor asks what props are available, whether a specific piece exists, or what's in a category.",
-    input_schema: { type: 'object', properties: {}, required: [] },
+    description: "The studio's live catalog of props (included free, first-come-first-serve during shared hours). Call with NO query to list what's available grouped by category. Call WITH a query (e.g. 'velvet couch', 'weight bench') to find specific props and get a shareable photo link for each match.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Optional keyword to find specific props (matches name, description, tags). Omit to list everything by category.' },
+      },
+      required: [],
+    },
   },
   {
     name: 'request_extension',
@@ -208,6 +214,27 @@ async function execTool(
       if (!d || !Array.isArray(d.props)) {
         return { result: "The props catalog is unavailable right now — tell the visitor props are included free (first-come-first-serve during shared hours) and they can browse them with photos at /props." }
       }
+      const absUrl = (u: string | null | undefined): string | null =>
+        !u ? null : (u.startsWith('http') ? u : `${APP_URL}${u.startsWith('/') ? '' : '/'}${u}`)
+      const q = String(input?.query || '').trim().toLowerCase()
+
+      if (q) {
+        const matches = d.props
+          .filter((p: any) => [p.name, p.description, p.category, ...(p.tags || [])].join(' ').toLowerCase().includes(q))
+          .slice(0, 8)
+          .map((p: any) => ({ name: p.name, category: p.category, photo: absUrl(p.image_url), description: p.description || undefined }))
+        return {
+          result: JSON.stringify({
+            query: q,
+            count: matches.length,
+            matches,
+            note: matches.length
+              ? "Share a prop's photo as a tappable markdown link like [see the <name>](photo). If photo is null, say a picture isn't on file. Props are first-come-first-serve — don't promise a specific one is free at their booking time."
+              : "No props matched. Suggest they browse the full directory at /props or describe it another way.",
+          }),
+        }
+      }
+
       const byCategory: Record<string, string[]> = {}
       for (const p of d.props) {
         const cat = p.category || 'Other'
@@ -217,7 +244,7 @@ async function execTool(
         result: JSON.stringify({
           total: d.props.length,
           by_category: byCategory,
-          note: "Props are included free with any booking, first-come-first-serve during shared hours, and must be returned to their spots. This is the live list; the full browsable directory with photos is at /props. Don't promise a specific prop will be free at their booking time.",
+          note: "Props are included free with any booking, first-come-first-serve during shared hours, and must be returned to their spots. This is the live list; the full browsable directory with photos is at /props. To share a specific prop's photo, call get_props again with a query for it. Don't promise a specific prop will be free at their booking time.",
         }),
       }
     }
