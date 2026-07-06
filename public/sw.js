@@ -29,15 +29,21 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const url = (event.notification.data && event.notification.data.url) || '/admin/inbox'
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if (client.url.includes('/admin') && 'focus' in client) {
-          client.navigate(url)
-          return client.focus()
-        }
+  const isKiosk = event.notification.tag === 'kiosk-summon'
+  event.waitUntil((async () => {
+    // Acknowledge a kiosk ring right here in the SW — reliable on tap, unlike the
+    // page-side ping which depends on the PWA fully loading (flaky on iOS). This
+    // stops the escalating repeat pushes the moment Teddy taps the notification.
+    if (isKiosk) {
+      try { await fetch('/api/admin/kiosk-ack', { method: 'POST' }) } catch (e) {}
+    }
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    for (const client of clients) {
+      if (client.url.includes('/admin') && 'focus' in client) {
+        client.navigate(url)
+        return client.focus()
       }
-      return self.clients.openWindow(url)
-    })
-  )
+    }
+    return self.clients.openWindow(url)
+  })())
 })
