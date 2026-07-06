@@ -86,6 +86,9 @@ export default function KioskPage() {
   const lastTs = useRef<string | null>(null)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const buildVer = useRef<string | null>(null)   // build the tablet loaded with
+  const needsReload = useRef(false)               // a newer build is live, waiting for idle
+  const screenRef = useRef<Screen>('home')
 
   const resetToHome = useCallback(() => {
     setScreen('home'); setPhone(''); setCi(null); setCiError('')
@@ -103,6 +106,37 @@ export default function KioskPage() {
     touch()
     return () => { if (idleTimer.current) clearTimeout(idleTimer.current) }
   }, [screen, touch])
+
+  // ── Self-update ────────────────────────────────────────────────────────────
+  // The tablet's WebView keeps serving the old app after we deploy. Poll a tiny
+  // version endpoint; when the live build changes, reload — but only while idle
+  // on HOME so we never interrupt a check-in or a June chat. If a new build lands
+  // while someone's mid-use, we flag it and reload the moment they return home.
+  useEffect(() => { screenRef.current = screen }, [screen])
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const r = await fetch('/api/version', { cache: 'no-store' })
+        if (!r.ok) return
+        const { version } = await r.json()
+        if (!version) return
+        if (buildVer.current === null) { buildVer.current = version; return }
+        if (version !== buildVer.current) {
+          if (screenRef.current === 'home') window.location.reload()
+          else needsReload.current = true
+        }
+      } catch {}
+    }
+    check()
+    const iv = setInterval(check, 120_000)
+    return () => clearInterval(iv)
+  }, [])
+
+  // Flush a pending update the moment the kiosk falls back to HOME.
+  useEffect(() => {
+    if (screen === 'home' && needsReload.current) window.location.reload()
+  }, [screen])
 
   // ── Check-in ─────────────────────────────────────────────────────────────
   const digits = phone.replace(/\D/g, '')
