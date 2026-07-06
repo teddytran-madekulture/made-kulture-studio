@@ -113,7 +113,19 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
             <span className="label">{c.heroEyebrow}</span>
           </div>
           <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:28, lineHeight:0.9, letterSpacing:'0.005em', textTransform:'uppercase' }}>
-            {nl(c.heroHeadline)}
+            {(c.heroHeadline || '').split('\n').map((line, i) => {
+              const t = line.trim()
+              // A short connective word (e.g. "TO", "&") renders as a small champagne
+              // accent so the stack keeps its solid block instead of a ragged stub line.
+              const accent = t.replace(/\*/g, '').length <= 3
+              return (
+                <span key={i} style={accent
+                  ? { display:'block', fontSize:'0.4em', color:'#c9b27e', letterSpacing:'0.16em', lineHeight:1.35, fontWeight:400 }
+                  : { display:'block' }}>
+                  {t}
+                </span>
+              )
+            })}
           </h1>
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
             {nl(c.heroParagraph)}
