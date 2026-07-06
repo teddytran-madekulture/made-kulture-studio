@@ -128,23 +128,31 @@ export default function JuneChatWidget() {
   // buttons (internal paths navigate in-tab; full URLs open a new tab).
   const renderContent = (text: string) => {
     const parts: React.ReactNode[] = []
-    const re = /\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g
+    const re = /(!?)\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g
     let last = 0
     let match: RegExpExecArray | null
     let k = 0
     while ((match = re.exec(text)) !== null) {
       if (match.index > last) parts.push(text.slice(last, match.index))
-      const href = match[2]
-      const external = href.startsWith('http') && !href.includes(window.location.hostname)
-      parts.push(
-        <a key={k++} href={href} target={external ? '_blank' : '_self'} rel="noreferrer" style={{
-          display: 'inline-block', background: GOLD, color: '#080808', textDecoration: 'none',
-          fontWeight: 700, fontSize: 12, letterSpacing: '0.06em', padding: '7px 14px',
-          borderRadius: 6, margin: '6px 4px 2px 0',
-        }}>
-          {match[1]} →
-        </a>
-      )
+      const isImg = match[1] === '!'
+      const label = match[2]
+      const href = match[3]
+      if (isImg) {
+        parts.push(
+          <img key={k++} src={href} alt={label} style={{ display: 'block', maxWidth: '100%', maxHeight: 260, borderRadius: 10, margin: '6px 0 2px' }} />
+        )
+      } else {
+        const external = href.startsWith('http') && !href.includes(window.location.hostname)
+        parts.push(
+          <a key={k++} href={href} target={external ? '_blank' : '_self'} rel="noreferrer" style={{
+            display: 'inline-block', background: GOLD, color: '#080808', textDecoration: 'none',
+            fontWeight: 700, fontSize: 12, letterSpacing: '0.06em', padding: '7px 14px',
+            borderRadius: 6, margin: '6px 4px 2px 0',
+          }}>
+            {label} →
+          </a>
+        )
+      }
       last = match.index + match[0].length
     }
     if (last < text.length) parts.push(text.slice(last))

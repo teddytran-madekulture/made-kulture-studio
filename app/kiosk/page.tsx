@@ -235,22 +235,31 @@ export default function KioskPage() {
   // photos on Supabase storage) open a new tab.
   const renderContent = (text: string): React.ReactNode[] => {
     const parts: React.ReactNode[] = []
-    const re = /\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g
+    const re = /(!?)\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g
     let last = 0, k = 0
     let match: RegExpExecArray | null
     while ((match = re.exec(text)) !== null) {
       if (match.index > last) parts.push(text.slice(last, match.index))
-      const href = match[2]
-      const external = href.startsWith('http') && (typeof window === 'undefined' || !href.includes(window.location.hostname))
-      parts.push(
-        <a key={k++} href={href} target={external ? '_blank' : '_self'} rel="noreferrer" style={{
-          display: 'inline-block', background: 'linear-gradient(135deg, #d7c08b 0%, #b59a63 55%, #9c8250 100%)',
-          color: INK, textDecoration: 'none', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-          padding: '8px 16px', borderRadius: 8, margin: '6px 6px 2px 0',
-        }}>
-          {match[1]} →
-        </a>
-      )
+      const isImg = match[1] === '!'
+      const label = match[2]
+      const href = match[3]
+      if (isImg) {
+        // Inline prop photo — keeps the guest in the kiosk (a link would navigate away).
+        parts.push(
+          <img key={k++} src={href} alt={label} style={{ display: 'block', maxWidth: '100%', maxHeight: 320, borderRadius: 14, margin: '8px 0 4px' }} />
+        )
+      } else {
+        const external = href.startsWith('http') && (typeof window === 'undefined' || !href.includes(window.location.hostname))
+        parts.push(
+          <a key={k++} href={href} target={external ? '_blank' : '_self'} rel="noreferrer" style={{
+            display: 'inline-block', background: 'linear-gradient(135deg, #d7c08b 0%, #b59a63 55%, #9c8250 100%)',
+            color: INK, textDecoration: 'none', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
+            padding: '8px 16px', borderRadius: 8, margin: '6px 6px 2px 0',
+          }}>
+            {label} →
+          </a>
+        )
+      }
       last = match.index + match[0].length
     }
     if (last < text.length) parts.push(text.slice(last))

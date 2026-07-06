@@ -214,20 +214,22 @@ async function execTool(
       if (!d || !Array.isArray(d.props)) {
         return { result: "The props catalog is unavailable right now — tell the visitor props are included free (first-come-first-serve during shared hours) and they can browse them with photos at /props." }
       }
+      const absUrl = (u: string | null | undefined): string | null =>
+        !u ? null : (u.startsWith('http') ? u : `${APP_URL}${u.startsWith('/') ? '' : '/'}${u}`)
       const q = String(input?.query || '').trim().toLowerCase()
 
       if (q) {
         const matches = d.props
           .filter((p: any) => [p.name, p.description, p.category, ...(p.tags || [])].join(' ').toLowerCase().includes(q))
           .slice(0, 8)
-          .map((p: any) => ({ name: p.name, category: p.category, page: p.slug ? `/props/p/${p.slug}` : '/props', description: p.description || undefined }))
+          .map((p: any) => ({ name: p.name, category: p.category, photo: absUrl(p.image_url), description: p.description || undefined }))
         return {
           result: JSON.stringify({
             query: q,
             count: matches.length,
             matches,
             note: matches.length
-              ? "When the visitor asks to SEE a specific prop, point them to its page with a link like [see the <name>](page) — that page shows its photos. Do this ONLY for a specific prop they named; when they're just asking what's available, list names ONLY with NO links. If it's unclear which prop they mean, ask which one first. Props are first-come-first-serve — don't promise a specific one is free at their booking time."
+              ? "When the visitor asks to SEE a specific prop, show its picture INLINE by writing exactly ![<name>](photo) — this renders the photo right inside the chat, so do NOT send a plain link that would navigate the kiosk away. Do this ONLY for a specific prop they named; when they're just asking what's available, list names ONLY with no images. If photo is null, say a picture isn't on file. If it's unclear which prop they mean, ask which one first. Props are first-come-first-serve — don't promise a specific one is free at their booking time."
               : "No props matched. Point them to the full directory at /props or ask them to describe it another way.",
           }),
         }
