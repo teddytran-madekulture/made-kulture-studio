@@ -249,16 +249,10 @@ export default function KioskPage() {
           <img key={k++} src={href} alt={label} style={{ display: 'block', maxWidth: '100%', maxHeight: 320, borderRadius: 14, margin: '8px 0 4px' }} />
         )
       } else {
-        const external = href.startsWith('http') && (typeof window === 'undefined' || !href.includes(window.location.hostname))
-        parts.push(
-          <a key={k++} href={href} target={external ? '_blank' : '_self'} rel="noreferrer" style={{
-            display: 'inline-block', background: 'linear-gradient(135deg, #d7c08b 0%, #b59a63 55%, #9c8250 100%)',
-            color: INK, textDecoration: 'none', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-            padding: '8px 16px', borderRadius: 8, margin: '6px 6px 2px 0',
-          }}>
-            {label} →
-          </a>
-        )
+        // Hard guardrail: the kiosk is a shared in-studio tablet — it must NEVER
+        // navigate away. Render any would-be link as plain, non-tappable text so
+        // a stray link from June can't strand the tablet off the kiosk.
+        parts.push(<span key={k++} style={{ fontWeight: 600, color: 'rgba(255,255,255,0.92)' }}>{label}</span>)
       }
       last = match.index + match[0].length
     }
