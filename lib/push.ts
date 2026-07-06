@@ -23,6 +23,8 @@ export async function sendOwnerPush(opts: {
   body: string
   url?: string     // deep link, defaults to June's inbox
   tag?: string     // same tag replaces older notification
+  renotify?: boolean          // re-alert even when replacing a same-tag notification
+  requireInteraction?: boolean // keep on screen until acted on (desktop/Android)
 }): Promise<void> {
   if (!pushConfigured()) return
   try {
@@ -54,6 +56,8 @@ export async function sendOwnerPush(opts: {
       body: opts.body,
       url: opts.url ?? '/admin/inbox',
       tag: opts.tag,
+      renotify: opts.renotify ?? false,
+      requireInteraction: opts.requireInteraction ?? false,
       badge,
     })
 

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import AdminPwa from '@/components/AdminPwa'
 import AdminShell from '@/components/AdminShell'
-import KioskAlarm from '@/components/KioskAlarm'
+import KioskAck from '@/components/KioskAck'
 
 // PWA metadata scoped to /admin — makes the admin installable ("Add to Home
 // Screen") as the Made Kulture task app, landing on June's inbox.
@@ -27,7 +27,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <>
       <AdminShell>{children}</AdminShell>
       <AdminPwa />
-      <KioskAlarm />
+      <KioskAck />
     </>
   )
 }

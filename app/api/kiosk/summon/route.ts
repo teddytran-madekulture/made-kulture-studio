@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
     body: note || 'A guest at the front kiosk tapped "Get the team".',
     url: '/admin/inbox',
     tag: 'kiosk-summon',
+    renotify: true,
+    requireInteraction: true,
   }).catch(e => console.error('[kiosk summon] push error:', e))
 
   return NextResponse.json({ success: true })

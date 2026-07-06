@@ -13,6 +13,10 @@ self.addEventListener('push', (event) => {
     badge: '/icons/admin-192.png',
     data: { url: data.url || '/admin/inbox' },
     tag: data.tag || undefined,
+    // renotify (with a tag) makes a repeat push re-alert instead of silently
+    // replacing; requireInteraction keeps it on screen until acted on (desktop/Android).
+    renotify: !!data.renotify,
+    requireInteraction: !!data.requireInteraction,
   }
   const work = [self.registration.showNotification(title, options)]
   // App-icon badge count (iOS 16.4+ installed PWAs, Android, desktop).
