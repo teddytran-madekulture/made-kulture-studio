@@ -66,6 +66,9 @@ function SidebarInner() {
         <Item href="/admin/marketing" icon="📣" label="Email Campaign" active={on('/admin/marketing')} />
         <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
 
+        <div style={sectionHdr}>FUNDING</div>
+        <Item href="/admin/funding" icon="$" label="Funding Tracker" active={on('/admin/funding')} />
+
         <button onClick={() => setSettingsOpen(o => !o)} style={{ ...sectionHdr, display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer' }}>
           SETTINGS <span style={{ fontSize: 8 }}>{settingsOpen ? '▲' : '▼'}</span>
         </button>
