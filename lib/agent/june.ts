@@ -52,6 +52,11 @@ const TOOLS = [
     input_schema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'get_props',
+    description: "The studio's live catalog of props available to style shoots, grouped by category. Props are included free with any booking, first-come-first-serve during shared hours. Use when a visitor asks what props are available, whether a specific piece exists, or what's in a category.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
     name: 'request_extension',
     description: 'KIOSK ONLY: start a session extension (+1 or +2 hours) for the booking happening right now. This NEVER charges anyone directly — it texts a secure confirm-and-pay link to the phone number on the booking, and only that phone can approve the charge. Use when a checked-in guest asks for more time. If the guest is not the checked-in one, ask for the phone number on the booking and pass it as phone.',
     input_schema: {
@@ -193,6 +198,26 @@ async function execTool(
           humidity_percent: d.humidity ?? null,
           outdoor_temp_f: d.outdoorTemp ?? null,
           note: 'Live from the studio thermostat. State the indoor temperature naturally; only mention humidity/outdoor if relevant.',
+        }),
+      }
+    }
+
+    if (name === 'get_props') {
+      const d = await fetch(`${APP_URL}/api/props`, { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null)
+      if (!d || !Array.isArray(d.props)) {
+        return { result: "The props catalog is unavailable right now — tell the visitor props are included free (first-come-first-serve during shared hours) and they can browse them with photos at /props." }
+      }
+      const byCategory: Record<string, string[]> = {}
+      for (const p of d.props) {
+        const cat = p.category || 'Other'
+        ;(byCategory[cat] ||= []).push(p.name)
+      }
+      return {
+        result: JSON.stringify({
+          total: d.props.length,
+          by_category: byCategory,
+          note: "Props are included free with any booking, first-come-first-serve during shared hours, and must be returned to their spots. This is the live list; the full browsable directory with photos is at /props. Don't promise a specific prop will be free at their booking time.",
         }),
       }
     }
