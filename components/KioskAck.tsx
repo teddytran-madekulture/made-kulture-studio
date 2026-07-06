@@ -1,13 +1,12 @@
 'use client'
 
-// Tells the server "Teddy is looking at the admin right now" so the escalating
-// kiosk-ring push loop stops. Pings on mount, whenever the tab becomes visible,
-// and on a slow heartbeat while visible. When the admin is closed/backgrounded,
-// pings stop — so a new ring keeps escalating until he opens the app.
+// Marks a kiosk ring as answered when Teddy actually engages the admin — on
+// mount (he opened it) and when he switches back to it (focus/visibility). It
+// does NOT ack on a loop, so a ring that arrives while the app is merely open
+// still keeps escalating until he taps a notification (handled in sw.js) or
+// re-opens/returns to the admin. Point: nag until answered, not until "app open".
 
 import { useEffect } from 'react'
-
-const HEARTBEAT_MS = 25_000
 
 export default function KioskAck() {
   useEffect(() => {
@@ -15,15 +14,13 @@ export default function KioskAck() {
       if (document.visibilityState !== 'visible') return
       fetch('/api/admin/kiosk-ack', { method: 'POST', cache: 'no-store' }).catch(() => {})
     }
-    ack()
+    ack() // opening the admin counts as answering
     const onVis = () => ack()
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onVis)
-    const iv = setInterval(ack, HEARTBEAT_MS)
     return () => {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', onVis)
-      clearInterval(iv)
     }
   }, [])
   return null
