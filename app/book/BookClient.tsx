@@ -159,7 +159,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
     guests:    null,
     setId:     setParam || null,
     date:      dateParam || today(),
-    startHour: startParam ? parseFloat(startParam) : null,
+    startHour: startParam ? Math.floor(parseFloat(startParam)) : null,  // starts snap to the hour
     endHour:   null,
     equipment: [],
     name: '', email: '', phone: '', notes: '', smsConsent: false, guestAck: false, agreementAck: false,
@@ -416,6 +416,9 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   const handleHourClick = (h: number) => {
     if (isHourBooked(h)) return
     if (selecting === 'start') {
+      // Start times are on the hour — the door code activates on the hour, so there's
+      // no early entry. Half-hour slots are selectable only as END times.
+      if (h % 1 !== 0) return
       setBooking(b => ({ ...b, startHour: h, endHour: null }))
       setSelecting('end')
     } else {
@@ -427,12 +430,12 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
         return
       }
       if (h <= (booking.startHour ?? 0)) {
+        if (h % 1 !== 0) return   // a new start must also be on the hour
         setBooking(b => ({ ...b, startHour: h, endHour: null }))
         return
       }
-      // End time must be a whole number of hours after start (no 30-min durations)
-      if ((h - (booking.startHour ?? 0)) % 1 !== 0) return
-      // Enforce minimum booking length (Watering Hole/Tank = 2hr, full warehouse = 4hr)
+      // Bookings run in 30-min increments (slots are already half-hour) with a
+      // per-set minimum length (standard sets 1hr; Watering Hole/Tank 2hr; buyout 4hr).
       if ((h - (booking.startHour ?? 0)) < minHours) return
       // Check no booked slot in range
       const start = booking.startHour!
@@ -726,6 +729,9 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   : `${fmt12(booking.startHour)} – ${fmt12(booking.endHour)} · ${hourCount} hour${hourCount !== 1 ? 's' : ''}`
               }
             </p>
+            <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, marginBottom: 12 }}>
+              Start on the hour · 30-minute increments · {minHours}-hour minimum.
+            </p>
             {booking.startHour !== null && booking.endHour === null && (
               <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, marginBottom: 12 }}>
                 Wrong start? Tap it again to clear it, or hit ↺ Reset Time below.
@@ -744,18 +750,19 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // before closing (e.g. 9:30pm, and 10pm itself). 10pm stays available
                 // as an END once a start is chosen.
                 const closeAsStart = booking.startHour === null && h > CLOSE_HOUR - minHours
-                // When picking end time, only allow whole-hour slots that meet the
-                // set's minimum length (e.g. The Watering Hole / The Tank = 2hr min)
+                // When picking end time, allow 30-min increments at or above the
+                // set's minimum length (standard 1hr; The Watering Hole / The Tank 2hr).
                 const isInvalidEnd = selecting === 'end' && booking.startHour !== null
-                                     && ((h - booking.startHour) % 1 !== 0
-                                         || (h > booking.startHour && (h - booking.startHour) < minHours))
+                                     && (h > booking.startHour && (h - booking.startHour) < minHours)
+                // Start times are on the hour; half-hour slots can only be an END.
+                const isInvalidStart = selecting === 'start' && h % 1 !== 0
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)
                 const isPending = booking.startHour === h && booking.endHour === null
 
                 let bg = '#0d0d0d'
-                let color = (isInvalidEnd || closeAsStart) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                let color = (isInvalidEnd || isInvalidStart || closeAsStart) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
                 if (isPast)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
                 if (inRange)      { bg = '#fff'; color = '#080808' }
@@ -763,10 +770,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
-                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isPast || closeAsStart}
+                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: (booked || isPast) ? 'not-allowed' : (isInvalidEnd || closeAsStart) ? 'default' : 'pointer',
+                      cursor: (booked || isPast) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart) ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >

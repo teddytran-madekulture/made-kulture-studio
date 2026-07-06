@@ -59,7 +59,8 @@ export default function TermsPage() {
           <Section title="BOOKING POLICY">
             <UL items={[
               <>All bookings must be made at least <strong style={{ color: '#fff' }}>48 hours in advance</strong></>,
-              'You may arrive up to 15 minutes early, but all setup and breakdown must occur within your booked time',
+              'Bookings run in 30-minute increments with a 1-hour minimum (some sets have longer minimums)',
+              'Your set unlocks at your booked start time — you will not be able to enter before your session begins; arriving a few minutes early to be ready is encouraged. All setup and breakdown must occur within your booked time',
               'Set reservations are for that specific set only — changing sets mid-session is not permitted',
               'Sessions running more than 15 minutes past your booked end time will be automatically charged an additional hour to the card on file',
             ]} />

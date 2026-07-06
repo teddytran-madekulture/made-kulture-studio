@@ -35,7 +35,7 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Bookings outside these hours may be avail
 ## Length of Use — Arrive and Leave On Time
 
 - Your booked time includes all setup and breakdown. The set must be cleaned and vacated by the end of your rental period.
-- You may arrive up to 15 minutes early, but all setup and breakdown must occur within your booked time.
+- Your set unlocks at your booked start time — you cannot enter before your session begins; arriving a few minutes early to be ready is encouraged. All setup and breakdown must occur within your booked time.
 - Sessions running more than 15 minutes past your booked end time are automatically charged an additional hour to the card on file.
 - No early drop-off or post-shoot pickup of equipment, props, etc., unless arranged in advance at the time of booking. Additional fees may apply. Any items left more than 48 hours after your rental will be considered abandoned and may be discarded.
 
@@ -116,7 +116,7 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Outside-hours bookings are available by r
 ## Length of Use — Arrive and Leave On Time
 
 - Your booked time includes all setup and breakdown. The space must be cleaned and vacated by the end of your rental period.
-- You may arrive up to 15 minutes early, but all setup and breakdown must occur within your booked time.
+- Your set unlocks at your booked start time — you cannot enter before your session begins; arriving a few minutes early to be ready is encouraged. All setup and breakdown must occur within your booked time.
 - Sessions running more than 15 minutes past your booked end time are automatically charged an additional hour (at the full-warehouse rate) to the card on file.
 - No early drop-off or post-shoot pickup of equipment, props, etc., unless arranged in advance at the time of booking. Additional fees may apply. Any items left more than 48 hours after your rental will be considered abandoned and may be discarded.
 

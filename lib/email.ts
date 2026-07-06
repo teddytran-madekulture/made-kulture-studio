@@ -479,7 +479,7 @@ export async function sendBookingReminder(data: BookingReminderData) {
         <td>
           <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">A Few Things to Know</p>
           <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
-            <li style="margin-bottom:6px;">You may arrive up to <strong style="color:#ddd;">15 minutes early</strong> — all setup and breakdown must happen within your booked time.</li>
+            <li style="margin-bottom:6px;">Your set unlocks at your <strong style="color:#ddd;">booked start time</strong> — you will not be able to get in early, so plan to arrive a few minutes ahead and be ready to start on time. Setup and breakdown happen within your booked time.</li>
             <li style="margin-bottom:6px;">Drive to the <strong style="color:#ddd;">back of the building</strong> for entrance and street parking.</li>
             <li style="margin-bottom:6px;">Return all props to their original spots before you leave.</li>
             <li>Questions before you arrive? Text us at <a href="sms:+18324081631" style="color:${ACCENT_COLOR};text-decoration:none;">(832) 408-1631</a>.</li>

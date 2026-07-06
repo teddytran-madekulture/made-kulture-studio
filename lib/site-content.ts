@@ -139,7 +139,7 @@ const STUDIO_RULES_FIELDS: ContentField[] = [
   { key: 'faq1Items', label: 'Questions',     type: 'list', group: 'Section 1 \u00b7 Booking',       item: FAQ_ITEM, default: JSON.stringify([
     { q: 'How far in advance do I need to book?', a: 'All bookings must be made at least 48 hours in advance. A card on file is required at checkout to cover any session overages.' },
     { q: 'What is the cancellation policy?', a: 'You may cancel or reschedule up to 48 hours before your session start time for a full refund, including all fees. Cancellations made less than 48 hours before your session are non-refundable.' },
-    { q: 'Can I arrive early?', a: 'You and your guests may arrive up to 15 minutes before your session start time. All setup, shooting, and breakdown must be completed within your booked hours \u2014 early arrival does not extend your time.' },
+    { q: 'Can I arrive early?', a: 'Your set unlocks at your booked start time \u2014 the door code activates then, so you will not be able to get in before your session begins. We still recommend arriving a few minutes early so you are ready to make the most of your time. All setup, shooting, and breakdown happen within your booked hours.' },
     { q: 'Can I book outside of business hours?', a: 'Yes. Outside-hours bookings are available upon request and are billed at the full warehouse rate. Overages that run past closing time are also charged at the full warehouse rate.' },
     { q: 'Can I add more time during my session?', a: 'Yes \u2014 if no booking immediately follows yours on that set, you can extend your session on the spot. Additional time is charged at the standard hourly rate for your set.' },
   ]) },
