@@ -229,7 +229,7 @@ async function execTool(
             count: matches.length,
             matches,
             note: matches.length
-              ? "Share a prop's photo as a tappable markdown link like [see the <name>](photo). If photo is null, say a picture isn't on file. Props are first-come-first-serve — don't promise a specific one is free at their booking time."
+              ? "Only include a photo link when the visitor asked to SEE a specific prop or asked for its picture/link — then share ONLY that one prop's photo as [see the <name>](photo). If they're just asking what you have or what's available, list names ONLY with NO links. If it's unclear which prop they mean, ask which one first. If photo is null, say a picture isn't on file. Props are first-come-first-serve — don't promise a specific one is free at their booking time."
               : "No props matched. Suggest they browse the full directory at /props or describe it another way.",
           }),
         }

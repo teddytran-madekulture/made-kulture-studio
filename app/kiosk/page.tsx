@@ -230,6 +230,33 @@ export default function KioskPage() {
     setBusy(false)
   }
 
+  // Render June's [label](url) markdown links as tappable champagne buttons
+  // (mirrors the web widget). Internal paths open in-tab; full URLs (e.g. prop
+  // photos on Supabase storage) open a new tab.
+  const renderContent = (text: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = []
+    const re = /\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g
+    let last = 0, k = 0
+    let match: RegExpExecArray | null
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > last) parts.push(text.slice(last, match.index))
+      const href = match[2]
+      const external = href.startsWith('http') && (typeof window === 'undefined' || !href.includes(window.location.hostname))
+      parts.push(
+        <a key={k++} href={href} target={external ? '_blank' : '_self'} rel="noreferrer" style={{
+          display: 'inline-block', background: 'linear-gradient(135deg, #d7c08b 0%, #b59a63 55%, #9c8250 100%)',
+          color: INK, textDecoration: 'none', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
+          padding: '8px 16px', borderRadius: 8, margin: '6px 6px 2px 0',
+        }}>
+          {match[1]} →
+        </a>
+      )
+      last = match.index + match[0].length
+    }
+    if (last < text.length) parts.push(text.slice(last))
+    return parts
+  }
+
   // ── Styles — luxury dark ─────────────────────────────────────────────────
   const wrap: React.CSSProperties = {
     background: 'radial-gradient(120% 90% at 85% -10%, #191510 0%, #0d0d10 45%, #09090b 100%)',
@@ -368,7 +395,7 @@ export default function KioskPage() {
               border: m.role === 'user' ? 'none' : `1px solid rgba(255,255,255,0.12)`,
               borderRadius: m.role === 'user' ? '18px 18px 5px 18px' : '18px 18px 18px 5px',
             }}>
-              {m.content}
+              {m.role === 'user' ? m.content : renderContent(m.content)}
             </div>
           </div>
         ))}
