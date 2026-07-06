@@ -47,6 +47,11 @@ const TOOLS = [
     input_schema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'get_studio_conditions',
+    description: "The studio's current live conditions from the Nest thermostat: indoor temperature, humidity, and the outdoor temperature (all in °F). Use whenever a visitor asks how hot or cold it is, the current temperature or humidity, or what the climate is like in the studio right now.",
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
     name: 'request_extension',
     description: 'KIOSK ONLY: start a session extension (+1 or +2 hours) for the booking happening right now. This NEVER charges anyone directly — it texts a secure confirm-and-pay link to the phone number on the booking, and only that phone can approve the charge. Use when a checked-in guest asks for more time. If the guest is not the checked-in one, ask for the phone number on the booking and pass it as phone.',
     input_schema: {
@@ -174,6 +179,22 @@ async function execTool(
         .order('start_time', { ascending: true })
         .limit(10)
       return { result: JSON.stringify(data ?? []) }
+    }
+
+    if (name === 'get_studio_conditions') {
+      const d = await fetch(`${APP_URL}/api/studio-temp`, { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null)
+      if (!d || (d.indoorTemp == null && d.outdoorTemp == null && d.humidity == null)) {
+        return { result: "The live studio conditions feed is unavailable right now — tell the visitor you can't read the current temperature, and they can text (832) 408-1631." }
+      }
+      return {
+        result: JSON.stringify({
+          indoor_temp_f: d.indoorTemp ?? null,
+          humidity_percent: d.humidity ?? null,
+          outdoor_temp_f: d.outdoorTemp ?? null,
+          note: 'Live from the studio thermostat. State the indoor temperature naturally; only mention humidity/outdoor if relevant.',
+        }),
+      }
     }
 
     if (name === 'escalate_to_teddy') {
