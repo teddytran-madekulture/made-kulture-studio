@@ -214,23 +214,21 @@ async function execTool(
       if (!d || !Array.isArray(d.props)) {
         return { result: "The props catalog is unavailable right now — tell the visitor props are included free (first-come-first-serve during shared hours) and they can browse them with photos at /props." }
       }
-      const absUrl = (u: string | null | undefined): string | null =>
-        !u ? null : (u.startsWith('http') ? u : `${APP_URL}${u.startsWith('/') ? '' : '/'}${u}`)
       const q = String(input?.query || '').trim().toLowerCase()
 
       if (q) {
         const matches = d.props
           .filter((p: any) => [p.name, p.description, p.category, ...(p.tags || [])].join(' ').toLowerCase().includes(q))
           .slice(0, 8)
-          .map((p: any) => ({ name: p.name, category: p.category, photo: absUrl(p.image_url), description: p.description || undefined }))
+          .map((p: any) => ({ name: p.name, category: p.category, page: p.slug ? `/props/p/${p.slug}` : '/props', description: p.description || undefined }))
         return {
           result: JSON.stringify({
             query: q,
             count: matches.length,
             matches,
             note: matches.length
-              ? "Only include a photo link when the visitor asked to SEE a specific prop or asked for its picture/link — then share ONLY that one prop's photo as [see the <name>](photo). If they're just asking what you have or what's available, list names ONLY with NO links. If it's unclear which prop they mean, ask which one first. If photo is null, say a picture isn't on file. Props are first-come-first-serve — don't promise a specific one is free at their booking time."
-              : "No props matched. Suggest they browse the full directory at /props or describe it another way.",
+              ? "When the visitor asks to SEE a specific prop, point them to its page with a link like [see the <name>](page) — that page shows its photos. Do this ONLY for a specific prop they named; when they're just asking what's available, list names ONLY with NO links. If it's unclear which prop they mean, ask which one first. Props are first-come-first-serve — don't promise a specific one is free at their booking time."
+              : "No props matched. Point them to the full directory at /props or ask them to describe it another way.",
           }),
         }
       }
