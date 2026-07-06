@@ -36,6 +36,13 @@ export default function AdminInboxPage() {
   const [newContent, setNewContent] = useState('')
   const [pushState, setPushState]   = useState<'idle' | 'busy' | 'ok' | 'denied' | 'unsupported' | 'error'>('idle')
   const [tabCounts, setTabCounts]   = useState<{ inbox: number; tours: number }>({ inbox: 0, tours: 0 })
+  const [isMobile, setIsMobile]     = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 720)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   const loadCounts = useCallback(async () => {
     try {
@@ -447,7 +454,8 @@ export default function AdminInboxPage() {
 
         <div style={{ display: tab === 'convos' ? 'flex' : 'none', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* Conversation list */}
-          <div style={{ flex: '0 0 340px', maxWidth: '100%', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, overflow: 'hidden' }}>
+          {(!isMobile || !sel) && (
+          <div style={{ flex: isMobile ? '1 1 100%' : '0 0 340px', maxWidth: '100%', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, overflow: 'hidden' }}>
             {loading && <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Loading…</div>}
             {!loading && convos.length === 0 && (
               <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No conversations yet. June's widget is live on the site.</div>
@@ -478,9 +486,11 @@ export default function AdminInboxPage() {
               </div>
             ))}
           </div>
+          )}
 
           {/* Transcript */}
-          <div style={{ flex: 1, minWidth: 320, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, display: 'flex', flexDirection: 'column', minHeight: 480 }}>
+          {(!isMobile || sel) && (
+          <div style={{ flex: 1, minWidth: isMobile ? 0 : 320, width: isMobile ? '100%' : undefined, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, display: 'flex', flexDirection: 'column', minHeight: 480 }}>
             {!sel ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                 Select a conversation
@@ -488,6 +498,9 @@ export default function AdminInboxPage() {
             ) : (
               <>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  {isMobile && (
+                    <button onClick={() => setSel(null)} style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '6px 10px', cursor: 'pointer', borderRadius: 4 }}>← BACK</button>
+                  )}
                   <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {sel.visitor_name || sel.visitor_email || 'Visitor'}
                     {channelBadge(sel)}
@@ -579,6 +592,7 @@ export default function AdminInboxPage() {
               </>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>
