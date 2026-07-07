@@ -54,13 +54,6 @@ export default function SignupPage() {
       },
     })
     if (error) { setError(error.message); setLoading(false); return }
-    // Queue any custom ("Other") roles for owner review — best-effort.
-    const customRoles = form.roles.filter(r => !roleOptions.includes(r))
-    await Promise.allSettled(customRoles.map(role =>
-      fetch('/api/roles/suggest', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, email: form.email }),
-      })))
     setSuccess(true)
   }
 

@@ -41,12 +41,6 @@ export default function WelcomePage() {
         roles, directory_opt_in: directoryOptIn, onboarded: true,
       }),
     })
-    const customRoles = roles.filter(r => !roleOptions.includes(r))
-    await Promise.allSettled(customRoles.map(role =>
-      fetch('/api/roles/suggest', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, email }),
-      })))
     router.replace('/account')
   }
 

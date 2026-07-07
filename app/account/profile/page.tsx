@@ -154,13 +154,6 @@ export default function ProfilePage() {
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
     else {
-      // Queue any custom ("Other") roles for owner review — best-effort.
-      const customRoles = form.roles.filter(r => !roleOptions.includes(r))
-      await Promise.allSettled(customRoles.map(role =>
-        fetch('/api/roles/suggest', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role, email: form.email }),
-        })))
       setSaved(true); setSaving(false)
     }
   }
