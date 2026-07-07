@@ -155,6 +155,17 @@ export async function fetchNewEmails(max = 10): Promise<InboundEmail[]> {
       await markProcessed(m.id)
       continue
     }
+    // Skip bulk / promotional / newsletter mail so June never drafts a reply to an
+    // ad or a newsletter (and it stays out of the admin inbox). A List-Unsubscribe
+    // header is the reliable "this is bulk mail" signal — real 1:1 inquiries don't
+    // carry it — backed up by Precedence: bulk and Gmail's Promotions category.
+    const listUnsub  = header(full.payload, 'List-Unsubscribe')
+    const precedence = header(full.payload, 'Precedence').toLowerCase()
+    const gmailLabels: string[] = full.labelIds ?? []
+    if (listUnsub || /bulk|list/.test(precedence) || gmailLabels.includes('CATEGORY_PROMOTIONS')) {
+      await markProcessed(m.id)
+      continue
+    }
     out.push({
       gmailMsgId: m.id,
       threadId: full.threadId,
