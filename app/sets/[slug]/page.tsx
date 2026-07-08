@@ -86,13 +86,19 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>RATE</div>
-                  <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>${guestRate}/hr · members ${set.rate_per_hour}/hr</div>
+                  <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>${guestRate}/hr</div>
                 </div>
                 <div>
                   <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>BOOKING</div>
                   <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>{minNote} · up to {set.capacity ?? 5} people</div>
                 </div>
               </div>
+
+              {surcharge > 0 && (
+                <Link href="/signup" style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#c9b27e', textDecoration: 'none' }}>
+                  Sign up free for member rates ↗
+                </Link>
+              )}
 
               {(set.features ?? []).length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

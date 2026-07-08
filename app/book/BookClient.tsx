@@ -647,7 +647,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   onMouseLeave={e => { if (booking.setId !== s.id) (e.currentTarget as HTMLButtonElement).style.background = '#0d0d0d' }}
                 >
                   <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: booking.setId === s.id ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', marginBottom: 10 }}>
-                    ${s.price + (loggedIn ? 0 : guestSurchargePerHour)}/HR{!loggedIn && guestSurchargePerHour > 0 ? ` · members $${s.price}` : ''} {s.minHours > 1 ? `· ${s.minHours}HR MIN` : ''}
+                    ${s.price + (loggedIn ? 0 : guestSurchargePerHour)}/HR {s.minHours > 1 ? `· ${s.minHours}HR MIN` : ''}
                   </div>
                   <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, color: booking.setId === s.id ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 6 }}>
                     {s.name.toUpperCase()}
@@ -1094,21 +1094,20 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 24 }}>
                   {booking.type === 'studio'
                     ? (hourCount > 0 && <Row label={`SPACE (${hourCount}hr × $${buyoutRate})`} value={`$${spaceTotal}`} />)
-                    : (cartSpaceTotal > 0 && <Row label="SETS SUBTOTAL" value={`$${cartSpaceTotal}`} />)}
+                    : (cartSpaceTotal > 0 && <Row label="SETS SUBTOTAL" value={`$${cartSpaceTotal + guestSurcharge}`} />)}
                   {guestFeeLines.map((g, i) => <Row key={`gf${i}`} label={g.label} value={`$${g.amount}`} />)}
                   {equipTotal > 0 && (
                     equipDiscount
                       ? <Row label={`EQUIPMENT (${equipDiscount}% off)`} value={`$${discountedEquipTotal}`} />
                       : <Row label="EQUIPMENT" value={`$${equipTotal}`} />
                   )}
-                  {guestSurcharge > 0 && <Row label={`NON-MEMBER RATE (+$${guestSurchargePerHour}/hr)`} value={`$${guestSurcharge}`} />}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                     <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', letterSpacing: '0.05em' }}>TOTAL</span>
                     <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff' }}>${grandTotal}</span>
                   </div>
                   {guestSurcharge > 0 && (
                     <div style={{ marginTop: 10, fontFamily: 'Inter', fontSize: 12, color: '#c9b27e', border: '1px solid rgba(201,178,126,0.3)', background: 'rgba(201,178,126,0.06)', padding: '9px 12px' }}>
-                      Members save ${guestSurchargePerHour}/hr. <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>Sign in</a> or <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>make a free account</a> to get the member rate.
+                      <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>Sign up free for member rates</a> or <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>sign in</a> to save on this booking.
                     </div>
                   )}
                 </div>

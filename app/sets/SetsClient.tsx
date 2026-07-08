@@ -28,6 +28,10 @@ interface ApiSet {
 
 const DEFAULT_GRADIENT = 'linear-gradient(135deg, #141414 0%, #1e1e1e 100%)'
 
+// Shared content column width — matches the home page (PAGE_MAX) so /sets lines
+// up with the same centered 1480px column and edge-to-edge divider lines.
+const PAGE_MAX = 1480
+
 // The full-warehouse buyout is a fixed offering, not a set row — kept here.
 const STUDIO = {
   name: 'Full Studio Takeover', price: 400,
@@ -80,7 +84,7 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
   const minNote = set.min_hours && set.min_hours > 1 ? `${set.min_hours} HR MIN` : ''
   return (
     <section style={{ padding: isMobile ? '0 20px 52px' : '0 40px 80px' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ maxWidth: PAGE_MAX, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>
             PREMIUM SET — ${set.rate_per_hour}/HR{minNote ? ` · ${minNote}` : ''}
@@ -141,7 +145,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
       .then(d => {
         const s = d.guestSurchargePerHour != null ? Number(d.guestSurchargePerHour) : 10
         setSurcharge(s)
-        // Catalog shows the guest rate; members save the surcharge (see banner).
+        // Catalog shows the guest rate; signed-in members are billed less at checkout.
         setSets((d.sets ?? []).map((x: any) => ({ ...x, rate_per_hour: Number(x.rate_per_hour) + s })))
         if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
         setLoading(false)
@@ -162,9 +166,9 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
 
   // Live-value tokens usable in editable copy (see lib/site-content.ts).
   const tok = (t: string) => (t ?? '')
-    .replace(/\{sets\}/g, loading ? '\u2014' : String(sets.length))
-    .replace(/\{min\}/g, loading ? '\u2014' : String(minRate))
-    .replace(/\{rate\}/g, loading ? '\u2026' : String(buyoutRate))
+    .replace(/\{sets\}/g, loading ? '—' : String(sets.length))
+    .replace(/\{min\}/g, loading ? '—' : String(minRate))
+    .replace(/\{rate\}/g, loading ? '…' : String(buyoutRate))
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
@@ -172,13 +176,13 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
 
       {surcharge > 0 && (
         <div style={{ background: 'rgba(201,178,126,0.08)', borderBottom: '1px solid rgba(201,178,126,0.25)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#c9b27e' }}>
-          Rates shown are guest prices. <strong>Members save ${surcharge}/hr</strong> — <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>make a free account</a> or <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>sign in</a>.
+          Prices shown are guest rates. <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>Sign up free for member rates</a> or <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>sign in</a>.
         </div>
       )}
 
       {/* Hero */}
       <section style={{ paddingTop: isMobile ? 104 : 160, paddingBottom: isMobile ? 52 : 80, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
               <div style={{ width: 40, height: 1, background: 'rgba(255,255,255,0.4)' }} />
@@ -216,7 +220,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
 
       {/* Standard sets grid */}
       <section style={{ padding: isMobile ? '52px 20px' : '80px 40px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ maxWidth: PAGE_MAX, margin: '0 auto' }}>
           <div style={{ marginBottom: 48 }}>
             <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>{tok(c.indivEyebrow)}</div>
             <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(36px, 5vw, 60px)', color: '#fff', letterSpacing: '0.02em', margin: 0 }}>{c.indivHeading}</h2>
@@ -225,7 +229,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
           {loading ? (
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', padding: '40px 0' }}>Loading sets…</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(240px, 1fr))', gap: isMobile ? 10 : 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: isMobile ? 10 : 12 }}>
               {standard.map(set => (
                 <SetCard key={set.id} set={set} num={numFor(set)} />
               ))}
@@ -245,7 +249,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
 
       {/* Full Studio Takeover */}
       <section style={{ padding: isMobile ? '0 20px 64px' : '0 40px 100px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ maxWidth: PAGE_MAX, margin: '0 auto' }}>
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>{tok(c.buyoutEyebrow)}</div>
           </div>

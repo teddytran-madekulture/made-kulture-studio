@@ -67,7 +67,7 @@ const HOME_FIELDS: ContentField[] = [
   // Sets section
   { key: 'setsEyebrow', label: 'Eyebrow',         type: 'text',      group: 'Sets', default: 'EXPLORE OUR SETS' },
   { key: 'setsHeading', label: 'Heading',         type: 'multiline', group: 'Sets', default: 'MULTIPLE SETS.\nENDLESS POSSIBILITIES.' },
-  { key: 'setsNote',    label: 'Note under heading', type: 'text',   group: 'Sets', default: 'Rates shown are guest prices — members save $10/hr with a free account.' },
+  { key: 'setsNote',    label: 'Note under heading', type: 'text',   group: 'Sets', default: 'Guest rates shown — sign up free for member rates.' },
 
   // Closing CTA
   { key: 'ctaEyebrow',     label: 'Eyebrow',       type: 'text',      group: 'Closing CTA', default: 'MADEKULTURE / HOUSTON' },

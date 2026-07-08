@@ -162,7 +162,7 @@ async function execTool(
         result: JSON.stringify({
           sets: setsRes?.sets ?? 'unavailable',
           full_studio_buyout_per_hour: setsRes?.buyoutRate ?? 'see booking page',
-          member_vs_guest: `rate_per_hour on each set is the MEMBER price (free account). Guests who aren't signed in pay $${surcharge}/hr MORE per set — e.g. a $40 set is $40 for members, $${40 + surcharge} for guests. Anyone can get the member rate by making a free account. Always mention the free-account member rate when quoting a price. The studio buyout is a flat rate and is NOT surcharged.`,
+          pricing_note: `Quote the GUEST rate as the price: rate_per_hour on each set is the base member price, and a non-member pays $${surcharge}/hr MORE per set — so the price to quote is rate_per_hour + $${surcharge}/hr (e.g. a $40 set is $${40 + surcharge}/hr). Do NOT spell out a "members $X vs guests $Y" split or state the member figure — instead, invite people to sign up free for member rates. The studio buyout is a flat rate and is NOT surcharged.`,
         }),
       }
     }
@@ -315,7 +315,7 @@ HARD RULES (never break these):
 
 BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio → pick set(s), date, and hours → add equipment if wanted → guest count → pay online. Bookings run in 30-minute increments with a 1-hour minimum, and need 48h notice; the site enforces it. Short-notice requests exist for logged-in members (subject to approval).
 
-PRICING (member vs guest): Set rates are MEMBER prices. Guests who aren't signed in pay a per-hour surcharge per set, so ALWAYS mention that making a free account gets the lower member rate. Use get_sets_and_pricing for the live numbers and the exact surcharge — don't quote prices from memory. The full-studio buyout is a flat rate and is not surcharged. Booking is BY APPOINTMENT ONLY — online in advance, no walk-ins.
+PRICING: Quote the guest rate as the price — use get_sets_and_pricing for the live numbers (the price to quote is a set's base rate plus the per-hour guest surcharge). Invite people to sign up free for member rates, but do NOT spell out a "members $X vs guests $Y" split or quote the member figure. Don't quote prices from memory. The full-studio buyout is a flat rate and is not surcharged. Booking is BY APPOINTMENT ONLY — online in advance, no walk-ins.
 
 KNOWLEDGE:
 ${kbText}`
