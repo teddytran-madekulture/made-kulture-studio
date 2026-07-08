@@ -44,6 +44,7 @@ const FEATURE_ICONS = [
 
 export default function HomeClient({ images = {}, settings, content = {} }: { images?: SiteImages; settings?: SiteSettings; content?: PageContent }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+  const [heroHover, setHeroHover] = useState<'primary' | 'secondary' | null>(null)
   const isMobile = useIsMobile()
   const c = content
   const tiles = parseList(c.featureTiles)
@@ -135,21 +136,27 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
           </p>
           <div style={{ display:'flex', gap:12, flexDirection: isMobile ? 'column' : 'row' }}>
             <Link href={c.heroPrimaryHref}
-              onMouseEnter={e => (e.currentTarget.style.background = '#c9b27e')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+              onMouseEnter={() => setHeroHover('primary')}
+              onMouseLeave={() => setHeroHover(null)}
               style={{
               display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
-              background:'#fff', color:'#080808', padding:'16px 24px', textDecoration:'none', transition:'background 0.2s ease',
+              background: heroHover === 'secondary' ? 'transparent' : '#fff',
+              color: heroHover === 'secondary' ? '#fff' : '#080808',
+              border: heroHover === 'secondary' ? '1px solid rgba(255,255,255,0.5)' : '1px solid transparent',
+              padding:'16px 24px', textDecoration:'none', transition:'background 0.25s ease, color 0.25s ease, border-color 0.25s ease',
             }}>
               <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroPrimaryLabel}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
             <Link href={c.heroSecondaryHref}
-              onMouseEnter={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#080808'; e.currentTarget.style.borderColor = '#fff' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)' }}
+              onMouseEnter={() => setHeroHover('secondary')}
+              onMouseLeave={() => setHeroHover(null)}
               style={{
               display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
-              background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.18)', padding:'16px 24px', textDecoration:'none', transition:'background 0.2s ease, color 0.2s ease, border-color 0.2s ease',
+              background: heroHover === 'secondary' ? '#fff' : 'transparent',
+              color: heroHover === 'secondary' ? '#080808' : '#fff',
+              border: heroHover === 'secondary' ? '1px solid #fff' : '1px solid rgba(255,255,255,0.18)',
+              padding:'16px 24px', textDecoration:'none', transition:'background 0.25s ease, color 0.25s ease, border-color 0.25s ease',
             }}>
               <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroSecondaryLabel}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
