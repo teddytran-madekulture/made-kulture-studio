@@ -124,16 +124,22 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
             {nl(c.heroParagraph)}
           </p>
           <div style={{ display:'flex', gap:12, flexDirection: isMobile ? 'column' : 'row' }}>
-            <Link href={c.heroPrimaryHref} style={{
+            <Link href={c.heroPrimaryHref}
+              onMouseEnter={e => (e.currentTarget.style.background = '#c9b27e')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+              style={{
               display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
-              background:'#fff', color:'#080808', padding:'16px 24px', textDecoration:'none',
+              background:'#fff', color:'#080808', padding:'16px 24px', textDecoration:'none', transition:'background 0.2s ease',
             }}>
               <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroPrimaryLabel}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
             </Link>
-            <Link href={c.heroSecondaryHref} style={{
+            <Link href={c.heroSecondaryHref}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#080808'; e.currentTarget.style.borderColor = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)' }}
+              style={{
               display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
-              background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.18)', padding:'16px 24px', textDecoration:'none',
+              background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.18)', padding:'16px 24px', textDecoration:'none', transition:'background 0.2s ease, color 0.2s ease, border-color 0.2s ease',
             }}>
               <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroSecondaryLabel}</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
@@ -172,7 +178,13 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
               {nl(c.setsNote)}
             </div>
           </div>
-          <Link href="/sets" className="btn">VIEW ALL SETS ↗</Link>
+          <Link href="/sets"
+            onMouseEnter={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#080808'; e.currentTarget.style.borderColor = '#fff' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)' }}
+            style={{ display:'inline-flex', alignItems:'center', gap:24, background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', padding:'16px 24px', textDecoration:'none', transition:'background 0.2s ease, color 0.2s ease, border-color 0.2s ease' }}>
+            <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>VIEW ALL SETS</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+          </Link>
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(5, 1fr)', gap: isMobile ? 8 : 10 }}>
