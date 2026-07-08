@@ -173,7 +173,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
               <Link key={i} href={`/sets/${set.slug}`}
                 onMouseEnter={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1.05)' }}
                 onMouseLeave={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1)' }}
-                style={{ position:'relative', display:'block', aspectRatio:'3/4', background: set.gradient, overflow:'hidden', textDecoration:'none' }}
+                style={{ position:'relative', display:'block', aspectRatio:'3/4', background: set.gradient, overflow:'hidden', textDecoration:'none', border:'1px solid rgba(255,255,255,0.14)' }}
               >
                 {/* Set image — editable at /admin/website/home (slot: set slug) */}
                 <img
