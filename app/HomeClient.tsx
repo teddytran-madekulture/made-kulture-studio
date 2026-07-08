@@ -88,7 +88,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
 
   // Max content width — everything except the full-bleed hero image is centered
   // in this column. Tune this one number to make the page narrower / wider.
-  const PAGE_MAX = 1120
+  const PAGE_MAX = 1480
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
@@ -111,7 +111,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
             <img src={images.hero} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center bottom' }} />
           )}
           {/* Mood/legibility scrim — anchors the headline without dimming the whole image (image stays full opacity) */}
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(8,8,8,0.9) 0%, rgba(8,8,8,0.25) 55%, transparent 100%)' }} />
+          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, #080808 0%, rgba(8,8,8,0.55) 24%, rgba(8,8,8,0.15) 50%, transparent 78%)' }} />
         </div>
 
         {/* Coordinates (hidden on mobile to avoid overlapping the headline) */}
@@ -169,26 +169,30 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
         </div>
       </section>
 
+      {/* FEATURES BAR — full-width top/bottom divider lines (border-y span to the
+          screen edge); tiles stay in the centered column. gap:1 + bg draws the
+          thin vertical dividers between tiles. Editable at /admin/website/pages/home */}
+      <section style={{ borderTop:'1px solid rgba(255,255,255,0.1)', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
+        <div style={{ maxWidth: PAGE_MAX, margin:'0 auto', display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${Math.max(tiles.length, 1)},1fr)`, gap:1, background:'rgba(255,255,255,0.09)' }}>
+          {tiles.map((f, i) => (
+            <div key={i} style={{ background:'#080808', padding: isMobile ? '22px 18px' : '30px 26px' }}>
+              <div style={{ marginBottom:14, color:'rgba(255,255,255,0.5)', display:'flex' }}>{FEATURE_ICONS[i] || <span style={{ fontSize:20 }}>{f.icon}</span>}</div>
+              <div className="label" style={{ color:'#fff', marginBottom:10 }}>{f.title}</div>
+              <p style={{ fontSize:12.5, color:'rgba(255,255,255,0.48)', lineHeight:1.55 }}>{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ── Centered content column — the hero image above stays full-bleed ── */}
       <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', width: '100%' }}>
-
-      {/* FEATURES BAR — tiles are editable at /admin/website/pages/home */}
-      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${Math.max(tiles.length, 1)},1fr)` }}>
-        {tiles.map((f, i) => (
-          <div key={i} style={{ padding: isMobile ? '22px 18px' : '30px 26px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
-            <div style={{ marginBottom:14, color:'rgba(255,255,255,0.5)', display:'flex' }}>{FEATURE_ICONS[i] || <span style={{ fontSize:20 }}>{f.icon}</span>}</div>
-            <div className="label" style={{ color:'#fff', marginBottom:10 }}>{f.title}</div>
-            <p style={{ fontSize:12.5, color:'rgba(255,255,255,0.48)', lineHeight:1.55 }}>{f.desc}</p>
-          </div>
-        ))}
-      </section>
 
       {/* SETS */}
       <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
         <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom: isMobile ? 40 : 64, flexWrap:'wrap', gap:24 }}>
           <div>
             <div className="label" style={{ marginBottom:20 }}>{c.setsEyebrow}</div>
-            <h2 style={{ fontSize:'clamp(32px, 4.4vw, 60px)', color:'#fff', lineHeight:0.95 }}>
+            <h2 style={{ fontSize:'clamp(48px, 6vw, 88px)', color:'#fff', lineHeight:0.92 }}>
               {nl(c.setsHeading)}
             </h2>
             <div style={{ marginTop:16, fontFamily:'Inter', fontSize:13, color:'#c9b27e' }}>
@@ -211,7 +215,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
               <Link key={i} href={`/sets/${set.slug}`}
                 onMouseEnter={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1.05)' }}
                 onMouseLeave={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1)' }}
-                style={{ position:'relative', display:'block', aspectRatio:'3/4', background: set.gradient, overflow:'hidden', textDecoration:'none' }}
+                style={{ position:'relative', display:'block', aspectRatio:'4/5', background: set.gradient, overflow:'hidden', textDecoration:'none' }}
               >
                 {/* Set image — editable at /admin/website/home (slot: set slug) */}
                 <img
