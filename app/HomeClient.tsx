@@ -45,6 +45,7 @@ const FEATURE_ICONS = [
 export default function HomeClient({ images = {}, focals = {}, settings, content = {} }: { images?: SiteImages; focals?: Record<string, string>; settings?: SiteSettings; content?: PageContent }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [heroHover, setHeroHover] = useState<'primary' | 'secondary' | null>(null)
+  const [pathHover, setPathHover] = useState<'a' | 'b' | null>(null)
   const isMobile = useIsMobile()
   const c = content
   const tiles = parseList(c.featureTiles)
@@ -243,32 +244,32 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
       {/* BOOKING PATHS — full-width divider lines, content stays in the column */}
       <section style={{ borderTop:'1px solid rgba(255,255,255,0.1)', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
         <div style={{ maxWidth: PAGE_MAX, margin:'0 auto', display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
-        <div style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24 }}>
-          <div className="label">PATH A</div>
-          <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color:'#fff' }}>BOOK INDIVIDUAL SET</h2>
-          <p style={{ fontSize:15, color:'rgba(255,255,255,0.5)', lineHeight:1.7, maxWidth:400 }}>
+        <Link href="/book?type=set"
+          onMouseEnter={() => setPathHover('a')} onMouseLeave={() => setPathHover(null)}
+          style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24, textDecoration:'none', background: pathHover === 'a' ? '#fff' : (pathHover === 'b' ? 'transparent' : '#111111'), transition:'background 0.3s ease' }}>
+          <div className="label" style={{ color: pathHover === 'a' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>PATH A</div>
+          <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color: pathHover === 'a' ? '#080808' : '#fff' }}>BOOK INDIVIDUAL SET</h2>
+          <p style={{ fontSize:15, color: pathHover === 'a' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)', lineHeight:1.7, maxWidth:400 }}>
             Reserve a single environment for editorials, portrait shoots, product days, or anything in between. Hourly. Pay for what you need.
           </p>
-          <div style={{ marginTop:'auto', paddingTop:40 }}>
-            <Link href="/book?type=set" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', textDecoration:'none', borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:24 }}>
-              <span className="label" style={{ color:'#fff' }}>RESERVE A SET</span>
-              <span style={{ fontSize:20, color:'rgba(255,255,255,0.6)' }}>↗</span>
-            </Link>
+          <div style={{ marginTop:'auto', paddingTop:40, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <span className="label" style={{ color: pathHover === 'a' ? '#080808' : '#fff' }}>RESERVE A SET</span>
+            <span style={{ fontSize:20, color: pathHover === 'a' ? '#080808' : 'rgba(255,255,255,0.6)' }}>↗</span>
           </div>
-        </div>
-        <div style={{ padding:'80px 60px', background:'#fff', display:'flex', flexDirection:'column', gap:24 }}>
-          <div className="label" style={{ color:'rgba(0,0,0,0.4)' }}>PATH B</div>
-          <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color:'#000' }}>FULL STUDIO TAKEOVER</h2>
-          <p style={{ fontSize:15, color:'rgba(0,0,0,0.5)', lineHeight:1.7, maxWidth:400 }}>
+        </Link>
+        <Link href="/book?type=studio"
+          onMouseEnter={() => setPathHover('b')} onMouseLeave={() => setPathHover(null)}
+          style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24, textDecoration:'none', background: pathHover === 'a' ? 'transparent' : '#fff', transition:'background 0.3s ease' }}>
+          <div className="label" style={{ color: pathHover === 'a' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }}>PATH B</div>
+          <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color: pathHover === 'a' ? '#fff' : '#000' }}>FULL STUDIO TAKEOVER</h2>
+          <p style={{ fontSize:15, color: pathHover === 'a' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', lineHeight:1.7, maxWidth:400 }}>
             Take over every set, vanity room, and the open floor. Perfect for full-day productions, music videos, and lookbooks.
           </p>
-          <div style={{ marginTop:'auto', paddingTop:40 }}>
-            <Link href="/book?type=studio" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', textDecoration:'none', borderTop:'1px solid rgba(0,0,0,0.15)', paddingTop:24 }}>
-              <span className="label" style={{ color:'#000' }}>FULL TAKEOVER</span>
-              <span style={{ fontSize:20, color:'rgba(0,0,0,0.6)' }}>↗</span>
-            </Link>
+          <div style={{ marginTop:'auto', paddingTop:40, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <span className="label" style={{ color: pathHover === 'a' ? '#fff' : '#000' }}>FULL TAKEOVER</span>
+            <span style={{ fontSize:20, color: pathHover === 'a' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }}>↗</span>
           </div>
-        </div>
+        </Link>
         </div>
       </section>
 
