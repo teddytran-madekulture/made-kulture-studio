@@ -118,7 +118,7 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
           {galleryExtra.length > 0 && (
             <div style={{ marginTop: 40 }}>
               <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>GALLERY</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
                 {galleryExtra.map((src, i) => (
                   <div key={i} style={{ position: 'relative', aspectRatio: '3 / 4', background: '#111', overflow: 'hidden' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}

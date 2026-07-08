@@ -225,7 +225,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
           {loading ? (
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', padding: '40px 0' }}>Loading sets…</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(340px, 1fr))', gap: isMobile ? 10 : 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(240px, 1fr))', gap: isMobile ? 10 : 12 }}>
               {standard.map(set => (
                 <SetCard key={set.id} set={set} num={numFor(set)} />
               ))}

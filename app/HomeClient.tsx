@@ -77,7 +77,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
 
   // Max content width — everything except the full-bleed hero image is centered
   // in this column. Tune this one number to make the page narrower / wider.
-  const PAGE_MAX = 1400
+  const PAGE_MAX = 1120
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
@@ -165,7 +165,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
         <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom: isMobile ? 40 : 64, flexWrap:'wrap', gap:24 }}>
           <div>
             <div className="label" style={{ marginBottom:20 }}>{c.setsEyebrow}</div>
-            <h2 style={{ fontSize:'clamp(48px, 7vw, 90px)', color:'#fff', lineHeight:0.9 }}>
+            <h2 style={{ fontSize:'clamp(32px, 4.4vw, 60px)', color:'#fff', lineHeight:0.95 }}>
               {nl(c.setsHeading)}
             </h2>
             <div style={{ marginTop:16, fontFamily:'Inter', fontSize:13, color:'#c9b27e' }}>
@@ -175,7 +175,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
           <Link href="/sets" className="btn">VIEW ALL SETS ↗</Link>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(340px, 1fr))', gap: isMobile ? 10 : 14 }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(5, 1fr)', gap: isMobile ? 8 : 10 }}>
           {SETS.map((set, i) => {
             const src = images[set.slug] || set.photo
             return (
