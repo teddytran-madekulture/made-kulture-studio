@@ -1,5 +1,5 @@
 import HomeClient from './HomeClient'
-import { getSiteImages } from '@/lib/site-images'
+import { getSiteImages, getSiteImageFocals } from '@/lib/site-images'
 import { getSiteSettings } from '@/lib/site-settings'
 import { getPageContent } from '@/lib/site-content'
 
@@ -12,6 +12,6 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 
 export default async function Home() {
-  const [images, settings, content] = await Promise.all([getSiteImages(), getSiteSettings(), getPageContent('home')])
-  return <HomeClient images={images} settings={settings} content={content} />
+  const [images, focals, settings, content] = await Promise.all([getSiteImages(), getSiteImageFocals(), getSiteSettings(), getPageContent('home')])
+  return <HomeClient images={images} focals={focals} settings={settings} content={content} />
 }

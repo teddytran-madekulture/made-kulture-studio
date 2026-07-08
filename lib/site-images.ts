@@ -56,3 +56,25 @@ export async function getSiteImages(): Promise<SiteImages> {
     return {}
   }
 }
+
+// Server-side fetch of the per-slot focal point (CSS object-position). Slots
+// without a saved focal are simply absent; the renderer falls back to a default.
+export async function getSiteImageFocals(): Promise<Record<string, string>> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: { persistSession: false },
+        global: { fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }) },
+      }
+    )
+    const { data, error } = await supabase.from('site_images').select('slug, focal')
+    if (error || !data) return {}
+    const out: Record<string, string> = {}
+    for (const row of data) if (row.slug && row.focal) out[row.slug] = row.focal
+    return out
+  } catch {
+    return {}
+  }
+}

@@ -42,7 +42,7 @@ const FEATURE_ICONS = [
   (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></svg>),
 ]
 
-export default function HomeClient({ images = {}, settings, content = {} }: { images?: SiteImages; settings?: SiteSettings; content?: PageContent }) {
+export default function HomeClient({ images = {}, focals = {}, settings, content = {} }: { images?: SiteImages; focals?: Record<string, string>; settings?: SiteSettings; content?: PageContent }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [heroHover, setHeroHover] = useState<'primary' | 'secondary' | null>(null)
   const isMobile = useIsMobile()
@@ -108,7 +108,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
           background: 'linear-gradient(135deg, #1a0a0a 0%, #0d0d0d 40%, #1a1208 100%)',
         }}>
           {images.hero && (
-            <img src={images.hero} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center bottom' }} />
+            <img src={images.hero} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition: focals.hero || 'center bottom' }} />
           )}
           {/* Mood/legibility scrim — anchors the headline without dimming the whole image (image stays full opacity) */}
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, #080808 0%, rgba(8,8,8,0.55) 24%, rgba(8,8,8,0.15) 50%, transparent 78%)' }} />
@@ -220,7 +220,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
                 {/* Set image — editable at /admin/website/home (slot: set slug) */}
                 <img
                   src={src} alt={set.name}
-                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transition:'transform 0.5s ease' }}
+                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition: focals[set.slug] || 'center', transition:'transform 0.5s ease' }}
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                 />
                 <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.25) 42%, transparent 68%)' }} />
@@ -301,7 +301,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
         {/* Left: studio photo — editable at /admin/homepage (slot: studio-photo) */}
         <div style={{ background:'rgba(255,255,255,0.03)', minHeight:500, position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
           {images['studio-photo']
-            ? <img src={images['studio-photo']} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
+            ? <img src={images['studio-photo']} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition: focals['studio-photo'] || 'center' }} />
             : <span style={{ fontSize:11, color:'rgba(255,255,255,0.15)', letterSpacing:'0.1em' }}>STUDIO PHOTO</span>}
         </div>
         {/* Right: copy */}

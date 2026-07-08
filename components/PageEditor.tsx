@@ -110,9 +110,11 @@ export default function PageEditor({ slug }: { slug: string }) {
   // ── Image state ──
   const [images, setImages] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
-  const [crop, setCrop] = useState<{ slug: string; aspect: number; src: string; outWidth: number } | null>(null)
+  const [crop, setCrop] = useState<{ slug: string; aspect: number; src: string; outWidth: number; crossOrigin: boolean; reCrop: boolean } | null>(null)
+  const [meta, setMeta] = useState<Record<string, { original_url: string | null; focal: string | null }>>({})
   const fileInput = useRef<HTMLInputElement | null>(null)
   const pendingImg = useRef<{ slug: string; aspect: number; outWidth: number } | null>(null)
+  const pendingOriginal = useRef<File | null>(null)
 
   // ── Hero height state ──
   const [heroH, setHeroH] = useState<number>(SITE_SETTINGS_DEFAULTS.heroHeightVh)
@@ -138,7 +140,7 @@ export default function PageEditor({ slug }: { slug: string }) {
     if (pageSlug === 'home') {
       try {
         const ri = await fetch('/api/admin/site-images', { credentials: 'include' })
-        if (ri.ok) { const di = await ri.json(); setImages(di.images ?? {}) }
+        if (ri.ok) { const di = await ri.json(); setImages(di.images ?? {}); setMeta(di.meta ?? {}) }
       } catch {}
       try {
         const rs = await fetch('/api/admin/site-settings', { credentials: 'include' })
@@ -184,24 +186,49 @@ export default function PageEditor({ slug }: { slug: string }) {
   const pickImage = (slot: SiteImageSlot) => {
     setErr('')
     pendingImg.current = { slug: slot.slug, aspect: slot.aspect, outWidth: slot.outWidth ?? 1000 }
+    pendingOriginal.current = null
     fileInput.current?.click()
   }
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = ''
     if (!f || !pendingImg.current) return
-    setCrop({ slug: pendingImg.current.slug, aspect: pendingImg.current.aspect, outWidth: pendingImg.current.outWidth, src: URL.createObjectURL(f) })
+    pendingOriginal.current = f
+    setCrop({ slug: pendingImg.current.slug, aspect: pendingImg.current.aspect, outWidth: pendingImg.current.outWidth, src: URL.createObjectURL(f), crossOrigin: false, reCrop: false })
+  }
+  // Re-open the cropper on the stored original photo — no re-upload needed.
+  const adjustImage = (slot: SiteImageSlot) => {
+    const orig = meta[slot.slug]?.original_url
+    if (!orig) return
+    setErr('')
+    setCrop({ slug: slot.slug, aspect: slot.aspect, outWidth: slot.outWidth ?? 1000, src: orig, crossOrigin: true, reCrop: true })
   }
   const onCropped = async (blob: Blob) => {
     if (!crop) return
     const slug = crop.slug
+    const isReCrop = crop.reCrop
+    const orig = pendingOriginal.current
     setCrop(null); setBusy(slug); setErr('')
     try {
-      const fd = new FormData(); fd.append('slug', slug); fd.append('file', blob, `${slug}.jpg`)
+      const fd = new FormData()
+      fd.append('slug', slug)
+      fd.append('file', blob, `${slug}.jpg`)
+      if (!isReCrop && orig) fd.append('original', orig, orig.name || `${slug}-original.jpg`)
       const r = await fetch('/api/admin/site-images', { method: 'POST', credentials: 'include', body: fd })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'Upload failed.'); return }
       setImages(prev => ({ ...prev, [slug]: d.url }))
-    } finally { setBusy(null) }
+      setMeta(prev => ({ ...prev, [slug]: { original_url: d.original_url ?? prev[slug]?.original_url ?? null, focal: d.focal ?? prev[slug]?.focal ?? null } }))
+    } finally { setBusy(null); pendingOriginal.current = null }
+  }
+  // Save just the focal point (which part of the photo shows when its frame crops it).
+  const setFocal = async (slug: string, focal: string) => {
+    setMeta(prev => ({ ...prev, [slug]: { original_url: prev[slug]?.original_url ?? null, focal } }))
+    setErr('')
+    try {
+      const fd = new FormData(); fd.append('slug', slug); fd.append('focal', focal)
+      const r = await fetch('/api/admin/site-images', { method: 'POST', credentials: 'include', body: fd })
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not save position.') }
+    } catch { setErr('Could not save position.') }
   }
   const resetImage = async (slug: string) => {
     setBusy(slug); setErr('')
@@ -209,6 +236,7 @@ export default function PageEditor({ slug }: { slug: string }) {
       const r = await fetch(`/api/admin/site-images?slug=${encodeURIComponent(slug)}`, { method: 'DELETE', credentials: 'include' })
       if (!r.ok) { const d = await r.json(); setErr(d.error || 'Could not reset.'); return }
       setImages(prev => { const n = { ...prev }; delete n[slug]; return n })
+      setMeta(prev => { const n = { ...prev }; delete n[slug]; return n })
     } finally { setBusy(null) }
   }
 
@@ -264,23 +292,41 @@ export default function PageEditor({ slug }: { slug: string }) {
     )
   }
 
+  const FOCAL_POINTS = ['0% 0%', '50% 0%', '100% 0%', '0% 50%', '50% 50%', '100% 50%', '0% 100%', '50% 100%', '100% 100%']
+  const defaultFocal = (slug: string) => (slug === 'hero' ? '50% 100%' : '50% 50%')
+
   const renderImage = (slot: SiteImageSlot) => {
     const url = images[slot.slug]; const isBusy = busy === slot.slug
+    const m = meta[slot.slug]
+    const focal = m?.focal || defaultFocal(slot.slug)
+    const canAdjust = !!m?.original_url
     return (
       <div key={slot.slug} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ width: '100%', aspectRatio: String(slot.aspect), background: 'linear-gradient(135deg, #1c1c1c, #0f0f10)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {url
-            ? <img src={url} alt={slot.label} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <img src={url} alt={slot.label} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: focal }} />
             : <span style={{ fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.2)' }}>NO PHOTO</span>}
-          {isBusy && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff' }}>Uploading…</div>}
+          {isBusy && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff' }}>Working…</div>}
         </div>
         <div style={{ padding: '12px 14px' }}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{slot.label}</div>
           {slot.hint && <div style={{ fontSize: 11, color: C.dim, lineHeight: 1.5, marginTop: 4 }}>{slot.hint}</div>}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button onClick={() => pickImage(slot)} disabled={isBusy} style={{ flex: 1, background: '#fff', color: '#080808', border: 'none', padding: '8px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', cursor: isBusy ? 'default' : 'pointer' }}>{url ? 'Replace' : 'Upload'}</button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            <button onClick={() => pickImage(slot)} disabled={isBusy} style={{ flex: '1 1 70px', background: '#fff', color: '#080808', border: 'none', padding: '8px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', cursor: isBusy ? 'default' : 'pointer' }}>{url ? 'Replace' : 'Upload'}</button>
+            {canAdjust && <button onClick={() => adjustImage(slot)} disabled={isBusy} style={{ background: 'transparent', color: C.text, border: `1px solid ${C.line}`, padding: '8px 12px', borderRadius: 6, fontSize: 12, cursor: isBusy ? 'default' : 'pointer' }}>Recrop</button>}
             {url && <button onClick={() => resetImage(slot.slug)} disabled={isBusy} style={{ background: 'transparent', color: C.dim, border: `1px solid ${C.line}`, padding: '8px 12px', borderRadius: 6, fontSize: 12, cursor: isBusy ? 'default' : 'pointer' }}>Reset</button>}
           </div>
+          {url && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 11, color: C.dim, marginBottom: 7 }}>Position — the part that shows when the frame crops it</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 26px)', gap: 4 }}>
+                {FOCAL_POINTS.map(fp => (
+                  <button key={fp} onClick={() => setFocal(slot.slug, fp)} disabled={isBusy} title={fp} aria-label={`Position ${fp}`}
+                    style={{ width: 26, height: 26, background: focal === fp ? C.accent : '#0e0e10', border: `1px solid ${focal === fp ? C.accent : C.line}`, borderRadius: 4, cursor: isBusy ? 'default' : 'pointer', padding: 0 }} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -331,7 +377,7 @@ export default function PageEditor({ slug }: { slug: string }) {
         })}
       </div>
 
-      {crop && <ImageCropper src={crop.src} aspect={crop.aspect} outWidth={crop.outWidth} onCancel={() => setCrop(null)} onCropped={onCropped} />}
+      {crop && <ImageCropper src={crop.src} aspect={crop.aspect} outWidth={crop.outWidth} crossOrigin={crop.crossOrigin} onCancel={() => setCrop(null)} onCropped={onCropped} />}
     </main>
   )
 }
