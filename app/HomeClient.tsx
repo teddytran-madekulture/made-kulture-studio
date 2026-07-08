@@ -11,15 +11,15 @@ import { fmt as nl } from '@/lib/fmt'
 
 
 const SETS = [
-  { num: '01', slug: 'set-a',         name: 'Set A',             price: '$50', desc: '12×15ft white cinderblock walls, large windows',      photo: '/images/sets/set-a.jpg',           gradient: 'linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)' },
-  { num: '02', slug: 'set-b',         name: 'Set B',             price: '$50', desc: '12×14ft faux brush walls, duo color smooth walls',    photo: '/images/sets/set-b.jpg',           gradient: 'linear-gradient(135deg, #0f1a1a 0%, #1a2a1e 100%)' },
-  { num: '03', slug: 'set-c',         name: 'Set C',             price: '$50', desc: '12×14ft white walls, 20ft red vinyl backdrop',        photo: '/images/sets/set-c.jpg',           gradient: 'linear-gradient(135deg, #1a0808 0%, #2a0f0f 100%)' },
+  { num: '01', slug: 'set-a',         name: 'Set A',             price: '$50', desc: '12×15ft white cinderblock walls, large windows',      photo: '/images/sets/set-a.webp',           gradient: 'linear-gradient(135deg, #1c1c1c 0%, #2a2a2a 100%)' },
+  { num: '02', slug: 'set-b',         name: 'Set B',             price: '$50', desc: '12×14ft faux brush walls, duo color smooth walls',    photo: '/images/sets/set-b.webp',           gradient: 'linear-gradient(135deg, #0f1a1a 0%, #1a2a1e 100%)' },
+  { num: '03', slug: 'set-c',         name: 'Set C',             price: '$50', desc: '12×14ft white walls, 20ft red vinyl backdrop',        photo: '/images/sets/set-c.webp',           gradient: 'linear-gradient(135deg, #1a0808 0%, #2a0f0f 100%)' },
   { num: '04', slug: 'set-d',         name: 'Set D',             price: '$50', desc: '12×15ft bare cinderblock, concrete floor',            photo: '/images/sets/set-d.jpg',           gradient: 'linear-gradient(135deg, #141414 0%, #1e1e1e 100%)' },
-  { num: '05', slug: 'concrete',      name: 'Concrete',          price: '$50', desc: '12×16ft faux concrete walls, mirror wall',            photo: '/images/sets/concrete.jpg',        gradient: 'linear-gradient(135deg, #111418 0%, #1a1e22 100%)' },
-  { num: '06', slug: 'vintage',       name: 'Vintage',           price: '$50', desc: '12×16ft vintage aesthetic',                           photo: '/images/sets/vintage.jpg',         gradient: 'linear-gradient(135deg, #1a1408 0%, #261e0e 100%)' },
-  { num: '07', slug: 'cottage',       name: 'Cottage',           price: '$50', desc: '12×16ft slate walls, faux wood flooring',             photo: '/images/sets/cottage.jpg',         gradient: 'linear-gradient(135deg, #0e1412 0%, #161e18 100%)' },
-  { num: '08', slug: 'watering-hole', name: 'The Watering Hole', price: '$85', desc: '12×16×13 shallow black pool — 2hr min',               photo: '/images/sets/watering-hole.jpg',   gradient: 'linear-gradient(135deg, #040e12 0%, #081820 100%)' },
-  { num: '09', slug: 'studio-one',    name: 'Studio One',        price: '$75', desc: 'Large open dilapidated warehouse aesthetic, up to 5 people', photo: '/images/sets/studio-one.jpg',      gradient: 'linear-gradient(135deg, #161210 0%, #1e1a16 100%)' },
+  { num: '05', slug: 'concrete',      name: 'Concrete',          price: '$50', desc: '12×16ft faux concrete walls, mirror wall',            photo: '/images/sets/concrete.webp',        gradient: 'linear-gradient(135deg, #111418 0%, #1a1e22 100%)' },
+  { num: '06', slug: 'vintage',       name: 'Vintage',           price: '$50', desc: '12×16ft vintage aesthetic',                           photo: '/images/sets/vintage.webp',         gradient: 'linear-gradient(135deg, #1a1408 0%, #261e0e 100%)' },
+  { num: '07', slug: 'cottage',       name: 'Cottage',           price: '$50', desc: '12×16ft slate walls, faux wood flooring',             photo: '/images/sets/cottage.webp',         gradient: 'linear-gradient(135deg, #0e1412 0%, #161e18 100%)' },
+  { num: '08', slug: 'watering-hole', name: 'The Watering Hole', price: '$85', desc: '12×16×13 shallow black pool — 2hr min',               photo: '/images/sets/watering-hole.webp',   gradient: 'linear-gradient(135deg, #040e12 0%, #081820 100%)' },
+  { num: '09', slug: 'studio-one',    name: 'Studio One',        price: '$75', desc: 'Large open dilapidated warehouse aesthetic, up to 5 people', photo: '/images/sets/studio-one.webp',      gradient: 'linear-gradient(135deg, #161210 0%, #1e1a16 100%)' },
 ]
 
 const FAQS = [
