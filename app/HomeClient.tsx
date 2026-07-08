@@ -213,8 +213,8 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
             const src = images[set.slug] || set.photo
             return (
               <Link key={i} href={`/sets/${set.slug}`}
-                onMouseEnter={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1.05)' }}
-                onMouseLeave={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1)' }}
+                onMouseEnter={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1.05)'; const ar = e.currentTarget.querySelector('[data-arrow]'); if (ar) { (ar as HTMLElement).style.background = '#fff'; (ar as HTMLElement).style.color = '#080808' } }}
+                onMouseLeave={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1)'; const ar = e.currentTarget.querySelector('[data-arrow]'); if (ar) { (ar as HTMLElement).style.background = 'transparent'; (ar as HTMLElement).style.color = '#fff' } }}
                 style={{ position:'relative', display:'block', aspectRatio:'4/5', background: set.gradient, overflow:'hidden', textDecoration:'none' }}
               >
                 {/* Set image — editable at /admin/website/home (slot: set slug) */}
@@ -230,7 +230,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
                     <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 18 : 26, color:'#fff', letterSpacing:'0.02em', lineHeight:1 }}>{set.name.toUpperCase()}</div>
                     <div style={{ fontFamily:'Inter', fontSize:11, fontWeight:500, letterSpacing:'0.12em', color:'rgba(255,255,255,0.6)', marginTop:8 }}>{set.price} / HR</div>
                   </div>
-                  <span style={{ flexShrink:0, width:34, height:34, border:'1px solid rgba(255,255,255,0.4)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:13 }}>↗</span>
+                  <span data-arrow style={{ flexShrink:0, width:36, height:36, border:'1px solid rgba(255,255,255,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:14, transition:'background 0.25s ease, color 0.25s ease' }}>↗</span>
                 </div>
               </Link>
             )
@@ -238,8 +238,11 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
         </div>
       </section>
 
-      {/* BOOKING PATHS */}
-      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+      </div>
+
+      {/* BOOKING PATHS — full-width divider lines, content stays in the column */}
+      <section style={{ borderTop:'1px solid rgba(255,255,255,0.1)', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
+        <div style={{ maxWidth: PAGE_MAX, margin:'0 auto', display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
         <div style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24 }}>
           <div className="label">PATH A</div>
           <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color:'#fff' }}>BOOK INDIVIDUAL SET</h2>
@@ -266,7 +269,10 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
             </Link>
           </div>
         </div>
+        </div>
       </section>
+
+      <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', width: '100%' }}>
 
       {/* HOW IT WORKS */}
       <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>

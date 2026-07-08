@@ -67,7 +67,7 @@ function SetCard({ set, num }: { set: ApiSet; num: string }) {
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 27, letterSpacing: '0.02em', color: '#fff', lineHeight: 1 }}>{set.name.toUpperCase()}</div>
           <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.65)', marginTop: 8 }}>${set.rate_per_hour} / HR</div>
         </div>
-        <span style={{ flexShrink: 0, width: 34, height: 34, border: '1px solid rgba(255,255,255,0.4)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13 }}>↗</span>
+        <span style={{ flexShrink: 0, width: 36, height: 36, border: '1px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: hovered ? '#fff' : 'transparent', color: hovered ? '#080808' : '#fff', fontSize: 14, transition: 'background 0.25s ease, color 0.25s ease' }}>↗</span>
       </div>
     </Link>
   )
