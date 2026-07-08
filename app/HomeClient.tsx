@@ -166,37 +166,31 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
           <Link href="/sets" className="btn">VIEW ALL SETS ↗</Link>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(260px, 1fr))', gap:1, background:'rgba(255,255,255,0.06)' }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(340px, 1fr))', gap: isMobile ? 10 : 14 }}>
           {SETS.map((set, i) => {
             const src = images[set.slug] || set.photo
             return (
-            <div key={i} style={{
-              background:'#080808', padding: isMobile ? '16px 14px' : '32px 28px', cursor:'pointer',
-              transition:'background 0.2s',
-              display:'flex', flexDirection:'column', gap:12,
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#111')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#080808')}
-            >
-              {/* Set image — editable at /admin/homepage (slot: set slug) */}
-              <div style={{ width:'100%', aspectRatio:'4/3', background: set.gradient, marginBottom:8, position:'relative', overflow:'hidden' }}>
+              <Link key={i} href={`/sets/${set.slug}`}
+                onMouseEnter={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1.05)' }}
+                onMouseLeave={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1)' }}
+                style={{ position:'relative', display:'block', aspectRatio:'3/4', background: set.gradient, overflow:'hidden', textDecoration:'none' }}
+              >
+                {/* Set image — editable at /admin/website/home (slot: set slug) */}
                 <img
                   src={src} alt={set.name}
-                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}
+                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transition:'transform 0.5s ease' }}
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                 />
-                <div style={{ position:'absolute', bottom:12, left:14, fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:13, letterSpacing:'0.12em', color:'rgba(255,255,255,0.18)' }}>{set.name.toUpperCase()}</div>
-              </div>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <span className="label" style={{ color:'rgba(255,255,255,0.3)' }}>{set.num}</span>
-                <span style={{ fontSize:11, fontFamily:'Inter', fontWeight:500, letterSpacing:'0.1em', color:'rgba(255,255,255,0.5)' }}>{set.price} / HR</span>
-              </div>
-              <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 19 : 28, color:'#fff', letterSpacing:'0.02em' }}>{set.name.toUpperCase()}</div>
-              <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', lineHeight:1.6 }}>{set.desc}</p>
-              <div style={{ marginTop:'auto', paddingTop:16 }}>
-                <span style={{ fontSize:11, fontFamily:'Inter', fontWeight:500, letterSpacing:'0.15em', color:'rgba(255,255,255,0.4)' }}>BOOK THIS SET ↗</span>
-              </div>
-            </div>
+                <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.25) 42%, transparent 68%)' }} />
+                <div style={{ position:'absolute', top:16, left:18, fontFamily:'Inter', fontSize:11, fontWeight:500, letterSpacing:'0.15em', color:'rgba(255,255,255,0.55)' }}>{set.num}</div>
+                <div style={{ position:'absolute', left:18, right:18, bottom:18, display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:12 }}>
+                  <div>
+                    <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 18 : 26, color:'#fff', letterSpacing:'0.02em', lineHeight:1 }}>{set.name.toUpperCase()}</div>
+                    <div style={{ fontFamily:'Inter', fontSize:11, fontWeight:500, letterSpacing:'0.12em', color:'rgba(255,255,255,0.6)', marginTop:8 }}>{set.price} / HR</div>
+                  </div>
+                  <span style={{ flexShrink:0, width:34, height:34, border:'1px solid rgba(255,255,255,0.4)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:13 }}>↗</span>
+                </div>
+              </Link>
             )
           })}
         </div>

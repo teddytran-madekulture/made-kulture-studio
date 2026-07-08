@@ -46,72 +46,30 @@ function SetCard({ set, num }: { set: ApiSet; num: string }) {
   const gradient = set.accent_gradient || DEFAULT_GRADIENT
 
   return (
-    <div
+    <Link
+      href={`/sets/${set.slug}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ display: 'flex', flexDirection: 'column', background: '#0a0a0a', position: 'relative', overflow: 'hidden' }}
+      style={{ position: 'relative', display: 'block', aspectRatio: '3/4', background: gradient, overflow: 'hidden', textDecoration: 'none' }}
     >
-      {/* Photo / gradient — links to the set's landing page */}
-      <Link href={`/sets/${set.slug}`} style={{ position: 'relative', aspectRatio: '4/3', background: gradient, overflow: 'hidden', display: 'block' }}>
-        {set.photo_url && (
-          <img
-            src={set.photo_url}
-            alt={set.name}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: hovered ? 0.9 : 0.75, transition: 'opacity 0.4s, transform 0.6s', transform: hovered ? 'scale(1.03)' : 'scale(1)' }}
-            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-          />
-        )}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,10,1) 0%, rgba(10,10,10,0.1) 60%, transparent 100%)' }} />
-        <div style={{ position: 'absolute', top: 20, left: 24, fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 13, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)' }}>
-          {num}
-        </div>
-        <div style={{ position: 'absolute', top: 20, right: 24, fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: '#fff' }}>
-          ${set.rate_per_hour}<span style={{ fontSize: 11, fontFamily: 'Inter', fontWeight: 400, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)', marginLeft: 3 }}>/HR</span>
-        </div>
-      </Link>
-
-      {/* Info */}
-      <div style={{ padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+      {set.photo_url && (
+        <img
+          src={set.photo_url}
+          alt={set.name}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.6s', transform: hovered ? 'scale(1.05)' : 'scale(1)' }}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+      )}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.25) 42%, transparent 68%)' }} />
+      <div style={{ position: 'absolute', top: 18, left: 22, fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.55)' }}>{num}</div>
+      <div style={{ position: 'absolute', left: 22, right: 22, bottom: 20, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <Link href={`/sets/${set.slug}`} style={{ display: 'block', fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, letterSpacing: '0.03em', color: '#fff', lineHeight: 1, marginBottom: 6, textDecoration: 'none' }}>
-            {set.name.toUpperCase()}
-          </Link>
-          {set.dimensions && (
-            <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>
-              {set.dimensions}
-            </div>
-          )}
+          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 27, letterSpacing: '0.02em', color: '#fff', lineHeight: 1 }}>{set.name.toUpperCase()}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.65)', marginTop: 8 }}>${set.rate_per_hour} / HR</div>
         </div>
-
-        {set.description && (
-          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, margin: 0, flex: 1 }}>
-            {set.description}
-          </p>
-        )}
-
-        {(set.features ?? []).length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {(set.features ?? []).map(tag => (
-              <span key={tag} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.1)', padding: '3px 8px' }}>
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <Link href={`/book?type=set&set=${set.slug}`}
-          style={{
-            fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em',
-            color: '#080808', background: '#fff', padding: '12px 20px', textDecoration: 'none',
-            display: 'inline-block', marginTop: 8, textAlign: 'center', transition: 'opacity 0.2s',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-        >
-          BOOK {set.name.toUpperCase()} ↗
-        </Link>
+        <span style={{ flexShrink: 0, width: 34, height: 34, border: '1px solid rgba(255,255,255,0.4)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13 }}>↗</span>
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -267,7 +225,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
           {loading ? (
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', padding: '40px 0' }}>Loading sets…</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 2, background: 'rgba(255,255,255,0.04)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(340px, 1fr))', gap: isMobile ? 10 : 14 }}>
               {standard.map(set => (
                 <SetCard key={set.id} set={set} num={numFor(set)} />
               ))}
