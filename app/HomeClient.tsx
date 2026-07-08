@@ -32,6 +32,16 @@ const FAQS = [
   { q: 'Can I use fog or haze machines?', a: 'Special effects like fog and haze are only available during full buyouts or when your party is the only booking in the studio.' },
 ]
 
+// Clean thin line-icons for the feature bar, index-mapped to the 5 tiles.
+// (Falls back to the CMS icon character for any extra tiles.)
+const FEATURE_ICONS = [
+  (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>),
+  (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>),
+  (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>),
+  (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></svg>),
+  (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></svg>),
+]
+
 export default function HomeClient({ images = {}, settings, content = {} }: { images?: SiteImages; settings?: SiteSettings; content?: PageContent }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const isMobile = useIsMobile()
@@ -158,10 +168,10 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
       {/* FEATURES BAR — tiles are editable at /admin/website/pages/home */}
       <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${Math.max(tiles.length, 1)},1fr)` }}>
         {tiles.map((f, i) => (
-          <div key={i} style={{ padding:'40px 28px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
-            <div style={{ fontSize:20, marginBottom:16, color:'rgba(255,255,255,0.4)' }}>{f.icon}</div>
+          <div key={i} style={{ padding: isMobile ? '22px 18px' : '30px 26px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+            <div style={{ marginBottom:14, color:'rgba(255,255,255,0.5)', display:'flex' }}>{FEATURE_ICONS[i] || <span style={{ fontSize:20 }}>{f.icon}</span>}</div>
             <div className="label" style={{ color:'#fff', marginBottom:10 }}>{f.title}</div>
-            <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', lineHeight:1.6 }}>{f.desc}</p>
+            <p style={{ fontSize:12.5, color:'rgba(255,255,255,0.48)', lineHeight:1.55 }}>{f.desc}</p>
           </div>
         ))}
       </section>
