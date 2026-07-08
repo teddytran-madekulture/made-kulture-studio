@@ -20,7 +20,7 @@ export const fetchCache = 'force-no-store'
 async function getSet(slug: string) {
   const { data } = await supabase
     .from('sets')
-    .select('id, slug, name, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, category, accent_gradient')
+    .select('id, slug, name, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, category, accent_gradient, gallery')
     .eq('slug', slug)
     .eq('is_active', true)
     .maybeSingle()
@@ -52,6 +52,8 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
   const guestRate = Number(set.rate_per_hour) + surcharge
   const minNote = set.min_hours && set.min_hours > 1 ? `${set.min_hours}-hour minimum` : 'no minimum'
   const gradient = set.accent_gradient || 'linear-gradient(135deg, #141414 0%, #1e1e1e 100%)'
+  // gallery[0] is the same shot as the hero (photo_url), so skip it here to avoid a duplicate
+  const galleryExtra = ((set.gallery as string[] | null) ?? []).slice(1)
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
@@ -112,6 +114,21 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
               </div>
             </div>
           </div>
+
+          {galleryExtra.length > 0 && (
+            <div style={{ marginTop: 40 }}>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>GALLERY</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+                {galleryExtra.map((src, i) => (
+                  <div key={i} style={{ position: 'relative', aspectRatio: '4 / 3', background: '#111', overflow: 'hidden' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`${set.name} — photo ${i + 2} at Made Kulture, Houston`} loading="lazy"
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.7, marginTop: 24, maxWidth: 720 }}>
             {set.name} is one of nine rentable sets at Made Kulture, a shared warehouse photography and video
