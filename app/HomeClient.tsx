@@ -242,11 +242,11 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
       </div>
 
       {/* BOOKING PATHS — full-width divider lines, content stays in the column */}
-      <section style={{ borderTop:'1px solid rgba(255,255,255,0.1)', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
+      <section style={{ background:'#111111', borderTop:'1px solid rgba(255,255,255,0.1)', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
         <div style={{ maxWidth: PAGE_MAX, margin:'0 auto', display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
         <Link href="/book?type=set"
           onMouseEnter={() => setPathHover('a')} onMouseLeave={() => setPathHover(null)}
-          style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24, textDecoration:'none', background: pathHover === 'a' ? '#fff' : (pathHover === 'b' ? 'transparent' : '#111111'), transition:'background 0.3s ease' }}>
+          style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24, textDecoration:'none', background: pathHover === 'a' ? '#fff' : '#080808', transition:'background 0.3s ease' }}>
           <div className="label" style={{ color: pathHover === 'a' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>PATH A</div>
           <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color: pathHover === 'a' ? '#080808' : '#fff' }}>BOOK INDIVIDUAL SET</h2>
           <p style={{ fontSize:15, color: pathHover === 'a' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)', lineHeight:1.7, maxWidth:400 }}>
@@ -259,7 +259,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
         </Link>
         <Link href="/book?type=studio"
           onMouseEnter={() => setPathHover('b')} onMouseLeave={() => setPathHover(null)}
-          style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24, textDecoration:'none', background: pathHover === 'a' ? 'transparent' : '#fff', transition:'background 0.3s ease' }}>
+          style={{ padding:'80px 60px', display:'flex', flexDirection:'column', gap:24, textDecoration:'none', background: pathHover === 'a' ? '#080808' : '#fff', transition:'background 0.3s ease' }}>
           <div className="label" style={{ color: pathHover === 'a' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }}>PATH B</div>
           <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color: pathHover === 'a' ? '#fff' : '#000' }}>FULL STUDIO TAKEOVER</h2>
           <p style={{ fontSize:15, color: pathHover === 'a' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', lineHeight:1.7, maxWidth:400 }}>
