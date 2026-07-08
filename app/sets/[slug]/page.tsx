@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import SiteNav from '@/components/SiteNav'
+import SetGallery from '@/components/SetGallery'
 
 // Individual landing page per set — one indexable page per space so searches
 // like "studio with pool Houston" have somewhere specific to land. Linked from
@@ -121,20 +122,7 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
             </div>
           </div>
 
-          {galleryExtra.length > 0 && (
-            <div style={{ marginTop: 40 }}>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>GALLERY</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-                {galleryExtra.map((src, i) => (
-                  <div key={i} style={{ position: 'relative', aspectRatio: '3 / 4', background: '#111', overflow: 'hidden' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt={`${set.name} — photo ${i + 2} at Made Kulture, Houston`} loading="lazy"
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <SetGallery images={galleryExtra} name={set.name} />
 
           <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.7, marginTop: 24, maxWidth: 720 }}>
             {set.name} is one of nine rentable sets at Made Kulture, a shared warehouse photography and video
