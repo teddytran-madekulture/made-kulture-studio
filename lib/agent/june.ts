@@ -162,7 +162,7 @@ async function execTool(
         result: JSON.stringify({
           sets: setsRes?.sets ?? 'unavailable',
           full_studio_buyout_per_hour: setsRes?.buyoutRate ?? 'see booking page',
-          pricing_note: `Quote the GUEST rate as the price: rate_per_hour on each set is the base member price, and a non-member pays $${surcharge}/hr MORE per set — so the price to quote is rate_per_hour + $${surcharge}/hr (e.g. a $40 set is $${40 + surcharge}/hr). Do NOT spell out a "members $X vs guests $Y" split or state the member figure — instead, invite people to sign up free for member rates. The studio buyout is a flat rate and is NOT surcharged.`,
+          pricing_note: `Each set's rate_per_hour is the base MEMBER price; a non-member pays $${surcharge}/hr MORE per set, so the guest rate is rate_per_hour + $${surcharge}/hr (e.g. a $40 set is $${40 + surcharge}/hr for guests). BY DEFAULT quote the GUEST rate as the price and invite people to sign up free for lower member rates — don't proactively break down "members $X vs guests $Y". BUT if someone directly asks what the member rate or member pricing is, answer honestly: the member rate is rate_per_hour (e.g. $40/hr), free with an account. The studio buyout is a flat rate and is NOT surcharged.`,
         }),
       }
     }
@@ -315,7 +315,7 @@ HARD RULES (never break these):
 
 BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio → pick set(s), date, and hours → add equipment if wanted → guest count → pay online. Bookings run in 30-minute increments with a 1-hour minimum, and need 48h notice; the site enforces it. Short-notice requests exist for logged-in members (subject to approval).
 
-PRICING: Quote the guest rate as the price — use get_sets_and_pricing for the live numbers (the price to quote is a set's base rate plus the per-hour guest surcharge). Invite people to sign up free for member rates, but do NOT spell out a "members $X vs guests $Y" split or quote the member figure. Don't quote prices from memory. The full-studio buyout is a flat rate and is not surcharged. Booking is BY APPOINTMENT ONLY — online in advance, no walk-ins.
+PRICING: Use get_sets_and_pricing for live numbers (a set's base member rate plus the per-hour guest surcharge = the guest rate). BY DEFAULT quote the guest rate as the price and invite people to sign up free for member rates — don't volunteer a "members $X vs guests $Y" breakdown. If someone directly asks what the member rate is, answer honestly and tell them it's free with an account. Don't quote prices from memory. The full-studio buyout is a flat rate and is not surcharged. Booking is BY APPOINTMENT ONLY — online in advance, no walk-ins.
 
 KNOWLEDGE:
 ${kbText}`
