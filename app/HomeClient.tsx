@@ -369,7 +369,13 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
       <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
         <div className="label" style={{ marginBottom:20 }}>{c.ctaEyebrow}</div>
         <h2 style={{ fontSize:'clamp(64px, 12vw, 160px)', color:'#fff', marginBottom:60 }}>{nl(c.ctaHeading)}</h2>
-        <Link href={c.ctaButtonHref} className="btn">{c.ctaButtonLabel}</Link>
+        <Link href={c.ctaButtonHref}
+          onMouseEnter={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#080808'; e.currentTarget.style.borderColor = '#fff' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)' }}
+          style={{ display:'inline-flex', alignItems:'center', gap:24, background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.25)', padding:'16px 24px', textDecoration:'none', transition:'background 0.2s ease, color 0.2s ease, border-color 0.2s ease' }}>
+          <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{(c.ctaButtonLabel || '').replace(/[↗→\s]+$/, '')}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        </Link>
       </section>
 
       {/* FOOTER */}
