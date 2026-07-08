@@ -175,7 +175,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
       <section style={{ borderTop:'1px solid rgba(255,255,255,0.1)', borderBottom:'1px solid rgba(255,255,255,0.1)' }}>
         <div style={{ maxWidth: PAGE_MAX, margin:'0 auto', display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${Math.max(tiles.length, 1)},1fr)`, gap:1, background:'rgba(255,255,255,0.09)' }}>
           {tiles.map((f, i) => (
-            <div key={i} style={{ background:'#080808', padding: isMobile ? '22px 18px' : '30px 26px' }}>
+            <div key={i} style={{ background:'#080808', padding: isMobile ? '24px 20px' : '40px 40px' }}>
               <div style={{ marginBottom:14, color:'rgba(255,255,255,0.5)', display:'flex' }}>{FEATURE_ICONS[i] || <span style={{ fontSize:20 }}>{f.icon}</span>}</div>
               <div className="label" style={{ color:'#fff', marginBottom:10 }}>{f.title}</div>
               <p style={{ fontSize:12.5, color:'rgba(255,255,255,0.48)', lineHeight:1.55 }}>{f.desc}</p>
