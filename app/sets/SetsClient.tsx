@@ -50,7 +50,7 @@ function SetCard({ set, num }: { set: ApiSet; num: string }) {
       href={`/sets/${set.slug}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ position: 'relative', display: 'block', aspectRatio: '3/4', background: gradient, overflow: 'hidden', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.14)' }}
+      style={{ position: 'relative', display: 'block', aspectRatio: '3/4', background: gradient, overflow: 'hidden', textDecoration: 'none' }}
     >
       {set.photo_url && (
         <img

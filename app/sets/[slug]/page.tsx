@@ -120,7 +120,7 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
               <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>GALLERY</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
                 {galleryExtra.map((src, i) => (
-                  <div key={i} style={{ position: 'relative', aspectRatio: '3 / 4', background: '#111', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.14)' }}>
+                  <div key={i} style={{ position: 'relative', aspectRatio: '3 / 4', background: '#111', overflow: 'hidden' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={src} alt={`${set.name} — photo ${i + 2} at Made Kulture, Houston`} loading="lazy"
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />

@@ -75,6 +75,10 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
     return () => { ro.disconnect(); window.removeEventListener('resize', fit) }
   }, [isMobile, heroHeightVh])
 
+  // Max content width — everything except the full-bleed hero image is centered
+  // in this column. Tune this one number to make the page narrower / wider.
+  const PAGE_MAX = 1400
+
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
 
@@ -85,7 +89,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
       <section style={{
         position: 'relative', display: 'flex', alignItems: 'flex-end',
         ...(isMobile ? { minHeight: '85vh' } : { height: `${heroHeightVh}vh` }),
-        padding: isMobile ? '96px 20px 48px' : '84px 40px 60px', border: 'none', overflow: 'hidden',
+        padding: isMobile ? '96px 0 48px' : '84px 0 60px', border: 'none', overflow: 'hidden',
       }}>
         {/* Background — editable at /admin/homepage (slot: hero) */}
         <div style={{
@@ -107,7 +111,8 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
           </div>
         )}
 
-        <div ref={heroContentRef} style={{ position:'relative', zIndex:1, maxWidth:700, transform: isMobile ? undefined : `scale(${heroScale})`, transformOrigin: 'left bottom' }}>
+        <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth:PAGE_MAX, margin:'0 auto', paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, boxSizing:'border-box' }}>
+        <div ref={heroContentRef} style={{ maxWidth:700, transform: isMobile ? undefined : `scale(${heroScale})`, transformOrigin: 'left bottom' }}>
           <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24 }}>
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
             <span className="label">{c.heroEyebrow}</span>
@@ -138,7 +143,11 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
             {nl(c.heroFinePrint)}
           </div>
         </div>
+        </div>
       </section>
+
+      {/* ── Centered content column — the hero image above stays full-bleed ── */}
+      <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', width: '100%' }}>
 
       {/* FEATURES BAR — tiles are editable at /admin/website/pages/home */}
       <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${Math.max(tiles.length, 1)},1fr)` }}>
@@ -173,7 +182,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
               <Link key={i} href={`/sets/${set.slug}`}
                 onMouseEnter={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1.05)' }}
                 onMouseLeave={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1)' }}
-                style={{ position:'relative', display:'block', aspectRatio:'3/4', background: set.gradient, overflow:'hidden', textDecoration:'none', border:'1px solid rgba(255,255,255,0.14)' }}
+                style={{ position:'relative', display:'block', aspectRatio:'3/4', background: set.gradient, overflow:'hidden', textDecoration:'none' }}
               >
                 {/* Set image — editable at /admin/website/home (slot: set slug) */}
                 <img
@@ -353,6 +362,7 @@ export default function HomeClient({ images = {}, settings, content = {} }: { im
         </div>
       </footer>
 
+      </div>
     </main>
   )
 }
