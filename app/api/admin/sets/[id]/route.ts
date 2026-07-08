@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const SET_COLUMNS = 'id, name, slug, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, sort_order, category, accent_gradient, is_active, created_at'
+const SET_COLUMNS = 'id, name, slug, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, sort_order, category, accent_gradient, gallery, is_active, created_at'
 
 function sanitizeSet(body: any) {
   const row: Record<string, unknown> = {}
@@ -32,6 +32,18 @@ function sanitizeSet(body: any) {
       row.features = body.features
         .split(/[\n,]/)
         .map((f: string) => f.trim())
+        .filter(Boolean)
+    }
+  }
+
+  // gallery: ordered list of image paths/URLs (array, or newline-separated string)
+  if (body.gallery !== undefined) {
+    if (Array.isArray(body.gallery)) {
+      row.gallery = body.gallery.map((g: unknown) => String(g).trim()).filter(Boolean)
+    } else if (typeof body.gallery === 'string') {
+      row.gallery = body.gallery
+        .split(/[\n,]/)
+        .map((g: string) => g.trim())
         .filter(Boolean)
     }
   }

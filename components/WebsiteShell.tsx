@@ -52,6 +52,7 @@ function SidebarInner() {
         <Item href="/admin/website/pages/tour" icon="🚪" label="Tour Page" active={on('/admin/website/pages/tour')} />
 
         <div style={sectionHdr}>CATALOG</div>
+        <Item href="/admin/website/sets" icon="▦" label="Sets" active={on('/admin/website/sets')} />
         <Item href="/admin/website/equipment" icon="🎥" label="Equipment" active={on('/admin/website/equipment')} />
         <Item href="/admin/website/props" icon="🛋" label="Props" active={on('/admin/website/props')} />
       </nav>
