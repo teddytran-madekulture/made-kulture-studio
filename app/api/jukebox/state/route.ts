@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const db = supabaseAdmin()
   const { data: zone } = await db
     .from('jukebox_zones')
-    .select('id, slug, name, is_open, source, house_playlist_url, now_playing_id')
+    .select('id, slug, name, is_open, paused, source, house_playlist_url, now_playing_id')
     .eq('slug', slug).single()
   if (!zone) return NextResponse.json({ error: 'Unknown zone.' }, { status: 404 })
 
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     zone: {
-      slug: zone.slug, name: zone.name, is_open: zone.is_open,
+      slug: zone.slug, name: zone.name, is_open: zone.is_open, paused: zone.paused,
       source: zone.source, house_playlist_url: zone.house_playlist_url,
     },
     now_playing,

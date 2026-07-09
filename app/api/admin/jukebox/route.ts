@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const { data: zones } = await db
     .from('jukebox_zones')
-    .select('id, slug, name, source, is_open, explicit_filter, auto_approve, house_playlist_url, now_playing_id, sort')
+    .select('id, slug, name, source, is_open, paused, explicit_filter, auto_approve, house_playlist_url, now_playing_id, sort')
     .order('sort', { ascending: true })
 
   const { connected: spotifyConnected, email: spotifyEmail } = await isConnected()

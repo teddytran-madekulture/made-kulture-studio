@@ -68,6 +68,8 @@ export default function PlayerPage() {
   const spTok = useRef<{ token: string; exp: number } | null>(null)
   const spWasPlaying = useRef(false)
 
+  const pausedLocal = useRef(false)
+
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     const z = (p.get('zone') || '').trim()
@@ -136,6 +138,7 @@ export default function PlayerPage() {
   const ytPlay = (id: string) => { if (ytLoaded.current === id && modeRef.current === 'request') return; try { yt.current?.loadVideoById(id) } catch {}; ytLoaded.current = id; shuffled.current = false }
   const ytHouse = (pid: string) => { shuffled.current = false; ytLoaded.current = null; try { yt.current?.loadPlaylist({ list: pid, listType: 'playlist' }) } catch {} }
   const ytStop = () => { try { yt.current?.pauseVideo() } catch {} }
+  const ytResume = () => { try { yt.current?.playVideo() } catch {} }
 
   // ── Spotify engine ──
   useEffect(() => {
@@ -151,7 +154,7 @@ export default function PlayerPage() {
       sp.current.addListener('ready', ({ device_id }: any) => { spDevice.current = device_id; spReady.current = true; try { sp.current.activateElement() } catch {}; if (lastState.current) apply(lastState.current) })
       sp.current.addListener('not_ready', () => { spReady.current = false })
       sp.current.addListener('player_state_changed', (st: any) => {
-        if (!st || currentSource.current !== 'spotify') return
+        if (!st || currentSource.current !== 'spotify' || pausedLocal.current) return
         // Natural end heuristic: was playing, now paused at position 0.
         if (spWasPlaying.current && st.paused && st.position === 0) { spWasPlaying.current = false; onSongEnd(); return }
         if (!st.paused) spWasPlaying.current = true
@@ -180,6 +183,7 @@ export default function PlayerPage() {
   const spPlayTrack = (id: string) => { spWasPlaying.current = false; spApiPlay({ uris: [`spotify:track:${id}`] }) }
   const spHouse = (uri: string) => { spWasPlaying.current = false; spApiPlay({ context_uri: uri }) }
   const spStop = () => { try { sp.current?.pause() } catch {} }
+  const spResume = () => { try { sp.current?.resume() } catch {} }
 
   // ── Song end → advance ──
   const onSongEnd = useCallback(async () => {
@@ -194,6 +198,7 @@ export default function PlayerPage() {
   }, [advance])
 
   const startTrack = (np: any) => {
+    pausedLocal.current = false
     currentReqId.current = np.id
     currentSource.current = (np.source === 'spotify' ? 'spotify' : 'youtube')
     setEngine(currentSource.current)
@@ -230,8 +235,21 @@ export default function PlayerPage() {
     if (wantsSpotify && !spReady.current) return       // wait for SDK
     if (!wantsSpotify && !ytReady.current) return      // wait for IFrame
 
-    if (!s.zone.is_open) { modeRef.current = 'paused'; ytStop(); spStop(); setDisplay({ title: 'Jukebox paused', artist: '', source: 'paused' }); return }
-    if (modeRef.current === 'paused' || modeRef.current === 'blocked') modeRef.current = 'idle'
+    // Pause when the jukebox is closed (is_open=false) OR admin hit Pause (paused=true).
+    // Keep modeRef as-is so playback resumes into the same track & queue position.
+    const wantPause = !s.zone.is_open || s.zone.paused
+    if (wantPause) {
+      if (!pausedLocal.current) { if (currentSource.current === 'spotify') spStop(); else ytStop(); pausedLocal.current = true }
+      setDisplay(d => ({ title: d.title || (!s.zone.is_open ? 'Jukebox off' : 'Paused'), artist: d.artist, source: 'paused' }))
+      return
+    }
+    if (pausedLocal.current) {
+      pausedLocal.current = false
+      if (currentSource.current === 'spotify') spResume(); else ytResume()
+      if (s.now_playing) setDisplay({ title: s.now_playing.title, artist: s.now_playing.artist || '', source: 'request' })
+      else if (modeRef.current === 'house') setDisplay({ title: 'House playlist', artist: '', source: 'house' })
+    }
+    if (modeRef.current === 'blocked') modeRef.current = 'idle'
 
     const np = s.now_playing
     if (np) { if (currentReqId.current !== np.id) startTrack(np); return }

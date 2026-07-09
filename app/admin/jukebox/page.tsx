@@ -9,7 +9,7 @@ import Link from 'next/link'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 
-interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null }
+interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; paused: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null }
 interface Req { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name: string | null; status: string }
 
 function fmtDur(s: number | null): string { if (s == null) return ''; const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}` }
@@ -50,6 +50,10 @@ export default function AdminJukeboxPage() {
 
   const act = async (id: string, action: string) => {
     await fetch(`/api/admin/jukebox/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) })
+    load()
+  }
+  const control = async (action: string) => {
+    await fetch('/api/admin/jukebox/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: slugRef.current, action }) })
     load()
   }
   const saveSettings = async (patch: Record<string, any>) => {
@@ -143,12 +147,20 @@ export default function AdminJukeboxPage() {
                   </div>
                 </div>
 
-                {/* Now playing */}
+                {/* Now playing + transport */}
                 <div style={{ marginBottom: 22 }}>
-                  <div style={{ fontSize: 11, letterSpacing: '0.14em', color: C.dim, marginBottom: 8 }}>NOW PLAYING</div>
+                  <div style={{ fontSize: 11, letterSpacing: '0.14em', color: C.dim, marginBottom: 8 }}>
+                    NOW PLAYING {zone.paused && <span style={{ color: C.accent }}>· PAUSED</span>}
+                  </div>
                   {nowPlaying ? (
-                    <Row t={nowPlaying}><button onClick={() => act(nowPlaying.id, 'skip')} style={btn('#3a2020', '#ff9a9a')}>SKIP ⏭</button></Row>
+                    <Row t={nowPlaying}>{null}</Row>
                   ) : <div style={{ color: C.dim, fontSize: 13 }}>{zone.house_playlist_url ? 'House playlist' : 'Nothing playing'}</div>}
+                  {/* Transport controls */}
+                  <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                    <button onClick={() => control('previous')} title="Previous" style={{ ...btn('rgba(255,255,255,0.06)', C.text), border: `1px solid ${C.line}`, padding: '11px 18px', fontSize: 15 }}>⏮</button>
+                    <button onClick={() => control(zone.paused ? 'play' : 'pause')} style={{ ...btn(C.accent, '#0b0b0d'), padding: '11px 24px', fontSize: 15 }}>{zone.paused ? '▶ Play' : '⏸ Pause'}</button>
+                    <button onClick={() => control('next')} title="Next" style={{ ...btn('rgba(255,255,255,0.06)', C.text), border: `1px solid ${C.line}`, padding: '11px 18px', fontSize: 15 }}>⏭</button>
+                  </div>
                 </div>
 
                 {/* Pending approvals */}
