@@ -9,7 +9,7 @@ import Link from 'next/link'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 
-interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; explicit_filter: boolean; house_playlist_url: string | null }
+interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null }
 interface Req { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name: string | null; status: string }
 
 function fmtDur(s: number | null): string { if (s == null) return ''; const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}` }
@@ -98,6 +98,9 @@ export default function AdminJukeboxPage() {
                     </button>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: C.dim, cursor: 'pointer' }}>
                       <input type="checkbox" checked={zone.explicit_filter} onChange={e => saveSettings({ explicit_filter: e.target.checked })} /> Filter explicit titles
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: zone.auto_approve ? C.accent : C.dim, cursor: 'pointer' }} title="Requests skip approval and go straight into the queue">
+                      <input type="checkbox" checked={zone.auto_approve} onChange={e => saveSettings({ auto_approve: e.target.checked })} /> Auto-approve requests
                     </label>
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 14, fontSize: 12 }}>
                       <a href={`/jukebox/player?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.accent, textDecoration: 'none' }}>Open player ↗</a>

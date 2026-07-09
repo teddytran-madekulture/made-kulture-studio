@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
   const updates: Record<string, any> = {}
   if (typeof b.is_open === 'boolean') updates.is_open = b.is_open
   if (typeof b.explicit_filter === 'boolean') updates.explicit_filter = b.explicit_filter
+  if (typeof b.auto_approve === 'boolean') updates.auto_approve = b.auto_approve
   if (b.source === 'youtube' || b.source === 'spotify') updates.source = b.source
   if (typeof b.house_playlist_url === 'string') updates.house_playlist_url = b.house_playlist_url.trim() || null
   if (typeof b.name === 'string' && b.name.trim()) updates.name = b.name.trim().slice(0, 60)

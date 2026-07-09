@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const { data: zones } = await db
     .from('jukebox_zones')
-    .select('id, slug, name, source, is_open, explicit_filter, house_playlist_url, now_playing_id, sort')
+    .select('id, slug, name, source, is_open, explicit_filter, auto_approve, house_playlist_url, now_playing_id, sort')
     .order('sort', { ascending: true })
 
   const slug = (req.nextUrl.searchParams.get('zone') || zones?.[0]?.slug || '').trim()

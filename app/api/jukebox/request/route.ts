@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   const { data: zone } = await supabase
     .from('jukebox_zones')
-    .select('id, name, is_open, explicit_filter')
+    .select('id, name, is_open, explicit_filter, auto_approve')
     .eq('slug', zoneSlug).single()
   if (!zone) return NextResponse.json({ error: 'Unknown area.' }, { status: 404 })
   if (!zone.is_open) return NextResponse.json({ error: 'The jukebox is paused right now.' }, { status: 409 })
@@ -65,14 +65,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "That title looks explicit — it can't be added to the shared queue." }, { status: 422 })
   }
 
-  // One pending request per device, per zone.
+  const autoApprove = !!zone.auto_approve
+
+  // Cap un-played requests per device (stops one phone flooding the queue).
   if (device) {
+    const statuses = autoApprove ? ['pending', 'approved', 'playing'] : ['pending']
+    const limit = autoApprove ? 3 : 1
     const { count } = await supabase
       .from('jukebox_requests')
       .select('id', { count: 'exact', head: true })
-      .eq('zone_id', zone.id).eq('requester_device', device).eq('status', 'pending')
-    if ((count ?? 0) >= 1) {
-      return NextResponse.json({ error: "You've already got a song waiting — hang tight until it's reviewed." }, { status: 409 })
+      .eq('zone_id', zone.id).eq('requester_device', device).in('status', statuses)
+    if ((count ?? 0) >= limit) {
+      return NextResponse.json({
+        error: autoApprove
+          ? "You've got a few songs in the queue already — give them a sec to play."
+          : "You've already got a song waiting — hang tight until it's reviewed.",
+      }, { status: 409 })
     }
   }
 
@@ -81,18 +89,27 @@ export async function POST(req: NextRequest) {
     .insert({
       zone_id: zone.id, source, external_id, title, artist,
       thumbnail_url: thumbnail, duration_sec: duration,
-      requester_device: device, requester_name: name, status: 'pending',
+      requester_device: device, requester_name: name,
+      status: autoApprove ? 'approved' : 'pending',
+      approved_at: autoApprove ? new Date().toISOString() : null,
     })
     .select('id').single()
   if (error || !created) return NextResponse.json({ error: 'Could not add your song — try again.' }, { status: 500 })
 
-  await sendOwnerPush({
-    title: '🎵 Song request',
-    body: `${zone.name}: "${title}"${artist ? ` — ${artist}` : ''}${name ? ` (from ${name})` : ''}`,
-    url: `/admin/jukebox?zone=${zoneSlug}`,
-    tag: `jukebox-${zone.id}`,
-    renotify: true,
-  }).catch(e => console.error('[jukebox] owner push (non-fatal):', e))
+  // In auto-approve mode Teddy doesn't need to act, so skip the push.
+  if (!autoApprove) {
+    await sendOwnerPush({
+      title: '🎵 Song request',
+      body: `${zone.name}: "${title}"${artist ? ` — ${artist}` : ''}${name ? ` (from ${name})` : ''}`,
+      url: `/admin/jukebox?zone=${zoneSlug}`,
+      tag: `jukebox-${zone.id}`,
+      renotify: true,
+    }).catch(e => console.error('[jukebox] owner push (non-fatal):', e))
+  }
 
-  return NextResponse.json({ success: true, id: created.id, message: 'Added! The team will approve it shortly.' })
+  return NextResponse.json({
+    success: true,
+    id: created.id,
+    message: autoApprove ? 'Added to the queue! 🎶' : 'Added! The team will approve it shortly.',
+  })
 }
