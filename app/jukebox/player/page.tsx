@@ -40,6 +40,7 @@ export default function PlayerPage() {
   const [upNext, setUpNext] = useState(0)
   const [zoneName, setZoneName] = useState('')
   const [zoneSlug, setZoneSlug] = useState('')
+  const [engine, setEngine] = useState<'youtube' | 'spotify' | null>(null)
 
   const zoneRef = useRef('')
   const keyRef = useRef<string | undefined>(undefined)
@@ -195,6 +196,7 @@ export default function PlayerPage() {
   const startTrack = (np: any) => {
     currentReqId.current = np.id
     currentSource.current = (np.source === 'spotify' ? 'spotify' : 'youtube')
+    setEngine(currentSource.current)
     modeRef.current = 'request'
     if (currentSource.current === 'spotify') { ytStop(); spPlayTrack(np.external_id) }
     else { spStop(); ytPlay(np.external_id) }
@@ -204,6 +206,7 @@ export default function PlayerPage() {
   const goHouse = (zone: any) => {
     houseKey.current = zone.house_playlist_url || null
     currentReqId.current = null
+    setEngine(zone.source === 'spotify' ? 'spotify' : 'youtube')
     if (zone.source === 'spotify') {
       const uri = spotifyPlaylistUri(zone.house_playlist_url)
       currentSource.current = 'spotify'; ytStop()
@@ -299,8 +302,8 @@ export default function PlayerPage() {
   return (
     <main style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, sans-serif', overflow: 'hidden' }}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-        <div id="yt-player" style={{ position: 'absolute', inset: 0, display: currentSource.current === 'spotify' ? 'none' : 'block' }} />
-        {currentSource.current === 'spotify' && (
+        <div id="yt-player" style={{ position: 'absolute', inset: 0, display: engine === 'spotify' ? 'none' : 'block' }} />
+        {engine === 'spotify' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.9)' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ color: '#1db954', fontSize: 13, letterSpacing: '0.2em', marginBottom: 14 }}>♫ SPOTIFY</div>
