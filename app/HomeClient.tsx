@@ -42,6 +42,50 @@ const FEATURE_ICONS = [
   (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></svg>),
 ]
 
+// Hero headline that fits each line to the full width, so the stacked lines line
+// up as one solid block (shorter lines size up to match the widest). Re-fits on
+// resize and once the display font loads.
+function FitHeadline({ text }: { text: string }) {
+  const lines = (text || '').split('\n').map(l => l.trim()).filter(Boolean)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const lineRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [sizes, setSizes] = useState<Record<number, number>>({})
+
+  useEffect(() => {
+    const fit = () => {
+      const wrap = wrapRef.current
+      if (!wrap) return
+      const w = wrap.clientWidth
+      if (!w) return
+      const next: Record<number, number> = {}
+      lineRefs.current.forEach((el, i) => {
+        if (!el) return
+        const natural = el.scrollWidth
+        const cur = parseFloat(getComputedStyle(el).fontSize) || 120
+        if (natural > 0) next[i] = Math.max(24, Math.min(420, cur * (w / natural)))
+      })
+      setSizes(next)
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    if (wrapRef.current) ro.observe(wrapRef.current)
+    window.addEventListener('resize', fit)
+    ;(document as any).fonts?.ready?.then(fit).catch(() => {})
+    return () => { ro.disconnect(); window.removeEventListener('resize', fit) }
+  }, [text])
+
+  return (
+    <div ref={wrapRef} style={{ width: '100%' }}>
+      {lines.map((line, i) => (
+        <div key={i} ref={el => { lineRefs.current[i] = el }}
+          style={{ fontSize: sizes[i] ? `${sizes[i]}px` : 'clamp(84px, 17vw, 170px)', lineHeight: 0.86, whiteSpace: 'nowrap' }}>
+          {line}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function HomeClient({ images = {}, focals = {}, settings, content = {} }: { images?: SiteImages; focals?: Record<string, string>; settings?: SiteSettings; content?: PageContent }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [heroHover, setHeroHover] = useState<'primary' | 'secondary' | null>(null)
@@ -129,8 +173,8 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
             <span className="label">{c.heroEyebrow}</span>
           </div>
-          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:28, lineHeight:0.9, letterSpacing:'0.005em', wordSpacing:'-0.15em', textTransform:'uppercase' }}>
-            {nl(c.heroHeadline)}
+          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', color:'#fff', marginBottom:28, letterSpacing:'0.005em', wordSpacing:'-0.15em', textTransform:'uppercase' }}>
+            <FitHeadline text={c.heroHeadline || ''} />
           </h1>
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
             {nl(c.heroParagraph)}
