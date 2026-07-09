@@ -20,22 +20,3 @@ export function useIsMobile(breakpoint = 768): boolean {
 
   return isMobile
 }
-
-
-/**
- * Returns true for tablet-width viewports (769-1023px) - between phone and
- * desktop. Lets marketing grids drop from 5 columns to 3 on tablets.
- */
-export function useIsTablet(): boolean {
-  const [isTablet, setIsTablet] = useState(false)
-
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 769px) and (max-width: 1023px)')
-    const update = () => setIsTablet(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
-  }, [])
-
-  return isTablet
-}

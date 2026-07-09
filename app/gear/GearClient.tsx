@@ -2,7 +2,7 @@
 import { useState, useEffect, type CSSProperties } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
-import { useIsMobile, useIsTablet } from '@/lib/use-is-mobile'
+import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { fmt as nl } from '@/lib/fmt'
 
@@ -62,7 +62,6 @@ export default function GearClient({ content = {} }: { content?: PageContent }) 
   const [gear, setGear]       = useState<Gear[]>([])
   const [loading, setLoading] = useState(true)
   const isMobile = useIsMobile()
-  const isTablet = useIsTablet()
   const c = content
 
   useEffect(() => {
@@ -104,7 +103,7 @@ export default function GearClient({ content = {} }: { content?: PageContent }) 
                 <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.2em', color: '#d4a843', marginBottom: 20 }}>
                   {(CATEGORY_LABELS[cat] || cat).toUpperCase()}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(5, 1fr)', gap: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 20 }}>
                   {items.map(g => (
                     <div key={g.id} id={g.id} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden', display: 'flex', flexDirection: 'column', scrollMarginTop: 90 }}>
                       {/* Image carousel or placeholder */}

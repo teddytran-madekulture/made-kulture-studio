@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
-import { useIsMobile, useIsTablet } from '@/lib/use-is-mobile'
+import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
 import { fmt as nl } from '@/lib/fmt'
@@ -133,7 +133,6 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
 
 export default function SetsClient({ content = {} }: { content?: PageContent }) {
   const isMobile = useIsMobile()
-  const isTablet = useIsTablet()
   const c = content
   const [sets, setSets] = useState<ApiSet[]>([])
   const [buyoutRate, setBuyoutRate] = useState(400)
@@ -230,7 +229,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
           {loading ? (
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', padding: '40px 0' }}>Loading sets…</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(5, 1fr)', gap: isMobile ? 10 : 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: isMobile ? 10 : 12 }}>
               {standard.map(set => (
                 <SetCard key={set.id} set={set} num={numFor(set)} />
               ))}
