@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
-import { useIsMobile } from '@/lib/use-is-mobile'
+import { useIsMobile, useIsTablet } from '@/lib/use-is-mobile'
 import type { SiteImages } from '@/lib/site-images'
 import { SITE_SETTINGS_DEFAULTS, type SiteSettings } from '@/lib/site-settings'
 import type { PageContent } from '@/lib/site-content'
@@ -47,6 +47,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
   const [heroHover, setHeroHover] = useState<'primary' | 'secondary' | null>(null)
   const [pathHover, setPathHover] = useState<'a' | 'b' | null>(null)
   const isMobile = useIsMobile()
+  const isTablet = useIsTablet()
   const c = content
   const tiles = parseList(c.featureTiles)
 
@@ -218,7 +219,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(5, 1fr)', gap: isMobile ? 8 : 10 }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : isTablet ? 'repeat(3, 1fr)' : 'repeat(5, 1fr)', gap: isMobile ? 8 : 10 }}>
           {SETS.map((set, i) => {
             const src = images[set.slug] || set.photo
             return (
