@@ -129,7 +129,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
             <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
             <span className="label">{c.heroEyebrow}</span>
           </div>
-          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:28, lineHeight:0.9, letterSpacing:'0.005em', textTransform:'uppercase' }}>
+          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:28, lineHeight:0.9, letterSpacing:'0.005em', wordSpacing:'-0.15em', textTransform:'uppercase' }}>
             {nl(c.heroHeadline)}
           </h1>
           <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
