@@ -26,13 +26,13 @@ function GearImage({ gear }: { gear: Gear }) {
   const [idx, setIdx] = useState(0)
   const arrow: CSSProperties = { position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 30, height: 30, border: 'none', background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 20, lineHeight: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }
   if (!imgs.length) {
-    return <div style={{ aspectRatio: '4 / 3', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    return <div style={{ aspectRatio: '1 / 1', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 16, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.18)' }}>MADE KULTURE</span>
     </div>
   }
   const go = (d: number) => setIdx(i => (i + d + imgs.length) % imgs.length)
   return (
-    <div style={{ position: 'relative', aspectRatio: '4 / 3', background: '#111', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', aspectRatio: '1 / 1', background: '#111', overflow: 'hidden' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={imgs[idx]} alt={gear.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       {imgs.length > 1 && (
@@ -103,7 +103,7 @@ export default function GearClient({ content = {} }: { content?: PageContent }) 
                 <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.2em', color: '#d4a843', marginBottom: 20 }}>
                   {(CATEGORY_LABELS[cat] || cat).toUpperCase()}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 20 }}>
                   {items.map(g => (
                     <div key={g.id} id={g.id} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden', display: 'flex', flexDirection: 'column', scrollMarginTop: 90 }}>
                       {/* Image carousel or placeholder */}
