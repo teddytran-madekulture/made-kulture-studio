@@ -193,7 +193,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
         <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom: isMobile ? 40 : 64, flexWrap:'wrap', gap:24 }}>
           <div>
             <div className="label" style={{ marginBottom:20 }}>{c.setsEyebrow}</div>
-            <h2 style={{ fontSize:'clamp(48px, 6vw, 88px)', color:'#fff', lineHeight:0.92 }}>
+            <h2 style={{ fontSize: isMobile ? 'clamp(28px, 8.5vw, 44px)' : 'clamp(48px, 6vw, 88px)', color:'#fff', lineHeight:0.92 }}>
               {nl(c.setsHeading)}
             </h2>
             <div style={{ marginTop:16, fontFamily:'Inter', fontSize:13, color:'#c9b27e' }}>
@@ -240,7 +240,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
                     <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 18 : 26, color:'#fff', letterSpacing:'0.02em', lineHeight:1 }}>{set.name.toUpperCase()}</div>
                     <div style={{ fontFamily:'Inter', fontSize:11, fontWeight:500, letterSpacing:'0.12em', color:'rgba(255,255,255,0.6)', marginTop:8 }}>{set.price} / HR</div>
                   </div>
-                  <span data-arrow style={{ flexShrink:0, width:36, height:36, border:'1px solid rgba(255,255,255,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:14, transition:'background 0.25s ease, color 0.25s ease' }}>↗</span>
+                  <span data-arrow style={{ flexShrink:0, width:36, height:36, border:'1px solid rgba(255,255,255,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:14, transition:'background 0.25s ease, color 0.25s ease' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></span>
                 </div>
               </Link>
             )
