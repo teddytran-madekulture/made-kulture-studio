@@ -7,6 +7,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 const REQ_COLS = 'id, external_id, source, title, artist, thumbnail_url, duration_sec, requester_name, requester_device, status, created_at, approved_at'
 

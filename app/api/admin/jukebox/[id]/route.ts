@@ -8,6 +8,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

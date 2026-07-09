@@ -13,6 +13,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 // Best-effort explicit filter (YouTube has no reliable explicit flag).
 const BLOCKLIST = ['fuck', 'shit', 'nigga', 'nigger', 'cunt', 'bitch', 'pussy', 'dick', 'cum', 'porn', 'xxx']
 function looksExplicit(title: string): boolean {
