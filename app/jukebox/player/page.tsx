@@ -39,6 +39,7 @@ export default function PlayerPage() {
   const [display, setDisplay] = useState<{ title: string; artist: string; source: 'request' | 'house' | 'idle' | 'paused' | 'blocked' }>({ title: '', artist: '', source: 'idle' })
   const [upNext, setUpNext] = useState(0)
   const [zoneName, setZoneName] = useState('')
+  const [zoneSlug, setZoneSlug] = useState('')
 
   const zoneRef = useRef('')
   const keyRef = useRef<string | undefined>(undefined)
@@ -68,8 +69,10 @@ export default function PlayerPage() {
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
-    zoneRef.current = (p.get('zone') || '').trim()
+    const z = (p.get('zone') || '').trim()
+    zoneRef.current = z
     keyRef.current = p.get('key') || undefined
+    setZoneSlug(z)
     document.body.style.zoom = '1'
   }, [])
 
@@ -144,7 +147,7 @@ export default function PlayerPage() {
         getOAuthToken: (cb: (t: string) => void) => { spotifyToken().then(t => { if (t) cb(t) }) },
         volume: 0.8,
       })
-      sp.current.addListener('ready', ({ device_id }: any) => { spDevice.current = device_id; spReady.current = true; if (lastState.current) apply(lastState.current) })
+      sp.current.addListener('ready', ({ device_id }: any) => { spDevice.current = device_id; spReady.current = true; try { sp.current.activateElement() } catch {}; if (lastState.current) apply(lastState.current) })
       sp.current.addListener('not_ready', () => { spReady.current = false })
       sp.current.addListener('player_state_changed', (st: any) => {
         if (!st || currentSource.current !== 'spotify') return
@@ -284,7 +287,7 @@ export default function PlayerPage() {
   if (!started) return (
     <main style={{ background: '#000', color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', gap: 18, textAlign: 'center', padding: 24 }}>
       <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, letterSpacing: '0.05em' }}>STUDIO JUKEBOX</div>
-      {zoneRef.current
+      {zoneSlug
         ? <>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 15, maxWidth: 400, lineHeight: 1.6 }}>Player for this area. Pair this device to the Bluetooth speaker, then tap to start. (Spotify zones must run on the laptop.)</div>
             <button onClick={() => setStarted(true)} style={{ marginTop: 8, background: GOLD, color: '#000', border: 'none', borderRadius: 14, padding: '20px 54px', fontSize: 15, fontWeight: 800, letterSpacing: '0.16em', cursor: 'pointer' }}>TAP TO START</button>
