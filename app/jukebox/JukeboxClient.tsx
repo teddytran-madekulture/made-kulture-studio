@@ -9,7 +9,7 @@ const GOLD = '#d4a843'
 const BG = '#080808'
 
 interface Zone { slug: string; name: string; is_open: boolean }
-interface Result { source: string; external_id: string; title: string; artist: string; thumbnail: string | null; duration: number | null }
+interface Result { source: string; external_id: string; title: string; artist: string; thumbnail: string | null; duration: number | null; explicit?: boolean }
 interface Track { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name?: string | null; status?: string }
 
 function fmtDur(s: number | null | undefined): string {
@@ -86,7 +86,7 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
         body: JSON.stringify({
           zone: zoneSlug, source: t.source, external_id: t.external_id,
           title: decode(t.title), artist: t.artist, thumbnail: t.thumbnail,
-          duration: t.duration, device: device.current,
+          duration: t.duration, explicit: t.explicit, device: device.current,
         }),
       })
       const d = await r.json()

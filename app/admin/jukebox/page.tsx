@@ -22,6 +22,7 @@ export default function AdminJukeboxPage() {
   const [upNext, setUpNext] = useState<Req[]>([])
   const [nowPlaying, setNowPlaying] = useState<Req | null>(null)
   const [played, setPlayed] = useState<Req[]>([])
+  const [spotify, setSpotify] = useState<{ configured: boolean; connected: boolean; email?: string | null }>({ configured: false, connected: false })
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
   const [playlist, setPlaylist] = useState('')
@@ -39,6 +40,7 @@ export default function AdminJukeboxPage() {
       setPlaylist(prev => (document.activeElement?.id === 'house-input' ? prev : (d.zone.house_playlist_url ?? '')))
     }
     setPending(d.pending ?? []); setUpNext(d.up_next ?? []); setNowPlaying(d.now_playing ?? null); setPlayed(d.played ?? [])
+    setSpotify(d.spotify ?? { configured: false, connected: false })
     setLoading(false)
   }, [])
 
@@ -102,15 +104,39 @@ export default function AdminJukeboxPage() {
                     <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: zone.auto_approve ? C.accent : C.dim, cursor: 'pointer' }} title="Requests skip approval and go straight into the queue">
                       <input type="checkbox" checked={zone.auto_approve} onChange={e => saveSettings({ auto_approve: e.target.checked })} /> Auto-approve requests
                     </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: C.dim }}>
+                      Source
+                      <select value={zone.source} onChange={e => saveSettings({ source: e.target.value })} style={{ ...inp, width: 'auto', padding: '6px 8px', fontWeight: 600, color: zone.source === 'spotify' ? '#1db954' : C.accent }}>
+                        <option value="youtube" style={{ color: '#111' }}>YouTube</option>
+                        <option value="spotify" style={{ color: '#111' }}>Spotify</option>
+                      </select>
+                    </label>
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 14, fontSize: 12 }}>
                       <a href={`/jukebox/player?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.accent, textDecoration: 'none' }}>Open player ↗</a>
                       <a href={`/jukebox?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.dim, textDecoration: 'none' }}>Guest page ↗</a>
                     </div>
                   </div>
+                  {/* Spotify connect (only when this zone is on Spotify) */}
+                  {zone.source === 'spotify' && (
+                    <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 8, background: 'rgba(29,185,84,0.08)', border: '1px solid rgba(29,185,84,0.3)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, color: spotify.connected ? '#6ee7a8' : '#ffd27a' }}>
+                        {spotify.connected ? `Spotify connected${spotify.email ? ` · ${spotify.email}` : ''}` : 'Spotify not connected yet'}
+                      </span>
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                        <a href="/api/spotify/auth" style={{ ...btn('#1db954', '#04160b'), textDecoration: 'none' }}>{spotify.connected ? 'Reconnect' : 'Connect Spotify'}</a>
+                        {spotify.connected && (
+                          <button onClick={async () => { await fetch('/api/spotify/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'disconnect' }) }); load() }} style={btn('transparent', C.dim)}>Disconnect</button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ marginTop: 14 }}>
-                    <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>House playlist (YouTube) — plays when the queue is empty</div>
+                    <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>
+                      House playlist ({zone.source === 'spotify' ? 'Spotify' : 'YouTube'}) — plays when the queue is empty
+                    </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input id="house-input" style={inp} value={playlist} onChange={e => setPlaylist(e.target.value)} placeholder="https://www.youtube.com/playlist?list=…" />
+                      <input id="house-input" style={inp} value={playlist} onChange={e => setPlaylist(e.target.value)} placeholder={zone.source === 'spotify' ? 'https://open.spotify.com/playlist/…' : 'https://www.youtube.com/playlist?list=…'} />
                       <button onClick={() => saveSettings({ house_playlist_url: playlist })} style={btn(C.accent, '#0b0b0d')}>SAVE</button>
                     </div>
                     {savedMsg && <span style={{ color: '#6ee7a8', fontSize: 12 }}>{savedMsg}</span>}

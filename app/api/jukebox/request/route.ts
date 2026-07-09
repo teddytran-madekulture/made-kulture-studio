@@ -61,8 +61,10 @@ export async function POST(req: NextRequest) {
   if (!zone) return NextResponse.json({ error: 'Unknown area.' }, { status: 404 })
   if (!zone.is_open) return NextResponse.json({ error: 'The jukebox is paused right now.' }, { status: 409 })
 
-  if (zone.explicit_filter && looksExplicit(title)) {
-    return NextResponse.json({ error: "That title looks explicit — it can't be added to the shared queue." }, { status: 422 })
+  // Spotify sends a real `explicit` flag; YouTube falls back to a title blocklist.
+  const explicitFlag = b?.explicit === true
+  if (zone.explicit_filter && (explicitFlag || looksExplicit(title))) {
+    return NextResponse.json({ error: "That track is marked explicit — it can't be added to the shared queue." }, { status: 422 })
   }
 
   const autoApprove = !!zone.auto_approve

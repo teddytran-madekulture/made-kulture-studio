@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { isConnected, spotifyConfigured } from '@/lib/spotify'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -20,9 +21,12 @@ export async function GET(req: NextRequest) {
     .select('id, slug, name, source, is_open, explicit_filter, auto_approve, house_playlist_url, now_playing_id, sort')
     .order('sort', { ascending: true })
 
+  const { connected: spotifyConnected, email: spotifyEmail } = await isConnected()
+  const spotify = { configured: spotifyConfigured(), connected: spotifyConnected, email: spotifyEmail }
+
   const slug = (req.nextUrl.searchParams.get('zone') || zones?.[0]?.slug || '').trim()
   const zone = (zones ?? []).find(z => z.slug === slug) || zones?.[0]
-  if (!zone) return NextResponse.json({ zones: zones ?? [], zone: null, pending: [], up_next: [], now_playing: null, played: [] })
+  if (!zone) return NextResponse.json({ zones: zones ?? [], zone: null, pending: [], up_next: [], now_playing: null, played: [], spotify })
 
   const [{ data: pending }, { data: up_next }, { data: played }] = await Promise.all([
     db.from('jukebox_requests').select(REQ_COLS).eq('zone_id', zone.id).eq('status', 'pending').order('created_at', { ascending: true }),
@@ -36,5 +40,5 @@ export async function GET(req: NextRequest) {
     if (data && data.status === 'playing') now_playing = data
   }
 
-  return NextResponse.json({ zones: zones ?? [], zone, pending: pending ?? [], up_next: up_next ?? [], now_playing, played: played ?? [] })
+  return NextResponse.json({ zones: zones ?? [], zone, pending: pending ?? [], up_next: up_next ?? [], now_playing, played: played ?? [], spotify })
 }
