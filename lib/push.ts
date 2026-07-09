@@ -43,12 +43,13 @@ export async function sendOwnerPush(opts: {
     // App-icon badge = everything currently waiting on Teddy.
     let badge = 0
     try {
-      const [convos, drafts, tours] = await Promise.all([
+      const [convos, drafts, tours, jukebox] = await Promise.all([
         supabase.from('agent_conversations').select('id', { count: 'exact', head: true }).eq('status', 'needs_teddy').eq('human_takeover', false),
         supabase.from('agent_messages').select('id', { count: 'exact', head: true }).eq('role', 'draft'),
         supabase.from('tour_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('jukebox_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       ])
-      badge = (convos.count ?? 0) + (drafts.count ?? 0) + (tours.count ?? 0)
+      badge = (convos.count ?? 0) + (drafts.count ?? 0) + (tours.count ?? 0) + (jukebox.count ?? 0)
     } catch {}
 
     const payload = JSON.stringify({

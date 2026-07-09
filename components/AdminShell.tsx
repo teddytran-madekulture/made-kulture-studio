@@ -57,6 +57,7 @@ function SidebarInner() {
 
         <div style={sectionHdr}>STUDIO</div>
         <Item href={`${D}sets`} icon="▦" label="Products & Pricing" />
+        <Item href="/admin/jukebox" icon="♪" label="Jukebox" active={on('/admin/jukebox')} />
 
         <div style={sectionHdr}>CUSTOMERS</div>
         <Item href={`${D}customers`} icon="👤" label="Client List" />
