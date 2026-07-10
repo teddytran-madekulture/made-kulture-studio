@@ -44,6 +44,9 @@ export default function AdminLogin() {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/api/admin/auth/callback`,
+        // Always show Google's account chooser so it can't silently reuse a
+        // different signed-in account (e.g. a personal Gmail) and get denied.
+        queryParams: { prompt: 'select_account' },
       },
     })
     // Page will navigate — no need to reset loading
