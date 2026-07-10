@@ -103,6 +103,17 @@ export default function PlayerPage() {
     } catch { return null }
   }, [])
 
+  // While the house playlist is running, YouTube (not our server) owns which
+  // track is on. Pull the live title/artist straight from the player so the
+  // tablet shows the actual song instead of a generic "House playlist" label.
+  const refreshHouseNowPlaying = useCallback(() => {
+    if (modeRef.current !== 'house' || currentSource.current !== 'youtube') return
+    try {
+      const d = yt.current?.getVideoData?.()
+      if (d?.title) setDisplay({ title: d.title, artist: d.author || '', source: 'house' })
+    } catch {}
+  }, [])
+
   // ── YouTube engine ──
   useEffect(() => {
     if (!started) return
@@ -116,19 +127,15 @@ export default function PlayerPage() {
           onReady: () => { ytReady.current = true; if (lastState.current) apply(lastState.current) },
           onStateChange: (e: any) => {
             const YT = (window as any).YT
-            if (e.data === YT.PlayerState.PLAYING && modeRef.current === 'house' && currentSource.current === 'youtube' && !shuffled.current) {
-              try { yt.current.setShuffle(true); yt.current.setLoop(true); shuffled.current = true; yt.current.nextVideo() } catch {}
+            if (e.data === YT.PlayerState.PLAYING && modeRef.current === 'house' && currentSource.current === 'youtube') {
+              if (!shuffled.current) {
+                try { yt.current.setShuffle(true); yt.current.setLoop(true); shuffled.current = true; yt.current.nextVideo() } catch {}
+              }
+              refreshHouseNowPlaying()
             }
             if (e.data === YT.PlayerState.ENDED && currentSource.current === 'youtube') onSongEnd()
           },
-          onError: () => {
-            if (currentSource.current !== 'youtube') return
-            // A restricted / unavailable video errors out. In the house playlist
-            // YouTube won't auto-advance past it, so skip forward ourselves;
-            // for a guest request, advance the server queue as on a normal end.
-            if (modeRef.current === 'house') { try { yt.current?.nextVideo() } catch {} }
-            else onSongEnd()
-          },
+          onError: () => { if (currentSource.current === 'youtube') onSongEnd() },
         },
       })
     }
@@ -141,6 +148,14 @@ export default function PlayerPage() {
       }
     }
   }, [started])
+
+  // Keep the house-playlist "now playing" label fresh — titles lag on load and
+  // change as YouTube auto-advances through the playlist.
+  useEffect(() => {
+    if (!started) return
+    const iv = setInterval(refreshHouseNowPlaying, 4000)
+    return () => clearInterval(iv)
+  }, [started, refreshHouseNowPlaying])
 
   const ytPlay = (id: string) => { if (ytLoaded.current === id && modeRef.current === 'request') return; try { yt.current?.loadVideoById(id) } catch {}; ytLoaded.current = id; shuffled.current = false }
   const ytHouse = (pid: string) => { shuffled.current = false; ytLoaded.current = null; try { yt.current?.loadPlaylist({ list: pid, listType: 'playlist' }) } catch {} }
@@ -328,20 +343,6 @@ export default function PlayerPage() {
     <main style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, sans-serif', overflow: 'hidden' }}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <div id="yt-player" style={{ position: 'absolute', inset: 0, display: engine === 'spotify' ? 'none' : 'block' }} />
-        {engine !== 'spotify' && (
-          // Audio-only cover: the YouTube player keeps playing underneath, but we
-          // paint an opaque "now playing" card over it so the tablet shows the
-          // song info instead of the music video.
-          <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.9)' }}>
-            <div style={{ textAlign: 'center', padding: 24 }}>
-              <div style={{ color: display.source === 'paused' ? '#f87171' : GOLD, fontSize: 13, letterSpacing: '0.2em', marginBottom: 14 }}>
-                {display.source === 'house' ? '♫ HOUSE PLAYLIST' : display.source === 'paused' ? '❚❚ PAUSED' : display.source === 'request' ? '♫ NOW PLAYING' : '♫ WAITING FOR REQUESTS'}
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, maxWidth: '80vw', lineHeight: 1.2 }}>{display.title || '—'}</div>
-              {display.artist && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 17, marginTop: 10 }}>{display.artist}</div>}
-            </div>
-          </div>
-        )}
         {engine === 'spotify' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.9)' }}>
             <div style={{ textAlign: 'center' }}>
