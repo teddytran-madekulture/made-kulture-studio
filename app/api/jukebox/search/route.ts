@@ -26,6 +26,7 @@ async function youtubeSearch(q: string) {
   su.searchParams.set('type', 'video')
   su.searchParams.set('videoCategoryId', '10')
   su.searchParams.set('videoEmbeddable', 'true')
+  su.searchParams.set('videoSyndicated', 'true') // only videos playable outside youtube.com
   su.searchParams.set('safeSearch', 'moderate')
   su.searchParams.set('maxResults', '10')
   su.searchParams.set('key', KEY)
@@ -36,13 +37,19 @@ async function youtubeSearch(q: string) {
   if (!ids.length) return { results: [] as any[] }
 
   const vu = new URL('https://www.googleapis.com/youtube/v3/videos')
-  vu.searchParams.set('part', 'contentDetails')
+  vu.searchParams.set('part', 'contentDetails,status')
   vu.searchParams.set('id', ids.join(','))
   vu.searchParams.set('key', KEY)
   const vr = await fetch(vu.toString())
   const vd = vr.ok ? await vr.json() : { items: [] }
   const durById: Record<string, number> = {}
-  for (const it of vd.items || []) durById[it.id] = isoToSec(it.contentDetails?.duration)
+  const playableById: Record<string, boolean> = {}
+  for (const it of vd.items || []) {
+    durById[it.id] = isoToSec(it.contentDetails?.duration)
+    // Drop videos the owner blocked from embedding or that aren't public — these
+    // pass the search flag but still fail to play on the tablet.
+    playableById[it.id] = it.status?.embeddable !== false && it.status?.privacyStatus === 'public'
+  }
 
   const results = (sd.items || [])
     .filter((i: any) => i.id?.videoId)
@@ -55,6 +62,8 @@ async function youtubeSearch(q: string) {
       duration: durById[i.id.videoId] ?? null,
     }))
     .filter((r: any) => !r.duration || r.duration <= 900)
+    // Keep unknowns (details call may have been skipped), drop known-unplayable.
+    .filter((r: any) => playableById[r.external_id] !== false)
   return { results }
 }
 

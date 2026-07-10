@@ -121,7 +121,14 @@ export default function PlayerPage() {
             }
             if (e.data === YT.PlayerState.ENDED && currentSource.current === 'youtube') onSongEnd()
           },
-          onError: () => { if (currentSource.current === 'youtube') onSongEnd() },
+          onError: () => {
+            if (currentSource.current !== 'youtube') return
+            // A restricted / unavailable video errors out. In the house playlist
+            // YouTube won't auto-advance past it, so skip forward ourselves;
+            // for a guest request, advance the server queue as on a normal end.
+            if (modeRef.current === 'house') { try { yt.current?.nextVideo() } catch {} }
+            else onSongEnd()
+          },
         },
       })
     }
@@ -321,6 +328,20 @@ export default function PlayerPage() {
     <main style={{ background: '#000', height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, sans-serif', overflow: 'hidden' }}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <div id="yt-player" style={{ position: 'absolute', inset: 0, display: engine === 'spotify' ? 'none' : 'block' }} />
+        {engine !== 'spotify' && (
+          // Audio-only cover: the YouTube player keeps playing underneath, but we
+          // paint an opaque "now playing" card over it so the tablet shows the
+          // song info instead of the music video.
+          <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.9)' }}>
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <div style={{ color: display.source === 'paused' ? '#f87171' : GOLD, fontSize: 13, letterSpacing: '0.2em', marginBottom: 14 }}>
+                {display.source === 'house' ? '♫ HOUSE PLAYLIST' : display.source === 'paused' ? '❚❚ PAUSED' : display.source === 'request' ? '♫ NOW PLAYING' : '♫ WAITING FOR REQUESTS'}
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 800, maxWidth: '80vw', lineHeight: 1.2 }}>{display.title || '—'}</div>
+              {display.artist && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 17, marginTop: 10 }}>{display.artist}</div>}
+            </div>
+          </div>
+        )}
         {engine === 'spotify' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.9)' }}>
             <div style={{ textAlign: 'center' }}>
