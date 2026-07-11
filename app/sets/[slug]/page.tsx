@@ -51,7 +51,7 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
   if (!set) notFound()
 
   const guestRate = Number(set.rate_per_hour) + surcharge
-  const minNote = set.min_hours && set.min_hours > 1 ? `${set.min_hours}-hour minimum` : 'no minimum'
+  const minNote = set.min_hours && set.min_hours > 1 ? `${set.min_hours}-hour minimum` : '1-hour minimum'
   const gradient = set.accent_gradient || 'linear-gradient(135deg, #141414 0%, #1e1e1e 100%)'
   // gallery[0] is the same shot as the hero (photo_url), so skip it here to avoid a duplicate
   const galleryExtra = ((set.gallery as string[] | null) ?? []).slice(1)
