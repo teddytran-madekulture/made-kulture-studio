@@ -103,19 +103,48 @@ export default function PlayerPage() {
     } catch { return null }
   }, [])
 
+  // Report the actual house track to the server so the admin console can show it
+  // under NOW PLAYING. Deduped by track + throttled to a ~15s heartbeat, so the
+  // server timestamp stays fresh through a long song without hammering the DB.
+  const lastHouseSig  = useRef<string>('')
+  const lastHousePost = useRef<number>(0)
+  const reportHouse = useCallback((title: string, artist: string) => {
+    if (!title) return
+    const sig = `${title}|${artist}`
+    const now = Date.now()
+    if (sig === lastHouseSig.current && now - lastHousePost.current < 15000) return
+    lastHouseSig.current  = sig
+    lastHousePost.current = now
+    try {
+      fetch('/api/jukebox/house-now', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zone: zoneRef.current, key: keyRef.current, title, artist }),
+      }).catch(() => {})
+    } catch {}
+  }, [])
+
   // While the house playlist is running, the player engine (not our server) owns
   // which track is on. Pull the live title/artist straight from it so the tablet
-  // shows the actual song instead of a generic "House playlist" label.
+  // shows the actual song — and report it to the server for the admin console.
   const refreshHouseNowPlaying = useCallback(() => {
-    if (modeRef.current !== 'house') return
+    if (modeRef.current !== 'house' || pausedLocal.current) return
     if (currentSource.current === 'youtube') {
       try {
         const d = yt.current?.getVideoData?.()
-        if (d?.title) setDisplay({ title: d.title, artist: d.author || '', source: 'house' })
+        if (d?.title) { setDisplay({ title: d.title, artist: d.author || '', source: 'house' }); reportHouse(d.title, d.author || '') }
+      } catch {}
+    } else if (currentSource.current === 'spotify') {
+      try {
+        sp.current?.getCurrentState?.().then((st: any) => {
+          const cur = st?.track_window?.current_track
+          if (cur?.name) {
+            const a = (cur.artists || []).map((x: any) => x.name).join(', ')
+            setDisplay({ title: cur.name, artist: a, source: 'house' }); reportHouse(cur.name, a)
+          }
+        }).catch(() => {})
       } catch {}
     }
-    // (Spotify updates itself via the player_state_changed listener.)
-  }, [])
+  }, [reportHouse])
 
   // ── YouTube engine ──
   useEffect(() => {
@@ -187,10 +216,14 @@ export default function PlayerPage() {
       sp.current.addListener('not_ready', () => { spReady.current = false })
       sp.current.addListener('player_state_changed', (st: any) => {
         if (!st || currentSource.current !== 'spotify' || pausedLocal.current) return
-        // In house mode, show the real track from Spotify (parity with YouTube).
+        // In house mode, show the real track from Spotify (parity with YouTube)
+        // and report it to the server for the admin console.
         if (modeRef.current === 'house') {
           const cur = st.track_window?.current_track
-          if (cur?.name) setDisplay({ title: cur.name, artist: (cur.artists || []).map((a: any) => a.name).join(', '), source: 'house' })
+          if (cur?.name) {
+            const a = (cur.artists || []).map((x: any) => x.name).join(', ')
+            setDisplay({ title: cur.name, artist: a, source: 'house' }); reportHouse(cur.name, a)
+          }
         }
         // Natural end heuristic: was playing, now paused at position 0.
         if (spWasPlaying.current && st.paused && st.position === 0) { spWasPlaying.current = false; onSongEnd(); return }
