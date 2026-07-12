@@ -530,6 +530,8 @@ export default function AdminDashboard() {
     const v = new URLSearchParams(window.location.search).get('view')
     const allowed = ['list', 'calendar', 'emails', 'profile', 'customers', 'sets', 'usage', 'legal', 'revenue']
     if (v && allowed.includes(v)) setView(v as any)
+    const cal = new URLSearchParams(window.location.search).get('cal')
+    if (cal && ['day', 'week', 'month', 'agenda'].includes(cal)) setCalMode(cal as any)
   }, [])
 
   // Pull true collected revenue from Square (net of refunds) for the stat cards
