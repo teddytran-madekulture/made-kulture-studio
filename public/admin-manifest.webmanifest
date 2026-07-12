@@ -2,7 +2,7 @@
   "name": "Made Kulture Admin",
   "short_name": "MK Admin",
   "description": "Made Kulture studio operations — June's inbox, bookings, and alerts.",
-  "start_url": "/admin/inbox",
+  "start_url": "/admin/dashboard?view=calendar&cal=agenda",
   "scope": "/admin",
   "display": "standalone",
   "background_color": "#080808",
