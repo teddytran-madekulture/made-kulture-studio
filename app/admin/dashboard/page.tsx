@@ -454,8 +454,6 @@ export default function AdminDashboard() {
   const [custSearch,       setCustSearch]       = useState('')
   const [custFilter,       setCustFilter]       = useState('all')
   const [custLoading,      setCustLoading]      = useState(false)
-  const [custImporting,    setCustImporting]    = useState(false)
-  const [custImportResult, setCustImportResult] = useState<{ totalUpserted: number } | null>(null)
   const [custDetail,       setCustDetail]       = useState<CustomerDetailData | null>(null)
   const [custDetailLoading,setCustDetailLoading]= useState(false)
   const [custEditMode,     setCustEditMode]     = useState(false)
@@ -2600,25 +2598,6 @@ export default function AdminDashboard() {
                   }}>
                   ⊞ FIND DUPLICATES
                 </button>
-                <button
-                  onClick={async () => {
-                    setCustImporting(true)
-                    setCustImportResult(null)
-                    const res = await fetch('/api/admin/customers/import', { method: 'POST' })
-                    const data = await res.json()
-                    setCustImportResult(data)
-                    setCustImporting(false)
-                    fetchCustomers(custSearch, custFilter, custPage)
-                  }}
-                  disabled={custImporting}
-                  style={{
-                    background: custImporting ? 'rgba(255,255,255,0.08)' : '#d4a843',
-                    border: 'none', padding: '10px 20px', cursor: custImporting ? 'default' : 'pointer',
-                    fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em',
-                    color: custImporting ? 'rgba(255,255,255,0.3)' : '#000',
-                  }}>
-                  {custImporting ? 'IMPORTING...' : '↓ IMPORT FROM SQUARE + ACUITY'}
-                </button>
               </div>
             </div>
 
@@ -2747,11 +2726,6 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {custImportResult && (
-              <div style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#4ade80', fontFamily: 'Inter, sans-serif' }}>
-                ✓ Imported {custImportResult.totalUpserted} customers — Square + Acuity merged by email
-              </div>
-            )}
 
             {/* Search + filter */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
