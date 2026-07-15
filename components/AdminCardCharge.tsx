@@ -1,5 +1,3 @@
-const TEST = "paste-check";
-export {}
 'use client'
 
 // Admin manual card charge — a small modal that mounts the Square Web Payments
