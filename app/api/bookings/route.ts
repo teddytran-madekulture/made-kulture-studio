@@ -10,6 +10,7 @@ import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin } from '@/lib/igloohome'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
+import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendOwnerPush } from '@/lib/push'
 import { createClient as createServerClient } from '@/lib/supabase/server'
@@ -460,18 +461,12 @@ export async function POST(req: NextRequest) {
     let squarePaymentId: string | null = null
 
     if (body.sourceId) {
-      const { result: searchResult } = await square.customersApi.searchCustomers({
-        query: { filter: { emailAddress: { exact: body.email } } },
+      // Reuse an existing Square profile for this email — never spawn a duplicate.
+      customerId = await findOrCreateSquareCustomer(square, {
+        email: body.email, name: body.name, phone: body.phone,
       })
-      if (searchResult.customers && searchResult.customers.length > 0) {
-        customerId = searchResult.customers[0].id!
-      } else {
-        const nameParts = body.name.trim().split(' ')
-        const { result: createResult } = await square.customersApi.createCustomer({
-          givenName: nameParts[0], familyName: nameParts.slice(1).join(' ') || '',
-          emailAddress: body.email, phoneNumber: body.phone, idempotencyKey: randomUUID(),
-        })
-        customerId = createResult.customer!.id!
+      if (!customerId) {
+        return NextResponse.json({ error: 'Could not set up your payment profile — please try again.' }, { status: 502 })
       }
 
       const { result: cardResult } = await square.cardsApi.createCard({

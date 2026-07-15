@@ -4,6 +4,7 @@ import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { randomUUID } from 'crypto'
+import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 
 // POST /api/admin/charge-manual
 // Charges a card the admin keys in on the spot (Square Web Payments nonce) —
@@ -74,15 +75,12 @@ export async function POST(req: NextRequest) {
         let sqCustId: string | null = cust.square_customer_id ?? null
 
         if (!sqCustId) {
-          const nameParts = (cust.name ?? customerName ?? '').trim().split(' ')
-          const cr = await square.customersApi.createCustomer({
-            emailAddress: cust.email ?? email ?? undefined,
-            givenName:    nameParts[0] || undefined,
-            familyName:   nameParts.slice(1).join(' ') || undefined,
-            phoneNumber:  cust.phone ?? phone ?? undefined,
-            idempotencyKey: `cust-${cust.id}`.slice(0, 45),
+          // Reuse an existing Square profile for this email — never spawn a duplicate.
+          sqCustId = await findOrCreateSquareCustomer(square, {
+            email: cust.email ?? email,
+            name:  cust.name ?? customerName,
+            phone: cust.phone ?? phone,
           })
-          sqCustId = cr.result.customer?.id ?? null
           if (sqCustId) {
             await supabase.from('customers').update({ square_customer_id: sqCustId }).eq('id', cust.id)
           }

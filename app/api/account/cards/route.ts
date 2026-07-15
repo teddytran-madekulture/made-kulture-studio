@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
+import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 
 function getSquare() {
   return new Client({
@@ -21,16 +22,9 @@ async function ensureSquareCustomer(userId: string, email: string, name: string 
 
   if (profile?.square_customer_id) return profile.square_customer_id
 
-  // Create Square customer
+  // Reuse an existing Square profile for this email — never spawn a duplicate.
   const square = getSquare()
-  const nameParts = (name ?? '').trim().split(' ')
-  const res = await square.customersApi.createCustomer({
-    emailAddress: email,
-    givenName: nameParts[0] || undefined,
-    familyName: nameParts.slice(1).join(' ') || undefined,
-    idempotencyKey: `customer-${userId}`,
-  })
-  const customerId = res.result.customer?.id
+  const customerId = await findOrCreateSquareCustomer(square, { email, name })
   if (!customerId) throw new Error('Failed to create Square customer')
 
   // Save to Supabase
