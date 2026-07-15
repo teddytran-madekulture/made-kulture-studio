@@ -145,6 +145,7 @@ interface SquareCard {
   last4: string
   expMonth: number
   expYear: number
+  squareCustomerId?: string  // Square profile that OWNS this card (charge must pair card + owner)
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -937,19 +938,18 @@ export default function AdminDashboard() {
     setEditPayLink(null); setEditError(''); setEditAction(null); setEditCopied(false)
     setEditSmsStatus(null); setEditChargeSuccess(false)
 
-    // Look up customer's Square cards
-    if (b.customers?.email) {
-      const res  = await fetch(`/api/admin/customers?q=${encodeURIComponent(b.customers.email)}`)
-      const data = await res.json()
-      const cust = (data.customers || []).find((c: CustomerResult) => c.email === b.customers?.email)
-      if (cust?.squareCustomerId) {
-        setEditSquareCustId(cust.squareCustomerId)
-        const cr   = await fetch(`/api/admin/square-cards?customerId=${cust.squareCustomerId}`)
-        const cd   = await cr.json()
-        const list = cd.cards || []
-        setEditCards(list); setEditCard(list[0] ?? null)
-      }
-    }
+    // Look up saved cards ROBUSTLY: searches every Square profile for this
+    // customer's email (handles duplicate Square records) plus the card saved on
+    // the booking itself, and returns each card with its OWNING profile so the
+    // charge can pair them correctly.
+    try {
+      const cr   = await fetch(`/api/admin/booking-cards?bookingId=${b.id}`)
+      const cd   = await cr.json()
+      const list = (cd.cards || []) as SquareCard[]
+      setEditCards(list)
+      setEditCard(list[0] ?? null)
+      setEditSquareCustId(list[0]?.squareCustomerId ?? null)
+    } catch { /* leave cards empty → keyed-entry fallback still works */ }
   }
 
   const handleEditSave = async () => {
@@ -1009,7 +1009,7 @@ export default function AdminDashboard() {
   }
 
   const handleEditCharge = async () => {
-    if (!editBooking || editAction || editDiff <= 0 || !editCard || !editSquareCustId) return
+    if (!editBooking || editAction || editDiff <= 0 || !editCard || !editCard.squareCustomerId) return
     setEditAction('charge'); setEditError('')
     // Save booking first
     const saveRes = await fetch(`/api/admin/bookings/${editBooking.id}`, {
@@ -1030,7 +1030,7 @@ export default function AdminDashboard() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         squareCardId:     editCard.id,
-        squareCustomerId: editSquareCustId,
+        squareCustomerId: editCard.squareCustomerId,
         amount:           editDiff,
         description:      `Made Kulture — ${editState.setName} Booking Extension`,
         phone:            editBooking.customers?.phone || '',
