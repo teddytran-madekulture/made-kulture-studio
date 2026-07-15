@@ -388,7 +388,6 @@ export default function AdminDashboard() {
   }
   const [calDate,       setCalDate]       = useState(todayStr)
   const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
-  const [agendaMode,    setAgendaMode]    = useState<'upcoming' | 'past'>('upcoming')  // Agenda: look forward or back
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [addSetFor,     setAddSetFor]     = useState<Booking | null>(null)  // "add another set" modal
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -1147,7 +1146,7 @@ export default function AdminDashboard() {
   const calHeaderLabel = calMode === 'day' ? fmtCalHeader(calDate)
     : calMode === 'week' ? weekLabel(calDate)
     : calMode === 'month' ? monthLabel(calDate)
-    : (agendaMode === 'past' ? 'Past' : 'Upcoming')
+    : fmtCalHeader(calDate)
   const nowTop      = (nowHour - CAL_START) * SLOT_H * 2
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -1787,17 +1786,17 @@ export default function AdminDashboard() {
 
             {/* Nav */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
-              {calMode !== 'agenda'
-                ? <button onClick={() => calNav(-1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>&larr; PREV</button>
-                : <span />}
+              <button onClick={() => calNav(-1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>&larr; PREV</button>
               <div style={{ textAlign: 'center', flex: '1 1 120px' }}>
                 <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: isMobile ? 20 : 24, letterSpacing: '0.05em' }}>{calHeaderLabel}</div>
                 {calMode === 'day' && isToday && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', marginTop: 4 }}>TODAY</div>}
+                <input type="date" value={calDate} onChange={e => { if (e.target.value) setCalDate(e.target.value) }}
+                  style={{ marginTop: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '4px 8px', fontFamily: 'Inter, sans-serif', fontSize: 12, colorScheme: 'dark' }} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {calMode !== 'day' && <button onClick={() => setCalDate(todayStr())} title="Jump to today" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '8px 12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>TODAY</button>}
                 <button onClick={() => fetchBookings()} title="Reload bookings" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '8px 13px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>{loading ? '…' : '↻'}</button>
-                {calMode !== 'agenda' && <button onClick={() => calNav(1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>NEXT &rarr;</button>}
+                <button onClick={() => calNav(1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>NEXT &rarr;</button>
               </div>
             </div>
 
@@ -1944,41 +1943,27 @@ export default function AdminDashboard() {
 
             {/* AGENDA — chronological list of upcoming bookings */}
             {calMode === 'agenda' && (() => {
-              const now = new Date()
-              const isPast = agendaMode === 'past'
-              // Past: most-recent first (easy to find who was in that day). Upcoming: soonest first.
+              // Anchored to the selected date: shows that day and everything after,
+              // grouped by day. Arrow / pick a past date to look back.
               const list = bookings
-                .filter(b => b.status !== 'cancelled' && (isPast ? new Date(b.end_time) < now : new Date(b.end_time) >= now))
-                .sort(isPast ? (a, b) => -sortByStart(a, b) : sortByStart)
-              const toggle = (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                  {(['upcoming', 'past'] as const).map(m => (
-                    <button key={m} onClick={() => setAgendaMode(m)}
-                      style={{ background: agendaMode === m ? '#fff' : 'transparent', color: agendaMode === m ? '#080808' : 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12, letterSpacing: '0.08em' }}>
-                      {m === 'upcoming' ? 'Upcoming' : 'Past'}
-                    </button>
-                  ))}
-                </div>
-              )
-              if (!list.length) return <div>{toggle}<div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No {isPast ? 'past' : 'upcoming'} bookings.</div></div>
+                .filter(b => b.status !== 'cancelled' && localDateStr(b.start_time) >= calDate)
+                .sort(sortByStart)
+              if (!list.length) return <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No bookings on or after this date.</div>
               let lastDate = ''
               return (
-                <div>
-                  {toggle}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {list.map(b => {
-                      const d = localDateStr(b.start_time); const showHeader = d !== lastDate; lastDate = d
-                      return (
-                        <div key={b.id}>
-                          {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
-                          <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
-                            <div><div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
-                            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_price != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_price}</div>}</div>
-                          </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {list.map(b => {
+                    const d = localDateStr(b.start_time); const showHeader = d !== lastDate; lastDate = d
+                    return (
+                      <div key={b.id}>
+                        {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
+                        <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
+                          <div><div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
+                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_price != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_price}</div>}</div>
                         </div>
-                      )
-                    })}
-                  </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })()}
