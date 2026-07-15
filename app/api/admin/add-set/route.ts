@@ -172,19 +172,25 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    // 4. Door code (non-fatal) — the guest needs to get into the added set/window.
+    // Back-charge for a session that already happened → no door code, and a
+    // receipt (not a future-framed "confirmed") message.
+    const isPast = new Date(r.endISO).getTime() < Date.now()
+
+    // 4. Door code (non-fatal) — only for upcoming windows; useless for a past one.
     let doorCode: string | null = null
-    try {
-      const pin = await createBookingPin({
-        startISO: r.startISO, endISO: r.endISO,
-        accessName: `MK ${setName} ${name || ''}`.slice(0, 40),
-      })
-      if (pin) {
-        doorCode = pin.pin
-        await supabase.from('bookings')
-          .update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).eq('id', booking.id)
-      }
-    } catch (e) { console.error('[add-set] door code error (non-fatal):', e) }
+    if (!isPast) {
+      try {
+        const pin = await createBookingPin({
+          startISO: r.startISO, endISO: r.endISO,
+          accessName: `MK ${setName} ${name || ''}`.slice(0, 40),
+        })
+        if (pin) {
+          doorCode = pin.pin
+          await supabase.from('bookings')
+            .update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).eq('id', booking.id)
+        }
+      } catch (e) { console.error('[add-set] door code error (non-fatal):', e) }
+    }
 
     // 5. Calendar sync (non-fatal).
     try {
@@ -198,21 +204,23 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) { console.error('[add-set] gcal error (non-fatal):', e) }
 
-    // 6. Confirmation SMS (non-fatal).
+    // 6. SMS (non-fatal) — a receipt for a past session, a confirmation for an upcoming one.
     if (sendSms && phone) {
-      const msg = [
-        `✅ Made Kulture — added set confirmed!`,
-        ``,
-        `${name || ''}`.trim(),
-        `📅 ${date}`,
-        `⏰ ${fmt12(startHour)} – ${fmt12(endHour)}`,
-        `📍 ${setName}`,
-        `💳 $${amount.toFixed(2)} charged`,
-        ...(doorCode ? [`🔑 Door code: ${doorCode}`] : []),
-        ``,
-        `4825 Gulf Freeway, Houston TX 77023`,
-        `Questions? Text (832) 408-1631.`,
-      ].join('\n')
+      const msg = isPast
+        ? `Made Kulture: we've charged $${amount.toFixed(2)} to your card for the extra time in ${setName} on ${date}. Questions? Text (832) 408-1631.`
+        : [
+            `✅ Made Kulture — added set confirmed!`,
+            ``,
+            `${name || ''}`.trim(),
+            `📅 ${date}`,
+            `⏰ ${fmt12(startHour)} – ${fmt12(endHour)}`,
+            `📍 ${setName}`,
+            `💳 $${amount.toFixed(2)} charged`,
+            ...(doorCode ? [`🔑 Door code: ${doorCode}`] : []),
+            ``,
+            `4825 Gulf Freeway, Houston TX 77023`,
+            `Questions? Text (832) 408-1631.`,
+          ].join('\n')
       await twilioClient.messages.create({
         body: msg, from: process.env.TWILIO_PHONE_NUMBER, to: normalizePhone(phone),
       }).catch(e => console.error('[add-set] SMS error:', e))
