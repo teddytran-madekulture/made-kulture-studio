@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from '@/lib/agreements'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import ReviewSettingsCard from '@/components/ReviewSettingsCard'
+import AdminCardCharge from '@/components/AdminCardCharge'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -412,6 +413,19 @@ export default function AdminDashboard() {
   const [editCopied,        setEditCopied]        = useState(false)
   const [editSmsStatus,     setEditSmsStatus]     = useState<'sent' | string | null>(null)
   const [editChargeSuccess, setEditChargeSuccess] = useState(false)
+  // Manual keyed-in card charge (no saved card required). When set, the
+  // AdminCardCharge modal opens for this amount/booking.
+  const [chargeCardFor, setChargeCardFor] = useState<null | {
+    amount: number
+    title?: string
+    description?: string
+    bookingId?: string
+    newTotal?: number
+    customerId?: string | null
+    email?: string | null
+    phone?: string | null
+    name?: string | null
+  }>(null)
 
   const [manual, setManual] = useState({
     setSlug: 'set-a', date: tomorrow(), startHour: 10, endHour: 12,
@@ -1033,6 +1047,40 @@ export default function AdminDashboard() {
     fetchBookings()
     if (detailBooking?.id === editBooking.id) setDetailBooking(null)
     setTimeout(() => { setEditBooking(null); setEditChargeSuccess(false); setEditSmsStatus(null) }, 2500)
+  }
+
+  // Charge a card the admin keys in on the spot (no saved card required).
+  // Save the new times/set first (without touching the total — the charge
+  // endpoint bumps total_amount only once the payment clears), then open the
+  // keyed-card modal for the difference.
+  const openEditManualCharge = async () => {
+    if (!editBooking || editAction || editDiff <= 0) return
+    setEditAction('charge'); setEditError('')
+    const saveRes = await fetch(`/api/admin/bookings/${editBooking.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_time: hourToISO(editState.date, editState.startHour),
+        end_time:   hourToISO(editState.date, editState.endHour),
+        setName:    editState.setName,
+        notes:      editState.notes,
+      }),
+    })
+    if (!saveRes.ok) {
+      const d = await saveRes.json().catch(() => ({}))
+      setEditError(d.error || 'Failed to update booking'); setEditAction(null); return
+    }
+    setEditAction(null)
+    setChargeCardFor({
+      amount:      editDiff,
+      title:       'CHARGE CARD',
+      description: `Made Kulture — ${editState.setName} Booking Extension`,
+      bookingId:   editBooking.id,
+      newTotal:    editNewTotal,
+      customerId:  editBooking.customer_id,
+      email:       editBooking.customers?.email,
+      phone:       editBooking.customers?.phone,
+      name:        editBooking.customers?.name,
+    })
   }
 
   const closeModal = () => { setShowManual(false); resetModal() }
@@ -3599,14 +3647,40 @@ export default function AdminDashboard() {
                   {editCards.length > 0 && editCard && (
                     <button onClick={handleEditCharge} disabled={!!editAction}
                       style={{ flex: 1, minWidth: 160, background: editAction === 'charge' ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', padding: '12px', cursor: editAction ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
-                      {editAction === 'charge' ? 'CHARGING...' : `CHARGE CARD +$${editDiff.toFixed(2)}`}
+                      {editAction === 'charge' ? 'CHARGING...' : `CHARGE ${editCard.brand?.replace('_', ' ')} ****${editCard.last4} +$${editDiff.toFixed(2)}`}
                     </button>
                   )}
+                  {/* Always available: charge a card keyed in on the spot (no card on file needed). */}
+                  <button onClick={openEditManualCharge} disabled={!!editAction}
+                    style={{ flex: 1, minWidth: 160, background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', padding: '12px', cursor: editAction ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
+                    {editCards.length > 0 && editCard ? 'DIFFERENT CARD' : `CHARGE CARD +$${editDiff.toFixed(2)}`}
+                  </button>
                 </>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* MANUAL KEYED-IN CARD CHARGE */}
+      {chargeCardFor && (
+        <AdminCardCharge
+          amount={chargeCardFor.amount}
+          title={chargeCardFor.title}
+          description={chargeCardFor.description}
+          bookingId={chargeCardFor.bookingId}
+          newTotal={chargeCardFor.newTotal}
+          customerId={chargeCardFor.customerId}
+          customerEmail={chargeCardFor.email}
+          customerPhone={chargeCardFor.phone}
+          customerName={chargeCardFor.name}
+          onClose={() => setChargeCardFor(null)}
+          onSuccess={() => {
+            setChargeCardFor(null)
+            setEditBooking(null)
+            fetchBookings()
+          }}
+        />
       )}
 
       {/* MANUAL BOOKING MODAL */}
