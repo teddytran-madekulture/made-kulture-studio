@@ -38,6 +38,8 @@ export interface AdminCardChargeProps {
   customerPhone?: string | null
   customerName?: string | null
   sendSmsDefault?: boolean           // default the notify-SMS checkbox
+  endpoint?: string                  // where to POST the charge (default charge-manual)
+  extraPayload?: Record<string, any> // extra fields merged into the POST body (e.g. add-set details)
   onSuccess: (info: { squarePaymentId: string; cardSaved: boolean }) => void
   onClose: () => void
 }
@@ -45,7 +47,8 @@ export interface AdminCardChargeProps {
 export default function AdminCardCharge({
   amount, title = 'CHARGE CARD', description, bookingId, newTotal,
   customerId, customerEmail, customerPhone, customerName,
-  sendSmsDefault = true, onSuccess, onClose,
+  sendSmsDefault = true, endpoint = '/api/admin/charge-manual', extraPayload,
+  onSuccess, onClose,
 }: AdminCardChargeProps) {
   const [sdkReady, setSdkReady] = useState(false)
   const [sdkError, setSdkError] = useState<string | null>(null)
@@ -88,7 +91,7 @@ export default function AdminCardCharge({
         setError(tok.errors?.[0]?.message || 'Please check the card details.')
         setCharging(false); return
       }
-      const res = await fetch('/api/admin/charge-manual', {
+      const res = await fetch(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceId: tok.token,
@@ -102,6 +105,7 @@ export default function AdminCardCharge({
           phone: customerPhone || undefined,
           customerName: customerName || undefined,
           sendSms,
+          ...(extraPayload || {}),
         }),
       })
       const d = await res.json()
@@ -115,7 +119,7 @@ export default function AdminCardCharge({
       setError('Something went wrong. Please try again.')
       setCharging(false)
     }
-  }, [amount, description, bookingId, newTotal, customerId, customerEmail, customerPhone, customerName, saveCard, sendSms, charging, onSuccess])
+  }, [amount, description, bookingId, newTotal, customerId, customerEmail, customerPhone, customerName, saveCard, sendSms, charging, onSuccess, endpoint, extraPayload])
 
   const label: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)' }
 

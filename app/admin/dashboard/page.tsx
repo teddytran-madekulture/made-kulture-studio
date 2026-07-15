@@ -5,6 +5,7 @@ import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from 
 import { useIsMobile } from '@/lib/use-is-mobile'
 import ReviewSettingsCard from '@/components/ReviewSettingsCard'
 import AdminCardCharge from '@/components/AdminCardCharge'
+import AddSetModal from '@/components/AddSetModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -388,6 +389,7 @@ export default function AdminDashboard() {
   const [calDate,       setCalDate]       = useState(todayStr)
   const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
+  const [addSetFor,     setAddSetFor]     = useState<Booking | null>(null)  // "add another set" modal
   const [nowHour,       setNowHour]       = useState(getNowHour)
 
   // Customer search
@@ -3469,6 +3471,12 @@ export default function AdminDashboard() {
                 EDIT BOOKING
               </button>
             )}
+            {detailBooking.status !== 'cancelled' && (
+              <button onClick={() => setAddSetFor(detailBooking)}
+                style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#4ade80' }}>
+                + ADD ANOTHER SET
+              </button>
+            )}
             {detailBooking.customers?.phone && (
               <button onClick={() => window.open(`sms:${detailBooking.customers?.phone}`, '_blank')}
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
@@ -3634,6 +3642,17 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ADD ANOTHER SET */}
+      {addSetFor && (
+        <AddSetModal
+          booking={addSetFor as any}
+          sets={Object.entries(SET_RATES).map(([name, rate]) => ({ name, rate }))}
+          defaultDate={localDateStr(addSetFor.start_time)}
+          onClose={() => setAddSetFor(null)}
+          onSuccess={() => { setAddSetFor(null); setDetailBooking(null); fetchBookings() }}
+        />
       )}
 
       {/* MANUAL KEYED-IN CARD CHARGE */}
