@@ -388,6 +388,7 @@ export default function AdminDashboard() {
   }
   const [calDate,       setCalDate]       = useState(todayStr)
   const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
+  const [agendaMode,    setAgendaMode]    = useState<'upcoming' | 'past'>('upcoming')  // Agenda: look forward or back
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [addSetFor,     setAddSetFor]     = useState<Booking | null>(null)  // "add another set" modal
   const [nowHour,       setNowHour]       = useState(getNowHour)
@@ -1146,7 +1147,7 @@ export default function AdminDashboard() {
   const calHeaderLabel = calMode === 'day' ? fmtCalHeader(calDate)
     : calMode === 'week' ? weekLabel(calDate)
     : calMode === 'month' ? monthLabel(calDate)
-    : 'Upcoming'
+    : (agendaMode === 'past' ? 'Past' : 'Upcoming')
   const nowTop      = (nowHour - CAL_START) * SLOT_H * 2
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -1944,23 +1945,40 @@ export default function AdminDashboard() {
             {/* AGENDA — chronological list of upcoming bookings */}
             {calMode === 'agenda' && (() => {
               const now = new Date()
-              const upcoming = bookings.filter(b => b.status !== 'cancelled' && new Date(b.end_time) >= now).sort(sortByStart)
-              if (!upcoming.length) return <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No upcoming bookings.</div>
+              const isPast = agendaMode === 'past'
+              // Past: most-recent first (easy to find who was in that day). Upcoming: soonest first.
+              const list = bookings
+                .filter(b => b.status !== 'cancelled' && (isPast ? new Date(b.end_time) < now : new Date(b.end_time) >= now))
+                .sort(isPast ? (a, b) => -sortByStart(a, b) : sortByStart)
+              const toggle = (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  {(['upcoming', 'past'] as const).map(m => (
+                    <button key={m} onClick={() => setAgendaMode(m)}
+                      style={{ background: agendaMode === m ? '#fff' : 'transparent', color: agendaMode === m ? '#080808' : 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12, letterSpacing: '0.08em' }}>
+                      {m === 'upcoming' ? 'Upcoming' : 'Past'}
+                    </button>
+                  ))}
+                </div>
+              )
+              if (!list.length) return <div>{toggle}<div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No {isPast ? 'past' : 'upcoming'} bookings.</div></div>
               let lastDate = ''
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {upcoming.map(b => {
-                    const d = localDateStr(b.start_time); const showHeader = d !== lastDate; lastDate = d
-                    return (
-                      <div key={b.id}>
-                        {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
-                        <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
-                          <div><div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
-                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_price != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_price}</div>}</div>
+                <div>
+                  {toggle}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {list.map(b => {
+                      const d = localDateStr(b.start_time); const showHeader = d !== lastDate; lastDate = d
+                      return (
+                        <div key={b.id}>
+                          {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
+                          <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
+                            <div><div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
+                            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_price != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_price}</div>}</div>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })()}
