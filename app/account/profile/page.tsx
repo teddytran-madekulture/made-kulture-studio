@@ -30,11 +30,12 @@ interface Profile {
 // Defined at module scope (NOT inside the page component) so its identity is
 // stable across renders — otherwise each keystroke remounts the input and the
 // cursor/focus is lost.
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
       <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
         {label}
+        {hint && <span style={{ marginLeft: 8, color: '#e6c07a', fontSize: 10, letterSpacing: '0.04em' }}>· {hint}</span>}
       </label>
       {children}
     </div>
@@ -192,9 +193,32 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {form.directory_opt_in && missing.length > 0 && (
+        {/* Always-visible directory guidance so people know what to do. */}
+        {isCustomer ? (
           <div style={{ background: 'rgba(230,192,122,0.08)', border: '1px solid rgba(230,192,122,0.3)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', lineHeight: 1.55, marginBottom: 24 }}>
-            <strong>Finish your profile to appear in the directory.</strong> Still needed: {missing.join(', ')}.
+            <strong>Want to join the Made Kulture creator directory?</strong> Your account is set to <strong>Customer</strong> (booking only). Switch it to <strong>Creative</strong> or <strong>Brand</strong> below, then fill out the fields marked <span style={{ whiteSpace: 'nowrap' }}>“· for directory”</span> so brands and other creatives can find you.
+          </div>
+        ) : (form.directory_opt_in && missing.length === 0) ? (
+          <div style={{ background: 'rgba(60,255,120,0.08)', border: '1px solid rgba(60,255,120,0.25)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: '#6bffaa', lineHeight: 1.55, marginBottom: 24 }}>
+            ✓ You&apos;re listed in the creator directory. Other members can find you by role.
+          </div>
+        ) : (
+          <div style={{ background: 'rgba(230,192,122,0.08)', border: '1px solid rgba(230,192,122,0.3)', borderRadius: 8, padding: '16px 18px', marginBottom: 24 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', fontWeight: 600, marginBottom: 12 }}>To appear in the creator directory:</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { done: !!(form.full_name ?? '').trim(), label: isBrand ? 'Add your company name' : 'Add your name' },
+                ...(!isBrand ? [{ done: (form.roles?.length ?? 0) > 0, label: 'Pick at least one role' }] : []),
+                { done: !!(form.bio ?? '').trim(), label: isBrand ? 'Write a short about' : 'Write a short bio' },
+                { done: portfolioCount > 0 || (form.links?.length ?? 0) > 0 || !!(form.instagram ?? '').trim(), label: 'Add a portfolio photo, a link, or Instagram' },
+                { done: form.directory_opt_in, label: 'Turn on “List me in the creative directory” (below)' },
+              ].map((s, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'Inter', fontSize: 13, color: s.done ? 'rgba(255,255,255,0.45)' : '#fff' }}>
+                  <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: '50%', border: `1px solid ${s.done ? '#6bffaa' : 'rgba(230,192,122,0.5)'}`, color: '#6bffaa', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>{s.done ? '✓' : ''}</span>
+                  <span style={{ textDecoration: s.done ? 'line-through' : 'none' }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -216,7 +240,7 @@ export default function ProfilePage() {
           )}
         </Field>
 
-        <Field label={isBrand ? 'LOGO' : 'PROFILE PHOTO'}>
+        <Field label={isBrand ? 'LOGO' : 'PROFILE PHOTO'} hint="for directory">
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {form.avatar_url
@@ -233,7 +257,7 @@ export default function ProfilePage() {
           </div>
         </Field>
 
-        <Field label={isBrand ? 'COMPANY NAME' : 'FULL NAME'}>
+        <Field label={isBrand ? 'COMPANY NAME' : 'FULL NAME'} hint="for directory">
           <input value={form.full_name} onChange={set('full_name')} placeholder={isBrand ? 'Your company name' : 'Your full name'} style={inputStyle} />
         </Field>
         <Field label="EMAIL">
@@ -251,7 +275,7 @@ export default function ProfilePage() {
         </Field>
 
         {!isBrand && (
-          <Field label="WHAT YOU DO">
+          <Field label="WHAT YOU DO" hint="for directory">
             <RolePicker
               value={form.roles}
               onChange={roles => setForm(f => ({ ...f, roles }))}
@@ -260,7 +284,7 @@ export default function ProfilePage() {
           </Field>
         )}
 
-        <Field label={isBrand ? 'ABOUT / WHAT YOU’RE LOOKING FOR' : 'BIO'}>
+        <Field label={isBrand ? 'ABOUT / WHAT YOU’RE LOOKING FOR' : 'BIO'} hint="for directory">
           <textarea
             value={form.bio}
             onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
@@ -272,7 +296,7 @@ export default function ProfilePage() {
           <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6, textAlign: 'right' }}>{form.bio.length}/600</div>
         </Field>
 
-        <Field label="PORTFOLIO">
+        <Field label="PORTFOLIO" hint="for directory">
           <PortfolioManager onCountChange={setPortfolioCount} />
         </Field>
 

@@ -11,7 +11,7 @@ export default async function AccountDashboard() {
 
   const { data: profile } = await supabase
     .from('customer_profiles')
-    .select('full_name')
+    .select('full_name, account_type, directory_opt_in')
     .eq('id', user!.id)
     .single()
 
@@ -40,15 +40,33 @@ export default async function AccountDashboard() {
   const creditCents = await getCreditBalance(user!.id)
 
   const firstName = profile?.full_name?.split(' ')[0] ?? user!.email?.split('@')[0]
+  const acctType = (profile as any)?.account_type ?? 'customer'
+  const inDirectory = !!(profile as any)?.directory_opt_in
 
   return (
     <div>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, letterSpacing: '0.02em', margin: '0 0 4px' }}>
         HEY {firstName?.toUpperCase()}
       </h1>
-      <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', margin: '0 0 40px' }}>
+      <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', margin: '0 0 24px' }}>
         {user!.email}
       </p>
+
+      {/* Nudge people to complete their profile + join the creator directory. */}
+      {!inDirectory && (
+        <Link href="/account/profile" style={{ textDecoration: 'none' }}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(230,192,122,0.14), rgba(230,192,122,0.03))', border: '1px solid rgba(230,192,122,0.35)', borderRadius: 8, padding: '16px 20px', marginBottom: 36 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#e6c07a', marginBottom: 4 }}>
+              {acctType === 'customer' ? 'Join the Made Kulture creator directory →' : 'You’re not in the creator directory yet →'}
+            </div>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
+              {acctType === 'customer'
+                ? 'Switch your account to Creative or Brand and complete your profile so brands and other creatives can find you.'
+                : 'Complete your profile and switch on your listing so other members can find you by role.'}
+            </div>
+          </div>
+        </Link>
+      )}
 
       {/* Quick stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 40 }}>
