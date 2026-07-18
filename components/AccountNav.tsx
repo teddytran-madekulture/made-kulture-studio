@@ -7,6 +7,7 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 const ITEMS = [
   { href: '/account', label: 'Dashboard' },
   { href: '/account/bookings', label: 'My Bookings' },
+  { href: '/account/plus', label: 'Membership' },
   { href: '/account/directory', label: 'Directory' },
   { href: '/account/castings', label: 'Castings' },
   { href: '/account/messages', label: 'Messages' },

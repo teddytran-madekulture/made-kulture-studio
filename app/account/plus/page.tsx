@@ -11,6 +11,7 @@ function fmtDate(ms: number) {
 const BENEFITS = [
   ['See the calendar inside 48 hours', 'Members can view near-term availability — the slots non-members can’t see.'],
   ['Request short-notice bookings', 'Ask to book inside the 48-hour window. The studio approves each request, then you have a short window to grab it.'],
+  ['Cancellation protection', 'Life happens. Cancel a booking — even last minute — and its full value comes back as studio credit for your next session instead of being forfeited. No-shows can be credited too, with a quick heads-up to the studio.'],
 ]
 
 export default function PlusPage() {
@@ -32,7 +33,7 @@ export default function PlusPage() {
       <Link href="/account" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>← Account</Link>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, letterSpacing: '0.02em', margin: '10px 0 4px' }}>MADE KULTURE PLUS</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.45)', margin: '0 0 28px' }}>
-        Membership for creators who book on short notice. <strong style={{ color: '#e6c07a' }}>{priceLabel}/year.</strong>
+        Short-notice booking access and cancellation protection for creators. <strong style={{ color: '#e6c07a' }}>{priceLabel}/year.</strong>
       </p>
 
       {loading ? (
