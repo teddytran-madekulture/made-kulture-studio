@@ -1553,11 +1553,11 @@ export default function AdminDashboard() {
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.customer_name} <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>{r.customer_email}</span></div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-                    {r.desired_date ? `Wants ${r.desired_date}${r.desired_start != null ? ' · ' + fmt12(Number(r.desired_start)) : ''}` : 'Any near-term slot'}{r.note ? ` · “${r.note}”` : ''}
+                    {r.desired_set_name ? `${r.desired_set_name} · ` : ''}{r.desired_date ? `${r.desired_date}${r.desired_start != null ? ' · ' + fmt12(Number(r.desired_start)) : ''}` : 'Any near-term slot'}{r.note ? ` · “${r.note}”` : ''}
                   </div>
                 </div>
-                <button disabled={shortReqBusy === r.approve_token} onClick={() => resolveShortReq(r.approve_token, 'approve_48h')}
-                  style={{ background: '#d4a843', border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>ALLOW 48H</button>
+                <button disabled={shortReqBusy === r.approve_token} onClick={() => resolveShortReq(r.approve_token, 'approve_1h')}
+                  style={{ background: '#d4a843', border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>ALLOW 1 HR</button>
                 <input type="date" value={shortReqUntil[r.id] ?? ''} onChange={e => setShortReqUntil(m => ({ ...m, [r.id]: e.target.value }))}
                   style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, padding: '6px 8px' }} />
                 <button disabled={shortReqBusy === r.approve_token} onClick={() => shortReqUntil[r.id] ? resolveShortReq(r.approve_token, 'approve_until', shortReqUntil[r.id]) : alert('Pick a date first')}

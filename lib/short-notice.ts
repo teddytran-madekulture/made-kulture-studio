@@ -22,10 +22,31 @@ export function chiNowDecimal(): number {
 
 // True when the customer may book same-day right now. `po` is the customer's
 // pricing_overrides object (may be null).
+//
+// Two grant shapes are supported, and the customer is active if EITHER is
+// currently valid:
+//   • short_notice_expires_at — a precise timestamp window (e.g. 1 hour from
+//     approval of a short-notice request). Once it passes, access ends.
+//   • short_notice_until — a whole-day expiry date (manual admin grants / longer
+//     standing access). Active through that date, inclusive.
+// If short_notice is on with NEITHER field set, it's an indefinite grant
+// (on until turned off) — preserves the legacy behavior.
 export function shortNoticeActive(po: any): boolean {
   if (!po || !po.short_notice) return false
-  if (!po.short_notice_until) return true // no expiry → active until turned off
-  return String(po.short_notice_until) >= todayDateStr() // active through the "until" date (inclusive)
+  const exp = po.short_notice_expires_at
+  const until = po.short_notice_until
+  if (exp && Date.now() < new Date(exp).getTime()) return true   // timed window still open
+  if (until && String(until) >= todayDateStr()) return true       // date window still open
+  if (!exp && !until) return true                                 // indefinite grant
+  return false
+}
+
+// The active timed-window expiry (ms epoch) if the customer is inside a timed
+// short-notice grant right now, else null. Drives the customer-facing countdown.
+export function shortNoticeExpiresAtMs(po: any): number | null {
+  if (!po || !po.short_notice || !po.short_notice_expires_at) return null
+  const ms = new Date(po.short_notice_expires_at).getTime()
+  return Number.isFinite(ms) && ms > Date.now() ? ms : null
 }
 
 // True when the customer may VIEW availability inside the 48-hr window. This is

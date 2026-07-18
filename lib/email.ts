@@ -599,7 +599,7 @@ export async function sendCancellationOwnerAlert(opts: {
 
 // ─── Short-notice booking request (to owner) ──────────────────────────────────
 export async function sendShortNoticeRequestAlert(data: {
-  customerName: string; customerEmail: string; desiredDate?: string | null; desiredStart?: number | null; note?: string | null; approveUrl: string
+  customerName: string; customerEmail: string; desiredSetName?: string | null; desiredDate?: string | null; desiredStart?: number | null; note?: string | null; approveUrl: string
 }) {
   const when = data.desiredDate
     ? `${formatDateLabel(data.desiredDate)}${data.desiredStart != null ? ' · ' + formatTimeLabel(Math.floor(data.desiredStart)) : ''}`
@@ -609,6 +609,7 @@ export async function sendShortNoticeRequestAlert(data: {
     <h1 style="margin:0 0 8px;font-size:20px;color:#fff;">Short-notice booking request</h1>
     <p style="margin:0 0 20px;font-size:14px;color:#aaa;line-height:1.6;"><strong style="color:#fff;">${esc(data.customerName)}</strong> (${esc(data.customerEmail)}) is asking to book inside the 48-hour window.</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #333;border-bottom:1px solid #333;margin-bottom:24px;">
+      ${data.desiredSetName ? row('SET', esc(data.desiredSetName)) : ''}
       ${row('REQUESTED', when)}
       ${data.note ? row('NOTE', esc(data.note)) : ''}
     </table>
@@ -626,12 +627,15 @@ export async function sendShortNoticeRequestAlert(data: {
 
 // ─── Short-notice approved (to customer) ──────────────────────────────────────
 export async function sendShortNoticeApprovedEmail(data: {
-  customerName: string; customerEmail: string; grantedUntil: string
+  customerName: string; customerEmail: string; grantedUntil?: string | null; timedLabel?: string | null
 }) {
   const first = (data.customerName || '').split(' ')[0] || 'there'
+  const windowText = data.timedLabel
+    ? `<strong style="color:#fff;">${esc(data.timedLabel)}</strong>`
+    : `through <strong style="color:#fff;">${formatDateLabel(data.grantedUntil || '')}</strong>`
   const body = `
     <h1 style="margin:0 0 8px;font-size:20px;color:#fff;">You're cleared to book short-notice</h1>
-    <p style="margin:0 0 20px;font-size:14px;color:#aaa;line-height:1.6;">Hi ${esc(first)} — you can now book inside the 48-hour window through <strong style="color:#fff;">${formatDateLabel(data.grantedUntil)}</strong>. Head to availability and grab your time.</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#aaa;line-height:1.6;">Hi ${esc(first)} — you can now book inside the 48-hour window ${windowText}. Head to availability and grab your time.</p>
     <a href="${APP_URL}/availability" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">Book now</a>
   `
   return sendEmail('short_notice_approved', {

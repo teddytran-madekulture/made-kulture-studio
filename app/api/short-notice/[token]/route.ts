@@ -16,16 +16,29 @@ function datePlusDays(n: number): string {
   return d.toISOString().split('T')[0]
 }
 
+// Read the studio-configured grant length in minutes (default 60).
+async function grantMinutes(): Promise<number> {
+  const { data } = await service.from('studio_settings').select('value').eq('key', 'short_notice_grant_minutes').maybeSingle()
+  const n = Number(data?.value)
+  return Number.isFinite(n) && n > 0 ? n : 60
+}
+
 // GET /api/short-notice/[token] — request details for the owner's approval page.
 export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
   const { data, error } = await service
     .from('short_notice_requests')
-    .select('customer_name, customer_email, desired_date, desired_start, note, status, granted_until, requested_at')
+    .select('customer_name, customer_email, desired_set, desired_date, desired_start, note, status, granted_until, granted_expires_at, requested_at')
     .eq('approve_token', params.token)
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Request not found' }, { status: 404 })
-  return NextResponse.json({ request: data })
+  // Resolve a readable set name for display (falls back to the slug).
+  let desiredSetName: string | null = null
+  if (data.desired_set) {
+    const { data: setRow } = await service.from('sets').select('name').eq('slug', data.desired_set).maybeSingle()
+    desiredSetName = setRow?.name || data.desired_set
+  }
+  return NextResponse.json({ request: { ...data, desired_set_name: desiredSetName }, grantMinutes: await grantMinutes() })
 }
 
 // POST /api/short-notice/[token] — approve (48h or until date) or deny.
@@ -48,13 +61,20 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     return NextResponse.json({ ok: true, status: 'denied' })
   }
 
-  if (action !== 'approve_48h' && action !== 'approve_until') {
+  if (action !== 'approve_1h' && action !== 'approve_48h' && action !== 'approve_until') {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }
-  const until = action === 'approve_48h'
-    ? datePlusDays(2)
-    : (typeof body.until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.until) ? body.until : null)
-  if (!until) return NextResponse.json({ error: 'A valid date is required' }, { status: 400 })
+
+  // Timed window (the default): open short-notice booking for N minutes only.
+  const timed = action === 'approve_1h'
+  const mins = timed ? await grantMinutes() : 0
+  const expiresIso = timed ? new Date(Date.now() + mins * 60_000).toISOString() : null
+  const until = timed
+    ? null
+    : (action === 'approve_48h'
+        ? datePlusDays(2)
+        : (typeof body.until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.until) ? body.until : null))
+  if (!timed && !until) return NextResponse.json({ error: 'A valid date is required' }, { status: 400 })
 
   // Merge into the customer's pricing_overrides (preserve any existing overrides).
   const custQ = service.from('customers').select('id, pricing_overrides, email')
@@ -63,17 +83,40 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     : await custQ.eq('email', reqRow.customer_email).maybeSingle()
   if (!cust) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
 
-  const overrides = { ...(cust.pricing_overrides || {}), short_notice: true, short_notice_until: until }
+  // Timed grant sets a precise expiry and clears any stale date; a date grant
+  // sets the day and clears any stale timed expiry.
+  const overrides = {
+    ...(cust.pricing_overrides || {}),
+    short_notice: true,
+    short_notice_until: timed ? null : until,
+    short_notice_expires_at: timed ? expiresIso : null,
+  }
   const { error: upErr } = await service.from('customers').update({ pricing_overrides: overrides }).eq('id', cust.id)
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
-  await service.from('short_notice_requests').update({ status: 'approved', granted_until: until, resolved_at: new Date().toISOString() }).eq('id', reqRow.id)
+  await service.from('short_notice_requests').update({
+    status: 'approved',
+    granted_until: until,
+    granted_expires_at: expiresIso,
+    resolved_at: new Date().toISOString(),
+  }).eq('id', reqRow.id)
+
+  const bookUrl = `${(process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')}/availability`
+  // Houston-time clock label for when the timed window closes.
+  const clock = timed
+    ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(expiresIso!))
+    : ''
+  const timedLabel = timed ? `for the next ${mins} minutes — until ${clock}` : null
 
   // Notify the customer — non-fatal.
   await Promise.allSettled([
-    sendShortNoticeApprovedEmail({ customerName: reqRow.customer_name || '', customerEmail: reqRow.customer_email, grantedUntil: until }),
-    reqRow.customer_phone ? sendSMS(reqRow.customer_phone, `✅ Made Kulture: you're approved to book short-notice through ${until}. Book at ${(process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')}/availability`) : Promise.resolve(),
+    sendShortNoticeApprovedEmail({ customerName: reqRow.customer_name || '', customerEmail: reqRow.customer_email, grantedUntil: until, timedLabel }),
+    reqRow.customer_phone
+      ? sendSMS(reqRow.customer_phone, timed
+          ? `✅ Made Kulture: you're approved to book short-notice for the next ${mins} min (until ${clock}). Book now: ${bookUrl}`
+          : `✅ Made Kulture: you're approved to book short-notice through ${until}. Book at ${bookUrl}`)
+      : Promise.resolve(),
   ])
 
-  return NextResponse.json({ ok: true, status: 'approved', granted_until: until })
+  return NextResponse.json({ ok: true, status: 'approved', granted_until: until, granted_expires_at: expiresIso })
 }

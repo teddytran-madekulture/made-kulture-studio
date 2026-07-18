@@ -12,7 +12,7 @@ function fmtDate(d: string) {
 }
 function plusDays(n: number) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0] }
 
-interface Req { customer_name: string; customer_email: string; desired_date: string | null; desired_start: number | null; note: string | null; status: string; granted_until: string | null }
+interface Req { customer_name: string; customer_email: string; desired_set_name: string | null; desired_date: string | null; desired_start: number | null; note: string | null; status: string; granted_until: string | null; granted_expires_at: string | null }
 
 export default function ApprovePage() {
   const params = useParams()
@@ -22,12 +22,13 @@ export default function ApprovePage() {
   const [busy, setBusy]     = useState(false)
   const [done, setDone]     = useState<string | null>(null)   // 'approved' | 'denied'
   const [until, setUntil]   = useState('')
+  const [grantMins, setGrantMins] = useState(60)
   const [err, setErr]       = useState('')
 
   useEffect(() => {
     fetch(`/api/short-notice/${token}`)
       .then(r => r.json())
-      .then(d => { if (d.request) { setReq(d.request); if (d.request.status !== 'pending') setDone(d.request.status) } else setErr(d.error || 'Not found') })
+      .then(d => { if (d.request) { setReq(d.request); if (typeof d.grantMinutes === 'number') setGrantMins(d.grantMinutes); if (d.request.status !== 'pending') setDone(d.request.status) } else setErr(d.error || 'Not found') })
       .catch(() => setErr('Could not load the request.'))
       .finally(() => setLoad(false))
   }, [token])
@@ -60,7 +61,7 @@ export default function ApprovePage() {
       </div>
       <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
         {done === 'approved'
-          ? `${req?.customer_name} can now book short-notice${req?.granted_until ? ` through ${fmtDate(req.granted_until)}` : ''}. They've been notified.`
+          ? `${req?.customer_name} can now book short-notice${req?.granted_expires_at ? ' for a limited window' : req?.granted_until ? ` through ${fmtDate(req.granted_until)}` : ''}. They've been notified.`
           : `${req?.customer_name}'s request was denied.`}
       </p>
     </div></div>
@@ -73,8 +74,14 @@ export default function ApprovePage() {
       <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 20 }}>{req?.customer_email}</div>
 
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '14px 0', marginBottom: 22, fontSize: 14 }}>
+        {req?.desired_set_name && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ color: 'rgba(255,255,255,0.4)' }}>Set</span>
+            <span>{req.desired_set_name}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: req?.note ? 8 : 0 }}>
-          <span style={{ color: 'rgba(255,255,255,0.4)' }}>Wants</span>
+          <span style={{ color: 'rgba(255,255,255,0.4)' }}>When</span>
           <span>{req?.desired_date ? `${fmtDate(req.desired_date)}${req.desired_start != null ? ' · ' + fmt12(req.desired_start) : ''}` : 'Any near-term slot'}</span>
         </div>
         {req?.note && <div style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>“{req.note}”</div>}
@@ -82,10 +89,13 @@ export default function ApprovePage() {
 
       {err && <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 14 }}>{err}</div>}
 
-      <button onClick={() => resolve('approve_48h')} disabled={busy}
-        style={{ width: '100%', background: '#d4a843', color: '#080808', border: 'none', padding: '14px', cursor: busy ? 'default' : 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', marginBottom: 12, opacity: busy ? 0.6 : 1 }}>
-        ALLOW · NEXT 48 HOURS
+      <button onClick={() => resolve('approve_1h')} disabled={busy}
+        style={{ width: '100%', background: '#d4a843', color: '#080808', border: 'none', padding: '14px', cursor: busy ? 'default' : 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', marginBottom: 6, opacity: busy ? 0.6 : 1 }}>
+        ALLOW · {grantMins === 60 ? '1 HOUR' : `${grantMins} MIN`} TO BOOK
       </button>
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginBottom: 14, lineHeight: 1.5 }}>
+        Opens short-notice booking for {grantMins === 60 ? 'one hour' : `${grantMins} minutes`}. If they don&apos;t book in time, it closes and they&apos;ll have to request again.
+      </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <input type="date" value={until} min={plusDays(0)} onChange={e => setUntil(e.target.value)}
