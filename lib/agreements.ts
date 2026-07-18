@@ -21,7 +21,7 @@ You must be at least 18 years old to book and to act as the responsible party on
 - Individual set rentals start at $40/hour. Certain premium sets (for example, The Watering Hole and Studio One) are priced higher and may carry their own minimum booking lengths. The rate and any minimum for each set are shown at the time of booking.
 - Each set holds up to 5 people total — this includes photographers, models, stylists, assistants, clients, and children. Everyone present with your party counts toward this limit.
 - A party of 6–7 may use a single set with a per-person buffer fee added at checkout. Larger parties require additional sets or a full-warehouse buyout.
-- Arriving with more people than your booking allows may result in additional per-guest charges to the card on file, and — for repeated or serious violations — a note or ban on your account. Extra guests are not permitted on the premises even if not actively on the set.
+- Arriving with more people than your set's guest limit allows (up to 5 people per set) may result in a per-guest penalty charge to the card on file, and — for repeated or serious violations — a note or ban on your account. Extra guests are not permitted on the premises even if not actively on the set.
 
 ## Payment
 

@@ -1046,7 +1046,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   {booking.guestAck && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
                 </div>
                 <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
-                  I confirm my party is <strong style={{ color: '#fff' }}>{booking.guests ?? '—'} {booking.guests === 1 ? 'person' : 'people'}</strong> total. I understand extra guests beyond this may be charged <strong style={{ color: '#fff' }}>${guestPricing.penaltyPerHead}/guest</strong> and can result in a note or ban on my account.
+                  I understand extra guests beyond the <strong style={{ color: '#fff' }}>{guestPricing.capacityPerSet}-person limit</strong> may be charged <strong style={{ color: '#fff' }}>${guestPricing.penaltyPerHead}/guest</strong> penalty fee. Multiple incidences can result in a note or ban on my account.
                 </p>
               </div>}
             </div>
