@@ -88,6 +88,7 @@ export default function AvailabilityPage() {
   const [loading, setLoading]     = useState(true)
   const [menuOpen, setMenuOpen]   = useState(false)
   const [mobileSet, setMobileSet] = useState('set-a')
+  const [nearTermAccess, setNearTermAccess] = useState<boolean | null>(null) // null=loading, false=non-member (show Plus CTA)
 
   useEffect(() => {
     setLoading(true)
@@ -109,10 +110,12 @@ export default function AvailabilityPage() {
       .then(d => {
         const po = d?.pricingOverrides
         const t = todayDateStr()
-        if (shortNoticeViewActive(po)) { setViewMin(t); setDate(t) }  // can see near-term
-        if (shortNoticeActive(po))     { setBookMin(t) }              // can book near-term
+        const canView = shortNoticeViewActive(po)
+        setNearTermAccess(canView)
+        if (canView) { setViewMin(t); setDate(t) }  // can see near-term
+        if (shortNoticeActive(po)) { setBookMin(t) } // can book near-term
       })
-      .catch(() => {})
+      .catch(() => setNearTermAccess(false))
   }, [])
 
   // Is the currently viewed date bookable, or view-only (inside the 48hr window)?
@@ -263,6 +266,21 @@ export default function AvailabilityPage() {
             BOOK FULL WAREHOUSE ↗
           </Link>
         </div>
+
+        {/* Plus upsell — shown to non-members (no short-notice access) at the 48hr wall */}
+        {nearTermAccess === false && (
+          <Link href="/account/plus" style={{ textDecoration: 'none' }}>
+            <div style={{ marginBottom: 28, padding: '16px 20px', background: 'linear-gradient(135deg, rgba(212,168,67,0.16), rgba(212,168,67,0.03))', border: '1px solid rgba(212,168,67,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.04em', color: '#e6c07a', marginBottom: 4 }}>BOOKING WITHIN 48 HOURS?</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', maxWidth: 520, lineHeight: 1.5 }}>
+                  Made Kulture Plus unlocks short-notice booking — and if you ever have to cancel, even last minute, your booking comes back as studio credit instead of being forfeited.
+                </div>
+              </div>
+              <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: '#000', background: '#d4a843', padding: '12px 24px', borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>GO PLUS ↗</span>
+            </div>
+          </Link>
+        )}
 
         {/* View-only notice inside the 48hr window */}
         {!dateBookable && (
