@@ -119,7 +119,13 @@ interface PricingOverrides {
   comp_no_card?: boolean   // $0 bookings skip the card entirely
   short_notice?: boolean            // allow BOOKING inside the 48-hr advance window
   short_notice_until?: string | null // optional expiry date (YYYY-MM-DD); blank = until turned off
+  short_notice_expires_at?: string | null // precise timed booking window (ISO)
   short_notice_view?: boolean       // allow VIEWING availability inside the 48-hr window (see-only)
+  plus?: boolean                    // Plus membership active
+  plus_started_at?: string | null
+  plus_expires_at?: string | null   // ISO; membership renewal/expiry
+  plus_auto_renew?: boolean
+  plus_comp?: boolean               // comped (admin-granted, no charge)
 }
 
 interface CustomerDetailData {
@@ -466,6 +472,7 @@ export default function AdminDashboard() {
   const [custNoteAdding,   setCustNoteAdding]   = useState(false)
   const [custPricingDraft,  setCustPricingDraft]  = useState<{ hourly_rate: string; equipment_discount_percent: string; sets: Record<string, string>; comp_no_card: boolean; short_notice: boolean; short_notice_until: string; short_notice_view: boolean }>({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false, short_notice: false, short_notice_until: '', short_notice_view: false })
   const [custPricingSaving, setCustPricingSaving] = useState(false)
+  const [plusBusy, setPlusBusy] = useState(false)
   const [dupGroups,         setDupGroups]         = useState<any[]>([])
   const [dupLoading,        setDupLoading]         = useState(false)
   const [dupPanelOpen,      setDupPanelOpen]       = useState(false)
@@ -599,6 +606,19 @@ export default function AdminDashboard() {
       if (match) fetchCustomerDetail(match.id)
     })()
   }, [fetchCustomerDetail])
+
+  // Grant (comp) / revoke / toggle-auto-renew a customer's Plus membership.
+  const plusAction = async (action: string, extra: Record<string, any> = {}) => {
+    if (!custDetail) return
+    setPlusBusy(true)
+    try {
+      await fetch(`/api/admin/customers/${custDetail.id}/plus`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...extra }),
+      })
+      await fetchCustomerDetail(custDetail.id)
+    } finally { setPlusBusy(false) }
+  }
 
   const fetchEmailSettings = useCallback(async () => {
     setEmailLoading(true)
@@ -3306,6 +3326,32 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
+                    {/* Plus membership */}
+                    {(() => {
+                      const po: any = custDetail!.pricingOverrides || {}
+                      const active = !!po.plus && (!po.plus_expires_at || Date.now() < new Date(po.plus_expires_at).getTime())
+                      const expLabel = po.plus_expires_at ? new Date(po.plus_expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+                      return (
+                        <div style={{ marginBottom: 14, padding: '12px 14px', border: `1px solid ${active ? 'rgba(212,168,67,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, background: active ? 'rgba(212,168,67,0.06)' : 'transparent' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: active ? 8 : 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', color: active ? '#e6c07a' : 'rgba(255,255,255,0.55)' }}>
+                              PLUS MEMBERSHIP{active ? ' · ACTIVE' : ''}{active && po.plus_comp ? ' (COMP)' : ''}
+                            </div>
+                            {active
+                              ? <button disabled={plusBusy} onClick={() => plusAction('revoke')} style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff8080', fontSize: 10, letterSpacing: '0.08em', padding: '5px 10px', cursor: 'pointer' }}>REVOKE</button>
+                              : <button disabled={plusBusy} onClick={() => plusAction('grant')} style={{ background: '#d4a843', border: 'none', color: '#080808', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', padding: '6px 12px', cursor: 'pointer' }}>GRANT · 1 YEAR</button>}
+                          </div>
+                          {active && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{expLabel ? `Renews/expires ${expLabel}` : 'No expiry'} · auto-renew {po.plus_auto_renew ? 'on' : 'off'}</span>
+                              <button disabled={plusBusy} onClick={() => plusAction('autorenew', { autoRenew: !po.plus_auto_renew })} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 10, letterSpacing: '0.06em', padding: '5px 10px', cursor: 'pointer' }}>{po.plus_auto_renew ? 'TURN OFF AUTO-RENEW' : 'TURN ON AUTO-RENEW'}</button>
+                            </div>
+                          )}
+                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 8, lineHeight: 1.4 }}>Grants calendar view + short-notice request eligibility. Booking still needs your per-request approval.</div>
+                        </div>
+                      )
+                    })()}
+
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button disabled={custPricingSaving} onClick={async () => {
                         setCustPricingSaving(true)
@@ -3321,6 +3367,14 @@ export default function AdminDashboard() {
                           if (custPricingDraft.short_notice_until) overrides.short_notice_until = custPricingDraft.short_notice_until
                         }
                         if (custPricingDraft.short_notice_view) overrides.short_notice_view = true
+                        // Preserve fields managed outside this panel (Plus membership + any
+                        // active timed short-notice window) so a pricing save doesn't wipe them.
+                        {
+                          const existing: any = custDetail!.pricingOverrides || {}
+                          for (const k of ['plus', 'plus_started_at', 'plus_expires_at', 'plus_auto_renew', 'plus_comp', 'short_notice_expires_at']) {
+                            if (existing[k] !== undefined) (overrides as any)[k] = existing[k]
+                          }
+                        }
                         const payload = Object.keys(overrides).length > 0 ? overrides : null
                         const res = await fetch(`/api/admin/customers/${custDetail!.id}`, {
                           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -3342,12 +3396,17 @@ export default function AdminDashboard() {
                       {hasPricing && (
                         <button disabled={custPricingSaving} onClick={async () => {
                           setCustPricingSaving(true)
+                          // Keep an active Plus membership even when clearing custom pricing.
+                          const existingPo: any = custDetail!.pricingOverrides || {}
+                          const keepPlus: any = {}
+                          for (const k of ['plus', 'plus_started_at', 'plus_expires_at', 'plus_auto_renew', 'plus_comp']) { if (existingPo[k] !== undefined) keepPlus[k] = existingPo[k] }
+                          const clearPayload = Object.keys(keepPlus).length ? keepPlus : null
                           const res = await fetch(`/api/admin/customers/${custDetail!.id}`, {
                             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ pricingOverrides: null }),
+                            body: JSON.stringify({ pricingOverrides: clearPayload }),
                           })
                           if (res.ok) {
-                            setCustDetail(d => d ? { ...d, pricingOverrides: null } : d)
+                            setCustDetail(d => d ? { ...d, pricingOverrides: clearPayload } : d)
                             setCustPricingDraft({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false, short_notice: false, short_notice_until: '', short_notice_view: false })
                             setCustList(list => list.map(x => x.id === custDetail!.id ? { ...x, hasCustom: false, customTags: [] } : x))
                           }

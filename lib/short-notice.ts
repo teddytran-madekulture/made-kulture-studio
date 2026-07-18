@@ -49,10 +49,30 @@ export function shortNoticeExpiresAtMs(po: any): number | null {
   return Number.isFinite(ms) && ms > Date.now() ? ms : null
 }
 
-// True when the customer may VIEW availability inside the 48-hr window. This is
-// a separate, view-only grant (`short_notice_view`); anyone who can BOOK
-// short-notice can obviously also see it.
+// ── Plus membership ──────────────────────────────────────────────────────────
+// A paid "Plus" membership lives on pricing_overrides as:
+//   plus: true, plus_started_at, plus_expires_at (ISO), plus_auto_renew, plus_comp
+// While active it grants short-notice VIEW (see the 48-hr window) + eligibility
+// to REQUEST short-notice booking (owner still approves each request).
+
+// True when the customer's Plus membership is currently active.
+export function plusActive(po: any): boolean {
+  if (!po || !po.plus) return false
+  if (!po.plus_expires_at) return true                       // active until turned off
+  return Date.now() < new Date(po.plus_expires_at).getTime() // active through the expiry
+}
+
+// Plus expiry as ms epoch (for renewal-date display), or null if not active.
+export function plusExpiresAtMs(po: any): number | null {
+  if (!plusActive(po) || !po?.plus_expires_at) return null
+  const ms = new Date(po.plus_expires_at).getTime()
+  return Number.isFinite(ms) ? ms : null
+}
+
+// True when the customer may VIEW availability inside the 48-hr window. Granted
+// by a manual `short_notice_view` flag, by an active Plus membership, or by any
+// booking-level short-notice grant (which implies viewing too).
 export function shortNoticeViewActive(po: any): boolean {
   if (!po) return false
-  return !!po.short_notice_view || shortNoticeActive(po)
+  return !!po.short_notice_view || plusActive(po) || shortNoticeActive(po)
 }
