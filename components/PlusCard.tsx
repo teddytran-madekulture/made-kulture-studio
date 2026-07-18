@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-interface Status { active: boolean; expiresAt: number | null; autoRenew: boolean; comp: boolean; priceCents: number }
+interface Status { active: boolean; expiresAt: number | null; autoRenew: boolean; comp: boolean; priceCents: number; standardCents?: number; isIntro?: boolean }
 
 function fmtDate(ms: number) {
   return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -39,7 +39,7 @@ export default function PlusCard() {
           <div>
             <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 700, color: '#e6c07a', marginBottom: 3 }}>Go Plus — book on short notice →</div>
             <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
-              See the calendar inside 48 hours, request short-notice bookings, and get your money back as studio credit if you cancel. {price}/year.
+              See the calendar inside 48 hours, request short-notice bookings, and get your money back as studio credit if you cancel. {price}/year{s.isIntro && s.standardCents ? ` \u2014 intro rate, going up to $${(s.standardCents / 100).toFixed(0)} soon` : ''}.
             </div>
           </div>
           <span style={{ flexShrink: 0, background: '#d4a843', color: '#080808', padding: '10px 18px', borderRadius: 4, fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em' }}>GO PLUS</span>

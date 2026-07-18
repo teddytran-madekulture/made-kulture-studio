@@ -2,10 +2,13 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
-interface Status { active: boolean; expiresAt: number | null; autoRenew: boolean; comp: boolean; priceCents: number }
+interface Status { active: boolean; expiresAt: number | null; autoRenew: boolean; comp: boolean; priceCents: number; standardCents?: number; introUntil?: string; isIntro?: boolean }
 
 function fmtDate(ms: number) {
   return new Date(ms).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+}
+function fmtDay(d: string) {
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 const BENEFITS = [
@@ -48,6 +51,12 @@ export default function PlusPage() {
         </div>
       ) : (
         <>
+          {status?.isIntro && status.standardCents && status.introUntil && (
+            <div style={{ background: 'linear-gradient(135deg, rgba(212,168,67,0.18), rgba(212,168,67,0.04))', border: '1px solid rgba(212,168,67,0.45)', borderRadius: 8, padding: '14px 18px', marginBottom: 24 }}>
+              <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', fontWeight: 600 }}>Act now — intro price.</span>
+              <span style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.65)' }}> {priceLabel}/year is the founding rate through {fmtDay(status.introUntil)}. It goes up to ${(status.standardCents / 100).toFixed(0)}/year after that, so join now to lock in your first year at {priceLabel}.</span>
+            </div>
+          )}
           <div style={{ display: 'grid', gap: 12, marginBottom: 28 }}>
             {BENEFITS.map(([title, desc]) => (
               <div key={title} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '16px 20px' }}>

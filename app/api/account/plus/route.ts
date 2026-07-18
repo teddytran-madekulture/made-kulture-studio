@@ -5,6 +5,7 @@ import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { plusActive, plusExpiresAtMs } from '@/lib/short-notice'
+import { getPlusPricing } from '@/lib/plus-pricing'
 import { sendPlusReceiptEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
@@ -20,13 +21,6 @@ const service = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-
-// Annual Plus price in cents (admin-editable studio_setting; default $99).
-async function priceCents(): Promise<number> {
-  const { data } = await service.from('studio_settings').select('value').eq('key', 'plus_annual_price_cents').maybeSingle()
-  const n = Number(data?.value)
-  return Number.isFinite(n) && n > 0 ? n : 9900
-}
 
 function isoPlusMonths(from: Date, months: number): string {
   const d = new Date(from); d.setMonth(d.getMonth() + months); return d.toISOString()
@@ -51,12 +45,17 @@ export async function GET() {
   const email = user.email.toLowerCase()
   const { data: grows } = await service.from('customers').select('pricing_overrides').eq('email', email).limit(1)
   const po: any = (grows ?? [])[0]?.pricing_overrides ?? null
+  const pricing = await getPlusPricing(service)
   return NextResponse.json({
     active:    plusActive(po),
     expiresAt: plusExpiresAtMs(po),
     autoRenew: !!po?.plus_auto_renew,
     comp:      !!po?.plus_comp,
-    priceCents: await priceCents(),
+    priceCents:    pricing.currentCents,
+    standardCents: pricing.standardCents,
+    introCents:    pricing.introCents,
+    introUntil:    pricing.introUntil,
+    isIntro:       pricing.isIntro,
   })
 }
 
@@ -96,7 +95,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const cents = await priceCents()
+  const cents = (await getPlusPricing(service)).currentCents
 
   try {
     const square = getSquare()

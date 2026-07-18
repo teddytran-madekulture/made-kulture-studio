@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Client, Environment } from 'square'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
+import { getPlusPricing } from '@/lib/plus-pricing'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,10 +33,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: settingRows } = await supabase
-    .from('studio_settings').select('key, value').in('key', ['plus_annual_price_cents', 'plus_renew_reminder_days'])
+    .from('studio_settings').select('key, value').in('key', ['plus_renew_reminder_days'])
   const sm: Record<string, string> = {}; for (const r of settingRows ?? []) sm[r.key] = r.value
-  const priceCents   = Number(sm['plus_annual_price_cents']) > 0 ? Number(sm['plus_annual_price_cents']) : 9900
   const reminderDays = Number(sm['plus_renew_reminder_days']) > 0 ? Number(sm['plus_renew_reminder_days']) : 7
+  // Renewals charge the CURRENT price tier at renewal time (intro or standard).
+  const priceCents = (await getPlusPricing(supabase)).currentCents
 
   const now = Date.now()
   const { data: customers } = await supabase
