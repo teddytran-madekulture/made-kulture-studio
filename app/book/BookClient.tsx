@@ -36,7 +36,7 @@ function loadSquareScript(): Promise<void> {
 
 // Sets are loaded from /api/sets at runtime (admin Sets Manager is the source
 // of truth). Shape used by this page:
-interface BookSet { id: string; name: string; price: number; desc: string; minHours: number }
+interface BookSet { id: string; name: string; price: number; desc: string; minHours: number; photo: string | null }
 
 // One set added to a multi-set order (per-set scheduling). price = effective
 // hourly rate (with any customer overrides) captured when it was added.
@@ -198,6 +198,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   // Sets catalog + buyout rate (DB-driven) for the picker, pricing, and minimums.
   const [sets, setSets] = useState<BookSet[]>([])
+  const [openSetInfo, setOpenSetInfo] = useState<string | null>(null)
   const [buyoutRate, setBuyoutRate] = useState(STUDIO_PRICE)
   const [ratesLoaded, setRatesLoaded] = useState(false)
   const [guestPricing, setGuestPricing] = useState<GuestPricing>(DEFAULT_GUEST_PRICING)
@@ -211,6 +212,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
           price: Number(s.rate_per_hour),
           desc: s.description ?? '',
           minHours: s.min_hours ?? 1,
+          photo: s.photo_url ?? null,
         }))
       )
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
@@ -636,27 +638,47 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   Loading sets…
                 </div>
               )}
-              {sets.map(s => (
-                <button key={s.id} onClick={() => pickSet(s.id)}
+              {sets.map(s => {
+                const selected = booking.setId === s.id
+                const open = openSetInfo === s.id
+                return (
+                <div key={s.id} role="button" tabIndex={0} onClick={() => pickSet(s.id)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickSet(s.id) } }}
                   style={{
-                    background: booking.setId === s.id ? '#fff' : '#0d0d0d',
-                    border: 'none', padding: '28px 24px', cursor: 'pointer', textAlign: 'left',
-                    transition: 'background 0.15s',
+                    background: selected ? '#fff' : '#0d0d0d',
+                    border: 'none', padding: '24px', cursor: 'pointer', textAlign: 'left',
+                    transition: 'background 0.15s', outline: 'none',
                   }}
-                  onMouseEnter={e => { if (booking.setId !== s.id) (e.currentTarget as HTMLButtonElement).style.background = '#111' }}
-                  onMouseLeave={e => { if (booking.setId !== s.id) (e.currentTarget as HTMLButtonElement).style.background = '#0d0d0d' }}
+                  onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.background = '#111' }}
+                  onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.background = '#0d0d0d' }}
                 >
-                  <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: booking.setId === s.id ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', marginBottom: 10 }}>
+                  <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: selected ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', marginBottom: 10 }}>
                     ${s.price + (loggedIn ? 0 : guestSurchargePerHour)}/HR {s.minHours > 1 ? `· ${s.minHours}HR MIN` : ''}
                   </div>
-                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, color: booking.setId === s.id ? '#080808' : '#fff', letterSpacing: '0.02em', marginBottom: 6 }}>
+                  <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, color: selected ? '#080808' : '#fff', letterSpacing: '0.02em' }}>
                     {s.name.toUpperCase()}
                   </div>
-                  <p style={{ fontFamily: 'Inter', fontSize: 12, color: booking.setId === s.id ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
-                    {s.desc}
-                  </p>
-                </button>
-              ))}
+                  <button type="button" aria-expanded={open}
+                    onClick={e => { e.stopPropagation(); setOpenSetInfo(prev => prev === s.id ? null : s.id) }}
+                    style={{ marginTop: 12, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+                      fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
+                      color: selected ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)' }}
+                  >
+                    {open ? 'HIDE DETAILS ▴' : 'VIEW DETAILS ▾'}
+                  </button>
+                  {open && (
+                    <div style={{ marginTop: 14 }} onClick={e => e.stopPropagation()}>
+                      {s.photo && (
+                        <img src={s.photo} alt={s.name} loading="lazy"
+                          style={{ width: '100%', height: 180, objectFit: 'cover', display: 'block', marginBottom: 12, borderRadius: 2 }} />
+                      )}
+                      <p style={{ fontFamily: 'Inter', fontSize: 12, color: selected ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.45)', lineHeight: 1.55, margin: 0 }}>
+                        {s.desc}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )})}
             </div>
             <div ref={setNavRef}>
               <NavRow onBack={back} onNext={() => setStep(mustFillWindow ? 4 : 3)} canNext={canNext[2]} />
