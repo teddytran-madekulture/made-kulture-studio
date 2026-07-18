@@ -65,7 +65,10 @@ export default function AdminSignupsPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.map(s => (
-            <div key={s.id} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <a key={s.id} href={`/admin/dashboard?view=customers&openEmail=${encodeURIComponent(s.email)}`}
+              style={{ textDecoration: 'none', color: 'inherit', background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.28)'; e.currentTarget.style.background = '#181818' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.background = '#141414' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{s.name || '(no name)'}</div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
@@ -82,7 +85,7 @@ export default function AdminSignupsPage() {
                 {!s.confirmed && pill('rgba(255,90,90,0.12)', '#ff8080', 'UNCONFIRMED')}
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', minWidth: 64, textAlign: 'right' }}>{when(s.createdAt)}</span>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       )}

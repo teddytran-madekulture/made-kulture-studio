@@ -583,6 +583,23 @@ export default function AdminDashboard() {
     setCustDetailLoading(false)
   }, [])
 
+  // Deep-link from Recent Signups: /admin/dashboard?view=customers&openEmail=<email>
+  // lands on the customers view and opens that person's detail (resolved by email).
+  useEffect(() => {
+    const email = new URLSearchParams(window.location.search).get('openEmail')
+    if (!email) return
+    setView('customers')
+    setCustSearch(email)
+    ;(async () => {
+      const token = document.cookie.match(/admin_token=([^;]+)/)?.[1] ?? ''
+      const res = await fetch(`/api/admin/customers?q=${encodeURIComponent(email)}&limit=50`, { headers: { 'x-admin-password': token } })
+      const data = await res.json().catch(() => ({}))
+      const list = data.customers ?? []
+      const match = list.find((c: any) => (c.email || '').toLowerCase() === email.toLowerCase()) || list[0]
+      if (match) fetchCustomerDetail(match.id)
+    })()
+  }, [fetchCustomerDetail])
+
   const fetchEmailSettings = useCallback(async () => {
     setEmailLoading(true)
     const res  = await fetch('/api/admin/email-settings')
