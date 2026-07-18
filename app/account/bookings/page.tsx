@@ -38,11 +38,12 @@ export default function BookingsPage() {
   const [notice, setNotice]     = useState('')
   const [gearCart, setGearCart] = useState<GearLine[]>([])
   const [addingTo, setAddingTo] = useState<string | null>(null)
+  const [isPlus, setIsPlus] = useState(false)
 
   const refetch = () =>
     fetch('/api/account/bookings').then(r => r.json()).then(d => { setBookings(d.bookings ?? []); setLoading(false) })
 
-  useEffect(() => { refetch(); setGearCart(loadGearCart()) }, [])
+  useEffect(() => { refetch(); setGearCart(loadGearCart()); fetch('/api/account/plus').then(r => r.ok ? r.json() : null).then(d => setIsPlus(!!d?.active)).catch(() => {}) }, [])
 
   const cartTotal = gearCart.reduce((s, l) => s + l.rate * l.quantity, 0)
 
@@ -80,8 +81,11 @@ export default function BookingsPage() {
   }
 
   const cancel = async (id: string) => {
-    if (!confirm('Cancel this booking? Refunds are only issued if cancelled 48+ hours in advance.')) return
-    setCancelling(id); setError('')
+    const msg = isPlus
+      ? 'Cancel this booking?\n\nAs a Plus member, its full value comes back as studio credit — it never expires and applies automatically to your next booking.'
+      : 'Cancel this booking? Refunds are only issued if cancelled 48+ hours in advance.'
+    if (!confirm(msg)) return
+    setCancelling(id); setError(''); setNotice('')
     const res = await fetch('/api/account/cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,6 +97,9 @@ export default function BookingsPage() {
       setCancelling(null)
     } else {
       setBookings(bs => bs.map(b => b.id === id ? { ...b, status: 'cancelled' } : b))
+      if (isPlus && data.creditCents > 0) {
+        setNotice(`$${((data.creditCents || 0) / 100).toFixed(2)} added to your account as studio credit — it applies automatically next time you book.`)
+      }
       setCancelling(null)
     }
   }
@@ -105,7 +112,8 @@ export default function BookingsPage() {
     const isUpcoming = new Date(b.start_time) > now && b.status !== 'cancelled'
     const isCancelled = b.status === 'cancelled'
     const hoursUntil = (new Date(b.start_time).getTime() - now.getTime()) / (1000 * 60 * 60)
-    const canCancel = isUpcoming && hoursUntil > 48
+    const canReschedule = isUpcoming && hoursUntil > 48
+    const canCancel = isUpcoming && (isPlus || hoursUntil > 48)
 
     return (
       <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '20px 24px', marginBottom: 12 }}>
@@ -141,7 +149,7 @@ export default function BookingsPage() {
             }}>
               {b.status?.toUpperCase()}
             </span>
-            {canCancel && (
+            {canReschedule && (
               <button
                 onClick={() => rescheduleCredit(b.id)}
                 disabled={rescheduling === b.id || cancelling === b.id}
@@ -160,7 +168,7 @@ export default function BookingsPage() {
                 {cancelling === b.id ? 'CANCELLING...' : 'CANCEL'}
               </button>
             )}
-            {isUpcoming && !canCancel && !isCancelled && (
+            {isUpcoming && !canCancel && !canReschedule && !isCancelled && (
               <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>Within 48hr window</span>
             )}
             {isUpcoming && !isCancelled && (

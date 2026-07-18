@@ -41,6 +41,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   } else if (action === 'autorenew') {
     if (!po.plus) return NextResponse.json({ error: 'Not a Plus member' }, { status: 400 })
     po.plus_auto_renew = body.autoRenew === true
+  } else if (action === 'suspend') {
+    // Abuse lever: block auto-renewal until an admin overrides. The renewal cron
+    // skips members with plus_renewal_suspended set.
+    if (!po.plus) return NextResponse.json({ error: 'Not a Plus member' }, { status: 400 })
+    po.plus_renewal_suspended = body.suspended === true
   } else {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }

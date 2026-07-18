@@ -126,6 +126,7 @@ interface PricingOverrides {
   plus_expires_at?: string | null   // ISO; membership renewal/expiry
   plus_auto_renew?: boolean
   plus_comp?: boolean               // comped (admin-granted, no charge)
+  plus_renewal_suspended?: boolean  // abuse hold — cron skips renewal until lifted
 }
 
 interface CustomerDetailData {
@@ -3345,6 +3346,14 @@ export default function AdminDashboard() {
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{expLabel ? `Renews/expires ${expLabel}` : 'No expiry'} · auto-renew {po.plus_auto_renew ? 'on' : 'off'}</span>
                               <button disabled={plusBusy} onClick={() => plusAction('autorenew', { autoRenew: !po.plus_auto_renew })} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 10, letterSpacing: '0.06em', padding: '5px 10px', cursor: 'pointer' }}>{po.plus_auto_renew ? 'TURN OFF AUTO-RENEW' : 'TURN ON AUTO-RENEW'}</button>
+                            </div>
+                          )}
+                          {active && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, color: po.plus_renewal_suspended ? '#ff8080' : 'rgba(255,255,255,0.4)' }}>
+                                {po.plus_renewal_suspended ? '⚠ Renewal suspended (abuse hold)' : 'Renewal in good standing'}
+                              </span>
+                              <button disabled={plusBusy} onClick={() => plusAction('suspend', { suspended: !po.plus_renewal_suspended })} style={{ background: 'transparent', border: `1px solid ${po.plus_renewal_suspended ? 'rgba(120,220,150,0.4)' : 'rgba(255,140,80,0.4)'}`, color: po.plus_renewal_suspended ? '#7cdc96' : '#ffb066', fontSize: 10, letterSpacing: '0.06em', padding: '5px 10px', cursor: 'pointer' }}>{po.plus_renewal_suspended ? 'LIFT SUSPENSION' : 'SUSPEND RENEWAL'}</button>
                             </div>
                           )}
                           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 8, lineHeight: 1.4 }}>Grants calendar view + short-notice request eligibility. Booking still needs your per-request approval.</div>
