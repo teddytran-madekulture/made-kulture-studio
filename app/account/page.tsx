@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { shortNoticeViewActive } from '@/lib/short-notice'
 import ShortNoticeRequest from '@/components/ShortNoticeRequest'
+import PlusCard from '@/components/PlusCard'
 import { getCreditBalance } from '@/lib/credits'
 
 export default async function AccountDashboard() {
@@ -67,6 +68,9 @@ export default async function AccountDashboard() {
           </div>
         </Link>
       )}
+
+      {/* Plus membership */}
+      <PlusCard />
 
       {/* Quick stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 40 }}>

@@ -647,6 +647,28 @@ export async function sendShortNoticeApprovedEmail(data: {
   })
 }
 
+// ─── Plus membership receipt (to customer) ───────────────────────────────────
+export async function sendPlusReceiptEmail(data: {
+  customerName: string; customerEmail: string; amountCents: number; expiresAt: string
+}) {
+  const first = (data.customerName || '').split(' ')[0] || 'there'
+  const amount = `$${(data.amountCents / 100).toFixed(2)}`
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:20px;color:#fff;">Welcome to Made Kulture Plus</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:#aaa;line-height:1.6;">Hi ${esc(first)} — your Plus membership is active. You can now see near-term availability and request short-notice bookings.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #333;border-bottom:1px solid #333;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;font-size:11px;letter-spacing:0.12em;color:#888;">PAID</td><td style="padding:6px 0;font-size:14px;color:#fff;text-align:right;">${amount}</td></tr>
+      <tr><td style="padding:6px 0;font-size:11px;letter-spacing:0.12em;color:#888;">RENEWS</td><td style="padding:6px 0;font-size:14px;color:#fff;text-align:right;">${formatDateLabel(data.expiresAt.split('T')[0])}</td></tr>
+    </table>
+    <p style="margin:0 0 20px;font-size:12px;color:#888;line-height:1.6;">Your membership renews automatically each year. You can turn off auto-renew anytime from your account.</p>
+    <a href="${APP_URL}/availability" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">See availability</a>
+  `
+  return sendEmail('plus_receipt', {
+    from: FROM_EMAIL, reply_to: REPLY_TO, to: data.customerEmail,
+    subject: 'Your Made Kulture Plus membership', html: layout(body),
+  })
+}
+
 // ─── Generic branded notice (used by the delegated-payment flow) ─────────────
 export async function sendSimpleEmail(opts: {
   to: string
