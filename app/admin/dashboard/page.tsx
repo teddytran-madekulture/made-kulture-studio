@@ -357,6 +357,7 @@ export default function AdminDashboard() {
   const [tab,       setTab]       = useState<'upcoming' | 'past' | 'all'>('upcoming')
   const [expanded,  setExpanded]  = useState<string | null>(null)
   const [cancelling,setCancelling]= useState<string | null>(null)
+  const [noShowBusy, setNoShowBusy] = useState<string | null>(null)
   const [showManual,setShowManual]= useState(false)
 
   // View / calendar
@@ -960,6 +961,36 @@ export default function AdminDashboard() {
     }
     fetchBookings()
     if (detailBooking?.id === id) setDetailBooking(null)
+  }
+
+  // Mark a booking as a no-show (member didn't show and didn't cancel). Keeps the
+  // detail modal open so you can approve Plus credit if/when they reach out.
+  const markNoShow = async (id: string) => {
+    if (!confirm('Mark this booking as a no-show?\n\nThey didn’t show and didn’t cancel. You can approve studio credit afterward if they reach out.')) return
+    setNoShowBusy(id)
+    const res = await fetch(`/api/admin/bookings/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'no_show' }),
+    })
+    setNoShowBusy(null)
+    if (res.ok) {
+      setDetailBooking(b => b && b.id === id ? { ...b, status: 'no_show' } : b)
+      fetchBookings(true)
+    } else {
+      const d = await res.json().catch(() => ({}))
+      alert(d.error || 'Could not mark no-show.')
+    }
+  }
+
+  // Approve the Plus cancellation-protection credit for a no-show (manual).
+  const approveNoShowCredit = async (id: string) => {
+    if (!confirm('Approve full studio credit for this no-show?\n\nAdds the booking’s full value to their account as non-expiring studio credit.')) return
+    setNoShowBusy(id)
+    const res = await fetch(`/api/admin/bookings/${id}/no-show-credit`, { method: 'POST' })
+    const data = await res.json().catch(() => ({}))
+    setNoShowBusy(null)
+    if (res.ok) alert(`$${((data.amountCents || 0) / 100).toFixed(2)} studio credit added to their account.`)
+    else alert(data.error || 'Could not add credit.')
   }
 
   const openEdit = async (b: Booking) => {
@@ -3575,6 +3606,18 @@ export default function AdminDashboard() {
               <button onClick={() => handleCancel(detailBooking.id)} disabled={cancelling === detailBooking.id}
                 style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.3)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ff6b6b' }}>
                 {cancelling === detailBooking.id ? 'CANCELLING...' : 'CANCEL BOOKING'}
+              </button>
+            )}
+            {detailBooking.status !== 'cancelled' && detailBooking.status !== 'no_show' && (
+              <button onClick={() => markNoShow(detailBooking.id)} disabled={noShowBusy === detailBooking.id}
+                style={{ background: 'transparent', border: '1px solid rgba(255,176,102,0.35)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ffb066' }}>
+                {noShowBusy === detailBooking.id ? '…' : 'MARK NO-SHOW'}
+              </button>
+            )}
+            {detailBooking.status === 'no_show' && (
+              <button onClick={() => approveNoShowCredit(detailBooking.id)} disabled={noShowBusy === detailBooking.id}
+                style={{ background: 'rgba(212,168,67,0.14)', border: '1px solid rgba(212,168,67,0.4)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#e6c07a', fontWeight: 600 }}>
+                {noShowBusy === detailBooking.id ? 'ADDING CREDIT…' : 'APPROVE PLUS CREDIT'}
               </button>
             )}
           </div>
