@@ -12,6 +12,7 @@ const LINKS: { label: string; href: string }[] = [
   { label: 'PROPS',         href: '/props' },
   { label: 'STUDIO RULES',  href: '/studio-rules' },
   { label: 'AVAILABILITY',  href: '/availability' },
+  { label: 'PLUS',          href: '/plus' },
 ]
 
 // Shared site navigation: transparent at the top, solid on scroll, with a
