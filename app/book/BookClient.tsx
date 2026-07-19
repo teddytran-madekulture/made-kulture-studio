@@ -596,9 +596,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 10 }}>
                     {opt.sub}
                   </p>
-                  <p style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.6, marginBottom: 24 }}>
+                  <p style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.6, marginBottom: opt.type === 'set' ? 10 : 24 }}>
                     {opt.limit}
                   </p>
+                  {opt.type === 'set' && (
+                    <p style={{ fontFamily: 'Inter', fontSize: 12, color: '#c9b27e', lineHeight: 1.5, marginBottom: 24 }}>
+                      Shared open studio — you may shoot near other creators.
+                    </p>
+                  )}
                   <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>
                     {opt.price}
                   </div>

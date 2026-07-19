@@ -125,6 +125,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
   if (!enabled) return null
 
   const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode, startISO, endISO, checkInToken } = data
+  const isBuyout = /full studio takeover/i.test(setName) // buyouts are private — skip the shared-studio note
 
   const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', `Manage: ${APP_URL}/account`].filter(Boolean).join(' ')
   const gCalLink = (startISO && endISO)
@@ -183,6 +184,10 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
         </td>
       </tr>` : ''}
     </table>
+
+    ${!isBuyout ? `<table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(201,178,126,0.08);border:1px solid rgba(201,178,126,0.25);border-radius:6px;margin-bottom:28px;">
+      <tr><td style="padding:14px 20px;"><p style="margin:0;font-size:13px;color:#e6c07a;line-height:1.6;"><strong>Heads up — shared open studio.</strong> You've got your set, but Made Kulture is one open warehouse, so other creators may be shooting nearby during your session.</p></td></tr>
+    </table>` : ''}
 
     <!-- Manage Booking CTA -->
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
