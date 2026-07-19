@@ -33,7 +33,7 @@ const FREE_BENEFITS = [
 ]
 
 const PLUS_BENEFITS = [
-  'Book on short notice — see and request slots inside the 48-hour window',
+  'Book on short notice — request near-term slots inside the 48-hour window. Studio-approved, so an open slot is not a guarantee.',
   'Cancellation protection — cancel anytime and get full studio credit',
   'No-show credit — your money stays in the building for next time',
 ]
@@ -165,7 +165,7 @@ export default function MembershipPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
             {[
-              { n: '01', t: 'REQUEST YOUR SLOT', d: 'Spot a near-term opening inside the 48-hour window and request it. We approve, then you have a short window to lock it in.' },
+              { n: '01', t: 'REQUEST YOUR SLOT', d: 'Spot a near-term opening inside the 48-hour window and request it. An open slot is not a guarantee — the studio may be unavailable even when the calendar looks open. If we approve, you have a short window to lock it in.' },
               { n: '02', t: 'CANCEL WORRY-FREE', d: 'Plans change? Cancel before your session and the full value comes back as studio credit — automatically.' },
               { n: '03', t: 'NEVER LOSE MONEY', d: 'Even a true no-show can be credited on request. Your money stays in the building for the next shoot.' },
             ].map(s => (
@@ -189,7 +189,7 @@ export default function MembershipPage() {
             {outlineCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}
           </div>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.32)', lineHeight: 1.7, marginTop: 28, maxWidth: 660, marginLeft: isMobile ? 0 : 'auto', marginRight: isMobile ? 0 : 'auto' }}>
-            Plus renews yearly at the then-current price · cancel auto-renew anytime and keep your benefits through the paid term · membership fees are non-refundable · short-notice bookings are studio-approved. Not a member? You can always book with 48 hours&apos; notice. See <Link href="/terms" style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>full terms</Link>.
+            Plus renews yearly at the then-current price · cancel auto-renew anytime and keep your benefits through the paid term · membership fees are non-refundable · short-notice bookings are studio-approved and not guaranteed. Not a member? You can always book with 48 hours&apos; notice. See <Link href="/terms" style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>full terms</Link>.
           </div>
         </div>
       </section>

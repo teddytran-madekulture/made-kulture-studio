@@ -104,7 +104,7 @@ export default function ShortNoticeRequest() {
     return (
       <div style={{ ...card, borderColor: 'rgba(212,168,67,0.3)' }}>
         <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#e6c07a', marginBottom: 4 }}>⏳ Request sent</div>
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Your short-notice booking request is pending. We&apos;ll text and email you the moment it&apos;s approved — then you&apos;ll have a short window to book.</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Your short-notice booking request is pending. We&apos;ll text and email you once we&apos;ve reviewed it — if approved, you&apos;ll have a short window to book. An open slot isn&apos;t guaranteed until then.</div>
       </div>
     )
   }
@@ -115,7 +115,7 @@ export default function ShortNoticeRequest() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 2 }}>Need to book inside 48 hours?</div>
-            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Tell us the set, date, and time you want and we&apos;ll approve a short booking window for you.</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Tell us the set, date, and time you want. Every request is reviewed by the studio — an open calendar slot isn&apos;t a guarantee until we approve it.</div>
           </div>
           <button onClick={() => setOpen(true)} style={{ flexShrink: 0, background: '#fff', color: '#080808', border: 'none', padding: '11px 18px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em' }}>REQUEST ACCESS</button>
         </div>

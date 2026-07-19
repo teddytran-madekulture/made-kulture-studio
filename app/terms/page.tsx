@@ -88,6 +88,7 @@ export default function TermsPage() {
               <>You can <strong style={{ color: '#fff' }}>cancel auto-renew at any time</strong> from your account. Your benefits continue through the end of the paid term; the membership simply does not renew, and you are not charged again.</>,
               <><strong style={{ color: '#fff' }}>Membership fees are non-refundable</strong>, including for partial or unused terms.</>,
               'Plus benefits (short-notice booking access and cancellation credit) are subject to studio approval and availability and do not change your per-session booking rate. Introductory pricing applies to sign-ups during the intro period; renewals are billed at the price in effect at the time of renewal.',
+              <>An open time slot shown on the availability calendar is <strong style={{ color: '#fff' }}>not a guarantee</strong>. Short-notice bookings must be reviewed and approved by the studio and may be declined — including when the studio is unavailable — even when the calendar appears open.</>,
             ]} />
           </Section>
 
