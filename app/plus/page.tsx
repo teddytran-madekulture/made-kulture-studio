@@ -188,6 +188,9 @@ export default function MembershipPage() {
             {filledCta('Create free account', '/signup')}
             {outlineCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}
           </div>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.32)', lineHeight: 1.7, marginTop: 28, maxWidth: 660, marginLeft: isMobile ? 0 : 'auto', marginRight: isMobile ? 0 : 'auto' }}>
+            Plus renews yearly at the then-current price · cancel auto-renew anytime and keep your benefits through the paid term · membership fees are non-refundable · short-notice bookings are studio-approved. Not a member? You can always book with 48 hours&apos; notice. See <Link href="/terms" style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>full terms</Link>.
+          </div>
         </div>
       </section>
 

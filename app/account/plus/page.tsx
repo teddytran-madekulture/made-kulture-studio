@@ -144,7 +144,7 @@ function Checkout({ priceLabel, onSuccess }: { priceLabel: string; onSuccess: ()
         {paying ? 'PROCESSING…' : `GO PLUS · ${priceLabel}`}
       </button>
       <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 14, lineHeight: 1.5 }}>
-        Your card is saved and your membership renews automatically each year for {priceLabel}. You can turn off auto-renew anytime from your account.
+        Your card is saved and your membership renews automatically each year at the then-current price. Cancel auto-renew anytime from your account — your benefits continue through the end of your paid year. Membership fees are non-refundable. See <Link href="/terms" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'underline' }}>terms</Link>.
       </div>
     </div>
   )

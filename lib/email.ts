@@ -660,7 +660,7 @@ export async function sendPlusReceiptEmail(data: {
       <tr><td style="padding:6px 0;font-size:11px;letter-spacing:0.12em;color:#888;">PAID</td><td style="padding:6px 0;font-size:14px;color:#fff;text-align:right;">${amount}</td></tr>
       <tr><td style="padding:6px 0;font-size:11px;letter-spacing:0.12em;color:#888;">RENEWS</td><td style="padding:6px 0;font-size:14px;color:#fff;text-align:right;">${formatDateLabel(data.expiresAt.split('T')[0])}</td></tr>
     </table>
-    <p style="margin:0 0 20px;font-size:12px;color:#888;line-height:1.6;">Your membership renews automatically each year. You can turn off auto-renew anytime from your account.</p>
+    <p style="margin:0 0 20px;font-size:12px;color:#888;line-height:1.6;">Your membership renews automatically each year at the then-current price. Cancel auto-renew anytime from your account — your benefits run through the end of your paid year. Membership fees are non-refundable.</p>
     <a href="${APP_URL}/availability" style="display:inline-block;background:${ACCENT_COLOR};color:#000;font-weight:700;font-size:13px;text-decoration:none;padding:14px 28px;border-radius:4px;letter-spacing:0.05em;text-transform:uppercase;">See availability</a>
   `
   return sendEmail('plus_receipt', {

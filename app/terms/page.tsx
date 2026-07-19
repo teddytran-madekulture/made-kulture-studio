@@ -78,6 +78,16 @@ export default function TermsPage() {
             <UL items={[
               <><strong style={{ color: '#fff' }}>Full refund</strong> if cancelled 48 or more hours before your booking start time</>,
               <><strong style={{ color: '#fff' }}>No refund</strong> for cancellations within 48 hours of the booking start time</>,
+              <>Made Kulture <strong style={{ color: '#fff' }}>Plus</strong> members receive full studio credit (never a forfeit) when they cancel a booking, and may be credited for a no-show on request — see Membership below</>,
+            ]} />
+          </Section>
+
+          <Section title="MEMBERSHIP (MADE KULTURE PLUS)">
+            <UL items={[
+              <>Made Kulture Plus is an <strong style={{ color: '#fff' }}>annual membership</strong> charged to the card on file. It <strong style={{ color: '#fff' }}>renews automatically</strong> each year at the then-current price unless auto-renew is turned off before the renewal date.</>,
+              <>You can <strong style={{ color: '#fff' }}>cancel auto-renew at any time</strong> from your account. Your benefits continue through the end of the paid term; the membership simply does not renew, and you are not charged again.</>,
+              <><strong style={{ color: '#fff' }}>Membership fees are non-refundable</strong>, including for partial or unused terms.</>,
+              'Plus benefits (short-notice booking access and cancellation credit) are subject to studio approval and availability and do not change your per-session booking rate. Introductory pricing applies to sign-ups during the intro period; renewals are billed at the price in effect at the time of renewal.',
             ]} />
           </Section>
 

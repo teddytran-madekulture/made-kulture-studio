@@ -63,12 +63,17 @@ export default function PlusCard() {
         You can view the 48-hour window, request short-notice bookings, and cancellations come back as studio credit.
       </div>
       {!s.comp && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
-          <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Auto-renew {s.autoRenew ? 'on' : 'off'}</span>
-          <button onClick={toggleRenew} disabled={busy} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', padding: '5px 12px', borderRadius: 4, cursor: busy ? 'default' : 'pointer' }}>
-            {s.autoRenew ? 'Turn off auto-renew' : 'Turn on auto-renew'}
-          </button>
-        </div>
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+            <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Auto-renew {s.autoRenew ? 'on' : 'off'}</span>
+            <button onClick={toggleRenew} disabled={busy} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', padding: '5px 12px', borderRadius: 4, cursor: busy ? 'default' : 'pointer' }}>
+              {s.autoRenew ? 'Turn off auto-renew' : 'Turn on auto-renew'}
+            </button>
+          </div>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', lineHeight: 1.5, marginTop: 8 }}>
+            Turning off auto-renew keeps your benefits through your renewal date — no further charge. Membership fees aren&apos;t refundable.
+          </div>
+        </>
       )}
     </div>
   )
