@@ -601,7 +601,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   </p>
                   {opt.type === 'set' && (
                     <p style={{ fontFamily: 'Inter', fontSize: 12, color: '#c9b27e', lineHeight: 1.5, marginBottom: 24 }}>
-                      Shared open studio — you may shoot near other creators.
+                      Shoot alongside the energy of other creatives in our open, shared studio.
                     </p>
                   )}
                   <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>

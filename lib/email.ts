@@ -186,7 +186,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
     </table>
 
     ${!isBuyout ? `<table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(201,178,126,0.08);border:1px solid rgba(201,178,126,0.25);border-radius:6px;margin-bottom:28px;">
-      <tr><td style="padding:14px 20px;"><p style="margin:0;font-size:13px;color:#e6c07a;line-height:1.6;"><strong>Heads up — shared open studio.</strong> You've got your set, but Made Kulture is one open warehouse, so other creators may be shooting nearby during your session.</p></td></tr>
+      <tr><td style="padding:14px 20px;"><p style="margin:0;font-size:13px;color:#e6c07a;line-height:1.6;"><strong>Open studio, shared energy.</strong> You've got your set — and you'll be creating alongside other creatives shooting in the same open warehouse. That shared energy is part of the Made Kulture experience.</p></td></tr>
     </table>` : ''}
 
     <!-- Manage Booking CTA -->
