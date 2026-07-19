@@ -12,7 +12,7 @@ const LINKS: { label: string; href: string }[] = [
   { label: 'PROPS',         href: '/props' },
   { label: 'STUDIO RULES',  href: '/studio-rules' },
   { label: 'AVAILABILITY',  href: '/availability' },
-  { label: 'PLUS',          href: '/plus' },
+  { label: 'MEMBERSHIP',    href: '/plus' },
 ]
 
 // Shared site navigation: transparent at the top, solid on scroll, with a
@@ -20,7 +20,7 @@ const LINKS: { label: string; href: string }[] = [
 export default function SiteNav({ active }: { active?: string }) {
   // Use the compact/hamburger nav below 1024px so the full desktop row (logo +
   // 6 links + login/signup + book) never has to cram or overlap.
-  const isMobile = useIsMobile(1024)
+  const isMobile = useIsMobile(1180)
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [authed, setAuthed] = useState<boolean | null>(null)

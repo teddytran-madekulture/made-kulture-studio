@@ -18,19 +18,27 @@ const Arrow = () => (
   </svg>
 )
 
-const BENEFITS: { n: string; title: string; desc: string }[] = [
-  { n: '01', title: 'BOOK ON\nSHORT NOTICE', desc: 'See the calendar inside the 48-hour window — the near-term slots non-members can’t — and request a session when a client or an idea can’t wait for two days’ notice.' },
-  { n: '02', title: 'CANCELLATION\nPROTECTION', desc: 'Life happens. Cancel a booking — even last minute — and its full value comes back as studio credit for your next session instead of being forfeited.' },
-  { n: '03', title: 'NO-SHOW\nCREDIT', desc: 'Couldn’t make it at all? Reach out and we’ll credit your session. Your money stays in the building, ready for the next shoot — it never expires.' },
+// Small rotated-square marker for benefit rows.
+const Mark = ({ gold }: { gold?: boolean }) => (
+  <span style={{ marginTop: 7, width: 6, height: 6, flexShrink: 0, background: gold ? '#c9b27e' : 'rgba(255,255,255,0.35)', transform: 'rotate(45deg)' }} />
+)
+
+const FREE_BENEFITS = [
+  'Member booking rate — pay less per hour than the guest rate, every session',
+  'Save your card for fast, one-tap checkout',
+  'Your own creative profile',
+  'Creator directory — get found by brands and other creatives',
+  'Castings board and direct messaging',
+  'Bookings and studio credit, all in one place',
 ]
 
-const STEPS: { n: string; title: string; desc: string }[] = [
-  { n: '01', title: 'JOIN', desc: 'One yearly membership. Your card is saved so renewals and credit are automatic — turn off auto-renew anytime.' },
-  { n: '02', title: 'REQUEST YOUR SLOT', desc: 'Spot a near-term opening and request it. We approve, then you have a short window to lock it in.' },
-  { n: '03', title: 'SHOOT WORRY-FREE', desc: 'Plans change? Cancel before your session for automatic credit — or, for a true no-show, get credited on request.' },
+const PLUS_BENEFITS = [
+  'Book on short notice — see and request slots inside the 48-hour window',
+  'Cancellation protection — cancel anytime and get full studio credit',
+  'No-show credit — your money stays in the building for next time',
 ]
 
-export default function PlusLanding() {
+export default function MembershipPage() {
   const isMobile = useIsMobile()
   const [p, setP] = useState<Pricing | null>(null)
 
@@ -42,54 +50,55 @@ export default function PlusLanding() {
   const stdLabel   = p?.standardCents ? `$${(p.standardCents / 100).toFixed(0)}` : '$149'
   const isIntro    = !!p?.isIntro
   const member     = !!p?.active
-  const ctaLabel   = member ? 'MANAGE MEMBERSHIP' : `GO PLUS · ${priceLabel}/YR`
 
-  const filledCta = (label: string) => (
-    <Link href="/account/plus"
+  const filledCta = (label: string, href: string) => (
+    <Link href={href}
       onMouseEnter={e => { const t = e.currentTarget; t.style.background = 'transparent'; t.style.color = '#fff'; t.style.borderColor = 'rgba(255,255,255,0.5)' }}
       onMouseLeave={e => { const t = e.currentTarget; t.style.background = '#fff'; t.style.color = '#080808'; t.style.borderColor = 'transparent' }}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 18, background: '#fff', color: '#080808', border: '1px solid transparent', padding: '16px 26px', textDecoration: 'none', transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease' }}>
-      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 500, letterSpacing: '0.22em', textTransform: 'uppercase' }}>{label}</span>
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 18, background: '#fff', color: '#080808', border: '1px solid transparent', padding: '15px 24px', textDecoration: 'none', transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease' }}>
+      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 500, letterSpacing: '0.2em', textTransform: 'uppercase' }}>{label}</span>
       <Arrow />
     </Link>
   )
 
-  const outlineCta = (label: string) => (
-    <Link href="/account/plus"
+  const goldCta = (label: string, href: string) => (
+    <Link href={href}
+      onMouseEnter={e => { const t = e.currentTarget; t.style.background = 'transparent'; t.style.color = '#c9b27e' }}
+      onMouseLeave={e => { const t = e.currentTarget; t.style.background = '#c9b27e'; t.style.color = '#080808' }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 16, background: '#c9b27e', color: '#080808', border: '1px solid #c9b27e', padding: '14px 22px', textDecoration: 'none', transition: 'background 0.2s ease, color 0.2s ease' }}>
+      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase' }}>{label}</span>
+      <Arrow />
+    </Link>
+  )
+
+  const outlineCta = (label: string, href: string) => (
+    <Link href={href}
       onMouseEnter={e => { const t = e.currentTarget; t.style.background = '#fff'; t.style.color = '#080808'; t.style.borderColor = '#fff' }}
       onMouseLeave={e => { const t = e.currentTarget; t.style.background = 'transparent'; t.style.color = '#fff'; t.style.borderColor = 'rgba(255,255,255,0.25)' }}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 24, background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', padding: '16px 24px', textDecoration: 'none', transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease' }}>
-      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 500, letterSpacing: '0.25em', textTransform: 'uppercase' }}>{label}</span>
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 16, background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', padding: '14px 22px', textDecoration: 'none', transition: 'background 0.2s ease, color 0.2s ease, border-color 0.2s ease' }}>
+      <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 500, letterSpacing: '0.18em', textTransform: 'uppercase' }}>{label}</span>
       <Arrow />
     </Link>
   )
 
   return (
     <main style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
-      <SiteNav active="plus" />
+      <SiteNav active="membership" />
 
       {/* HERO */}
-      <section style={{ paddingTop: isMobile ? 104 : 168, paddingBottom: isMobile ? 52 : 96, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ paddingTop: isMobile ? 104 : 168, paddingBottom: isMobile ? 48 : 84, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden' }}>
         <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(1100px 500px at 15% -10%, rgba(201,178,126,0.12), transparent 60%)', pointerEvents: 'none' }} />
         <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
             <div style={{ width: 40, height: 1, background: 'rgba(201,178,126,0.6)' }} />
             <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.2em', color: '#c9b27e', textTransform: 'uppercase' }}>Membership</span>
           </div>
-          <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(64px, 12vw, 150px)', color: '#fff', lineHeight: 0.88, letterSpacing: '0.01em', textTransform: 'uppercase', margin: '0 0 28px', maxWidth: 1000 }}>
-            Made Kulture<br />Plus.
+          <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(58px, 11vw, 138px)', color: '#fff', lineHeight: 0.88, letterSpacing: '0.01em', textTransform: 'uppercase', margin: '0 0 28px', maxWidth: 1000 }}>
+            Two ways<br />to belong.
           </h1>
-          <p style={{ fontFamily: 'Inter', fontSize: isMobile ? 15 : 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, maxWidth: 560, margin: '0 0 36px' }}>
-            For creators who move fast. Book inside the 48-hour window, and never lose a session to a last-minute change — cancellations and no-shows come back to you as studio credit.
+          <p style={{ fontFamily: 'Inter', fontSize: isMobile ? 15 : 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, maxWidth: 580, margin: '0 0 8px' }}>
+            Every shoot starts with an account — it&apos;s free, and it unlocks member rates, your profile, and the creator directory. When you&apos;re ready to move faster, <strong style={{ color: '#c9b27e' }}>Made Kulture Plus</strong> adds short-notice booking and cancellation protection.
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 16 : 28, flexWrap: 'wrap' }}>
-            {filledCta(ctaLabel)}
-            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
-              {isIntro
-                ? <><strong style={{ color: '#c9b27e' }}>{priceLabel}/year</strong> intro rate{p?.introUntil ? ` through ${fmtDay(p.introUntil)}` : ''} · {stdLabel} after</>
-                : <><strong style={{ color: '#fff' }}>{priceLabel}/year</strong></>}
-            </div>
-          </div>
         </div>
       </section>
 
@@ -97,66 +106,87 @@ export default function PlusLanding() {
       {isIntro && !member && (
         <section style={{ background: 'rgba(201,178,126,0.08)', borderBottom: '1px solid rgba(201,178,126,0.25)', padding: isMobile ? '14px 20px' : '15px 40px' }}>
           <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', fontFamily: 'Inter', fontSize: 13, color: '#c9b27e', lineHeight: 1.5, textAlign: isMobile ? 'left' : 'center' }}>
-            <strong>Act now — founding rate.</strong> Join at {priceLabel}/year. The price goes up to {stdLabel} {p?.introUntil ? `after ${fmtDay(p.introUntil)}` : 'soon'}.
+            <strong>Act now — founding rate.</strong> Plus is {priceLabel}/year, going up to {stdLabel} {p?.introUntil ? `after ${fmtDay(p.introUntil)}` : 'soon'}.
           </div>
         </section>
       )}
 
-      {/* BENEFITS */}
-      <section style={{ padding: isMobile ? '56px 20px' : '104px 40px' }}>
+      {/* TIERS */}
+      <section style={{ padding: isMobile ? '52px 20px' : '96px 40px' }}>
         <div style={{ maxWidth: PAGE_MAX, margin: '0 auto' }}>
-          <div style={{ marginBottom: isMobile ? 40 : 72 }}>
-            <div className="label" style={{ marginBottom: 20 }}>What you get</div>
-            <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(40px, 7vw, 88px)', color: '#fff', lineHeight: 0.9, margin: 0 }}>Built for the<br />ones who show up.</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 1, background: 'rgba(255,255,255,0.08)' }}>
-            {BENEFITS.map(b => (
-              <div key={b.n} style={{ background: '#080808', padding: isMobile ? '36px 26px' : '48px 36px' }}>
-                <div className="label" style={{ color: '#c9b27e', marginBottom: 24 }}>{b.n}</div>
-                <h3 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 26 : 30, color: '#fff', lineHeight: 1, margin: '0 0 18px', letterSpacing: '0.01em', whiteSpace: 'pre-line' }}>{b.title}</h3>
-                <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, margin: 0 }}>{b.desc}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 16 : 24, alignItems: 'stretch' }}>
+
+            {/* FREE */}
+            <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.1)', padding: isMobile ? '32px 26px' : '44px 40px', display: 'flex', flexDirection: 'column' }}>
+              <div className="label" style={{ marginBottom: 18 }}>Free</div>
+              <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 40 : 52, color: '#fff', lineHeight: 0.9, letterSpacing: '0.01em', margin: '0 0 6px' }}>Member</h2>
+              <div style={{ fontFamily: 'Inter', fontSize: 15, color: 'rgba(255,255,255,0.45)', marginBottom: 28 }}>Create a free account — no cost, ever.</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px' }}>
+                {FREE_BENEFITS.map(b => (
+                  <li key={b} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+                    <Mark />
+                    <span style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }}>{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <div style={{ marginTop: 'auto' }}>{filledCta('Create free account', '/signup')}</div>
+            </div>
+
+            {/* PLUS (featured) */}
+            <div style={{ background: 'linear-gradient(165deg, rgba(201,178,126,0.11), rgba(201,178,126,0.02))', border: '1px solid rgba(201,178,126,0.45)', padding: isMobile ? '32px 26px' : '44px 40px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+              <div style={{ position: 'absolute', top: 0, right: 0, background: '#c9b27e', color: '#080808', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', padding: '5px 12px', textTransform: 'uppercase' }}>Upgrade</div>
+              <div className="label" style={{ color: '#c9b27e', marginBottom: 18 }}>Plus</div>
+              <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 40 : 52, color: '#fff', lineHeight: 0.9, letterSpacing: '0.01em', margin: '0 0 6px' }}>Plus</h2>
+              <div style={{ fontFamily: 'Inter', fontSize: 15, color: 'rgba(255,255,255,0.6)', marginBottom: 28 }}>
+                <strong style={{ color: '#fff' }}>{priceLabel}</strong>/year{isIntro ? <span style={{ color: '#c9b27e' }}> · intro rate{p?.introUntil ? ` through ${fmtDay(p.introUntil)}` : ''}</span> : null}
               </div>
-            ))}
+              <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>Everything in Member, plus:</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px' }}>
+                {PLUS_BENEFITS.map(b => (
+                  <li key={b} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+                    <Mark gold />
+                    <span style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.8)', lineHeight: 1.6 }}>{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <div style={{ marginTop: 'auto' }}>{goldCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}</div>
+            </div>
+
           </div>
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section style={{ background: '#111111', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: isMobile ? '56px 20px' : '100px 40px' }}>
+      {/* HOW PLUS SHORT-NOTICE WORKS */}
+      <section style={{ background: '#111111', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: isMobile ? '52px 20px' : '96px 40px' }}>
         <div style={{ maxWidth: PAGE_MAX, margin: '0 auto' }}>
-          <div style={{ marginBottom: isMobile ? 40 : 72 }}>
-            <div className="label" style={{ marginBottom: 20 }}>How it works</div>
-            <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(40px, 7vw, 88px)', color: '#fff', lineHeight: 0.9, margin: 0 }}>Simple. Fast.<br />On your terms.</h2>
+          <div style={{ marginBottom: isMobile ? 36 : 64 }}>
+            <div className="label" style={{ marginBottom: 20 }}>How Plus works</div>
+            <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(36px, 6vw, 76px)', color: '#fff', lineHeight: 0.9, margin: 0 }}>Move fast.<br />Never lose a session.</h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
-            {STEPS.map(s => (
-              <div key={s.n} style={{ background: '#111111', padding: isMobile ? '36px 26px' : '48px 36px' }}>
-                <div className="label" style={{ marginBottom: 24 }}>{s.n}</div>
-                <h3 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 24 : 28, color: '#fff', lineHeight: 1, margin: '0 0 16px', letterSpacing: '0.01em' }}>{s.title}</h3>
-                <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, margin: 0 }}>{s.desc}</p>
+            {[
+              { n: '01', t: 'REQUEST YOUR SLOT', d: 'Spot a near-term opening inside the 48-hour window and request it. We approve, then you have a short window to lock it in.' },
+              { n: '02', t: 'CANCEL WORRY-FREE', d: 'Plans change? Cancel before your session and the full value comes back as studio credit — automatically.' },
+              { n: '03', t: 'NEVER LOSE MONEY', d: 'Even a true no-show can be credited on request. Your money stays in the building for the next shoot.' },
+            ].map(s => (
+              <div key={s.n} style={{ background: '#111111', padding: isMobile ? '32px 24px' : '44px 32px' }}>
+                <div className="label" style={{ color: '#c9b27e', marginBottom: 22 }}>{s.n}</div>
+                <h3 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 22 : 26, color: '#fff', lineHeight: 1, margin: '0 0 16px', letterSpacing: '0.01em' }}>{s.t}</h3>
+                <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, margin: 0 }}>{s.d}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PRICING / FINAL CTA */}
-      <section style={{ padding: isMobile ? '64px 20px' : '120px 40px', textAlign: isMobile ? 'left' : 'center' }}>
+      {/* FINAL CTA */}
+      <section style={{ padding: isMobile ? '60px 20px' : '110px 40px', textAlign: isMobile ? 'left' : 'center' }}>
         <div style={{ maxWidth: PAGE_MAX, margin: '0 auto' }}>
-          <div className="label" style={{ marginBottom: 20, color: '#c9b27e' }}>{isIntro ? 'Founding rate' : 'Membership'}</div>
-          <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(72px, 14vw, 180px)', color: '#fff', lineHeight: 0.86, margin: 0 }}>
-            {priceLabel}<span style={{ fontFamily: 'Inter', fontSize: isMobile ? 15 : 20, fontWeight: 500, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.45)', marginLeft: 12 }}>/ year</span>
-          </h2>
-          {isIntro && (
-            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 16 }}>
-              Intro rate{p?.introUntil ? ` through ${fmtDay(p.introUntil)}` : ''} — {stdLabel}/year after.
-            </div>
-          )}
-          <div style={{ marginTop: 44, display: 'flex', justifyContent: isMobile ? 'flex-start' : 'center' }}>
-            {outlineCta(member ? 'MANAGE MEMBERSHIP' : 'GO PLUS')}
-          </div>
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)', lineHeight: 1.7, marginTop: 26, maxWidth: 560, marginLeft: isMobile ? 0 : 'auto', marginRight: isMobile ? 0 : 'auto' }}>
-            Renews yearly · cancel auto-renew anytime · short-notice bookings are studio-approved. Not a member? You can still book with 48 hours’ notice, always.
+          <div className="label" style={{ marginBottom: 20, color: '#c9b27e' }}>Join Made Kulture</div>
+          <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(52px, 10vw, 128px)', color: '#fff', lineHeight: 0.88, margin: '0 0 40px' }}>Start free.<br />Upgrade anytime.</h2>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: isMobile ? 'flex-start' : 'center' }}>
+            {filledCta('Create free account', '/signup')}
+            {outlineCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}
           </div>
         </div>
       </section>
