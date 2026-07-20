@@ -6,6 +6,7 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 import ReviewSettingsCard from '@/components/ReviewSettingsCard'
 import AdminCardCharge from '@/components/AdminCardCharge'
 import AddSetModal from '@/components/AddSetModal'
+import AddChargeModal from '@/components/AddChargeModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -398,6 +399,7 @@ export default function AdminDashboard() {
   const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [addSetFor,     setAddSetFor]     = useState<Booking | null>(null)  // "add another set" modal
+  const [addChargeFor,  setAddChargeFor]  = useState<Booking | null>(null)  // "add charge" (equipment/fees) modal
   const [nowHour,       setNowHour]       = useState(getNowHour)
 
   // Customer search
@@ -3596,6 +3598,12 @@ export default function AdminDashboard() {
                 + ADD ANOTHER SET
               </button>
             )}
+            {detailBooking.status !== 'cancelled' && (
+              <button onClick={() => setAddChargeFor(detailBooking)}
+                style={{ background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.35)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#e6c07a' }}>
+                + ADD CHARGE (EQUIPMENT / FEES)
+              </button>
+            )}
             {detailBooking.customers?.phone && (
               <button onClick={() => window.open(`sms:${detailBooking.customers?.phone}`, '_blank')}
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
@@ -3783,6 +3791,15 @@ export default function AdminDashboard() {
           defaultDate={localDateStr(addSetFor.start_time)}
           onClose={() => setAddSetFor(null)}
           onSuccess={() => { setAddSetFor(null); setDetailBooking(null); fetchBookings() }}
+        />
+      )}
+
+      {/* ADD CHARGE (equipment / one-off fees) */}
+      {addChargeFor && (
+        <AddChargeModal
+          booking={addChargeFor as any}
+          onClose={() => setAddChargeFor(null)}
+          onSuccess={() => { setAddChargeFor(null); setDetailBooking(null); fetchBookings() }}
         />
       )}
 
