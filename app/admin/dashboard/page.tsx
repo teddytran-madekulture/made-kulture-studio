@@ -52,7 +52,7 @@ interface Booking {
   id: string
   start_time: string
   end_time: string
-  status: 'confirmed' | 'cancelled' | 'completed'
+  status: 'confirmed' | 'cancelled' | 'completed' | 'no_show'
   total_amount: number
   notes: string | null
   source: string
@@ -2028,7 +2028,7 @@ export default function AdminDashboard() {
                         {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
                         <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
                           <div><div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
-                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_price != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_price}</div>}</div>
+                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_amount != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_amount}</div>}</div>
                         </div>
                       </div>
                     )
