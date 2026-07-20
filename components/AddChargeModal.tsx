@@ -26,6 +26,8 @@ interface SavedCard {
   last4: string | null
   squareCustomerId: string
   isBookingCard?: boolean
+  prepaidType?: string | null   // 'PREPAID' | 'NOT_PREPAID' | 'UNKNOWN'
+  cardType?: string | null      // 'CREDIT' | 'DEBIT' | ...
 }
 
 export interface AddChargeBooking {
@@ -58,6 +60,8 @@ export default function AddChargeModal({
   const [keying, setKeying]       = useState(false)
   const [busy, setBusy]           = useState(false)
   const [error, setError]         = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)  // cardId pending removal
+  const [removing, setRemoving]   = useState(false)
 
   // Load the equipment catalog + the customer's saved cards.
   useEffect(() => {
@@ -123,6 +127,32 @@ export default function AddChargeModal({
       setError('Something went wrong. Please try again.'); setBusy(false)
     }
   }, [busy, total, chosenCard, booking.id, lines, sendSms, onSuccess])
+
+  // Permanently remove a dead / unusable card on file.
+  const removeCard = useCallback(async (cardId: string) => {
+    if (removing) return
+    setRemoving(true); setError(null)
+    try {
+      const res = await fetch('/api/admin/cards/disable', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId }),
+      })
+      const d = await res.json()
+      if (res.ok && d.success) {
+        setCards(cs => {
+          const next = cs.filter(c => c.id !== cardId)
+          setChosen(prev => (prev === cardId ? (next[0]?.id ?? null) : prev))
+          return next
+        })
+        setConfirmRemove(null)
+      } else {
+        setError(d.error || 'Could not remove the card.')
+      }
+    } catch {
+      setError('Could not remove the card.')
+    }
+    setRemoving(false)
+  }, [removing])
 
   const label: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)' }
   const summary = lines.map(l => ('quantity' in l && (l as any).quantity > 1 ? `${(l as any).quantity}× ${l.label}` : l.label)).join(', ')
@@ -232,15 +262,34 @@ export default function AddChargeModal({
               <div style={{ marginTop: 18 }}>
                 <div style={{ ...label, marginBottom: 8 }}>CHARGE CARD ON FILE</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {cards.map(c => (
-                    <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: `1px solid ${c.id === chosenCardId ? 'rgba(74,222,128,0.5)' : 'rgba(255,255,255,0.14)'}`, cursor: 'pointer' }}>
-                      <input type="radio" name="mkcard" checked={c.id === chosenCardId} onChange={() => setChosen(c.id)} />
-                      <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff' }}>
-                        {(c.brand || 'Card').replace('_', ' ')} ····{c.last4}
-                        {c.isBookingCard && <span style={{ color: '#d4a843', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8 }}>ON FILE</span>}
-                      </span>
-                    </label>
-                  ))}
+                  {cards.map(c => {
+                    const prepaid = c.prepaidType === 'PREPAID'
+                    return (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: `1px solid ${c.id === chosenCardId ? 'rgba(74,222,128,0.5)' : 'rgba(255,255,255,0.14)'}` }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flex: 1, minWidth: 0 }}>
+                          <input type="radio" name="mkcard" checked={c.id === chosenCardId} onChange={() => setChosen(c.id)} />
+                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff' }}>
+                            {(c.brand || 'Card').replace('_', ' ')} ····{c.last4}
+                            {c.isBookingCard && <span style={{ color: '#d4a843', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8 }}>ON FILE</span>}
+                            {prepaid && <span style={{ color: '#f5a623', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8, border: '1px solid rgba(245,166,35,0.4)', padding: '1px 5px' }}>PREPAID</span>}
+                          </span>
+                        </label>
+                        {confirmRemove === c.id ? (
+                          <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                            <button onClick={() => removeCard(c.id)} disabled={removing}
+                              style={{ background: 'rgba(255,107,107,0.15)', border: '1px solid rgba(255,107,107,0.4)', color: '#ff6b6b', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', padding: '4px 8px', cursor: removing ? 'default' : 'pointer' }}>
+                              {removing ? '…' : 'REMOVE'}
+                            </button>
+                            <button onClick={() => setConfirmRemove(null)} disabled={removing}
+                              style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 14, cursor: 'pointer' }}>&#x2715;</button>
+                          </span>
+                        ) : (
+                          <button onClick={() => setConfirmRemove(c.id)} title="Remove this card (use for dead/declined cards)"
+                            style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 15, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>&#x2715;</button>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}

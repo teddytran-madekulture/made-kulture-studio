@@ -77,6 +77,8 @@ export async function GET(req: NextRequest) {
             expYear:          c.expYear != null ? Number(c.expYear) : null,
             squareCustomerId: cid,
             isBookingCard,
+            prepaidType:      c.prepaidType ?? null,   // 'PREPAID' | 'NOT_PREPAID' | 'UNKNOWN'
+            cardType:         c.cardType ?? null,       // 'CREDIT' | 'DEBIT' | ...
           })
         }
       } catch (e) {

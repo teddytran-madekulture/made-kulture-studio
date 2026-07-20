@@ -155,6 +155,8 @@ interface SquareCard {
   expMonth: number
   expYear: number
   squareCustomerId?: string  // Square profile that OWNS this card (charge must pair card + owner)
+  prepaidType?: string | null  // 'PREPAID' | 'NOT_PREPAID' | 'UNKNOWN'
+  cardType?: string | null     // 'CREDIT' | 'DEBIT' | ...
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -273,7 +275,8 @@ function tomorrow() {
 }
 
 function cardLabel(c: SquareCard) {
-  return `${c.brand?.replace('_', ' ')} **** ${c.last4}  (exp ${c.expMonth}/${c.expYear})`
+  const prepaid = c.prepaidType === 'PREPAID' ? '  · PREPAID' : ''
+  return `${c.brand?.replace('_', ' ')} **** ${c.last4}  (exp ${c.expMonth}/${c.expYear})${prepaid}`
 }
 
 function hourToISO(date: string, hour: number): string {
