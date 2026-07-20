@@ -8,7 +8,7 @@ import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
-import { createBookingPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
@@ -173,7 +173,7 @@ interface OrderLine {
 
 async function sendConfirmationSMS(
   body: BookingRequest, lines: OrderLine[], totalCents: number, checkInToken?: string | null,
-  doorCode?: string | null
+  doorCode?: string | null, doorCodeBack?: string | null
 ) {
   const dollars = (totalCents / 100).toFixed(2)
   const sched = lines.map(l =>
@@ -182,7 +182,12 @@ async function sendConfirmationSMS(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
   const checkInLine = checkInToken ? `📲 Check in when you arrive: ${appUrl}/checkin/${checkInToken}` : null
   const doorDisplay = doorCode ? doorCode.replace(/(\d{3})(?=\d)/g, '$1 ') : null
-  const doorLine = doorCode ? `🔑 Front-door code: ${doorDisplay} (works during your booked time only)` : null
+  const doorBackDisplay = doorCodeBack ? doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ') : null
+  const codeLines = [
+    doorCode ? `🔑 Front-door code: ${doorDisplay}` : null,
+    doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
+  ].filter(Boolean) as string[]
+  if (codeLines.length) codeLines.push('(each works during your booked time only)')
 
   const message = [
     `✅ Made Kulture — Booking Confirmed!`,
@@ -191,7 +196,7 @@ async function sendConfirmationSMS(
     sched,
     ...(guestLine ? [guestLine] : []),
     `💳 $${dollars} charged`,
-    ...(doorLine ? [``, doorLine] : []),
+    ...(codeLines.length ? ['', ...codeLines] : []),
     ...(checkInLine ? [``, checkInLine] : []),
     ``,
     `4825 Gulf Freeway, Houston TX 77023`,
@@ -611,19 +616,25 @@ export async function POST(req: NextRequest) {
     //     the latest end across all set lines. Awaited so the SMS/email below
     //     can include it, but non-fatal — the booking is already saved.
     let doorCode: string | null = null
+    let doorCodeBack: string | null = null
     try {
       const startMs = Math.min(...lines.map(l => Date.parse(l.startISO)))
       const endMs   = Math.max(...lines.map(l => Date.parse(l.endISO)))
-      const pin = await createBookingPin({
-        startISO: new Date(startMs).toISOString(),
-        endISO:   new Date(endMs).toISOString(),
-        accessName: `MK ${body.name} ${primary.date}`,
-      })
+      const winStart = new Date(startMs).toISOString()
+      const winEnd   = new Date(endMs).toISOString()
+      // Front door, and (when a back-door lock is configured) the back door too.
+      // Each lock's algoPIN is distinct — the same window yields two codes.
+      const pin     = await createBookingPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${body.name} ${primary.date}` })
       if (pin) {
         doorCode = pin.pin
-        await supabase.from('bookings')
-          .update({ door_code: pin.pin, door_code_pin_id: pin.pinId })
-          .in('id', bookingIds)
+        await supabase.from('bookings').update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).in('id', bookingIds)
+      }
+      // Back door is written separately so a missing back-door column (migration
+      // 081 not yet run) can never roll back the front-door code above.
+      const pinBack = await createBackDoorPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${body.name} ${primary.date} back` })
+      if (pinBack) {
+        doorCodeBack = pinBack.pin
+        await supabase.from('bookings').update({ door_code_back: pinBack.pin, door_code_back_pin_id: pinBack.pinId }).in('id', bookingIds)
       }
     } catch (err) {
       console.error('[bookings] door code generation error (non-fatal):', err)
@@ -674,7 +685,7 @@ export async function POST(req: NextRequest) {
     //     right after responding, delaying the email/SMS by minutes. Each send
     //     still .catch()es so a failure stays non-fatal.
     const notifications: Promise<any>[] = [
-      sendConfirmationSMS(body, lines, chargeCents, checkInToken, doorCode)
+      sendConfirmationSMS(body, lines, chargeCents, checkInToken, doorCode, doorCodeBack)
         .catch(err => console.error('SMS error (non-fatal):', err)),
     ]
 
@@ -694,6 +705,7 @@ export async function POST(req: NextRequest) {
           notes: body.notes || undefined, scheduleLines,
           guestCount: guestCount || undefined,
           doorCode: doorCode || undefined,
+          doorCodeBack: doorCodeBack || undefined,
           startISO: primary.startISO, endISO: primary.endISO,
           checkInToken: checkInToken || undefined,
         }).catch(err => console.error('Email confirmation error (non-fatal):', err)),

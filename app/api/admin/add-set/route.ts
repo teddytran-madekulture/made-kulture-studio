@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import twilio from 'twilio'
 import { randomUUID } from 'crypto'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
-import { createBookingPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 
@@ -177,17 +177,21 @@ export async function POST(req: NextRequest) {
     const isPast = new Date(r.endISO).getTime() < Date.now()
 
     // 4. Door code (non-fatal) — only for upcoming windows; useless for a past one.
+    //    Front door, plus the back door when a back-door lock is configured.
     let doorCode: string | null = null
+    let doorCodeBack: string | null = null
     if (!isPast) {
       try {
-        const pin = await createBookingPin({
-          startISO: r.startISO, endISO: r.endISO,
-          accessName: `MK ${setName} ${name || ''}`.slice(0, 40),
-        })
+        const pin     = await createBookingPin({ startISO: r.startISO, endISO: r.endISO, accessName: `MK ${setName} ${name || ''}`.slice(0, 40) })
         if (pin) {
           doorCode = pin.pin
-          await supabase.from('bookings')
-            .update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).eq('id', booking.id)
+          await supabase.from('bookings').update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).eq('id', booking.id)
+        }
+        // Back door written separately so a missing back-door column can't roll back the front code.
+        const pinBack = await createBackDoorPin({ startISO: r.startISO, endISO: r.endISO, accessName: `MK ${setName} ${name || ''} back`.slice(0, 40) })
+        if (pinBack) {
+          doorCodeBack = pinBack.pin
+          await supabase.from('bookings').update({ door_code_back: pinBack.pin, door_code_back_pin_id: pinBack.pinId }).eq('id', booking.id)
         }
       } catch (e) { console.error('[add-set] door code error (non-fatal):', e) }
     }
@@ -216,7 +220,8 @@ export async function POST(req: NextRequest) {
             `⏰ ${fmt12(startHour)} – ${fmt12(endHour)}`,
             `📍 ${setName}`,
             `💳 $${amount.toFixed(2)} charged`,
-            ...(doorCode ? [`🔑 Door code: ${doorCode}`] : []),
+            ...(doorCode ? [`🔑 Front-door code: ${doorCode}`] : []),
+            ...(doorCodeBack ? [`🔑 Back-door code: ${doorCodeBack}`] : []),
             ``,
             `4825 Gulf Freeway, Houston TX 77023`,
             `Questions? Text (832) 408-1631.`,

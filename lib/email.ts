@@ -115,6 +115,7 @@ interface BookingConfirmationData {
   scheduleLines?: string[] // multi-set orders: one line per set, e.g. "Set A — Sat Jul 12, 2pm–5pm"
   guestCount?: number      // declared party size (the booked limit)
   doorCode?: string        // per-booking front-door code (igloohome algoPIN)
+  doorCodeBack?: string    // per-booking back-door code (igloohome algoPIN; when a back-door lock is configured)
   startISO?: string        // primary window start/end (raw ISO) for calendar links
   endISO?: string
   checkInToken?: string    // gates the downloadable .ics link
@@ -124,10 +125,10 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode, startISO, endISO, checkInToken } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode, doorCodeBack, startISO, endISO, checkInToken } = data
   const isBuyout = /full studio takeover/i.test(setName) // buyouts are private — skip the shared-studio note
 
-  const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', `Manage: ${APP_URL}/account`].filter(Boolean).join(' ')
+  const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', doorCodeBack ? `Back-door code: ${doorCodeBack}.` : '', `Manage: ${APP_URL}/account`].filter(Boolean).join(' ')
   const gCalLink = (startISO && endISO)
     ? googleCalUrl({ title: `Made Kulture — ${setName}`, startISO, endISO, location: STUDIO_ADDRESS, details: calDetails })
     : null
@@ -211,6 +212,18 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
           <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Front-Door Code</p>
           <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCode.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
           <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">front-door</strong> keypad, then press the unlock key. It only works during your booked time. Don't share it.</p>
+        </td>
+      </tr>
+    </table>` : ''}
+
+    ${doorCodeBack ? `
+    <!-- Back Door Code -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid ${ACCENT_COLOR};border-radius:6px;padding:20px 24px;margin-bottom:16px;">
+      <tr>
+        <td align="center">
+          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Back-Door Code</p>
+          <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
+          <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">back-door</strong> keypad, then press the unlock key. It only works during your booked time. Don't share it.</p>
         </td>
       </tr>
     </table>` : ''}

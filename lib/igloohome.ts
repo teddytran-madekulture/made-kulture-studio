@@ -1,18 +1,27 @@
 // igloohome API — per-booking door codes (algoPIN, offline).
 //
 // On a confirmed booking we mint an *hourly* algoPIN valid for the booking
-// window on the front-door lock. algoPINs are computed offline against the
-// lock's clock, so they work without wifi/bridge and expire on their own.
+// window on the front-door lock — and, when a back-door lock is configured, a
+// second algoPIN on the back door for the same window. algoPINs are computed
+// offline against each lock's own clock + unique algorithm, so a code is
+// specific to ONE lock (the same PIN can't open both doors) and expires on its
+// own without wifi/bridge.
 //
 // Auth:  POST https://auth.igloohome.co/oauth2/token  (Basic client_id:secret,
 //        grant_type=client_credentials). Token is a JWT valid ~24h; cached here.
+//        The same API account owns both locks, so one token covers both.
 // PIN:   POST https://api.igloodeveloper.co/igloohome/devices/{deviceId}/algopin/hourly
 //        body { variance, startDate, endDate, accessName } → { pin, pinId }
 //
 // Env (set in Vercel from Bitwarden "igloohome API – Made Kulture"):
-//   IGLOOHOME_CLIENT_ID, IGLOOHOME_CLIENT_SECRET, IGLOOHOME_DEVICE_ID
-// If any is missing the feature is dormant (createBookingPin returns null) so
-// bookings keep working before the env vars are wired up.
+//   IGLOOHOME_CLIENT_ID, IGLOOHOME_CLIENT_SECRET  — shared API credentials
+//   IGLOOHOME_DEVICE_ID       — front-door lock (DBX211001490)
+//   IGLOOHOME_DEVICE_ID_BACK  — back-door lock (optional; while unset the
+//                               back-door code feature stays dormant and the
+//                               front door behaves exactly as before)
+// If the client creds or the front-door device id are missing the front-door
+// feature is dormant (createBookingPin returns null) so bookings keep working
+// before the env vars are wired up.
 
 const AUTH_URL = 'https://auth.igloohome.co/oauth2/token'
 const API_BASE = 'https://api.igloodeveloper.co'
@@ -23,13 +32,16 @@ const HOUR_MS = 60 * 60 * 1000
 const MIN_WINDOW_MS = HOUR_MS                // 1 hour
 const MAX_WINDOW_MS = 672 * HOUR_MS          // 28 days
 
-function creds() {
+// Shared API credentials (the same igloohome account owns every lock).
+function apiCreds() {
   const clientId = process.env.IGLOOHOME_CLIENT_ID
   const clientSecret = process.env.IGLOOHOME_CLIENT_SECRET
-  const deviceId = process.env.IGLOOHOME_DEVICE_ID
-  if (!clientId || !clientSecret || !deviceId) return null
-  return { clientId, clientSecret, deviceId }
+  if (!clientId || !clientSecret) return null
+  return { clientId, clientSecret }
 }
+
+function frontDeviceId() { return process.env.IGLOOHOME_DEVICE_ID || null }
+function backDeviceId()  { return process.env.IGLOOHOME_DEVICE_ID_BACK || null }
 
 // ── Token cache (module-scoped; fine for serverless warm invocations) ──────────
 let cachedToken: { value: string; expiresAt: number } | null = null
@@ -70,17 +82,16 @@ export interface BookingPin {
   pinId: string | null
 }
 
-// Generate an hourly algoPIN for [startISO, endISO] on the front-door lock.
+// Core: mint an hourly algoPIN on a specific lock for [startISO, endISO].
 // startISO/endISO are the booking window (ISO strings, any parseable offset).
-// Returns null if the feature isn't configured; throws on a real API error so
-// the caller can log it (callers treat it as non-fatal).
-export async function createBookingPin(opts: {
+// Throws on an invalid window or a real API error (callers treat it as non-fatal).
+async function mintHourlyPin(deviceId: string, opts: {
   startISO: string
   endISO: string
   accessName: string
-}): Promise<BookingPin | null> {
-  const c = creds()
-  if (!c) return null
+}): Promise<BookingPin> {
+  const c = apiCreds()
+  if (!c) throw new Error('igloohome: missing API credentials')
 
   const s0 = Date.parse(opts.startISO)
   const e0 = Date.parse(opts.endISO)
@@ -99,7 +110,7 @@ export async function createBookingPin(opts: {
 
   const token = await getAccessToken(c.clientId, c.clientSecret)
   const res = await fetch(
-    `${API_BASE}/igloohome/devices/${encodeURIComponent(c.deviceId)}/algopin/hourly`,
+    `${API_BASE}/igloohome/devices/${encodeURIComponent(deviceId)}/algopin/hourly`,
     {
       method: 'POST',
       headers: {
@@ -121,7 +132,37 @@ export async function createBookingPin(opts: {
   return { pin: String(json.pin), pinId: json.pinId ?? null }
 }
 
-// True when the door-code feature is configured (used to gate DB writes/UI).
+// Front-door algoPIN for [startISO, endISO]. Returns null if the feature isn't
+// configured (missing creds or front-door device id); throws on a real API error.
+export async function createBookingPin(opts: {
+  startISO: string
+  endISO: string
+  accessName: string
+}): Promise<BookingPin | null> {
+  const deviceId = frontDeviceId()
+  if (!apiCreds() || !deviceId) return null
+  return mintHourlyPin(deviceId, opts)
+}
+
+// Back-door algoPIN for the same window. Returns null when no back-door lock is
+// configured (IGLOOHOME_DEVICE_ID_BACK unset), so the back-door feature stays
+// dormant until the second lock is paired and its device id is added to Vercel.
+export async function createBackDoorPin(opts: {
+  startISO: string
+  endISO: string
+  accessName: string
+}): Promise<BookingPin | null> {
+  const deviceId = backDeviceId()
+  if (!apiCreds() || !deviceId) return null
+  return mintHourlyPin(deviceId, opts)
+}
+
+// True when the front-door code feature is configured (used to gate DB writes/UI).
 export function doorCodesEnabled(): boolean {
-  return creds() !== null
+  return apiCreds() !== null && frontDeviceId() !== null
+}
+
+// True when the back-door lock is configured.
+export function backDoorEnabled(): boolean {
+  return apiCreds() !== null && backDeviceId() !== null
 }

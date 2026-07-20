@@ -13,7 +13,7 @@ import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDa
 import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
-import { createBookingPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
@@ -362,21 +362,26 @@ export async function finalizeBooking(
   const primary = lines[0]
   const totalAmount = rows.reduce((s: number, r: any) => s + Number(r.total_amount ?? 0), 0)
 
-  // Door code across the whole window.
+  // Door code across the whole window — front door, plus the back door when a
+  // back-door lock is configured (distinct algoPIN per lock).
   let doorCode: string | null = null
+  let doorCodeBack: string | null = null
   try {
     const startMs = Math.min(...lines.map(l => Date.parse(l.startISO)))
     const endMs   = Math.max(...lines.map(l => Date.parse(l.endISO)))
-    const pin = await createBookingPin({
-      startISO: new Date(startMs).toISOString(),
-      endISO:   new Date(endMs).toISOString(),
-      accessName: `MK ${custName} ${primary.date}`.slice(0, 40),
-    })
+    const winStart = new Date(startMs).toISOString()
+    const winEnd   = new Date(endMs).toISOString()
+    const pin     = await createBookingPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${custName} ${primary.date}`.slice(0, 40) })
     if (pin) {
       doorCode = pin.pin
-      await supabase.from('bookings')
-        .update({ door_code: pin.pin, door_code_pin_id: pin.pinId })
-        .in('id', bookingIds)
+      await supabase.from('bookings').update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).in('id', bookingIds)
+    }
+    // Back door written separately — a missing back-door column (migration 081
+    // not yet run) can never roll back the front-door code above.
+    const pinBack = await createBackDoorPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${custName} ${primary.date} back`.slice(0, 40) })
+    if (pinBack) {
+      doorCodeBack = pinBack.pin
+      await supabase.from('bookings').update({ door_code_back: pinBack.pin, door_code_back_pin_id: pinBack.pinId }).in('id', bookingIds)
     }
   } catch (err) {
     console.error('[finalize] door code error (non-fatal):', err)
@@ -416,14 +421,19 @@ export async function finalizeBooking(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
     const checkInLine = first.check_in_token ? `📲 Check in when you arrive: ${appUrl}/checkin/${first.check_in_token}` : null
     const doorDisplay = doorCode ? doorCode.replace(/(\d{3})(?=\d)/g, '$1 ') : null
-    const doorLine = doorCode ? `🔑 Front-door code: ${doorDisplay} (works during your booked time only)` : null
+    const doorBackDisplay = doorCodeBack ? doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ') : null
+    const codeLines = [
+      doorCode ? `🔑 Front-door code: ${doorDisplay}` : null,
+      doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
+    ].filter(Boolean) as string[]
+    if (codeLines.length) codeLines.push('(each works during your booked time only)')
     const guestLine = guestCount ? `👥 ${guestCount} guests — this is your booked limit` : null
     const message = [
       `✅ Made Kulture — Booking Confirmed!`, ``,
       `${custName}, you're locked in.`, sched,
       ...(guestLine ? [guestLine] : []),
       `💳 $${dollars} paid`,
-      ...(doorLine ? [``, doorLine] : []),
+      ...(codeLines.length ? ['', ...codeLines] : []),
       ...(checkInLine ? [``, checkInLine] : []),
       ``, `4825 Gulf Freeway, Houston TX 77023`,
       `Questions? Text or call (832) 408-1631.`, `Reply STOP to opt out.`,
@@ -446,6 +456,7 @@ export async function finalizeBooking(
         notes: notes || undefined, scheduleLines,
         guestCount: guestCount || undefined,
         doorCode: doorCode || undefined,
+        doorCodeBack: doorCodeBack || undefined,
         startISO: primary.startISO, endISO: primary.endISO,
         checkInToken: first.check_in_token || undefined,
       } as any).catch((err: any) => console.error('[finalize] email confirm error:', err)),

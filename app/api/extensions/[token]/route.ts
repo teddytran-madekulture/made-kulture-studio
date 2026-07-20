@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { planExtension } from '@/lib/extensions'
 import { patchCalendarEvent } from '@/lib/gcal'
-import { createBookingPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 
@@ -173,8 +173,10 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
   }
 
   // Door code: the original algoPIN expires at the old end time — mint a fresh
-  // one covering the extended window so the guest can still get back in.
+  // one covering the extended window so the guest can still get back in. Refresh
+  // whichever locks the booking already had a code on (front and/or back).
   let newDoorCode: string | null = null
+  let newDoorCodeBack: string | null = null
   if (b.door_code) {
     try {
       const pin = await createBookingPin({
@@ -192,13 +194,31 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
       console.error('[extension] door code refresh error (non-fatal):', e)
     }
   }
+  if (b.door_code_back) {
+    try {
+      const pinBack = await createBackDoorPin({
+        startISO: b.start_time,
+        endISO: p.newEndISO,
+        accessName: `MK ext ${p.customerName} back`.slice(0, 40),
+      })
+      if (pinBack) {
+        newDoorCodeBack = pinBack.pin
+        await db.from('bookings')
+          .update({ door_code_back: pinBack.pin, door_code_back_pin_id: pinBack.pinId })
+          .eq('id', r.booking_id)
+      }
+    } catch (e) {
+      console.error('[extension] back-door code refresh error (non-fatal):', e)
+    }
+  }
 
   const untilLabel = centralLabel(p.newEndISO)
   if (p.customerPhone) {
     await sendSMS(
       p.customerPhone,
       `✅ Done! ${p.setName} is yours until ${untilLabel}. $${(r.amount_cents / 100).toFixed(2)} charged to your card on file.` +
-      (newDoorCode ? `\n🔑 Updated door code (valid to ${untilLabel}): ${newDoorCode}` : '') +
+      (newDoorCode ? `\n🔑 Updated front-door code (valid to ${untilLabel}): ${newDoorCode}` : '') +
+      (newDoorCodeBack ? `\n🔑 Updated back-door code (valid to ${untilLabel}): ${newDoorCodeBack}` : '') +
       `\n— Made Kulture`
     ).catch(e => console.error('[extension] receipt SMS error:', e))
   }

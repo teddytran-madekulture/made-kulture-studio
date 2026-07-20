@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const token = req.nextUrl.searchParams.get('token') || ''
   const { data: b } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, door_code, check_in_token, sets(name)')
+    .select('id, start_time, end_time, door_code, door_code_back, check_in_token, sets(name)')
     .eq('id', params.id)
     .maybeSingle()
 
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const details = [
     `Your Made Kulture session: ${setName}.`,
     (b as any).door_code ? `Front-door code: ${(b as any).door_code} (works during your booked time).` : '',
+    (b as any).door_code_back ? `Back-door code: ${(b as any).door_code_back} (works during your booked time).` : '',
     `Manage your booking at ${(process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')}/account`,
   ].filter(Boolean).join('\n')
 
