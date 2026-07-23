@@ -13,6 +13,18 @@ export const WORKER_CLASS_LABELS: Record<WorkerClass, string> = {
   freelancer: 'Freelancer',
 }
 
+export type WorkerProfile = {
+  id: string
+  account_id: string | null
+  email: string | null
+  full_name: string | null
+  worker_class: WorkerClass
+  status: WorkerStatus
+  learning_only: boolean
+  created_at: string
+  updated_at: string
+}
+
 // ── Module + quiz shapes ───────────────────────────────────────────────────────
 export type QuizQuestion = {
   id: string
@@ -88,6 +100,25 @@ export async function getCurrentModules(): Promise<OnboardingModule[]> {
 
 export function requiredForClass(modules: OnboardingModule[], cls: WorkerClass): OnboardingModule[] {
   return modules.filter(m => (m.required_for || []).includes(cls))
+}
+
+// A worker's profile by their auth account id (or null if not enrolled).
+export async function getWorkerByAccount(accountId: string): Promise<WorkerProfile | null> {
+  const { data } = await supabaseAdmin()
+    .from('worker_profiles')
+    .select('*')
+    .eq('account_id', accountId)
+    .maybeSingle()
+  return (data ?? null) as WorkerProfile | null
+}
+
+// A worker's progress rows.
+export async function getProgressRows(workerId: string): Promise<ProgressRow[]> {
+  const { data } = await supabaseAdmin()
+    .from('onboarding_progress')
+    .select('module_slug, module_version, passed')
+    .eq('worker_id', workerId)
+  return (data ?? []) as ProgressRow[]
 }
 
 // ── Certification logic ─────────────────────────────────────────────────────────

@@ -24,8 +24,9 @@ export async function middleware(request: NextRequest) {
   // Refresh session
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protect /account/* routes — redirect to login if not authenticated
-  if (request.nextUrl.pathname.startsWith('/account') && !user) {
+  // Protect /account/* and /work/* routes — redirect to login if not authenticated
+  const p = request.nextUrl.pathname
+  if ((p.startsWith('/account') || p.startsWith('/work')) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('next', request.nextUrl.pathname)
@@ -36,5 +37,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/account/:path*'],
+  matcher: ['/account/:path*', '/work/:path*'],
 }
