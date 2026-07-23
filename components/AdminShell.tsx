@@ -64,6 +64,9 @@ function SidebarInner() {
         <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
         <Item href="/admin/roles" icon="◆" label="Directory Roles" active={on('/admin/roles')} />
 
+        <div style={sectionHdr}>STAFFING</div>
+        <Item href="/admin/onboarding" icon="🎓" label="Onboarding" active={on('/admin/onboarding')} />
+
         <div style={sectionHdr}>MARKETING</div>
         <Item href="/admin/marketing" icon="📣" label="Email Campaign" active={on('/admin/marketing')} />
         <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
