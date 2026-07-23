@@ -1377,6 +1377,16 @@ export default function AdminDashboard() {
             <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>$</span>Funding Tracker
           </a>
 
+          {/* STAFFING */}
+          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>STAFFING</div>
+          <a href="/admin/onboarding" style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+          }}>
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>🎓</span>Onboarding
+          </a>
+
           {/* SETTINGS (collapsible — rarely needed) */}
           <button onClick={() => setSettingsOpen(o => !o)} style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
