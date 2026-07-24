@@ -17,7 +17,10 @@ export default async function WorkLayout({ children }: { children: React.ReactNo
               MADE KULTURE
             </span>
           </Link>
-          <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)' }}>WORK</span>
+          <nav style={{ display: 'flex', gap: 18, fontSize: 12, letterSpacing: '0.08em' }}>
+            <Link href="/work/onboarding" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>ORIENTATION</Link>
+            <Link href="/work/shifts" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>SHIFTS</Link>
+          </nav>
         </div>
       </div>
       <div style={{ maxWidth: 820, margin: '0 auto', padding: '40px 24px' }}>{children}</div>
