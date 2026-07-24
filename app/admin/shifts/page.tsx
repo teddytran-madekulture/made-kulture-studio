@@ -4,6 +4,7 @@ import Link from 'next/link'
 
 type WClass = 'attendant' | 'sanitation' | 'intern' | 'freelancer'
 type ShiftState = 'open' | 'claimed' | 'cancelled' | 'past'
+type ShiftPhoto = { id: string; url: string; caption: string; created_at: string }
 interface Shift {
   id: string
   starts_at: string
@@ -13,9 +14,13 @@ interface Shift {
   claimed_by: string | null
   claimed_at: string | null
   cancelled_at: string | null
+  clock_in_at: string | null
+  clock_out_at: string | null
   label: string
   state: ShiftState
   claimer: { name: string | null; email: string | null } | null
+  worked_minutes: number | null
+  photos: ShiftPhoto[]
 }
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
@@ -34,6 +39,8 @@ function fmtRange(startIso: string, endIso: string): string {
   const sameDay = s.toDateString() === e.toDateString()
   return sameDay ? `${day} · ${t(s)} – ${t(e)}` : `${day} ${t(s)} → ${e.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} ${t(e)}`
 }
+function fmtTime(iso: string): string { return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }
+function workedLabel(mins: number): string { const h = Math.floor(mins / 60), m = mins % 60; return h ? `${h}h ${m}m` : `${m}m` }
 
 function statePill(st: ShiftState) {
   const m = ({
@@ -43,6 +50,35 @@ function statePill(st: ShiftState) {
     past: { bg: 'rgba(255,255,255,0.06)', fg: C.dim, txt: 'PAST' },
   } as Record<ShiftState, { bg: string; fg: string; txt: string }>)[st]
   return <span style={{ background: m.bg, color: m.fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap' }}>{m.txt}</span>
+}
+
+// Clock + closeout-photo summary for a claimed shift.
+function ClockBlock({ s }: { s: Shift }) {
+  if (!s.claimed_by) return null
+  let clockLine: { text: string; color: string }
+  if (s.clock_in_at && s.clock_out_at) clockLine = { text: `Worked ${fmtTime(s.clock_in_at)} – ${fmtTime(s.clock_out_at)}${s.worked_minutes != null ? ` · ${workedLabel(s.worked_minutes)}` : ''}`, color: GREEN }
+  else if (s.clock_in_at) clockLine = { text: `On the clock since ${fmtTime(s.clock_in_at)}`, color: C.accent }
+  else clockLine = { text: 'Not clocked in yet', color: C.dim }
+
+  return (
+    <div style={{ marginTop: 10, borderTop: `1px solid ${C.line}`, paddingTop: 10 }}>
+      <div style={{ fontSize: 12, color: clockLine.color }}>{clockLine.text}</div>
+      {s.photos.length > 0 ? (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Closeout photos ({s.photos.length})</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {s.photos.map(p => (
+              <a key={p.id} href={p.url} target="_blank" rel="noreferrer" title={p.caption ? `${p.caption} · ${fmtTime(p.created_at)}` : fmtTime(p.created_at)}>
+                <img src={p.url} alt={p.caption || 'closeout'} style={{ width: 66, height: 66, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.line}`, display: 'block' }} />
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : s.clock_in_at ? (
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>No closeout photos yet.</div>
+      ) : null}
+    </div>
+  )
 }
 
 export default function AdminShiftsPage() {
@@ -66,8 +102,6 @@ export default function AdminShiftsPage() {
   const post = async () => {
     setErr('')
     if (!f.starts_at || !f.ends_at) { setErr('Enter a start and end time.'); return }
-    // datetime-local gives a tz-less local string; convert to a real UTC instant
-    // here (in the browser's timezone) so the server stores the intended time.
     const sd = new Date(f.starts_at), ed = new Date(f.ends_at)
     if (isNaN(sd.getTime()) || isNaN(ed.getTime())) { setErr('Enter a valid start and end time.'); return }
     setBusy(true)
@@ -148,7 +182,7 @@ export default function AdminShiftsPage() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {shifts.map(s => (
-                  <div key={s.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '14px 18px', opacity: s.state === 'cancelled' || s.state === 'past' ? 0.6 : 1 }}>
+                  <div key={s.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '14px 18px', opacity: s.state === 'cancelled' ? 0.6 : 1 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -171,6 +205,7 @@ export default function AdminShiftsPage() {
                           : <button onClick={() => setConfirmDel(s.id)} style={smallBtn(C.dim)}>DELETE</button>}
                       </div>
                     </div>
+                    <ClockBlock s={s} />
                   </div>
                 ))}
               </div>
