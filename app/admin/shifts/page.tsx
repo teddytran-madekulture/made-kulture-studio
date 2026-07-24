@@ -139,6 +139,92 @@ function WorkerRating({ s, reload }: { s: Shift; reload: () => void }) {
   )
 }
 
+type StaffableBooking = {
+  booking_id: string
+  start_time: string
+  end_time: string
+  set_name: string | null
+  guest_count: number | null
+  shift: { id: string; worker_class: WClass; state: ShiftState; claimer_name: string | null } | null
+}
+
+// Staff straight from the booking calendar: each upcoming booking becomes a
+// one-click OPEN shift for its exact window, so workers only cover booked times.
+function StaffFromBookings({ onPosted }: { onPosted: () => void }) {
+  const [items, setItems] = useState<StaffableBooking[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [role, setRole] = useState<Record<string, WClass>>({})
+  const [err, setErr] = useState('')
+
+  const load = async () => {
+    const r = await fetch('/api/admin/staffing/bookings')
+    if (!r.ok) { setItems([]); return }
+    const d = await r.json().catch(() => ({}))
+    setItems(d.bookings ?? [])
+  }
+  useEffect(() => { load() }, [])
+
+  const post = async (bookingId: string) => {
+    setBusyId(bookingId); setErr('')
+    const r = await fetch('/api/admin/staffing/from-booking', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ booking_id: bookingId, worker_class: role[bookingId] || 'attendant' }),
+    })
+    setBusyId(null)
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not post.') }
+    load(); onPosted()
+  }
+
+  if (!items) return null
+  const needing = items.filter(b => !b.shift || b.shift.state === 'cancelled')
+
+  const shiftStatusText = (sh: NonNullable<StaffableBooking['shift']>) => {
+    if (sh.state === 'claimed') return { txt: `Claimed by ${sh.claimer_name || 'a worker'}`, color: C.accent }
+    if (sh.state === 'open') return { txt: 'Shift posted · open', color: GREEN }
+    if (sh.state === 'past') return { txt: 'Shift done', color: C.dim }
+    return { txt: 'Shift cancelled', color: RED }
+  }
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: 20, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em' }}>Staff a booking</div>
+        <div style={{ fontSize: 12, color: C.dim }}>{needing.length} upcoming booking{needing.length === 1 ? '' : 's'} unstaffed</div>
+      </div>
+      <p style={{ fontSize: 12, color: C.dim, marginTop: 0, marginBottom: 14 }}>Post a shift matching a booking&apos;s exact window — workers claim only real booked times.</p>
+      {items.length === 0 ? (
+        <div style={{ color: C.dim, fontSize: 13 }}>No upcoming bookings.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map(b => (
+            <div key={b.booking_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '10px 0', borderTop: `1px solid ${C.line}` }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{fmtRange(b.start_time, b.end_time)}</div>
+                <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{b.set_name || 'Booking'}{b.guest_count != null ? ` · ${b.guest_count} guest${b.guest_count === 1 ? '' : 's'}` : ''}</div>
+              </div>
+              {b.shift && b.shift.state !== 'cancelled' ? (
+                <span style={{ fontSize: 12, color: shiftStatusText(b.shift).color, whiteSpace: 'nowrap' }}>{shiftStatusText(b.shift).txt}</span>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <select value={role[b.booking_id] || 'attendant'} onChange={e => setRole({ ...role, [b.booking_id]: e.target.value as WClass })}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 12, padding: '6px 8px', borderRadius: 6 }}>
+                    {CLASSES.map(c => <option key={c.key} value={c.key} style={{ background: C.card }}>{c.label}</option>)}
+                  </select>
+                  <button onClick={() => post(b.booking_id)} disabled={busyId === b.booking_id}
+                    style={{ background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {busyId === b.booking_id ? '…' : 'POST SHIFT'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {err && <div style={{ color: RED, fontSize: 13, marginTop: 10 }}>{err}</div>}
+    </div>
+  )
+}
+
 export default function AdminShiftsPage() {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
@@ -211,9 +297,12 @@ export default function AdminShiftsPage() {
           </div>
         ) : (
           <>
-            {/* Post a shift */}
+            {/* Staff from bookings */}
+            <StaffFromBookings onPosted={load} />
+
+            {/* Post a one-off shift */}
             <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: 20, marginBottom: 28 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', marginBottom: 14 }}>Post a shift</div>
+              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', marginBottom: 14 }}>Post a one-off shift</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
                 <div><span style={lbl}>Starts</span><input type="datetime-local" style={inp} value={f.starts_at} onChange={e => setF({ ...f, starts_at: e.target.value })} /></div>
                 <div><span style={lbl}>Ends</span><input type="datetime-local" style={inp} value={f.ends_at} onChange={e => setF({ ...f, ends_at: e.target.value })} /></div>
