@@ -66,6 +66,7 @@ function SidebarInner() {
 
         <div style={sectionHdr}>STAFFING</div>
         <Item href="/admin/onboarding" icon="🎓" label="Onboarding" active={on('/admin/onboarding')} />
+        <Item href="/admin/workers" icon="👥" label="Workers" active={on('/admin/workers')} />
 
         <div style={sectionHdr}>MARKETING</div>
         <Item href="/admin/marketing" icon="📣" label="Email Campaign" active={on('/admin/marketing')} />

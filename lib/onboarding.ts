@@ -135,3 +135,48 @@ export function moduleStatus(mod: OnboardingModule, progress: ProgressRow[]): Mo
 export function isCertified(required: OnboardingModule[], progress: ProgressRow[]): boolean {
   return required.every(m => moduleStatus(m, progress) === 'passed')
 }
+
+// ── Admin roster (all workers + computed progress) ─────────────────────────────
+export type RosterCell = { slug: string; title: string; version: number; status: ModuleStatus }
+export type RosterWorker = WorkerProfile & {
+  label: string
+  requiredCount: number
+  passedCount: number
+  certified: boolean
+  cells: RosterCell[]
+}
+
+// One roster of every worker with their status against the CURRENT required
+// modules for their class. Batches all progress in a single query, then groups
+// in memory (no per-worker round trips).
+export async function getRoster(): Promise<RosterWorker[]> {
+  const admin = supabaseAdmin()
+  const [{ data: workerRows }, modules, { data: progRows }] = await Promise.all([
+    admin.from('worker_profiles').select('*').order('created_at', { ascending: false }),
+    getCurrentModules(),
+    admin.from('onboarding_progress').select('worker_id, module_slug, module_version, passed'),
+  ])
+
+  const byWorker = new Map<string, ProgressRow[]>()
+  for (const p of (progRows ?? []) as (ProgressRow & { worker_id: string })[]) {
+    const list = byWorker.get(p.worker_id) ?? []
+    list.push({ module_slug: p.module_slug, module_version: p.module_version, passed: p.passed })
+    byWorker.set(p.worker_id, list)
+  }
+
+  return ((workerRows ?? []) as WorkerProfile[]).map(w => {
+    const required = requiredForClass(modules, w.worker_class)
+    const progress = byWorker.get(w.id) ?? []
+    const cells: RosterCell[] = required.map(m => ({
+      slug: m.slug, title: m.title, version: m.version, status: moduleStatus(m, progress),
+    }))
+    return {
+      ...w,
+      label: WORKER_CLASS_LABELS[w.worker_class],
+      requiredCount: required.length,
+      passedCount: cells.filter(c => c.status === 'passed').length,
+      certified: isCertified(required, progress),
+      cells,
+    }
+  })
+}
