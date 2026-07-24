@@ -64,8 +64,17 @@ export default function AdminShiftsPage() {
   useEffect(() => { load() }, [])
 
   const post = async () => {
-    setErr(''); setBusy(true)
-    const r = await fetch('/api/admin/shifts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) })
+    setErr('')
+    if (!f.starts_at || !f.ends_at) { setErr('Enter a start and end time.'); return }
+    // datetime-local gives a tz-less local string; convert to a real UTC instant
+    // here (in the browser's timezone) so the server stores the intended time.
+    const sd = new Date(f.starts_at), ed = new Date(f.ends_at)
+    if (isNaN(sd.getTime()) || isNaN(ed.getTime())) { setErr('Enter a valid start and end time.'); return }
+    setBusy(true)
+    const r = await fetch('/api/admin/shifts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ starts_at: sd.toISOString(), ends_at: ed.toISOString(), worker_class: f.worker_class, notes: f.notes }),
+    })
     const d = await r.json().catch(() => ({})); setBusy(false)
     if (!r.ok) { setErr(d.error || 'Could not post shift.'); return }
     setF({ starts_at: '', ends_at: '', worker_class: f.worker_class, notes: '' }); load()
