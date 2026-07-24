@@ -21,6 +21,16 @@ interface Worker {
   passedCount: number
   certified: boolean
   cells: Cell[]
+  reliability: {
+    score: number | null
+    rating_avg: number | null
+    rating_count: number
+    obligations: number
+    attended: number
+    no_shows: number
+    late: number
+    completed: number
+  } | null
 }
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
@@ -55,6 +65,12 @@ function cellColor(s: ModuleStatus) {
   if (s === 'passed') return { bg: 'rgba(110,231,168,0.16)', bd: GREEN }
   if (s === 'needs_recert') return { bg: 'rgba(255,176,102,0.16)', bd: AMBER }
   return { bg: 'rgba(255,255,255,0.04)', bd: 'rgba(255,255,255,0.14)' }
+}
+
+function relColor(score: number) {
+  if (score >= 80) return { bg: 'rgba(110,231,168,0.16)', fg: GREEN }
+  if (score >= 50) return { bg: 'rgba(255,176,102,0.16)', fg: AMBER }
+  return { bg: 'rgba(255,107,107,0.16)', fg: RED }
 }
 
 function when(iso: string): string {
@@ -180,8 +196,19 @@ export default function WorkersRosterPage() {
                         <div style={{ fontSize: 12, color: C.dim, marginTop: 3 }}>
                           {w.email || 'no email'} · {w.label}{w.learning_only ? ' · learning-only' : ''} · applied {when(w.created_at)}
                         </div>
+                        {w.reliability && (w.reliability.obligations > 0 || w.reliability.rating_count > 0) && (
+                          <div style={{ fontSize: 12, color: C.dim, marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            {w.reliability.rating_avg != null && <span style={{ color: '#e0b64a' }}>★ {w.reliability.rating_avg} <span style={{ color: C.dim, opacity: 0.7 }}>({w.reliability.rating_count})</span></span>}
+                            <span>{w.reliability.completed} completed</span>
+                            {w.reliability.no_shows > 0 && <span style={{ color: RED }}>{w.reliability.no_shows} no-show{w.reliability.no_shows === 1 ? '' : 's'}</span>}
+                            {w.reliability.late > 0 && <span style={{ color: AMBER }}>{w.reliability.late} late</span>}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        {w.reliability?.score != null && (() => { const c = relColor(w.reliability.score); return (
+                          <span title="Reliability score (attendance + studio rating)" style={{ background: c.bg, color: c.fg, fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap' }}>{w.reliability.score}</span>
+                        ) })()}
                         <span style={{ fontSize: 12, color: w.certified ? C.accent : C.dim, whiteSpace: 'nowrap' }}>{w.passedCount}/{w.requiredCount} modules</span>
                         <select value={w.status} disabled={savingId === w.id} onChange={e => setStatus(w, e.target.value as WStatus)} style={{
                           background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text,

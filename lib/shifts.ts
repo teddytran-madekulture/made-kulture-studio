@@ -3,6 +3,7 @@ import {
   type WorkerClass, WORKER_CLASS_LABELS,
   getWorkerByAccount, getCurrentModules, requiredForClass, getProgressRows, isCertified,
 } from '@/lib/onboarding'
+import { type ShiftReview, getShiftReviewMap } from '@/lib/reviews'
 
 // ── Tunables ────────────────────────────────────────────────────────────────────
 export const CLOCK_IN_LEAD_MS = 30 * 60 * 1000   // clock-in unlocks 30 min before start
@@ -75,6 +76,8 @@ export type MyShift = PublicShift & {
   phase: ShiftPhase
   photo_min: number
   photos: ShiftPhoto[]
+  can_review: boolean            // shift is done → worker may rate the studio
+  worker_review: ShiftReview | null
 }
 
 function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase; can_clock_in: boolean } {
@@ -88,13 +91,14 @@ function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase
   return { phase: 'upcoming', can_clock_in: false }
 }
 
-async function toMyShift(s: Shift, active: boolean, now: number): Promise<MyShift> {
+async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null): Promise<MyShift> {
   const { phase, can_clock_in } = shiftPhase(s, active, now)
   const photos = await signPhotos(await photosForShift(s.id))
   return {
     ...toPublic(s),
     clock_in_at: s.clock_in_at, clock_out_at: s.clock_out_at,
     can_clock_in, phase, photo_min: CLOSEOUT_PHOTO_MIN, photos,
+    can_review: phase === 'done', worker_review: review,
   }
 }
 
@@ -105,6 +109,7 @@ export type AdminShift = Shift & {
   claimer: { name: string | null; email: string | null } | null
   worked_minutes: number | null
   photos: ShiftPhoto[]
+  studio_review: ShiftReview | null
 }
 
 export async function getShiftsAdmin(): Promise<AdminShift[]> {
@@ -119,6 +124,8 @@ export async function getShiftsAdmin(): Promise<AdminShift[]> {
     for (const w of (workers ?? []) as any[]) byId.set(w.id, { full_name: w.full_name, email: w.email })
   }
 
+  const reviewMap = await getShiftReviewMap('studio_to_worker', rows.map(r => r.id))
+
   const out: AdminShift[] = []
   for (const s of rows) {
     const photos = s.claimed_by ? await signPhotos(await photosForShift(s.id)) : []
@@ -132,6 +139,7 @@ export async function getShiftsAdmin(): Promise<AdminShift[]> {
       claimer: s.claimed_by ? { name: byId.get(s.claimed_by)?.full_name ?? null, email: byId.get(s.claimed_by)?.email ?? null } : null,
       worked_minutes: worked,
       photos,
+      studio_review: reviewMap.get(s.id) ?? null,
     })
   }
   return out
@@ -166,8 +174,10 @@ export async function getWorkerShiftView(accountId: string): Promise<WorkerShift
   const { data: mineRows } = await admin.from('shifts').select('*')
     .eq('claimed_by', worker.id).is('cancelled_at', null)
     .gte('ends_at', floorIso).order('starts_at', { ascending: true })
+  const mineShifts = (mineRows ?? []) as Shift[]
+  const wReviews = await getShiftReviewMap('worker_to_studio', mineShifts.map(s => s.id))
   const mine: MyShift[] = []
-  for (const s of (mineRows ?? []) as Shift[]) mine.push(await toMyShift(s, active, now))
+  for (const s of mineShifts) mine.push(await toMyShift(s, active, now, wReviews.get(s.id) ?? null))
 
   let openRows: Shift[] = []
   if (active && certified) {

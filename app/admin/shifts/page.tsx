@@ -21,6 +21,7 @@ interface Shift {
   claimer: { name: string | null; email: string | null } | null
   worked_minutes: number | null
   photos: ShiftPhoto[]
+  studio_review: { rating: number; note: string; created_at: string } | null
 }
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
@@ -77,6 +78,63 @@ function ClockBlock({ s }: { s: Shift }) {
       ) : s.clock_in_at ? (
         <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>No closeout photos yet.</div>
       ) : null}
+    </div>
+  )
+}
+
+// Static star row (filled/empty).
+function Stars({ n, size = 15 }: { n: number; size?: number }) {
+  return (
+    <span style={{ color: '#e0b64a', fontSize: size, letterSpacing: 1 }}>
+      {[1, 2, 3, 4, 5].map(i => <span key={i} style={{ opacity: i <= n ? 1 : 0.25 }}>★</span>)}
+    </span>
+  )
+}
+
+// Rate the worker who did a finished shift (studio → worker). Editable stars if
+// unrated; shows the saved rating (still re-clickable to change) once set.
+function WorkerRating({ s, reload }: { s: Shift; reload: () => void }) {
+  const reviewable = !!s.claimed_by && (s.state === 'past' || !!s.clock_out_at)
+  const [rating, setRating] = useState(s.studio_review?.rating ?? 0)
+  const [note, setNote] = useState(s.studio_review?.note ?? '')
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  if (!reviewable) return null
+
+  const submit = async (stars: number) => {
+    setRating(stars); setBusy(true); setErr('')
+    const r = await fetch(`/api/admin/shifts/${s.id}/review`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rating: stars, note }),
+    })
+    setBusy(false)
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not save.'); return }
+    reload()
+  }
+
+  const star = (i: number) => (
+    <span key={i} onClick={() => !busy && submit(i)} style={{ cursor: busy ? 'default' : 'pointer', color: '#e0b64a', fontSize: 20, opacity: i <= rating ? 1 : 0.28, padding: '0 1px' }}>★</span>
+  )
+
+  return (
+    <div style={{ marginTop: 10, borderTop: `1px solid ${C.line}`, paddingTop: 10 }}>
+      {s.studio_review && !open ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12, color: C.dim }}>
+          <span>Your rating:</span> <Stars n={s.studio_review.rating} />
+          {s.studio_review.note ? <span>· “{s.studio_review.note}”</span> : null}
+          <button onClick={() => setOpen(true)} style={{ background: 'none', border: `1px solid ${C.line}`, color: C.dim, borderRadius: 6, padding: '3px 9px', fontSize: 11, cursor: 'pointer' }}>Change</button>
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Rate {s.claimer?.name || s.claimer?.email || 'the worker'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span>{[1, 2, 3, 4, 5].map(star)}</span>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)"
+              style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 13, padding: '7px 10px', borderRadius: 6, flex: '1 1 180px', minWidth: 140, outline: 'none' }} />
+          </div>
+          {err && <div style={{ color: RED, fontSize: 12, marginTop: 6 }}>{err}</div>}
+        </div>
+      )}
     </div>
   )
 }
@@ -206,6 +264,7 @@ export default function AdminShiftsPage() {
                       </div>
                     </div>
                     <ClockBlock s={s} />
+                    <WorkerRating s={s} reload={load} />
                   </div>
                 ))}
               </div>

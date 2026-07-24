@@ -14,6 +14,8 @@ type MyShift = PublicShift & {
   phase: ShiftPhase
   photo_min: number
   photos: ShiftPhoto[]
+  can_review: boolean
+  worker_review: { rating: number; note: string; created_at: string } | null
 }
 type View = {
   enrolled: boolean
@@ -42,6 +44,7 @@ function workedLabel(inIso: string, outIso: string): string {
 function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
   const [busy, setBusy] = useState(false)
   const [caption, setCaption] = useState('')
+  const [rating, setRating] = useState(s.worker_review?.rating ?? 0)
   const [err, setErr] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -79,6 +82,15 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
     const r = await fetch(`/api/work/shifts/${s.id}/photos?photoId=${photoId}`, { method: 'DELETE' })
     setBusy(false)
     if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not remove.'); return }
+    reload()
+  }
+  const rateStudio = async (stars: number) => {
+    setRating(stars); setBusy(true); setErr('')
+    const r = await fetch(`/api/work/shifts/${s.id}/review`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rating: stars }),
+    })
+    setBusy(false)
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not save rating.'); return }
     reload()
   }
 
@@ -160,6 +172,22 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
             ✓ Completed · {fmtTime(s.clock_in_at!)} – {fmtTime(s.clock_out_at!)} · {workedLabel(s.clock_in_at!, s.clock_out_at!)} · {s.photos.length} photo{s.photos.length === 1 ? '' : 's'}
           </div>
           {photoStrip(false)}
+          {s.can_review && (
+            <div style={{ marginTop: 12 }}>
+              {s.worker_review ? (
+                <div style={{ fontSize: 12, color: C.dim }}>
+                  You rated this shift <span style={{ color: C.warn }}>{'★'.repeat(s.worker_review.rating)}{'☆'.repeat(5 - s.worker_review.rating)}</span>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>How was this shift?</div>
+                  <span>{[1, 2, 3, 4, 5].map(i => (
+                    <span key={i} onClick={() => !busy && rateStudio(i)} style={{ cursor: busy ? 'default' : 'pointer', color: C.warn, fontSize: 24, opacity: i <= rating ? 1 : 0.3, padding: '0 2px' }}>★</span>
+                  ))}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
