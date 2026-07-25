@@ -8,6 +8,7 @@ import { refundPayment } from '@/lib/square-refund'
 import { notifyDelegatedRefund } from '@/lib/refund-notify'
 import { issueCredit } from '@/lib/credits'
 import { sendSMS } from '@/lib/sms'
+import { notifyCoverageGap } from '@/lib/coverage'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -165,6 +166,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     } catch (e) {
       console.error('[admin reschedule] gcal patch error (non-fatal):', e)
     }
+    // A reschedule can push the session past whoever is covering it — warn on a
+    // resulting staffing gap. Non-fatal.
+    await notifyCoverageGap(params.id).catch(() => {})
   }
 
   // Optionally notify the customer that their booking was cancelled (opt-in from

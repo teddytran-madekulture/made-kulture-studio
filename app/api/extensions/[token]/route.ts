@@ -11,6 +11,7 @@ import { patchCalendarEvent } from '@/lib/gcal'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
+import { notifyCoverageGap } from '@/lib/coverage'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -227,6 +228,10 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
     body: `${p.customerName} +${r.hours}hr on ${p.setName} until ${untilLabel} — $${(r.amount_cents / 100).toFixed(2)} charged.`,
     url: '/admin/dashboard',
   }).catch(() => {})
+
+  // The session now runs later than whoever is covering it signed up for — warn
+  // if the extra time falls outside every posted shift.
+  await notifyCoverageGap(r.booking_id).catch(() => {})
 
   return NextResponse.json({ success: true, until: untilLabel })
 }

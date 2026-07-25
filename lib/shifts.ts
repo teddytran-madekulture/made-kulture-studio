@@ -4,6 +4,7 @@ import {
   getWorkerByAccount, getCurrentModules, requiredForClass, getProgressRows, isCertified,
 } from '@/lib/onboarding'
 import { type ShiftReview, getShiftReviewMap } from '@/lib/reviews'
+import { type ShiftDrift, getShiftDriftMap } from '@/lib/coverage'
 
 // ── Tunables ────────────────────────────────────────────────────────────────────
 export const CLOCK_IN_LEAD_MS = 60 * 60 * 1000    // clock-in unlocks 1 hour before start
@@ -121,6 +122,7 @@ export type AdminShift = Shift & {
   worked_minutes: number | null
   photos: ShiftPhoto[]
   studio_review: ShiftReview | null
+  drift: ShiftDrift | null     // bookings moved/cancelled/extended under this shift
 }
 
 export async function getShiftsAdmin(): Promise<AdminShift[]> {
@@ -138,8 +140,11 @@ export async function getShiftsAdmin(): Promise<AdminShift[]> {
   const reviewMap = await getShiftReviewMap('studio_to_worker', rows.map(r => r.id))
 
   const out: AdminShift[] = []
+  const captionsByShift = new Map<string, Set<string>>()
   for (const s of rows) {
-    const photos = s.claimed_by ? await signPhotos(await photosForShift(s.id)) : []
+    const photoRows = s.claimed_by ? await photosForShift(s.id) : []
+    captionsByShift.set(s.id, new Set(photoRows.map(p => (p.caption || '').trim()).filter(Boolean)))
+    const photos = await signPhotos(photoRows)
     const worked = s.clock_in_at && s.clock_out_at
       ? Math.max(0, Math.round((new Date(s.clock_out_at).getTime() - new Date(s.clock_in_at).getTime()) / 60000))
       : null
@@ -151,7 +156,17 @@ export async function getShiftsAdmin(): Promise<AdminShift[]> {
       worked_minutes: worked,
       photos,
       studio_review: reviewMap.get(s.id) ?? null,
+      drift: null,
     })
+  }
+
+  // Derived: has anything about the underlying bookings changed since this shift
+  // was posted (or since the worker closed it out)? Never fatal to the board.
+  try {
+    const driftMap = await getShiftDriftMap(rows, captionsByShift)
+    for (const a of out) a.drift = driftMap.get(a.id) ?? null
+  } catch (e) {
+    console.error('[shifts] drift check failed (non-fatal):', e)
   }
   return out
 }

@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
 import { audit } from '@/lib/audit'
+import { notifyCoverageGap } from '@/lib/coverage'
 
 export const dynamic = 'force-dynamic'
 
@@ -153,6 +154,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     entityType: 'booking', entityId: params.id, amountCents: body.charge ? p.priceCents : undefined,
     details: { hours, setName: p.setName, charged: !!squarePaymentId, squarePaymentId, newEnd: p.newEndISO },
   })
+
+  // Added time can run past the shift covering this session — warn on a gap.
+  await notifyCoverageGap(params.id).catch(() => {})
 
   return NextResponse.json({ success: true, charged: !!squarePaymentId, priceCents: p.priceCents, newEnd: p.newEndISO })
 }

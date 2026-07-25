@@ -5,6 +5,13 @@ import Link from 'next/link'
 type WClass = 'attendant' | 'sanitation' | 'intern' | 'freelancer'
 type ShiftState = 'open' | 'claimed' | 'cancelled' | 'past'
 type ShiftPhoto = { id: string; url: string; caption: string; created_at: string }
+type CoverageIssue = {
+  kind: 'booking_cancelled' | 'window_moved' | 'uncovered_tail' | 'unlogged_set'
+  message: string
+  gap_start?: string
+  gap_end?: string
+}
+type ShiftDrift = { post_closeout: boolean; issues: CoverageIssue[] }
 interface Shift {
   id: string
   starts_at: string
@@ -24,6 +31,7 @@ interface Shift {
   worked_minutes: number | null
   photos: ShiftPhoto[]
   studio_review: { rating: number; note: string; created_at: string } | null
+  drift: ShiftDrift | null
 }
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
@@ -126,6 +134,48 @@ function ClockBlock({ s, reload }: { s: Shift; reload: () => void }) {
       ) : s.clock_in_at ? (
         <div style={{ fontSize: 12, color: C.dim, marginTop: 6 }}>No closeout photos yet.</div>
       ) : null}
+    </div>
+  )
+}
+
+// Bookings move after a shift is posted — extended, rescheduled, cancelled, set
+// swapped. This surfaces that drift on the shift itself (louder when the change
+// landed after the worker already closed out) and staffs an uncovered tail in one
+// click, so a session that ran long doesn't quietly go unattended.
+function DriftBlock({ s, reload }: { s: Shift; reload: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  if (!s.drift || s.drift.issues.length === 0) return null
+
+  const staffGap = async (i: CoverageIssue) => {
+    if (!i.gap_start || !i.gap_end) return
+    setBusy(true); setErr('')
+    const r = await fetch('/api/admin/staffing/from-block', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ starts_at: i.gap_start, ends_at: i.gap_end, worker_class: s.worker_class, notes: 'Coverage gap — session ran long' }),
+    })
+    setBusy(false)
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not post a shift for the gap.'); return }
+    reload()
+  }
+
+  return (
+    <div style={{ marginTop: 10, background: 'rgba(255,176,102,0.08)', border: '1px solid rgba(255,176,102,0.35)', borderRadius: 8, padding: '10px 12px' }}>
+      <span style={{ display: 'inline-block', background: 'rgba(255,176,102,0.18)', color: AMBER, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 7px', borderRadius: 4, marginBottom: 7 }}>
+        {s.drift.post_closeout ? '⚠ CHANGED AFTER CLOSEOUT' : '⚠ NEEDS ATTENTION'}
+      </span>
+      {s.drift.issues.map((i, idx) => (
+        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: idx ? 7 : 0 }}>
+          <span style={{ fontSize: 12, color: C.text }}>{i.message}</span>
+          {i.kind === 'uncovered_tail' && i.gap_start && i.gap_end && (
+            <button onClick={() => staffGap(i)} disabled={busy}
+              style={{ background: AMBER, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '5px 11px', fontWeight: 700, fontSize: 10, letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {busy ? '…' : 'STAFF THE GAP'}
+            </button>
+          )}
+        </div>
+      ))}
+      {err && <div style={{ color: RED, fontSize: 12, marginTop: 7 }}>{err}</div>}
     </div>
   )
 }
@@ -367,6 +417,7 @@ export default function AdminShiftsPage() {
   const counts = useMemo(() => ({
     open: shifts.filter(s => s.state === 'open').length,
     claimed: shifts.filter(s => s.state === 'claimed').length,
+    attention: shifts.filter(s => (s.drift?.issues.length ?? 0) > 0).length,
   }), [shifts])
 
   const inp: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontFamily: 'Inter, sans-serif', fontSize: 14, padding: '10px 12px', outline: 'none', borderRadius: 6, width: '100%', boxSizing: 'border-box' }
@@ -381,7 +432,8 @@ export default function AdminShiftsPage() {
           <Link href="/admin/workers" style={{ color: C.dim, fontSize: 13, textDecoration: 'none' }}>Worker roster →</Link>
         </div>
         <p style={{ color: C.dim, fontSize: 13, marginTop: 0, marginBottom: 22 }}>
-          Post a shift for a role and an <b>active, certified</b> worker of that class can claim it. {counts.open} open · {counts.claimed} claimed.
+          Post a shift for a role and an <b>active, certified</b> worker of that class can claim it. {counts.open} open · {counts.claimed} claimed
+          {counts.attention > 0 && <> · <b style={{ color: AMBER }}>{counts.attention} need{counts.attention === 1 ? 's' : ''} attention</b></>}.
         </p>
 
         {unauth ? (
@@ -445,6 +497,7 @@ export default function AdminShiftsPage() {
                           : <button onClick={() => setConfirmDel(s.id)} style={smallBtn(C.dim)}>DELETE</button>}
                       </div>
                     </div>
+                    <DriftBlock s={s} reload={load} />
                     <ClockBlock s={s} reload={load} />
                     <WorkerRating s={s} reload={load} />
                   </div>
