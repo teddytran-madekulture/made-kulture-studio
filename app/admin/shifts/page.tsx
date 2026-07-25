@@ -187,20 +187,21 @@ function WorkerRating({ s, reload }: { s: Shift; reload: () => void }) {
   )
 }
 
-type StaffableBooking = {
-  booking_id: string
+type CoverageBlock = {
+  key: string
   start_time: string
   end_time: string
-  set_name: string | null
-  guest_count: number | null
+  booking_count: number
+  bookings: { start_time: string; end_time: string; set_name: string | null }[]
+  sets: string[]
   shift: { id: string; worker_class: WClass; state: ShiftState; claimer_name: string | null } | null
 }
 
-// Staff straight from the booking calendar: each upcoming booking becomes a
-// one-click OPEN shift for its exact window, so workers only cover booked times.
+// Staff by coverage block: overlapping / back-to-back bookings are merged so one
+// shift covers a natural stretch and one worker owns every booking in it.
 function StaffFromBookings({ onPosted }: { onPosted: () => void }) {
-  const [items, setItems] = useState<StaffableBooking[] | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [items, setItems] = useState<CoverageBlock[] | null>(null)
+  const [busyKey, setBusyKey] = useState<string | null>(null)
   const [role, setRole] = useState<Record<string, WClass>>({})
   const [err, setErr] = useState('')
 
@@ -208,17 +209,17 @@ function StaffFromBookings({ onPosted }: { onPosted: () => void }) {
     const r = await fetch('/api/admin/staffing/bookings')
     if (!r.ok) { setItems([]); return }
     const d = await r.json().catch(() => ({}))
-    setItems(d.bookings ?? [])
+    setItems(d.blocks ?? [])
   }
   useEffect(() => { load() }, [])
 
-  const post = async (bookingId: string) => {
-    setBusyId(bookingId); setErr('')
-    const r = await fetch('/api/admin/staffing/from-booking', {
+  const post = async (bl: CoverageBlock) => {
+    setBusyKey(bl.key); setErr('')
+    const r = await fetch('/api/admin/staffing/from-block', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ booking_id: bookingId, worker_class: role[bookingId] || 'attendant' }),
+      body: JSON.stringify({ starts_at: bl.start_time, ends_at: bl.end_time, worker_class: role[bl.key] || 'attendant', notes: bl.sets.join(', ') }),
     })
-    setBusyId(null)
+    setBusyKey(null)
     if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not post.') }
     load(); onPosted()
   }
@@ -226,41 +227,42 @@ function StaffFromBookings({ onPosted }: { onPosted: () => void }) {
   if (!items) return null
   const needing = items.filter(b => !b.shift || b.shift.state === 'cancelled')
 
-  const shiftStatusText = (sh: NonNullable<StaffableBooking['shift']>) => {
+  const statusText = (sh: NonNullable<CoverageBlock['shift']>) => {
     if (sh.state === 'claimed') return { txt: `Claimed by ${sh.claimer_name || 'a worker'}`, color: C.accent }
     if (sh.state === 'open') return { txt: 'Shift posted · open', color: GREEN }
     if (sh.state === 'past') return { txt: 'Shift done', color: C.dim }
     return { txt: 'Shift cancelled', color: RED }
   }
+  const desc = (bl: CoverageBlock) => `${bl.booking_count} booking${bl.booking_count === 1 ? '' : 's'} · ${bl.sets.length ? bl.sets.join(', ') : 'Booking'}`
 
   return (
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: 20, marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em' }}>Staff a booking</div>
-        <div style={{ fontSize: 12, color: C.dim }}>{needing.length} upcoming booking{needing.length === 1 ? '' : 's'} unstaffed</div>
+        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.04em' }}>Staff a coverage block</div>
+        <div style={{ fontSize: 12, color: C.dim }}>{needing.length} block{needing.length === 1 ? '' : 's'} unstaffed</div>
       </div>
-      <p style={{ fontSize: 12, color: C.dim, marginTop: 0, marginBottom: 14 }}>Post a shift matching a booking&apos;s exact window — workers claim only real booked times.</p>
+      <p style={{ fontSize: 12, color: C.dim, marginTop: 0, marginBottom: 14 }}>Overlapping and back-to-back bookings are merged into one block. Post a shift for the block and one worker covers every booking in it.</p>
       {items.length === 0 ? (
         <div style={{ color: C.dim, fontSize: 13 }}>No upcoming bookings.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.map(b => (
-            <div key={b.booking_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '10px 0', borderTop: `1px solid ${C.line}` }}>
+          {items.map(bl => (
+            <div key={bl.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '10px 0', borderTop: `1px solid ${C.line}` }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{fmtRange(b.start_time, b.end_time)}</div>
-                <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{b.set_name || 'Booking'}{b.guest_count != null ? ` · ${b.guest_count} guest${b.guest_count === 1 ? '' : 's'}` : ''}</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{fmtRange(bl.start_time, bl.end_time)}</div>
+                <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{desc(bl)}</div>
               </div>
-              {b.shift && b.shift.state !== 'cancelled' ? (
-                <span style={{ fontSize: 12, color: shiftStatusText(b.shift).color, whiteSpace: 'nowrap' }}>{shiftStatusText(b.shift).txt}</span>
+              {bl.shift && bl.shift.state !== 'cancelled' ? (
+                <span style={{ fontSize: 12, color: statusText(bl.shift).color, whiteSpace: 'nowrap' }}>{statusText(bl.shift).txt}</span>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <select value={role[b.booking_id] || 'attendant'} onChange={e => setRole({ ...role, [b.booking_id]: e.target.value as WClass })}
+                  <select value={role[bl.key] || 'attendant'} onChange={e => setRole({ ...role, [bl.key]: e.target.value as WClass })}
                     style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 12, padding: '6px 8px', borderRadius: 6 }}>
                     {CLASSES.map(c => <option key={c.key} value={c.key} style={{ background: C.card }}>{c.label}</option>)}
                   </select>
-                  <button onClick={() => post(b.booking_id)} disabled={busyId === b.booking_id}
+                  <button onClick={() => post(bl)} disabled={busyKey === bl.key}
                     style={{ background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    {busyId === b.booking_id ? '…' : 'POST SHIFT'}
+                    {busyKey === bl.key ? 'â¦' : 'POST SHIFT'}
                   </button>
                 </div>
               )}

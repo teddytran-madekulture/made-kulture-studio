@@ -16,8 +16,7 @@ type MyShift = PublicShift & {
   photos: ShiftPhoto[]
   can_review: boolean
   worker_review: { rating: number; note: string; created_at: string } | null
-  door_code: string | null
-  door_code_back: string | null
+  door_codes: { start_time: string; end_time: string; set_name: string | null; front: string | null; back: string | null }[]
   booking_linked: boolean
 }
 type View = {
@@ -137,20 +136,23 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
         )}
       </div>
 
-      {s.door_code && s.phase !== 'done' && (
+      {s.phase !== 'done' && s.door_codes.length > 0 && (
         <div style={{ marginTop: 10, background: 'rgba(201,178,126,0.10)', border: '1px solid rgba(201,178,126,0.32)', borderRadius: 8, padding: '9px 12px' }}>
-          <div style={{ fontSize: 14 }}>
-            <span style={{ color: C.dim, fontSize: 12 }}>Door code </span>
-            <span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.08em' }}>{groupCode(s.door_code)}</span>
-            {s.door_code_back ? <span style={{ color: C.dim, fontSize: 13 }}>{'  ·  back door '}<span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.08em' }}>{groupCode(s.door_code_back)}</span></span> : null}
-          </div>
-          <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>Unlocks at your booked start time.</div>
+          <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: s.door_codes.length > 1 ? 7 : 3 }}>Door code{s.door_codes.length > 1 ? 's' : ''}</div>
+          {s.door_codes.map((dc, i) => (
+            <div key={i} style={{ marginBottom: i < s.door_codes.length - 1 ? 8 : 0 }}>
+              {s.door_codes.length > 1 && <div style={{ fontSize: 11, color: C.dim, marginBottom: 1 }}>{fmtTime(dc.start_time)}–{fmtTime(dc.end_time)}{dc.set_name ? ` · ${dc.set_name}` : ''}</div>}
+              <span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.08em', fontSize: 15 }}>{groupCode(dc.front || '—')}</span>
+              {dc.back ? <span style={{ color: C.dim, fontSize: 13 }}>{'  ·  back '}<span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.08em' }}>{groupCode(dc.back)}</span></span> : null}
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 5 }}>{s.door_codes.length > 1 ? 'Each code unlocks at its booking start time.' : 'Unlocks at your booked start time.'}</div>
         </div>
       )}
 
-      {!s.door_code && s.booking_linked && s.phase !== 'done' && (
+      {s.phase !== 'done' && s.door_codes.length === 0 && s.booking_linked && (
         <div style={{ marginTop: 10, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.line}`, borderRadius: 8, padding: '9px 12px' }}>
-          <div style={{ fontSize: 13, color: C.dim }}>Door code will appear here once it&apos;s issued for this booking.</div>
+          <div style={{ fontSize: 13, color: C.dim }}>Door code will appear here once it&apos;s issued.</div>
           <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>If it&apos;s your start time and there&apos;s still no code, text the studio.</div>
         </div>
       )}
