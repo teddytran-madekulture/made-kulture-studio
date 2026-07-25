@@ -18,6 +18,7 @@ type MyShift = PublicShift & {
   worker_review: { rating: number; note: string; created_at: string } | null
   door_codes: { start_time: string; end_time: string; set_name: string | null; front: string | null; back: string | null }[]
   booking_linked: boolean
+  itinerary: { start_time: string; end_time: string; set_name: string | null }[]
 }
 type View = {
   enrolled: boolean
@@ -135,6 +136,20 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
           <button onClick={drop} disabled={busy} style={ghostBtn}>{busy ? '…' : 'DROP'}</button>
         )}
       </div>
+
+      {s.phase !== 'done' && s.itinerary.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Bookings during your shift</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {s.itinerary.map((it, i) => (
+              <div key={i} style={{ fontSize: 13, display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                <span style={{ color: C.text, minWidth: 132 }}>{fmtTime(it.start_time)} – {fmtTime(it.end_time)}</span>
+                <span style={{ color: C.dim }}>{it.set_name || 'Booking'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {s.phase !== 'done' && s.door_codes.length > 0 && (
         <div style={{ marginTop: 10, background: 'rgba(201,178,126,0.10)', border: '1px solid rgba(201,178,126,0.32)', borderRadius: 8, padding: '9px 12px' }}>

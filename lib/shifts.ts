@@ -85,6 +85,7 @@ export type MyShift = PublicShift & {
   worker_review: ShiftReview | null
   door_codes: DoorCode[]         // codes for every booking overlapping this shift's window
   booking_linked: boolean        // shift overlaps >=1 booking (missing codes = "coming", not "n/a")
+  itinerary: { start_time: string; end_time: string; set_name: string | null }[]  // bookings during the shift
 }
 
 function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase; can_clock_in: boolean } {
@@ -98,7 +99,7 @@ function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase
   return { phase: 'upcoming', can_clock_in: false }
 }
 
-async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null, doorInfo: { codes: DoorCode[]; hasBooking: boolean }): Promise<MyShift> {
+async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null, info: { codes: DoorCode[]; itinerary: { start_time: string; end_time: string; set_name: string | null }[]; hasBooking: boolean }): Promise<MyShift> {
   const { phase, can_clock_in } = shiftPhase(s, active, now)
   const photos = await signPhotos(await photosForShift(s.id))
   return {
@@ -106,7 +107,7 @@ async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftRe
     clock_in_at: s.clock_in_at, clock_out_at: s.clock_out_at,
     can_clock_in, phase, photo_min: CLOSEOUT_PHOTO_MIN, photos,
     can_review: phase === 'done', worker_review: review,
-    door_codes: doorInfo.codes, booking_linked: doorInfo.hasBooking,
+    door_codes: info.codes, booking_linked: info.hasBooking, itinerary: info.itinerary,
   }
 }
 
@@ -197,19 +198,21 @@ export async function getWorkerShiftView(accountId: string): Promise<WorkerShift
       .order('start_time', { ascending: true })
     bkRows = (bks ?? []) as any[]
   }
-  const doorInfoFor = (s: Shift): { codes: DoorCode[]; hasBooking: boolean } => {
+  const overlapFor = (s: Shift) => {
     const a = new Date(s.starts_at).getTime(), b = new Date(s.ends_at).getTime()
     const over = bkRows.filter(x => new Date(x.start_time).getTime() < b && new Date(x.end_time).getTime() > a)
     const codes: DoorCode[] = []
+    const itinerary: { start_time: string; end_time: string; set_name: string | null }[] = []
     for (const x of over) {
       const setName = Array.isArray(x.sets) ? (x.sets[0]?.name ?? null) : (x.sets?.name ?? null)
+      itinerary.push({ start_time: x.start_time, end_time: x.end_time, set_name: setName })
       if (x.door_code || x.door_code_back) codes.push({ start_time: x.start_time, end_time: x.end_time, set_name: setName, front: x.door_code ?? null, back: x.door_code_back ?? null })
     }
-    return { codes, hasBooking: over.length > 0 }
+    return { codes, itinerary, hasBooking: over.length > 0 }
   }
   const mine: MyShift[] = []
   for (const s of mineShifts) {
-    mine.push(await toMyShift(s, active, now, wReviews.get(s.id) ?? null, doorInfoFor(s)))
+    mine.push(await toMyShift(s, active, now, wReviews.get(s.id) ?? null, overlapFor(s)))
   }
 
   let openRows: Shift[] = []

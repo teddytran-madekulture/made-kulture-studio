@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { type WorkerClass } from '@/lib/onboarding'
+import { type WorkerClass, WORKER_CLASS_LABELS } from '@/lib/onboarding'
 import { overlappingShiftExists } from '@/lib/shifts'
 
 // Supabase returns a to-one relation as an object, but the generated types
@@ -84,7 +84,7 @@ export async function createShiftFromBooking(bookingId: string, workerClass: Wor
   if (((existing ?? []) as any[]).some(s => !s.cancelled_at)) return { ok: false, error: 'This booking already has a shift.' }
 
   if (await overlappingShiftExists(workerClass, (b as any).start_time, (b as any).end_time)) {
-    return { ok: false, error: 'A ' + workerClass + ' shift already overlaps that booking\'s time — that window is already covered.' }
+    return { ok: false, error: 'That window is already covered by an existing ' + WORKER_CLASS_LABELS[workerClass] + ' shift.' }
   }
 
   const setName = relName((b as any).sets)
@@ -178,7 +178,7 @@ export async function createShiftForWindow(startsAt: string, endsAt: string, wor
   const s = new Date(startsAt), e = new Date(endsAt)
   if (isNaN(s.getTime()) || isNaN(e.getTime()) || e.getTime() <= s.getTime()) return { ok: false, error: 'Enter a valid window.' }
   if (await overlappingShiftExists(workerClass, s.toISOString(), e.toISOString())) {
-    return { ok: false, error: 'A ' + workerClass + ' shift already overlaps that window — it is already covered.' }
+    return { ok: false, error: 'That window is already covered by an existing ' + WORKER_CLASS_LABELS[workerClass] + ' shift.' }
   }
   const now = new Date().toISOString()
   const { data: ins, error } = await admin.from('shifts').insert({
