@@ -5,7 +5,7 @@ import Link from 'next/link'
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e', good: '#5bd08a', warn: '#e0b64a' }
 
 type ShiftPhase = 'upcoming' | 'clock_in_open' | 'working' | 'done' | 'missed'
-type ShiftPhoto = { id: string; url: string; caption: string; created_at: string }
+type ShiftPhoto = { id: string; url: string; caption: string; created_at: string; captured_live?: boolean | null }
 type PublicShift = { id: string; starts_at: string; ends_at: string; worker_class: string; label: string; notes: string }
 type MyShift = PublicShift & {
   clock_in_at: string | null
@@ -57,6 +57,13 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
   const [err, setErr] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Live camera. A closeout photo has to be shot HERE, now — the old file input
+  // opened the photo gallery, so an old shot of a tidy set could stand in for
+  // one. This never opens a picker, so there's nothing old to pick.
+  const [camFor, setCamFor] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
   const clock = async (action: 'in' | 'out') => {
     setBusy(true); setErr('')
     const r = await fetch(`/api/work/shifts/${s.id}/clock`, {
@@ -73,20 +80,72 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
     if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not drop.'); }
     reload()
   }
-  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (fileRef.current) fileRef.current.value = ''
-    if (!file) return
+  const upload = async (file: File, label: string, live: boolean) => {
     setBusy(true); setErr('')
     const fd = new FormData()
     fd.append('file', file)
-    if (activeLabel.trim()) fd.append('caption', activeLabel.trim())
+    if (label.trim()) fd.append('caption', label.trim())
+    fd.append('live', live ? '1' : '0')
     const r = await fetch(`/api/work/shifts/${s.id}/photos`, { method: 'POST', body: fd })
     setBusy(false)
     if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Upload failed.'); return }
     setActiveLabel(''); reload()
   }
-  const shootFor = (label: string) => { setActiveLabel(label); setTimeout(() => fileRef.current?.click(), 0) }
+
+  // Fallback path only — reached when the device has no camera API or the worker
+  // denied permission. Flagged not-live and EXIF-checked on the server.
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (fileRef.current) fileRef.current.value = ''
+    if (!file) return
+    await upload(file, activeLabel, false)
+  }
+
+  const stopCam = () => {
+    try { streamRef.current?.getTracks().forEach(t => t.stop()) } catch {}
+    streamRef.current = null
+  }
+  useEffect(() => () => stopCam(), [])
+
+  const shootFor = async (label: string) => {
+    setErr(''); setActiveLabel(label)
+    const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null
+    if (!md?.getUserMedia) { setTimeout(() => fileRef.current?.click(), 0); return }
+    try {
+      streamRef.current = await md.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1600 } }, audio: false,
+      })
+      setCamFor(label)
+    } catch {
+      // No camera or permission denied — don't strand them, fall back to the
+      // picker. The server decides whether what comes back is acceptable.
+      setTimeout(() => fileRef.current?.click(), 0)
+    }
+  }
+
+  const closeCam = () => { stopCam(); setCamFor(null); setActiveLabel('') }
+
+  useEffect(() => {
+    if (!camFor || !videoRef.current || !streamRef.current) return
+    videoRef.current.srcObject = streamRef.current
+    videoRef.current.play().catch(() => {})
+  }, [camFor])
+
+  const shoot = async () => {
+    const v = videoRef.current
+    if (!v || !v.videoWidth) { setErr('Camera is still warming up — try again.'); return }
+    const label = camFor || ''
+    const scale = Math.min(1, 1600 / v.videoWidth)
+    const w = Math.round(v.videoWidth * scale), h = Math.round(v.videoHeight * scale)
+    const c = document.createElement('canvas'); c.width = w; c.height = h
+    const ctx = c.getContext('2d')
+    if (!ctx) { setErr('Could not capture that — try again.'); return }
+    ctx.drawImage(v, 0, 0, w, h)
+    const blob: Blob | null = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85))
+    closeCam()
+    if (!blob) { setErr('Could not capture that — try again.'); return }
+    await upload(new File([blob], 'closeout.jpg', { type: 'image/jpeg' }), label, true)
+  }
   const removePhoto = async (photoId: string) => {
     setBusy(true); setErr('')
     const r = await fetch(`/api/work/shifts/${s.id}/photos?photoId=${photoId}`, { method: 'DELETE' })
@@ -127,6 +186,21 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
 
   return (
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '14px 18px' }}>
+      {/* Live viewfinder — full screen so the shot is deliberate and framed. */}
+      {camFor && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#000', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '14px 16px', color: '#fff', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+            Closeout photo · {camFor}
+          </div>
+          <video ref={videoRef} playsInline muted style={{ flex: 1, width: '100%', minHeight: 0, objectFit: 'cover', background: '#000' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '18px 24px 30px' }}>
+            <button onClick={closeCam} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: 13, cursor: 'pointer', width: 60, textAlign: 'left' }}>Cancel</button>
+            <button onClick={shoot} disabled={busy} aria-label="Take photo"
+              style={{ width: 74, height: 74, borderRadius: '50%', background: busy ? 'rgba(255,255,255,0.4)' : '#fff', border: '4px solid rgba(255,255,255,0.35)', cursor: 'pointer', padding: 0 }} />
+            <span style={{ width: 60 }} />
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>{fmtRange(s.starts_at, s.ends_at)}</div>
@@ -206,6 +280,7 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
                 {generic
                   ? 'Reset the space to photo-ready, then take a closeout photo to clock out.'
                   : 'Reset each set to photo-ready, then take its photo. Every set needs one before you can clock out.'}
+                {' '}Photos are taken here in the app, so allow camera access when it asks.
               </div>
 
               <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} style={{ display: 'none' }} />

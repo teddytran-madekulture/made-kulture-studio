@@ -4,7 +4,7 @@ import Link from 'next/link'
 
 type WClass = 'attendant' | 'sanitation' | 'intern' | 'freelancer'
 type ShiftState = 'open' | 'claimed' | 'cancelled' | 'past'
-type ShiftPhoto = { id: string; url: string; caption: string; created_at: string }
+type ShiftPhoto = { id: string; url: string; caption: string; created_at: string; captured_live: boolean | null }
 type CoverageIssue = {
   kind: 'booking_cancelled' | 'window_moved' | 'uncovered_tail' | 'unlogged_set'
   message: string
@@ -124,11 +124,22 @@ function ClockBlock({ s, reload }: { s: Shift; reload: () => void }) {
         <div style={{ marginTop: 8 }}>
           <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Closeout photos ({s.photos.length})</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {s.photos.map(p => (
-              <a key={p.id} href={p.url} target="_blank" rel="noreferrer" title={p.caption ? `${p.caption} · ${fmtTime(p.created_at)}` : fmtTime(p.created_at)}>
-                <img src={p.url} alt={p.caption || 'closeout'} style={{ width: 66, height: 66, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.line}`, display: 'block' }} />
-              </a>
-            ))}
+            {s.photos.map(p => {
+              // Only false is worth flagging — null just means the photo predates
+              // the live camera, and claiming those are suspect would be noise.
+              const notLive = p.captured_live === false
+              return (
+                <a key={p.id} href={p.url} target="_blank" rel="noreferrer" style={{ position: 'relative', display: 'block' }}
+                  title={notLive
+                    ? `${p.caption || 'Closeout'} · ${fmtTime(p.created_at)} — picked from the device, not shot in the app`
+                    : (p.caption ? `${p.caption} · ${fmtTime(p.created_at)}` : fmtTime(p.created_at))}>
+                  <img src={p.url} alt={p.caption || 'closeout'} style={{ width: 66, height: 66, objectFit: 'cover', borderRadius: 8, border: `1px solid ${notLive ? AMBER : C.line}`, display: 'block' }} />
+                  {notLive && (
+                    <span style={{ position: 'absolute', bottom: 3, left: 3, background: 'rgba(11,11,13,0.85)', color: AMBER, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '1px 4px', borderRadius: 3 }}>FROM FILES</span>
+                  )}
+                </a>
+              )
+            })}
           </div>
         </div>
       ) : s.clock_in_at ? (

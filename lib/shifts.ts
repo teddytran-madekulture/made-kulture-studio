@@ -40,15 +40,17 @@ export function shiftState(s: Shift, now = Date.now()): ShiftState {
 }
 
 // ── Closeout photos ──────────────────────────────────────────────────────────────
-export type ShiftPhotoRow = { id: string; shift_id: string; worker_id: string | null; storage_path: string; caption: string; created_at: string }
-export type ShiftPhoto = { id: string; url: string; caption: string; created_at: string }
+export type ShiftPhotoRow = { id: string; shift_id: string; worker_id: string | null; storage_path: string; caption: string; created_at: string; captured_live: boolean | null }
+// captured_live: true = shot in the app's live camera, false = came from the
+// device's file picker (fallback), null = predates the live-camera build.
+export type ShiftPhoto = { id: string; url: string; caption: string; created_at: string; captured_live: boolean | null }
 
 async function signPhotos(rows: ShiftPhotoRow[]): Promise<ShiftPhoto[]> {
   const admin = supabaseAdmin()
   const out: ShiftPhoto[] = []
   for (const r of rows) {
     const { data } = await admin.storage.from(SHIFT_MEDIA_BUCKET).createSignedUrl(r.storage_path, SIGNED_URL_TTL)
-    out.push({ id: r.id, url: data?.signedUrl ?? '', caption: r.caption, created_at: r.created_at })
+    out.push({ id: r.id, url: data?.signedUrl ?? '', caption: r.caption, created_at: r.created_at, captured_live: r.captured_live ?? null })
   }
   return out
 }
@@ -441,18 +443,18 @@ export async function clockOut(accountId: string, shiftId: string): Promise<{ ok
 // ── Closeout photo record / delete (upload itself lives in the API route) ────────
 // Returns the worker_id to attribute the photo to, after checking the caller may
 // add photos to this shift (owns it, clocked in, not yet clocked out).
-export async function assertCanAddPhoto(accountId: string, shiftId: string): Promise<{ ok: boolean; workerId?: string; error?: string }> {
+export async function assertCanAddPhoto(accountId: string, shiftId: string): Promise<{ ok: boolean; workerId?: string; clockInAt?: string; error?: string }> {
   const r = await loadOwnedShift(accountId, shiftId)
   if ('error' in r) return { ok: false, error: r.error }
   const { worker, shift } = r
   if (!shift.clock_in_at) return { ok: false, error: 'Clock in before adding closeout photos.' }
   if (shift.clock_out_at) return { ok: false, error: 'This shift is already clocked out.' }
-  return { ok: true, workerId: worker.id }
+  return { ok: true, workerId: worker.id, clockInAt: shift.clock_in_at }
 }
 
-export async function recordShiftPhoto(shiftId: string, workerId: string, storagePath: string, caption: string): Promise<{ ok: boolean; error?: string }> {
+export async function recordShiftPhoto(shiftId: string, workerId: string, storagePath: string, caption: string, capturedLive: boolean): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabaseAdmin().from('shift_photos')
-    .insert({ shift_id: shiftId, worker_id: workerId, storage_path: storagePath, caption: caption.slice(0, 200) })
+    .insert({ shift_id: shiftId, worker_id: workerId, storage_path: storagePath, caption: caption.slice(0, 200), captured_live: capturedLive })
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

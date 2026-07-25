@@ -3,6 +3,7 @@
 // route (per-customer overrides included) so every path prices identically.
 
 import { supabaseAdmin } from '@/lib/supabase'
+import { randomUUID } from 'crypto'
 
 const RATE_BY_NAME: Record<string, number> = {
   'Set A': 40, 'Set B': 40, 'Set C': 40, 'Set D': 40,
@@ -87,6 +88,52 @@ export async function planExtension(bookingId: string, hours: number): Promise<E
     // actual card (booking's card → else customer's saved cards) before charging.
     hasCardOnFile: !!customer?.square_customer_id,
   }
+}
+
+// Price an extension and mint the pay-link token for it, without sending
+// anything — the caller decides how the link reaches the guest. Reuses a live
+// pending request for the same hours so a guest can't end up with two live
+// links (and two possible charges) for one session.
+//
+// ttlMs is the link's lifetime: June's kiosk flow uses a tight 15 min because
+// the guest is standing right there, but the wrap-up text needs longer — it
+// arrives 15 min before the session ends and the guest is mid-pack-up.
+//
+// (June's kiosk tool in lib/agent/june.ts still does this inline; it predates
+// this helper and works, so it was left alone rather than refactored blind.)
+export async function createExtensionRequest(
+  bookingId: string,
+  hours: number,
+  ttlMs = 30 * 60 * 1000,
+): Promise<{ token: string; priceCents: number; setName: string } | { error: string }> {
+  const p = await planExtension(bookingId, hours)
+  if ('error' in p) return { error: p.error }
+  if (p.conflict) return { error: 'The set is booked right after this session.' }
+  if (!p.hasCardOnFile) return { error: 'No card on file for this booking.' }
+
+  const db = supabaseAdmin()
+  const { data: existing } = await db
+    .from('extension_requests')
+    .select('id, confirm_token, hours')
+    .eq('booking_id', bookingId).eq('status', 'pending')
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle()
+
+  if (existing && existing.hours === hours) {
+    return { token: existing.confirm_token, priceCents: p.priceCents, setName: p.setName }
+  }
+  if (existing) await db.from('extension_requests').update({ status: 'cancelled' }).eq('id', existing.id)
+
+  const token = randomUUID().replace(/-/g, '') + randomUUID().slice(0, 8)
+  const { error } = await db.from('extension_requests').insert({
+    booking_id: bookingId,
+    hours,
+    amount_cents: p.priceCents,
+    confirm_token: token,
+    expires_at: new Date(Date.now() + ttlMs).toISOString(),
+  })
+  if (error) return { error: error.message }
+  return { token, priceCents: p.priceCents, setName: p.setName }
 }
 
 // Find the booking happening NOW (or starting within 30 min) for a phone number.
