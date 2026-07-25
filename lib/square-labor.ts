@@ -45,6 +45,21 @@ export async function setPayrollClassEnabled(cls: WorkerClass, enabled: boolean)
   else await admin.from('studio_settings').insert({ key, value })
 }
 
+// Per-set bonus rate (dollars) lives in the app, not Square. Default $10.
+const PER_SET_KEY = 'payroll_per_set'
+export async function getPerSetRate(): Promise<number> {
+  const { data } = await supabaseAdmin().from('studio_settings').select('value').eq('key', PER_SET_KEY).maybeSingle()
+  const n = data ? parseFloat((data as any).value) : NaN
+  return isNaN(n) ? 10 : n
+}
+export async function setPerSetRate(rate: number): Promise<void> {
+  const admin = supabaseAdmin()
+  const value = String(Math.max(0, rate))
+  const { data: ex } = await admin.from('studio_settings').select('key').eq('key', PER_SET_KEY).maybeSingle()
+  if (ex) await admin.from('studio_settings').update({ value }).eq('key', PER_SET_KEY)
+  else await admin.from('studio_settings').insert({ key: PER_SET_KEY, value })
+}
+
 // ── Connection / scope test ──────────────────────────────────────────────────────
 // A harmless read against Team + Labor to confirm the token actually carries those
 // scopes in production (can't be checked any other way from outside Vercel).
@@ -135,6 +150,8 @@ export type PayrollRow = {
   provisioned: boolean
   synced_at: string | null
   auto_clock_out: boolean
+  sets_covered: number
+  bonus: number
 }
 
 export async function getPayrollQueue(): Promise<PayrollRow[]> {
@@ -143,29 +160,55 @@ export async function getPayrollQueue(): Promise<PayrollRow[]> {
   const classes = WORKER_CLASSES.filter(c => enabled[c])
   if (!classes.length) return []
   const { data: rows } = await admin.from('shifts')
-    .select('id, starts_at, clock_in_at, clock_out_at, worker_class, claimed_by, timecard_synced_at, auto_clock_out')
+    .select('id, starts_at, ends_at, clock_in_at, clock_out_at, worker_class, claimed_by, timecard_synced_at, auto_clock_out')
     .not('clock_out_at', 'is', null).in('worker_class', classes)
     .order('clock_out_at', { ascending: false }).limit(100)
   const list = ((rows ?? []) as any[]).filter(r => r.claimed_by)
+  if (!list.length) return []
+
   const workerIds = [...new Set(list.map(r => r.claimed_by))] as string[]
   const wById = new Map<string, any>()
   if (workerIds.length) {
     const { data: ws } = await admin.from('worker_profiles').select('id, full_name, email, square_team_member_id').in('id', workerIds)
     for (const w of (ws ?? []) as any[]) wById.set(w.id, w)
   }
+
+  // Set bonus = non-cancelled bookings overlapping each shift's scheduled window x per-set rate.
+  const rate = await getPerSetRate()
+  let minStart = Infinity, maxEnd = -Infinity
+  for (const r of list) { minStart = Math.min(minStart, new Date(r.starts_at).getTime()); maxEnd = Math.max(maxEnd, new Date(r.ends_at).getTime()) }
+  const { data: bk } = await admin.from('bookings').select('start_time, end_time').neq('status', 'cancelled')
+    .lt('start_time', new Date(maxEnd).toISOString()).gt('end_time', new Date(minStart).toISOString())
+  const bookings = ((bk ?? []) as any[]).map(b => ({ start: new Date(b.start_time).getTime(), end: new Date(b.end_time).getTime() }))
+  const overlap = (sStart: string, sEnd: string) => {
+    const a = new Date(sStart).getTime(), b = new Date(sEnd).getTime()
+    return bookings.filter(x => x.start < b && x.end > a).length
+  }
+
   return list.map(r => {
     const w = wById.get(r.claimed_by)
+    const sets = overlap(r.starts_at, r.ends_at)
     return {
       shift_id: r.id, starts_at: r.starts_at, clock_in_at: r.clock_in_at, clock_out_at: r.clock_out_at,
       worked_minutes: Math.max(0, Math.round((new Date(r.clock_out_at).getTime() - new Date(r.clock_in_at).getTime()) / 60000)),
       worker_id: r.claimed_by, worker_name: w?.full_name || w?.email || null,
       worker_class: r.worker_class, worker_label: WORKER_CLASS_LABELS[r.worker_class as WorkerClass],
       provisioned: !!w?.square_team_member_id, synced_at: r.timecard_synced_at ?? null, auto_clock_out: !!r.auto_clock_out,
+      sets_covered: sets, bonus: Math.round(sets * rate * 100) / 100,
     }
   })
 }
 
+export type PayrollWorkerSummary = { worker_id: string; worker_name: string | null; worker_label: string; shifts: number; hours: number; bonus: number; unsynced: number }
+
 export async function getPayrollOverview() {
-  const [settings, queue] = await Promise.all([getPayrollClassEnabled(), getPayrollQueue()])
-  return { configured: squareConfigured(), settings, queue }
+  const [settings, perSetRate, queue] = await Promise.all([getPayrollClassEnabled(), getPerSetRate(), getPayrollQueue()])
+  const byWorker = new Map<string, PayrollWorkerSummary>()
+  for (const r of queue) {
+    let w = byWorker.get(r.worker_id)
+    if (!w) { w = { worker_id: r.worker_id, worker_name: r.worker_name, worker_label: r.worker_label, shifts: 0, hours: 0, bonus: 0, unsynced: 0 }; byWorker.set(r.worker_id, w) }
+    w.shifts++; w.hours += r.worked_minutes / 60; w.bonus += r.bonus; if (!r.synced_at) w.unsynced++
+  }
+  const workers = [...byWorker.values()].map(w => ({ ...w, hours: Math.round(w.hours * 100) / 100, bonus: Math.round(w.bonus * 100) / 100 }))
+  return { configured: squareConfigured(), settings, perSetRate, queue, workers }
 }

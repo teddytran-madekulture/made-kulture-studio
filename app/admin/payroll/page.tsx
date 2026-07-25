@@ -7,8 +7,10 @@ type PayrollRow = {
   shift_id: string; starts_at: string; clock_in_at: string; clock_out_at: string
   worked_minutes: number; worker_id: string; worker_name: string | null
   worker_class: WClass; worker_label: string; provisioned: boolean; synced_at: string | null; auto_clock_out: boolean
+  sets_covered: number; bonus: number
 }
-type Overview = { configured: boolean; settings: Record<WClass, boolean>; queue: PayrollRow[] }
+type WorkerSummary = { worker_id: string; worker_name: string | null; worker_label: string; shifts: number; hours: number; bonus: number; unsynced: number }
+type Overview = { configured: boolean; settings: Record<WClass, boolean>; perSetRate: number; queue: PayrollRow[]; workers: WorkerSummary[] }
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
 const GREEN = '#6ee7a8', AMBER = '#ffb066', RED = '#ff6b6b'
@@ -22,6 +24,7 @@ const CLASSES: { key: WClass; label: string; hint: string }[] = [
 function fmtDay(iso: string) { return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }
 function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }
 function worked(mins: number) { const h = Math.floor(mins / 60), m = mins % 60; return h ? `${h}h ${m}m` : `${m}m` }
+function money(n: number) { return '$' + (n || 0).toFixed(2) }
 
 function Toggle({ on, busy, onClick }: { on: boolean; busy: boolean; onClick: () => void }) {
   return (
@@ -42,6 +45,7 @@ export default function PayrollPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
   const [test, setTest] = useState<{ ok: boolean; team: boolean; labor: boolean; error?: string } | null>(null)
+  const [rateVal, setRateVal] = useState('')
 
   const load = async () => {
     const r = await fetch('/api/admin/payroll')
@@ -51,6 +55,7 @@ export default function PayrollPage() {
     setOv(d); setLoading(false)
   }
   useEffect(() => { load() }, [])
+  useEffect(() => { if (ov) setRateVal(String(ov.perSetRate)) }, [ov])
 
   const toggle = async (cls: WClass, enabled: boolean) => {
     setBusyKey('cls:' + cls); setErr('')
@@ -58,6 +63,14 @@ export default function PayrollPage() {
     const r = await fetch('/api/admin/payroll', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ worker_class: cls, enabled }) })
     setBusyKey(null)
     if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not update.') }
+    load()
+  }
+  const saveRate = async () => {
+    const n = parseFloat(rateVal); if (isNaN(n)) return
+    setBusyKey('rate'); setErr('')
+    const r = await fetch('/api/admin/payroll', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ per_set: n }) })
+    setBusyKey(null)
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not save rate.') }
     load()
   }
   const runTest = async () => {
@@ -84,7 +97,7 @@ export default function PayrollPage() {
           <Link href="/admin/shifts" style={{ color: C.dim, fontSize: 13, textDecoration: 'none' }}>Shifts →</Link>
         </div>
         <p style={{ color: C.dim, fontSize: 13, marginTop: 0, marginBottom: 22 }}>
-          Approve worked hours and push them to each worker&apos;s Square Team profile as a timecard, then click <b>Import time and wages</b> in Square Payroll. Hours only — wages + tax classification are set on the Square side.
+          Two layers: <b>hours</b> go to Square as timecards (Square multiplies by the base rate you set there), and the <b>per-set bonus</b> is computed here and added as a bonus line at payroll. Wages + tax classification live on the Square side.
         </p>
 
         {unauth ? (
@@ -132,6 +145,42 @@ export default function PayrollPage() {
               </div>
             </div>
 
+            {/* Per-set bonus rate */}
+            <div style={card}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Set bonus</div>
+              <p style={{ fontSize: 12, color: C.dim, marginTop: 0, marginBottom: 12 }}>
+                On top of the Square hourly base, each worker earns this for every booking (&ldquo;set&rdquo;) that ran during their shift. Square never sees it — the app counts the sets and you add the total as a bonus line at payroll.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ color: C.dim }}>$</span>
+                <input type="number" min="0" step="0.5" value={rateVal} onChange={e => setRateVal(e.target.value)} style={{ width: 90, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 15, padding: '9px 10px', borderRadius: 6, outline: 'none' }} />
+                <span style={{ color: C.dim, fontSize: 13 }}>per set covered</span>
+                <button onClick={saveRate} disabled={busyKey === 'rate'} style={{ background: 'none', border: `1px solid ${C.line}`, color: C.text, borderRadius: 6, padding: '8px 14px', fontSize: 12, letterSpacing: '0.06em', cursor: 'pointer' }}>{busyKey === 'rate' ? '…' : 'SAVE'}</button>
+              </div>
+            </div>
+
+            {/* Bonuses to enter in Square (per worker) */}
+            {ov.workers.length > 0 && (
+              <div style={card}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Bonuses to enter in Square</div>
+                <p style={{ fontSize: 12, color: C.dim, marginTop: 0, marginBottom: 14 }}>When you run a Square pay period, add each worker&apos;s set bonus as a one-time bonus/commission line. Hours import automatically from the timecards you send below.</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {ov.workers.map(w => (
+                    <div key={w.worker_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderTop: `1px solid ${C.line}` }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>{w.worker_name || '(worker)'} <span style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>· {w.worker_label}</span></div>
+                        <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{w.shifts} shift{w.shifts === 1 ? '' : 's'} · {w.hours} hrs{w.unsynced > 0 ? ` · ${w.unsynced} not sent yet` : ''}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: C.accent }}>{money(w.bonus)}</div>
+                        <div style={{ fontSize: 10, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase' }}>set bonus</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Timecard queue */}
             <div style={card}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Completed shifts to approve</div>
@@ -144,7 +193,7 @@ export default function PayrollPage() {
                     <div key={row.shift_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '10px 0', borderTop: `1px solid ${C.line}` }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{row.worker_name || '(worker)'} <span style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>· {row.worker_label}</span></div>
-                        <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{fmtDay(row.clock_in_at)} · {fmtTime(row.clock_in_at)}–{fmtTime(row.clock_out_at)} · {worked(row.worked_minutes)}</div>
+                        <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{fmtDay(row.clock_in_at)} · {fmtTime(row.clock_in_at)}–{fmtTime(row.clock_out_at)} · {worked(row.worked_minutes)} · {row.sets_covered} set{row.sets_covered === 1 ? '' : 's'} · <span style={{ color: C.accent }}>+{money(row.bonus)}</span></div>
                         {row.auto_clock_out && !row.synced_at && <div style={{ fontSize: 12, color: AMBER, marginTop: 3 }}>⚠ Auto-closed at the scheduled end — check the hours (edit on the Shifts board) before sending.</div>}
                       </div>
                       {row.synced_at ? (

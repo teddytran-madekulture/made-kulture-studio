@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
-import { getPayrollOverview, setPayrollClassEnabled } from '@/lib/square-labor'
+import { getPayrollOverview, setPayrollClassEnabled, setPerSetRate } from '@/lib/square-labor'
 import { WORKER_CLASSES, type WorkerClass } from '@/lib/onboarding'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +20,11 @@ export async function GET(req: NextRequest) {
 // PATCH /api/admin/payroll — { worker_class, enabled } toggle payroll for a class.
 export async function PATCH(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const b = await req.json().catch(() => ({})) as { worker_class?: string; enabled?: boolean }
+  const b = await req.json().catch(() => ({})) as { worker_class?: string; enabled?: boolean; per_set?: number }
+  if (typeof b.per_set === 'number' && isFinite(b.per_set)) {
+    await setPerSetRate(b.per_set)
+    return NextResponse.json({ success: true })
+  }
   if (!b.worker_class || !WORKER_CLASSES.includes(b.worker_class as WorkerClass)) {
     return NextResponse.json({ error: 'Valid worker_class required.' }, { status: 400 })
   }
