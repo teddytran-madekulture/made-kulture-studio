@@ -194,6 +194,7 @@ type CoverageBlock = {
   booking_count: number
   bookings: { start_time: string; end_time: string; set_name: string | null }[]
   sets: string[]
+  cut_points: string[]
   shift: { id: string; worker_class: WClass; state: ShiftState; claimer_name: string | null } | null
 }
 
@@ -202,6 +203,7 @@ type CoverageBlock = {
 function StaffFromBookings({ onPosted }: { onPosted: () => void }) {
   const [items, setItems] = useState<CoverageBlock[] | null>(null)
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [splitKey, setSplitKey] = useState<string | null>(null)
   const [role, setRole] = useState<Record<string, WClass>>({})
   const [err, setErr] = useState('')
 
@@ -222,6 +224,22 @@ function StaffFromBookings({ onPosted }: { onPosted: () => void }) {
     setBusyKey(null)
     if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not post.') }
     load(); onPosted()
+  }
+
+  // Split one block into two back-to-back shifts at a clean booking boundary.
+  // Posts [start, cut] then [cut, end] — same role, whole bookings on each side.
+  const postSplit = async (bl: CoverageBlock, cut: string) => {
+    setBusyKey(bl.key); setErr('')
+    const wc = role[bl.key] || 'attendant'
+    const windows: [string, string][] = [[bl.start_time, cut], [cut, bl.end_time]]
+    for (const [s, e] of windows) {
+      const r = await fetch('/api/admin/staffing/from-block', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starts_at: s, ends_at: e, worker_class: wc, notes: bl.sets.join(', ') }),
+      })
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Could not split the block.'); break }
+    }
+    setBusyKey(null); setSplitKey(null); load(); onPosted()
   }
 
   if (!items) return null
@@ -246,28 +264,53 @@ function StaffFromBookings({ onPosted }: { onPosted: () => void }) {
         <div style={{ color: C.dim, fontSize: 13 }}>No upcoming bookings.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.map(bl => (
-            <div key={bl.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '10px 0', borderTop: `1px solid ${C.line}` }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{fmtRange(bl.start_time, bl.end_time)}</div>
-                <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{desc(bl)}</div>
+          {items.map(bl => {
+            const staffed = bl.shift && bl.shift.state !== 'cancelled'
+            const canSplit = !staffed && (bl.cut_points?.length ?? 0) > 0
+            return (
+            <div key={bl.key} style={{ padding: '10px 0', borderTop: `1px solid ${C.line}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{fmtRange(bl.start_time, bl.end_time)}</div>
+                  <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{desc(bl)}</div>
+                </div>
+                {staffed ? (
+                  <span style={{ fontSize: 12, color: statusText(bl.shift!).color, whiteSpace: 'nowrap' }}>{statusText(bl.shift!).txt}</span>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <select value={role[bl.key] || 'attendant'} onChange={e => setRole({ ...role, [bl.key]: e.target.value as WClass })}
+                      style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 12, padding: '6px 8px', borderRadius: 6 }}>
+                      {CLASSES.map(c => <option key={c.key} value={c.key} style={{ background: C.card }}>{c.label}</option>)}
+                    </select>
+                    {canSplit && (
+                      <button onClick={() => setSplitKey(splitKey === bl.key ? null : bl.key)} disabled={busyKey === bl.key}
+                        style={{ background: 'none', border: `1px solid ${C.line}`, color: C.text, borderRadius: 6, padding: '8px 12px', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {splitKey === bl.key ? 'CANCEL' : 'SPLIT'}
+                      </button>
+                    )}
+                    <button onClick={() => post(bl)} disabled={busyKey === bl.key}
+                      style={{ background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      {busyKey === bl.key ? '…' : 'POST SHIFT'}
+                    </button>
+                  </div>
+                )}
               </div>
-              {bl.shift && bl.shift.state !== 'cancelled' ? (
-                <span style={{ fontSize: 12, color: statusText(bl.shift).color, whiteSpace: 'nowrap' }}>{statusText(bl.shift).txt}</span>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <select value={role[bl.key] || 'attendant'} onChange={e => setRole({ ...role, [bl.key]: e.target.value as WClass })}
-                    style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 12, padding: '6px 8px', borderRadius: 6 }}>
-                    {CLASSES.map(c => <option key={c.key} value={c.key} style={{ background: C.card }}>{c.label}</option>)}
-                  </select>
-                  <button onClick={() => post(bl)} disabled={busyKey === bl.key}
-                    style={{ background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '8px 14px', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    {busyKey === bl.key ? 'â¦' : 'POST SHIFT'}
-                  </button>
+              {canSplit && splitKey === bl.key && (
+                <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.line}`, borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: C.dim, marginBottom: 8 }}>Split into two back-to-back shifts at a booking boundary — each side covers whole bookings, never mid-shoot. The same worker can claim both and stays clocked in across them.</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {bl.cut_points.map(cut => (
+                      <button key={cut} onClick={() => postSplit(bl, cut)} disabled={busyKey === bl.key}
+                        style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, borderRadius: 6, padding: '6px 12px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {fmtTime(bl.start_time)}–{fmtTime(cut)}  +  {fmtTime(cut)}–{fmtTime(bl.end_time)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
       {err && <div style={{ color: RED, fontSize: 13, marginTop: 10 }}>{err}</div>}

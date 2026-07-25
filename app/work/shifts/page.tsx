@@ -19,6 +19,7 @@ type MyShift = PublicShift & {
   door_codes: { start_time: string; end_time: string; set_name: string | null; front: string | null; back: string | null }[]
   booking_linked: boolean
   itinerary: { start_time: string; end_time: string; set_name: string | null }[]
+  has_next: boolean
 }
 type View = {
   enrolled: boolean
@@ -184,26 +185,35 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
         <div style={{ marginTop: 12, borderTop: `1px solid ${C.line}`, paddingTop: 12 }}>
           <div style={{ fontSize: 12, color: C.good, marginBottom: 10 }}>● Clocked in at {fmtTime(s.clock_in_at!)}</div>
 
-          <div style={{ fontSize: 12, color: C.dim, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Closeout photos</div>
-          <div style={{ fontSize: 12, color: C.dim, marginBottom: 10 }}>
-            Snap each set once it&apos;s reset to photo-ready. You need at least {s.photo_min} to clock out.
-          </div>
+          {s.has_next ? (
+            <div>
+              <div style={{ fontSize: 12, color: C.dim, marginTop: 4 }}>You&apos;ve got a back-to-back shift right after this — finishing hands you straight into it. No closeout photos yet; take them when you clock out of your last shift.</div>
+              <button onClick={() => clock('out')} disabled={busy} style={{ ...pillBtn, marginTop: 12 }}>{busy ? '…' : 'FINISH · HAND OFF →'}</button>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: C.dim, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Closeout photos</div>
+              <div style={{ fontSize: 12, color: C.dim, marginBottom: 10 }}>
+                Snap each set once it&apos;s reset to photo-ready. You need at least {s.photo_min} to clock out.
+              </div>
 
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} style={{ display: 'none' }} />
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input value={caption} onChange={e => setCaption(e.target.value)} placeholder="Caption (optional) — e.g. Set B reset"
-              style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 13, padding: '9px 12px', borderRadius: 6, flex: '1 1 180px', minWidth: 140, outline: 'none' }} />
-            <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ ...ghostBtn, color: C.text }}>{busy ? '…' : '+ ADD PHOTO'}</button>
-          </div>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} style={{ display: 'none' }} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input value={caption} onChange={e => setCaption(e.target.value)} placeholder="Caption (optional) — e.g. Set B reset"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 13, padding: '9px 12px', borderRadius: 6, flex: '1 1 180px', minWidth: 140, outline: 'none' }} />
+                <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ ...ghostBtn, color: C.text }}>{busy ? '…' : '+ ADD PHOTO'}</button>
+              </div>
 
-          {photoStrip(true)}
+              {photoStrip(true)}
 
-          <button onClick={() => clock('out')} disabled={busy || s.photos.length < s.photo_min}
-            style={{ ...pillBtn, marginTop: 14, opacity: s.photos.length < s.photo_min ? 0.4 : 1, cursor: s.photos.length < s.photo_min ? 'not-allowed' : 'pointer' }}>
-            {busy ? '…' : 'CLOCK OUT'}
-          </button>
-          {s.photos.length < s.photo_min && (
-            <div style={{ fontSize: 12, color: C.warn, marginTop: 8 }}>Add {s.photo_min - s.photos.length} more closeout photo{s.photo_min - s.photos.length === 1 ? '' : 's'} to clock out.</div>
+              <button onClick={() => clock('out')} disabled={busy || s.photos.length < s.photo_min}
+                style={{ ...pillBtn, marginTop: 14, opacity: s.photos.length < s.photo_min ? 0.4 : 1, cursor: s.photos.length < s.photo_min ? 'not-allowed' : 'pointer' }}>
+                {busy ? '…' : 'CLOCK OUT'}
+              </button>
+              {s.photos.length < s.photo_min && (
+                <div style={{ fontSize: 12, color: C.warn, marginTop: 8 }}>Add {s.photo_min - s.photos.length} more closeout photo{s.photo_min - s.photos.length === 1 ? '' : 's'} to clock out.</div>
+              )}
+            </>
           )}
         </div>
       )}

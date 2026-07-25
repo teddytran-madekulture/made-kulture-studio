@@ -86,6 +86,7 @@ export type MyShift = PublicShift & {
   door_codes: DoorCode[]         // codes for every booking overlapping this shift's window
   booking_linked: boolean        // shift overlaps >=1 booking (missing codes = "coming", not "n/a")
   itinerary: { start_time: string; end_time: string; set_name: string | null }[]  // bookings during the shift
+  has_next: boolean              // worker holds an adjacent next shift (clock-out hands off)
 }
 
 function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase; can_clock_in: boolean } {
@@ -99,7 +100,7 @@ function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase
   return { phase: 'upcoming', can_clock_in: false }
 }
 
-async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null, info: { codes: DoorCode[]; itinerary: { start_time: string; end_time: string; set_name: string | null }[]; hasBooking: boolean }): Promise<MyShift> {
+async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null, info: { codes: DoorCode[]; itinerary: { start_time: string; end_time: string; set_name: string | null }[]; hasBooking: boolean; hasNext: boolean }): Promise<MyShift> {
   const { phase, can_clock_in } = shiftPhase(s, active, now)
   const photos = await signPhotos(await photosForShift(s.id))
   return {
@@ -107,7 +108,7 @@ async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftRe
     clock_in_at: s.clock_in_at, clock_out_at: s.clock_out_at,
     can_clock_in, phase, photo_min: CLOSEOUT_PHOTO_MIN, photos,
     can_review: phase === 'done', worker_review: review,
-    door_codes: info.codes, booking_linked: info.hasBooking, itinerary: info.itinerary,
+    door_codes: info.codes, booking_linked: info.hasBooking, itinerary: info.itinerary, has_next: info.hasNext,
   }
 }
 
@@ -208,7 +209,11 @@ export async function getWorkerShiftView(accountId: string): Promise<WorkerShift
       itinerary.push({ start_time: x.start_time, end_time: x.end_time, set_name: setName })
       if (x.door_code || x.door_code_back) codes.push({ start_time: x.start_time, end_time: x.end_time, set_name: setName, front: x.door_code ?? null, back: x.door_code_back ?? null })
     }
-    return { codes, itinerary, hasBooking: over.length > 0 }
+    const endMs = b
+    const hasNext = mineShifts.some(o => o.id !== s.id && !o.clock_in_at && !o.clock_out_at && !o.cancelled_at
+      && new Date(o.starts_at).getTime() >= endMs - 15 * 60 * 1000
+      && new Date(o.starts_at).getTime() <= endMs + 60 * 60 * 1000)
+    return { codes, itinerary, hasBooking: over.length > 0, hasNext }
   }
   const mine: MyShift[] = []
   for (const s of mineShifts) {
@@ -312,22 +317,48 @@ export async function clockIn(accountId: string, shiftId: string): Promise<{ ok:
   return { ok: true }
 }
 
-export async function clockOut(accountId: string, shiftId: string): Promise<{ ok: boolean; error?: string }> {
+// A worker's next back-to-back shift: same worker, not started, starting from just
+// before this one ends through up to an hour after (bridging a cleanup gap).
+export const ADJ_BEFORE_MS = 15 * 60 * 1000
+export const ADJ_AFTER_MS = 60 * 60 * 1000
+async function findAdjacentNextShift(workerId: string, shift: Shift): Promise<Shift | null> {
+  const end = new Date(shift.ends_at).getTime()
+  const { data } = await supabaseAdmin().from('shifts').select('*')
+    .eq('claimed_by', workerId).is('cancelled_at', null).is('clock_out_at', null).is('clock_in_at', null).neq('id', shift.id)
+    .gte('starts_at', new Date(end - ADJ_BEFORE_MS).toISOString())
+    .lte('starts_at', new Date(end + ADJ_AFTER_MS).toISOString())
+    .order('starts_at', { ascending: true }).limit(1)
+  return ((data ?? []) as Shift[])[0] ?? null
+}
+
+export async function clockOut(accountId: string, shiftId: string): Promise<{ ok: boolean; error?: string; handoff?: boolean }> {
   const r = await loadOwnedShift(accountId, shiftId)
   if ('error' in r) return { ok: false, error: r.error }
   const { worker, shift } = r
   if (!shift.clock_in_at) return { ok: false, error: 'You need to clock in first.' }
   if (shift.clock_out_at) return { ok: false, error: 'You already clocked out.' }
 
-  const { count } = await supabaseAdmin()
-    .from('shift_photos').select('id', { count: 'exact', head: true }).eq('shift_id', shiftId)
+  const admin = supabaseAdmin()
+  const now = new Date().toISOString()
+
+  // Handoff: a claimed back-to-back shift they haven't started → flow straight into
+  // it (no closeout photos mid-run, no re-punch). Photos happen at the true end.
+  const next = await findAdjacentNextShift(worker.id, shift)
+  if (next) {
+    const { error: e1 } = await admin.from('shifts').update({ clock_out_at: now, updated_at: now })
+      .eq('id', shiftId).eq('claimed_by', worker.id).not('clock_in_at', 'is', null).is('clock_out_at', null)
+    if (e1) return { ok: false, error: e1.message }
+    await admin.from('shifts').update({ clock_in_at: now, updated_at: now })
+      .eq('id', next.id).eq('claimed_by', worker.id).is('clock_in_at', null).is('clock_out_at', null)
+    return { ok: true, handoff: true }
+  }
+
+  // Final clock-out — closeout photos required.
+  const { count } = await admin.from('shift_photos').select('id', { count: 'exact', head: true }).eq('shift_id', shiftId)
   if ((count ?? 0) < CLOSEOUT_PHOTO_MIN) {
     return { ok: false, error: `Add at least ${CLOSEOUT_PHOTO_MIN} closeout photo${CLOSEOUT_PHOTO_MIN === 1 ? '' : 's'} before clocking out.` }
   }
-
-  const now = new Date().toISOString()
-  const { error } = await supabaseAdmin().from('shifts')
-    .update({ clock_out_at: now, updated_at: now })
+  const { error } = await admin.from('shifts').update({ clock_out_at: now, updated_at: now })
     .eq('id', shiftId).eq('claimed_by', worker.id).not('clock_in_at', 'is', null).is('clock_out_at', null)
   if (error) return { ok: false, error: error.message }
   return { ok: true }

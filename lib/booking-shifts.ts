@@ -112,6 +112,7 @@ export type CoverageBlock = {
   booking_count: number
   bookings: BlockBooking[]
   sets: string[]
+  cut_points: string[]         // clean times to split the block (booking boundaries, never mid-shoot)
   shift: StaffedShift | null   // an existing non-cancelled shift overlapping this block
 }
 
@@ -132,7 +133,7 @@ export async function getCoverageBlocks(now = Date.now()): Promise<CoverageBlock
     const setName = relName(r.sets)
     const bk: BlockBooking = { start_time: r.start_time, end_time: r.end_time, set_name: setName }
     const last = blocks[blocks.length - 1]
-    if (last && start <= last.end + BLOCK_GAP_MS) {
+    if (last && start < last.end + BLOCK_GAP_MS) {
       last.end = Math.max(last.end, end)
       last.bookings.push(bk)
       if (setName) last.sets.add(setName)
@@ -154,6 +155,15 @@ export async function getCoverageBlocks(now = Date.now()): Promise<CoverageBlock
   }
 
   return blocks.map(bl => {
+    // Clean split points: booking start/end times inside the block that don't fall
+    // in the middle of any booking (so a split never cuts a shoot in half).
+    const times = new Set<number>()
+    for (const bk of bl.bookings) { times.add(new Date(bk.start_time).getTime()); times.add(new Date(bk.end_time).getTime()) }
+    const cut_points = [...times]
+      .filter(t => t > bl.start && t < bl.end)
+      .filter(t => !bl.bookings.some(bk => new Date(bk.start_time).getTime() < t && new Date(bk.end_time).getTime() > t))
+      .sort((a, b) => a - b)
+      .map(t => new Date(t).toISOString())
     const sh = shifts.find(s => new Date(s.starts_at).getTime() < bl.end && new Date(s.ends_at).getTime() > bl.start)
     let shift: StaffedShift | null = null
     if (sh) {
@@ -167,6 +177,7 @@ export async function getCoverageBlocks(now = Date.now()): Promise<CoverageBlock
       booking_count: bl.bookings.length,
       bookings: bl.bookings,
       sets: [...bl.sets],
+      cut_points,
       shift,
     }
   })
