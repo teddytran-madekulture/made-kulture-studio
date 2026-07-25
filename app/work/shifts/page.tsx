@@ -16,6 +16,8 @@ type MyShift = PublicShift & {
   photos: ShiftPhoto[]
   can_review: boolean
   worker_review: { rating: number; note: string; created_at: string } | null
+  door_code: string | null
+  door_code_back: string | null
 }
 type View = {
   enrolled: boolean
@@ -130,8 +132,19 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
         )}
       </div>
 
+      {s.door_code && s.phase !== 'done' && (
+        <div style={{ marginTop: 10, background: 'rgba(201,178,126,0.10)', border: '1px solid rgba(201,178,126,0.32)', borderRadius: 8, padding: '9px 12px' }}>
+          <div style={{ fontSize: 14 }}>
+            <span style={{ color: C.dim, fontSize: 12 }}>Door code </span>
+            <span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.04em' }}>{s.door_code}</span>
+            {s.door_code_back ? <span style={{ color: C.dim, fontSize: 13 }}>{'  ·  back door '}<span style={{ color: C.accent, fontWeight: 700 }}>{s.door_code_back}</span></span> : null}
+          </div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>Unlocks at your booked start time.</div>
+        </div>
+      )}
+
       {s.phase === 'upcoming' && (
-        <div style={{ fontSize: 12, color: C.dim, marginTop: 10 }}>Clock-in opens 30 minutes before your start time.</div>
+        <div style={{ fontSize: 12, color: C.dim, marginTop: 10 }}>Clock-in opens 1 hour before your start time.</div>
       )}
 
       {s.phase === 'missed' && (

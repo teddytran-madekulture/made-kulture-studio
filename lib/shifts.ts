@@ -6,7 +6,8 @@ import {
 import { type ShiftReview, getShiftReviewMap } from '@/lib/reviews'
 
 // ── Tunables ────────────────────────────────────────────────────────────────────
-export const CLOCK_IN_LEAD_MS = 30 * 60 * 1000   // clock-in unlocks 30 min before start
+export const CLOCK_IN_LEAD_MS = 60 * 60 * 1000    // clock-in unlocks 1 hour before start
+export const CLOCK_IN_TRAIL_MS = 60 * 60 * 1000   // and stays open until 1 hour after end
 export const CLOSEOUT_PHOTO_MIN = 1              // photos required before clock-out
 const SIGNED_URL_TTL = 60 * 60                    // 1h signed URL for private photos
 const SHIFT_MEDIA_BUCKET = 'shift-media'
@@ -25,6 +26,7 @@ export type Shift = {
   clock_out_at: string | null
   clock_edited_at: string | null
   auto_clock_out: boolean
+  booking_id: string | null
   created_at: string
   updated_at: string
 }
@@ -80,6 +82,8 @@ export type MyShift = PublicShift & {
   photos: ShiftPhoto[]
   can_review: boolean            // shift is done → worker may rate the studio
   worker_review: ShiftReview | null
+  door_code: string | null       // booking's front-door PIN (booking-linked shifts)
+  door_code_back: string | null
 }
 
 function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase; can_clock_in: boolean } {
@@ -87,13 +91,13 @@ function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase
   if (s.clock_in_at) return { phase: 'working', can_clock_in: false }
   const start = new Date(s.starts_at).getTime()
   const end = new Date(s.ends_at).getTime()
-  const inWindow = now >= start - CLOCK_IN_LEAD_MS && now <= end
+  const inWindow = now >= start - CLOCK_IN_LEAD_MS && now <= end + CLOCK_IN_TRAIL_MS
   if (inWindow) return { phase: 'clock_in_open', can_clock_in: active }
-  if (now > end) return { phase: 'missed', can_clock_in: false }
+  if (now > end + CLOCK_IN_TRAIL_MS) return { phase: 'missed', can_clock_in: false }
   return { phase: 'upcoming', can_clock_in: false }
 }
 
-async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null): Promise<MyShift> {
+async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null, doors: { front: string | null; back: string | null } | null): Promise<MyShift> {
   const { phase, can_clock_in } = shiftPhase(s, active, now)
   const photos = await signPhotos(await photosForShift(s.id))
   return {
@@ -101,6 +105,7 @@ async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftRe
     clock_in_at: s.clock_in_at, clock_out_at: s.clock_out_at,
     can_clock_in, phase, photo_min: CLOSEOUT_PHOTO_MIN, photos,
     can_review: phase === 'done', worker_review: review,
+    door_code: doors?.front ?? null, door_code_back: doors?.back ?? null,
   }
 }
 
@@ -178,8 +183,18 @@ export async function getWorkerShiftView(accountId: string): Promise<WorkerShift
     .gte('ends_at', floorIso).order('starts_at', { ascending: true })
   const mineShifts = (mineRows ?? []) as Shift[]
   const wReviews = await getShiftReviewMap('worker_to_studio', mineShifts.map(s => s.id))
+  // Door codes for booking-linked shifts, so the worker has the code when they arrive.
+  const bookingIds = [...new Set(mineShifts.map(s => s.booking_id).filter(Boolean))] as string[]
+  const doorByBooking = new Map<string, { front: string | null; back: string | null }>()
+  if (bookingIds.length) {
+    const { data: bks } = await admin.from('bookings').select('id, door_code, door_code_back').in('id', bookingIds)
+    for (const b of (bks ?? []) as any[]) doorByBooking.set(b.id, { front: b.door_code ?? null, back: b.door_code_back ?? null })
+  }
   const mine: MyShift[] = []
-  for (const s of mineShifts) mine.push(await toMyShift(s, active, now, wReviews.get(s.id) ?? null))
+  for (const s of mineShifts) {
+    const doors = s.booking_id ? (doorByBooking.get(s.booking_id) ?? null) : null
+    mine.push(await toMyShift(s, active, now, wReviews.get(s.id) ?? null, doors))
+  }
 
   let openRows: Shift[] = []
   if (active && certified) {
@@ -268,8 +283,8 @@ export async function clockIn(accountId: string, shiftId: string): Promise<{ ok:
   const now = Date.now()
   const start = new Date(shift.starts_at).getTime()
   const end = new Date(shift.ends_at).getTime()
-  if (now < start - CLOCK_IN_LEAD_MS) return { ok: false, error: 'Too early — clock-in opens 30 minutes before your start time.' }
-  if (now > end) return { ok: false, error: 'This shift has ended. Ask the studio to sort out the hours.' }
+  if (now < start - CLOCK_IN_LEAD_MS) return { ok: false, error: 'Too early — clock-in opens 1 hour before your start time.' }
+  if (now > end + CLOCK_IN_TRAIL_MS) return { ok: false, error: 'This shift ended over an hour ago. Ask the studio to sort out the hours.' }
 
   const { error } = await supabaseAdmin().from('shifts')
     .update({ clock_in_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() })
