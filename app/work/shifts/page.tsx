@@ -61,6 +61,7 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
   // opened the photo gallery, so an old shot of a tidy set could stand in for
   // one. This never opens a picker, so there's nothing old to pick.
   const [camFor, setCamFor] = useState<string | null>(null)
+  const [camErr, setCamErr] = useState('')
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -107,23 +108,45 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
   }
   useEffect(() => () => stopCam(), [])
 
-  const shootFor = async (label: string) => {
-    setErr(''); setActiveLabel(label)
-    const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null
-    if (!md?.getUserMedia) { setTimeout(() => fileRef.current?.click(), 0); return }
+  // The default device isn't always a working one — a virtual camera (OBS and
+  // friends) sits at the front of the list and fails to start when the app
+  // behind it isn't running. On anything other than a permission refusal, walk
+  // the inputs and take the first that actually opens.
+  const openStream = async (md: MediaDevices): Promise<MediaStream> => {
     try {
-      streamRef.current = await md.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1600 } }, audio: false,
-      })
-      setCamFor(label)
-    } catch {
-      // No camera or permission denied — don't strand them, fall back to the
-      // picker. The server decides whether what comes back is acceptable.
-      setTimeout(() => fileRef.current?.click(), 0)
+      return await md.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1600 } }, audio: false })
+    } catch (e: any) {
+      if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') throw e
+      const inputs = (await md.enumerateDevices()).filter(d => d.kind === 'videoinput')
+      for (const d of inputs) {
+        try { return await md.getUserMedia({ video: { deviceId: { exact: d.deviceId } }, audio: false }) } catch {}
+      }
+      throw e
     }
   }
 
-  const closeCam = () => { stopCam(); setCamFor(null); setActiveLabel('') }
+  const shootFor = async (label: string) => {
+    setErr(''); setCamErr(''); setActiveLabel(label)
+    const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null
+    if (!md?.getUserMedia) {
+      setCamErr("This browser can't open the camera. You can pick a photo instead, but the studio sees that it wasn't shot here.")
+      return
+    }
+    try {
+      streamRef.current = await openStream(md)
+      setCamFor(label)
+    } catch (e: any) {
+      // NEVER drop silently into the file picker. The first tap always raises
+      // the permission prompt, and a worker who hesitates used to land in their
+      // camera roll with no explanation — the exact thing this feature prevents.
+      const denied = e?.name === 'NotAllowedError' || e?.name === 'SecurityError'
+      setCamErr(denied
+        ? 'Camera access is blocked. Allow the camera for this site, then tap TAKE PHOTO again.'
+        : "Couldn't start the camera. Close any other app using it and tap TAKE PHOTO again.")
+    }
+  }
+
+  const closeCam = () => { stopCam(); setCamFor(null); setActiveLabel(''); setCamErr('') }
 
   useEffect(() => {
     if (!camFor || !videoRef.current || !streamRef.current) return
@@ -284,6 +307,19 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
               </div>
 
               <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} style={{ display: 'none' }} />
+
+              {camErr && (
+                <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 8, background: 'rgba(224,182,74,0.08)', border: `1px solid rgba(224,182,74,0.35)` }}>
+                  <div style={{ fontSize: 13, color: C.text }}>{camErr}</div>
+                  <button onClick={() => fileRef.current?.click()} disabled={busy}
+                    style={{ ...ghostBtn, marginTop: 9, padding: '7px 13px' }}>
+                    USE A PHOTO INSTEAD
+                  </button>
+                  <div style={{ fontSize: 11, color: C.dim, marginTop: 7 }}>
+                    Only if the camera won&apos;t work — a picked photo is marked for the studio, and one taken before your shift is rejected.
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {labels.map(label => {
