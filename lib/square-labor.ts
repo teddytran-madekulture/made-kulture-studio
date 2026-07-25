@@ -134,6 +134,7 @@ export type PayrollRow = {
   worker_label: string
   provisioned: boolean
   synced_at: string | null
+  auto_clock_out: boolean
 }
 
 export async function getPayrollQueue(): Promise<PayrollRow[]> {
@@ -142,7 +143,7 @@ export async function getPayrollQueue(): Promise<PayrollRow[]> {
   const classes = WORKER_CLASSES.filter(c => enabled[c])
   if (!classes.length) return []
   const { data: rows } = await admin.from('shifts')
-    .select('id, starts_at, clock_in_at, clock_out_at, worker_class, claimed_by, timecard_synced_at')
+    .select('id, starts_at, clock_in_at, clock_out_at, worker_class, claimed_by, timecard_synced_at, auto_clock_out')
     .not('clock_out_at', 'is', null).in('worker_class', classes)
     .order('clock_out_at', { ascending: false }).limit(100)
   const list = ((rows ?? []) as any[]).filter(r => r.claimed_by)
@@ -159,7 +160,7 @@ export async function getPayrollQueue(): Promise<PayrollRow[]> {
       worked_minutes: Math.max(0, Math.round((new Date(r.clock_out_at).getTime() - new Date(r.clock_in_at).getTime()) / 60000)),
       worker_id: r.claimed_by, worker_name: w?.full_name || w?.email || null,
       worker_class: r.worker_class, worker_label: WORKER_CLASS_LABELS[r.worker_class as WorkerClass],
-      provisioned: !!w?.square_team_member_id, synced_at: r.timecard_synced_at ?? null,
+      provisioned: !!w?.square_team_member_id, synced_at: r.timecard_synced_at ?? null, auto_clock_out: !!r.auto_clock_out,
     }
   })
 }

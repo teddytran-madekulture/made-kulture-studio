@@ -16,6 +16,8 @@ interface Shift {
   cancelled_at: string | null
   clock_in_at: string | null
   clock_out_at: string | null
+  clock_edited_at: string | null
+  auto_clock_out: boolean
   label: string
   state: ShiftState
   claimer: { name: string | null; email: string | null } | null
@@ -54,16 +56,62 @@ function statePill(st: ShiftState) {
 }
 
 // Clock + closeout-photo summary for a claimed shift.
-function ClockBlock({ s }: { s: Shift }) {
+function toLocalInput(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso); const z = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`
+}
+
+function ClockBlock({ s, reload }: { s: Shift; reload: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [cin, setCin] = useState('')
+  const [cout, setCout] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [cerr, setCerr] = useState('')
   if (!s.claimed_by) return null
+
+  const openEdit = () => { setCin(toLocalInput(s.clock_in_at)); setCout(toLocalInput(s.clock_out_at)); setCerr(''); setEditing(true) }
+  const save = async () => {
+    setBusy(true); setCerr('')
+    const r = await fetch(`/api/admin/shifts/${s.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_clock', clock_in_at: cin ? new Date(cin).toISOString() : null, clock_out_at: cout ? new Date(cout).toISOString() : null }),
+    })
+    setBusy(false)
+    if (!r.ok) { const d = await r.json().catch(() => ({})); setCerr(d.error || 'Could not save.'); return }
+    setEditing(false); reload()
+  }
+
   let clockLine: { text: string; color: string }
   if (s.clock_in_at && s.clock_out_at) clockLine = { text: `Worked ${fmtTime(s.clock_in_at)} – ${fmtTime(s.clock_out_at)}${s.worked_minutes != null ? ` · ${workedLabel(s.worked_minutes)}` : ''}`, color: GREEN }
   else if (s.clock_in_at) clockLine = { text: `On the clock since ${fmtTime(s.clock_in_at)}`, color: C.accent }
   else clockLine = { text: 'Not clocked in yet', color: C.dim }
 
+  const cinp: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 13, padding: '7px 9px', borderRadius: 6, outline: 'none', marginTop: 3 }
+
   return (
     <div style={{ marginTop: 10, borderTop: `1px solid ${C.line}`, paddingTop: 10 }}>
-      <div style={{ fontSize: 12, color: clockLine.color }}>{clockLine.text}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: clockLine.color }}>{clockLine.text}</span>
+        {s.auto_clock_out && <span style={{ background: 'rgba(255,176,102,0.16)', color: AMBER, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', padding: '2px 7px', borderRadius: 4 }}>⚠ AUTO-CLOSED · REVIEW</span>}
+        {s.clock_edited_at && !s.auto_clock_out && <span style={{ fontSize: 10, color: C.dim }}>✎ time adjusted</span>}
+        {!editing && <button onClick={openEdit} style={{ background: 'none', border: 'none', color: C.accent, fontSize: 11, cursor: 'pointer', padding: 0 }}>Edit times</button>}
+      </div>
+
+      {editing && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 11, color: C.dim, display: 'block' }}>Clock in<br /><input type="datetime-local" style={cinp} value={cin} onChange={e => setCin(e.target.value)} /></label>
+            <label style={{ fontSize: 11, color: C.dim, display: 'block' }}>Clock out<br /><input type="datetime-local" style={cinp} value={cout} onChange={e => setCout(e.target.value)} /></label>
+          </div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Leave a field blank to clear it — use this when someone forgot to punch or the time is off.</div>
+          {cerr && <div style={{ color: RED, fontSize: 12, marginTop: 6 }}>{cerr}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button onClick={save} disabled={busy} style={{ background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '7px 14px', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer' }}>{busy ? '…' : 'SAVE TIMES'}</button>
+            <button onClick={() => setEditing(false)} style={{ background: 'none', border: `1px solid ${C.line}`, color: C.dim, borderRadius: 6, padding: '7px 12px', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+          </div>
+        </div>
+      )}
       {s.photos.length > 0 ? (
         <div style={{ marginTop: 8 }}>
           <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Closeout photos ({s.photos.length})</div>
@@ -352,7 +400,7 @@ export default function AdminShiftsPage() {
                           : <button onClick={() => setConfirmDel(s.id)} style={smallBtn(C.dim)}>DELETE</button>}
                       </div>
                     </div>
-                    <ClockBlock s={s} />
+                    <ClockBlock s={s} reload={load} />
                     <WorkerRating s={s} reload={load} />
                   </div>
                 ))}

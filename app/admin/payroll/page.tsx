@@ -6,7 +6,7 @@ type WClass = 'attendant' | 'sanitation' | 'intern' | 'freelancer'
 type PayrollRow = {
   shift_id: string; starts_at: string; clock_in_at: string; clock_out_at: string
   worked_minutes: number; worker_id: string; worker_name: string | null
-  worker_class: WClass; worker_label: string; provisioned: boolean; synced_at: string | null
+  worker_class: WClass; worker_label: string; provisioned: boolean; synced_at: string | null; auto_clock_out: boolean
 }
 type Overview = { configured: boolean; settings: Record<WClass, boolean>; queue: PayrollRow[] }
 
@@ -145,6 +145,7 @@ export default function PayrollPage() {
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{row.worker_name || '(worker)'} <span style={{ fontSize: 11, color: C.dim, fontWeight: 400 }}>· {row.worker_label}</span></div>
                         <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>{fmtDay(row.clock_in_at)} · {fmtTime(row.clock_in_at)}–{fmtTime(row.clock_out_at)} · {worked(row.worked_minutes)}</div>
+                        {row.auto_clock_out && !row.synced_at && <div style={{ fontSize: 12, color: AMBER, marginTop: 3 }}>⚠ Auto-closed at the scheduled end — check the hours (edit on the Shifts board) before sending.</div>}
                       </div>
                       {row.synced_at ? (
                         <span style={{ fontSize: 12, color: GREEN, whiteSpace: 'nowrap' }}>✓ Sent to Square</span>

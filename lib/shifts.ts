@@ -23,6 +23,8 @@ export type Shift = {
   cancelled_at: string | null
   clock_in_at: string | null
   clock_out_at: string | null
+  clock_edited_at: string | null
+  auto_clock_out: boolean
   created_at: string
   updated_at: string
 }
@@ -333,3 +335,51 @@ export async function deleteShiftPhoto(accountId: string, shiftId: string, photo
 }
 
 export { SHIFT_MEDIA_BUCKET }
+
+
+// ── Admin clock corrections + forgot-to-punch handling ───────────────────────────
+// Set or fix a shift's clock in/out. undefined = leave as-is, null = clear, string
+// (ISO) = set. Stamps clock_edited_at and clears any auto-close review flag.
+export async function adminSetClock(shiftId: string, clockIn: string | null | undefined, clockOut: string | null | undefined): Promise<{ ok: boolean; error?: string }> {
+  const admin = supabaseAdmin()
+  const { data: sh } = await admin.from('shifts').select('*').eq('id', shiftId).maybeSingle()
+  if (!sh) return { ok: false, error: 'That shift no longer exists.' }
+  const s = sh as Shift
+  if (!s.claimed_by) return { ok: false, error: 'No worker is assigned to that shift.' }
+
+  const nextIn = clockIn === undefined ? s.clock_in_at : clockIn
+  const nextOut = clockOut === undefined ? s.clock_out_at : clockOut
+  if (nextIn && isNaN(new Date(nextIn).getTime())) return { ok: false, error: 'Invalid clock-in time.' }
+  if (nextOut && isNaN(new Date(nextOut).getTime())) return { ok: false, error: 'Invalid clock-out time.' }
+  if (nextOut && !nextIn) return { ok: false, error: 'Set a clock-in time before a clock-out time.' }
+  if (nextIn && nextOut && new Date(nextIn).getTime() >= new Date(nextOut).getTime()) {
+    return { ok: false, error: 'Clock-out has to be after clock-in.' }
+  }
+
+  const now = new Date().toISOString()
+  const { error } = await admin.from('shifts')
+    .update({ clock_in_at: nextIn, clock_out_at: nextOut, clock_edited_at: now, auto_clock_out: false, updated_at: now })
+    .eq('id', shiftId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Nightly sweep: close shifts a worker clocked into but never out of, once the shift
+// has been over for `graceMs`. Caps clock-out at the scheduled end and flags
+// auto_clock_out so the studio reviews (and can bump it up if they stayed later).
+export async function autoCloseStaleShifts(now = Date.now(), graceMs = 60 * 60 * 1000): Promise<number> {
+  const admin = supabaseAdmin()
+  const cutoff = new Date(now - graceMs).toISOString()
+  const { data } = await admin.from('shifts').select('id, ends_at')
+    .not('clock_in_at', 'is', null).is('clock_out_at', null).is('cancelled_at', null)
+    .lt('ends_at', cutoff)
+  const rows = (data ?? []) as { id: string; ends_at: string }[]
+  let closed = 0
+  for (const r of rows) {
+    const { error } = await admin.from('shifts')
+      .update({ clock_out_at: r.ends_at, auto_clock_out: true, updated_at: new Date(now).toISOString() })
+      .eq('id', r.id).is('clock_out_at', null)
+    if (!error) closed++
+  }
+  return closed
+}

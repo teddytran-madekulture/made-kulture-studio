@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { SHIFT_MEDIA_BUCKET } from '@/lib/shifts'
+import { SHIFT_MEDIA_BUCKET, adminSetClock } from '@/lib/shifts'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +23,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   let b: any
   try { b = await req.json() } catch { return NextResponse.json({ error: 'Bad request.' }, { status: 400 }) }
+
+  // Manual clock correction (forgot / wrong punch). ISO string = set, null = clear.
+  if (b.action === 'set_clock') {
+    const r = await adminSetClock(params.id, b.clock_in_at, b.clock_out_at)
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
+    return NextResponse.json({ success: true })
+  }
 
   const now = new Date().toISOString()
   const updates: Record<string, any> = { updated_at: now }

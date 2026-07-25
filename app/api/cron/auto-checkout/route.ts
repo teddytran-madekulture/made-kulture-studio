@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { autoCloseStaleShifts } from '@/lib/shifts'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,5 +53,8 @@ export async function GET(req: NextRequest) {
     if (!error) purged++
   }
 
-  return NextResponse.json({ success: true, swept, purged })
+  // Close out shifts a worker clocked into but never clocked out of (past their end).
+  const shiftsClosed = await autoCloseStaleShifts()
+
+  return NextResponse.json({ success: true, swept, purged, shiftsClosed })
 }
