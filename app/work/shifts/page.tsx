@@ -13,6 +13,7 @@ type MyShift = PublicShift & {
   can_clock_in: boolean
   phase: ShiftPhase
   photo_min: number
+  photo_sets: string[]
   photos: ShiftPhoto[]
   can_review: boolean
   worker_review: { rating: number; note: string; created_at: string } | null
@@ -51,7 +52,7 @@ function workedLabel(inIso: string, outIso: string): string {
 // ── A claimed shift with clock + closeout-photo controls ─────────────────────────
 function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
   const [busy, setBusy] = useState(false)
-  const [caption, setCaption] = useState('')
+  const [activeLabel, setActiveLabel] = useState('')
   const [rating, setRating] = useState(s.worker_review?.rating ?? 0)
   const [err, setErr] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -79,12 +80,13 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
     setBusy(true); setErr('')
     const fd = new FormData()
     fd.append('file', file)
-    if (caption.trim()) fd.append('caption', caption.trim())
+    if (activeLabel.trim()) fd.append('caption', activeLabel.trim())
     const r = await fetch(`/api/work/shifts/${s.id}/photos`, { method: 'POST', body: fd })
     setBusy(false)
     if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Upload failed.'); return }
-    setCaption(''); reload()
+    setActiveLabel(''); reload()
   }
+  const shootFor = (label: string) => { setActiveLabel(label); setTimeout(() => fileRef.current?.click(), 0) }
   const removePhoto = async (photoId: string) => {
     setBusy(true); setErr('')
     const r = await fetch(`/api/work/shifts/${s.id}/photos?photoId=${photoId}`, { method: 'DELETE' })
@@ -190,31 +192,71 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
               <div style={{ fontSize: 12, color: C.dim, marginTop: 4 }}>You&apos;ve got a back-to-back shift right after this — finishing hands you straight into it. No closeout photos yet; take them when you clock out of your last shift.</div>
               <button onClick={() => clock('out')} disabled={busy} style={{ ...pillBtn, marginTop: 12 }}>{busy ? '…' : 'FINISH · HAND OFF →'}</button>
             </div>
-          ) : (
+          ) : (() => {
+            const labels = s.photo_sets.length ? s.photo_sets : ['Closeout']
+            const generic = s.photo_sets.length === 0
+            const shotsFor = (label: string) => generic ? s.photos : s.photos.filter(p => (p.caption || '').trim() === label)
+            const doneFor = (label: string) => shotsFor(label).length > 0
+            const remaining = labels.filter(l => !doneFor(l))
+            const allDone = remaining.length === 0
+            return (
             <>
               <div style={{ fontSize: 12, color: C.dim, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Closeout photos</div>
-              <div style={{ fontSize: 12, color: C.dim, marginBottom: 10 }}>
-                Snap each set once it&apos;s reset to photo-ready. You need at least {s.photo_min} to clock out.
+              <div style={{ fontSize: 12, color: C.dim, marginBottom: 12 }}>
+                {generic
+                  ? 'Reset the space to photo-ready, then take a closeout photo to clock out.'
+                  : 'Reset each set to photo-ready, then take its photo. Every set needs one before you can clock out.'}
               </div>
 
               <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} style={{ display: 'none' }} />
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <input value={caption} onChange={e => setCaption(e.target.value)} placeholder="Caption (optional) — e.g. Set B reset"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontSize: 13, padding: '9px 12px', borderRadius: 6, flex: '1 1 180px', minWidth: 140, outline: 'none' }} />
-                <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ ...ghostBtn, color: C.text }}>{busy ? '…' : '+ ADD PHOTO'}</button>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {labels.map(label => {
+                  const shots = shotsFor(label)
+                  const done = shots.length > 0
+                  return (
+                    <div key={label} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: '10px 12px', background: done ? 'rgba(91,208,138,0.06)' : 'rgba(255,255,255,0.02)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: done ? C.good : C.text }}>
+                          <span style={{ marginRight: 7 }}>{done ? '✓' : '○'}</span>{label}
+                        </span>
+                        <button onClick={() => shootFor(label)} disabled={busy}
+                          style={{ ...ghostBtn, color: done ? C.dim : C.text, borderColor: done ? C.line : C.accent, padding: '7px 14px' }}>
+                          {busy && activeLabel === label ? '…' : (done ? 'RETAKE' : '📷 TAKE PHOTO')}
+                        </button>
+                      </div>
+                      {shots.length > 0 && (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                          {shots.map(p => (
+                            <div key={p.id} style={{ position: 'relative' }}>
+                              <a href={p.url} target="_blank" rel="noreferrer">
+                                <img src={p.url} alt={p.caption || 'closeout'} title={p.caption} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: `1px solid ${C.line}`, display: 'block' }} />
+                              </a>
+                              <button onClick={() => removePhoto(p.id)} disabled={busy} aria-label="Remove photo"
+                                style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: '#1c1c1f', color: '#ff6b6b', border: `1px solid ${C.line}`, fontSize: 12, lineHeight: '18px', cursor: 'pointer', padding: 0 }}>×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
-              {photoStrip(true)}
-
-              <button onClick={() => clock('out')} disabled={busy || s.photos.length < s.photo_min}
-                style={{ ...pillBtn, marginTop: 14, opacity: s.photos.length < s.photo_min ? 0.4 : 1, cursor: s.photos.length < s.photo_min ? 'not-allowed' : 'pointer' }}>
+              <button onClick={() => clock('out')} disabled={busy || !allDone}
+                style={{ ...pillBtn, marginTop: 14, opacity: allDone ? 1 : 0.4, cursor: allDone ? 'pointer' : 'not-allowed' }}>
                 {busy ? '…' : 'CLOCK OUT'}
               </button>
-              {s.photos.length < s.photo_min && (
-                <div style={{ fontSize: 12, color: C.warn, marginTop: 8 }}>Add {s.photo_min - s.photos.length} more closeout photo{s.photo_min - s.photos.length === 1 ? '' : 's'} to clock out.</div>
+              {!allDone && (
+                <div style={{ fontSize: 12, color: C.warn, marginTop: 8 }}>
+                  {generic
+                    ? 'Take a closeout photo to clock out.'
+                    : `Still need a photo for: ${remaining.join(', ')}.`}
+                </div>
               )}
             </>
-          )}
+            )
+          })()}
         </div>
       )}
 

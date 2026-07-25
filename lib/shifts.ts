@@ -80,6 +80,7 @@ export type MyShift = PublicShift & {
   can_clock_in: boolean
   phase: ShiftPhase
   photo_min: number
+  photo_sets: string[]           // distinct sets covered across this clock-in run; one closeout photo required per set
   photos: ShiftPhoto[]
   can_review: boolean            // shift is done → worker may rate the studio
   worker_review: ShiftReview | null
@@ -100,13 +101,13 @@ function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase
   return { phase: 'upcoming', can_clock_in: false }
 }
 
-async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null, info: { codes: DoorCode[]; itinerary: { start_time: string; end_time: string; set_name: string | null }[]; hasBooking: boolean; hasNext: boolean }): Promise<MyShift> {
+async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftReview | null, info: { codes: DoorCode[]; itinerary: { start_time: string; end_time: string; set_name: string | null }[]; hasBooking: boolean; hasNext: boolean; photoSets: string[] }): Promise<MyShift> {
   const { phase, can_clock_in } = shiftPhase(s, active, now)
   const photos = await signPhotos(await photosForShift(s.id))
   return {
     ...toPublic(s),
     clock_in_at: s.clock_in_at, clock_out_at: s.clock_out_at,
-    can_clock_in, phase, photo_min: CLOSEOUT_PHOTO_MIN, photos,
+    can_clock_in, phase, photo_min: Math.max(CLOSEOUT_PHOTO_MIN, info.photoSets.length), photo_sets: info.photoSets, photos,
     can_review: phase === 'done', worker_review: review,
     door_codes: info.codes, booking_linked: info.hasBooking, itinerary: info.itinerary, has_next: info.hasNext,
   }
@@ -215,9 +216,31 @@ export async function getWorkerShiftView(accountId: string): Promise<WorkerShift
       && new Date(o.starts_at).getTime() <= endMs + 60 * 60 * 1000)
     return { codes, itinerary, hasBooking: over.length > 0, hasNext }
   }
+  const infoByShift = new Map<string, ReturnType<typeof overlapFor>>()
+  for (const s of mineShifts) infoByShift.set(s.id, overlapFor(s))
+  // Distinct named sets in an itinerary.
+  const labelsOfItin = (it: { set_name: string | null }[]) => [...new Set(it.map(x => x.set_name).filter((n): n is string => !!n))]
+  // All sets covered across the clock-in run ending at this shift: walk back through
+  // handed-off predecessors (a predecessor's clock-out == this shift's clock-in), so
+  // the final closeout asks for a photo of every set touched in the whole stretch.
+  const chainLabels = (s: Shift): string[] => {
+    const out = new Set<string>()
+    let cur: Shift | undefined = s
+    const seen = new Set<string>()
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id)
+      for (const l of labelsOfItin(infoByShift.get(cur.id)?.itinerary ?? [])) out.add(l)
+      if (!cur.clock_in_at) break
+      const cin = cur.clock_in_at
+      cur = mineShifts.find(o => o.id !== cur!.id && !!o.clock_out_at && o.clock_out_at === cin)
+    }
+    return [...out]
+  }
   const mine: MyShift[] = []
   for (const s of mineShifts) {
-    mine.push(await toMyShift(s, active, now, wReviews.get(s.id) ?? null, overlapFor(s)))
+    const info = infoByShift.get(s.id)!
+    const photoSets = info.hasNext ? [] : chainLabels(s)
+    mine.push(await toMyShift(s, active, now, wReviews.get(s.id) ?? null, { ...info, photoSets }))
   }
 
   let openRows: Shift[] = []
@@ -331,6 +354,37 @@ async function findAdjacentNextShift(workerId: string, shift: Shift): Promise<Sh
   return ((data ?? []) as Shift[])[0] ?? null
 }
 
+// Distinct named sets covered across the clock-in run ending at this shift — walks
+// back through handed-off predecessors (prev.clock_out_at === cur.clock_in_at) and
+// unions the sets of every booking overlapping the combined window. Mirrors the
+// client's chainLabels so the clock-out gate matches what the worker is shown.
+async function closeoutLabelsForChain(workerId: string, shift: Shift): Promise<string[]> {
+  const admin = supabaseAdmin()
+  let startMs = new Date(shift.starts_at).getTime()
+  const endMs = new Date(shift.ends_at).getTime()
+  let cur: Shift | null = shift
+  const seen = new Set<string>()
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id)
+    startMs = Math.min(startMs, new Date(cur.starts_at).getTime())
+    if (!cur.clock_in_at) break
+    const cin: string = cur.clock_in_at
+    const { data } = await admin.from('shifts').select('*')
+      .eq('claimed_by', workerId).is('cancelled_at', null).eq('clock_out_at', cin).neq('id', cur.id)
+      .order('starts_at', { ascending: false }).limit(1)
+    cur = ((data ?? []) as Shift[])[0] ?? null
+  }
+  const { data: bks } = await admin.from('bookings')
+    .select('start_time, end_time, sets(name)').neq('status', 'cancelled')
+    .lt('start_time', new Date(endMs).toISOString()).gt('end_time', new Date(startMs).toISOString())
+  const labels = new Set<string>()
+  for (const b of (bks ?? []) as any[]) {
+    const nm = Array.isArray(b.sets) ? (b.sets[0]?.name ?? null) : (b.sets?.name ?? null)
+    if (nm) labels.add(nm)
+  }
+  return [...labels]
+}
+
 export async function clockOut(accountId: string, shiftId: string): Promise<{ ok: boolean; error?: string; handoff?: boolean }> {
   const r = await loadOwnedShift(accountId, shiftId)
   if ('error' in r) return { ok: false, error: r.error }
@@ -353,9 +407,14 @@ export async function clockOut(accountId: string, shiftId: string): Promise<{ ok
     return { ok: true, handoff: true }
   }
 
-  // Final clock-out — closeout photos required.
-  const { count } = await admin.from('shift_photos').select('id', { count: 'exact', head: true }).eq('shift_id', shiftId)
-  if ((count ?? 0) < CLOSEOUT_PHOTO_MIN) {
+  // Final clock-out — one closeout photo required per set covered in this run.
+  const labels = await closeoutLabelsForChain(worker.id, shift)
+  const { data: prows } = await admin.from('shift_photos').select('caption').eq('shift_id', shiftId)
+  const caps = new Set(((prows ?? []) as any[]).map(p => (p.caption || '').trim()))
+  if (labels.length) {
+    const missing = labels.filter(l => !caps.has(l))
+    if (missing.length) return { ok: false, error: `Take a closeout photo for each set before clocking out — still need: ${missing.join(', ')}.` }
+  } else if ((prows?.length ?? 0) < CLOSEOUT_PHOTO_MIN) {
     return { ok: false, error: `Add at least ${CLOSEOUT_PHOTO_MIN} closeout photo${CLOSEOUT_PHOTO_MIN === 1 ? '' : 's'} before clocking out.` }
   }
   const { error } = await admin.from('shifts').update({ clock_out_at: now, updated_at: now })
