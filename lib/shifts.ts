@@ -84,6 +84,7 @@ export type MyShift = PublicShift & {
   worker_review: ShiftReview | null
   door_code: string | null       // booking's front-door PIN (booking-linked shifts)
   door_code_back: string | null
+  booking_linked: boolean        // tied to a booking (so a missing code = "coming", not "n/a")
 }
 
 function shiftPhase(s: Shift, active: boolean, now: number): { phase: ShiftPhase; can_clock_in: boolean } {
@@ -105,7 +106,7 @@ async function toMyShift(s: Shift, active: boolean, now: number, review: ShiftRe
     clock_in_at: s.clock_in_at, clock_out_at: s.clock_out_at,
     can_clock_in, phase, photo_min: CLOSEOUT_PHOTO_MIN, photos,
     can_review: phase === 'done', worker_review: review,
-    door_code: doors?.front ?? null, door_code_back: doors?.back ?? null,
+    door_code: doors?.front ?? null, door_code_back: doors?.back ?? null, booking_linked: !!s.booking_id,
   }
 }
 

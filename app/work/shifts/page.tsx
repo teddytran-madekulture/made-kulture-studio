@@ -18,6 +18,7 @@ type MyShift = PublicShift & {
   worker_review: { rating: number; note: string; created_at: string } | null
   door_code: string | null
   door_code_back: string | null
+  booking_linked: boolean
 }
 type View = {
   enrolled: boolean
@@ -35,6 +36,10 @@ function fmtRange(startIso: string, endIso: string): string {
 }
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+// Group a door PIN into 3s so it's readable (490185977 -> 490 185 977).
+function groupCode(code: string): string {
+  return code.replace(/\s+/g, '').replace(/(.{3})/g, '$1 ').trim()
 }
 function workedLabel(inIso: string, outIso: string): string {
   const mins = Math.max(0, Math.round((new Date(outIso).getTime() - new Date(inIso).getTime()) / 60000))
@@ -136,10 +141,17 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
         <div style={{ marginTop: 10, background: 'rgba(201,178,126,0.10)', border: '1px solid rgba(201,178,126,0.32)', borderRadius: 8, padding: '9px 12px' }}>
           <div style={{ fontSize: 14 }}>
             <span style={{ color: C.dim, fontSize: 12 }}>Door code </span>
-            <span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.04em' }}>{s.door_code}</span>
-            {s.door_code_back ? <span style={{ color: C.dim, fontSize: 13 }}>{'  ·  back door '}<span style={{ color: C.accent, fontWeight: 700 }}>{s.door_code_back}</span></span> : null}
+            <span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.08em' }}>{groupCode(s.door_code)}</span>
+            {s.door_code_back ? <span style={{ color: C.dim, fontSize: 13 }}>{'  ·  back door '}<span style={{ color: C.accent, fontWeight: 700, letterSpacing: '0.08em' }}>{groupCode(s.door_code_back)}</span></span> : null}
           </div>
           <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>Unlocks at your booked start time.</div>
+        </div>
+      )}
+
+      {!s.door_code && s.booking_linked && s.phase !== 'done' && (
+        <div style={{ marginTop: 10, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.line}`, borderRadius: 8, padding: '9px 12px' }}>
+          <div style={{ fontSize: 13, color: C.dim }}>Door code will appear here once it&apos;s issued for this booking.</div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>If it&apos;s your start time and there&apos;s still no code, text the studio.</div>
         </div>
       )}
 
