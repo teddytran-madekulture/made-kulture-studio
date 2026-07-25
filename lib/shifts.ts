@@ -350,6 +350,15 @@ export async function deleteShiftPhoto(accountId: string, shiftId: string, photo
   return { ok: true }
 }
 
+// True if a non-cancelled shift of the SAME role already overlaps this window —
+// so a time block can only have one shift per role (one owner per window).
+export async function overlappingShiftExists(workerClass: WorkerClass, startsAt: string, endsAt: string, excludeId?: string): Promise<boolean> {
+  const a = new Date(startsAt).getTime(), b = new Date(endsAt).getTime()
+  const { data } = await supabaseAdmin().from('shifts').select('id, starts_at, ends_at')
+    .eq('worker_class', workerClass).is('cancelled_at', null)
+  return ((data ?? []) as any[]).some(x => x.id !== excludeId && new Date(x.starts_at).getTime() < b && new Date(x.ends_at).getTime() > a)
+}
+
 export { SHIFT_MEDIA_BUCKET }
 
 

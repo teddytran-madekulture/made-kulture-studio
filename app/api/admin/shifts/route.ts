@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { WORKER_CLASSES } from '@/lib/onboarding'
-import { getShiftsAdmin } from '@/lib/shifts'
+import { getShiftsAdmin, overlappingShiftExists } from '@/lib/shifts'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
   const ends = new Date(b.ends_at)
   if (isNaN(starts.getTime()) || isNaN(ends.getTime())) return NextResponse.json({ error: 'Enter a start and end time.' }, { status: 400 })
   if (ends.getTime() <= starts.getTime()) return NextResponse.json({ error: 'End time must be after the start time.' }, { status: 400 })
+
+  if (await overlappingShiftExists(worker_class as any, starts.toISOString(), ends.toISOString())) {
+    return NextResponse.json({ error: 'Another ' + worker_class + ' shift already overlaps that window — one role can only have one shift per time block.' }, { status: 400 })
+  }
 
   const { data, error } = await supabaseAdmin().from('shifts').insert({
     starts_at: starts.toISOString(),

@@ -173,21 +173,28 @@ export async function getPayrollQueue(): Promise<PayrollRow[]> {
     for (const w of (ws ?? []) as any[]) wById.set(w.id, w)
   }
 
-  // Set bonus = non-cancelled bookings overlapping each shift's scheduled window x per-set rate.
+  // Set bonus = non-cancelled bookings overlapping each shift's scheduled window x
+  // per-set rate. Each booking is assigned to exactly ONE shift (the earliest-starting
+  // overlapper) so a booking is never paid twice.
   const rate = await getPerSetRate()
   let minStart = Infinity, maxEnd = -Infinity
   for (const r of list) { minStart = Math.min(minStart, new Date(r.starts_at).getTime()); maxEnd = Math.max(maxEnd, new Date(r.ends_at).getTime()) }
   const { data: bk } = await admin.from('bookings').select('start_time, end_time').neq('status', 'cancelled')
     .lt('start_time', new Date(maxEnd).toISOString()).gt('end_time', new Date(minStart).toISOString())
   const bookings = ((bk ?? []) as any[]).map(b => ({ start: new Date(b.start_time).getTime(), end: new Date(b.end_time).getTime() }))
-  const overlap = (sStart: string, sEnd: string) => {
-    const a = new Date(sStart).getTime(), b = new Date(sEnd).getTime()
-    return bookings.filter(x => x.start < b && x.end > a).length
+  const shiftMeta = list.map(r => ({ id: r.id, s: new Date(r.starts_at).getTime(), e: new Date(r.ends_at).getTime() }))
+  const setsByShift = new Map<string, number>()
+  for (const bkg of bookings) {
+    let chosen: { id: string; s: number } | null = null
+    for (const sh of shiftMeta) {
+      if (sh.s < bkg.end && sh.e > bkg.start && (!chosen || sh.s < chosen.s)) chosen = { id: sh.id, s: sh.s }
+    }
+    if (chosen) setsByShift.set(chosen.id, (setsByShift.get(chosen.id) || 0) + 1)
   }
 
   return list.map(r => {
     const w = wById.get(r.claimed_by)
-    const sets = overlap(r.starts_at, r.ends_at)
+    const sets = setsByShift.get(r.id) || 0
     return {
       shift_id: r.id, starts_at: r.starts_at, clock_in_at: r.clock_in_at, clock_out_at: r.clock_out_at,
       worked_minutes: Math.max(0, Math.round((new Date(r.clock_out_at).getTime() - new Date(r.clock_in_at).getTime()) / 60000)),
