@@ -17,12 +17,11 @@
     "types": ["node", "react"]
   },
   "files": [
-    "lib/coverage.ts",
-    "lib/shifts.ts",
-    "app/admin/shifts/page.tsx",
-    "app/api/extensions/[token]/route.ts",
-    "app/api/desk/bookings/[id]/add-time/route.ts",
-    "app/api/admin/bookings/[id]/route.ts",
-    "app/api/admin/shifts/route.ts"
+    "lib/player-rev.ts",
+    "app/api/version/route.ts",
+    "app/api/admin/jukebox/control/route.ts",
+    "app/jukebox/player/page.tsx",
+    "app/admin/jukebox/page.tsx",
+    "app/kiosk/page.tsx"
   ]
 }

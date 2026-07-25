@@ -5,10 +5,14 @@
 //   play     — resume it
 //   next     — skip current, advance to the next approved (also un-pauses)
 //   previous — replay the last finished song; the current one plays next (un-pauses)
+//   reload_players — stamp a marker every player device polls (/api/version), so
+//                    the tablets take a new build on demand instead of waiting
+//                    for a quiet moment. Studio-wide, so it needs no zone.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { PLAYER_RELOAD_KEY } from '@/lib/player-rev'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -19,6 +23,17 @@ export async function POST(req: NextRequest) {
   try { b = await req.json() } catch { return NextResponse.json({ error: 'Bad request.' }, { status: 400 }) }
   const slug = String(b?.zone ?? '').trim()
   const action = String(b?.action ?? '')
+
+  // Studio-wide, no zone needed: tell every player device to take the new build.
+  if (action === 'reload_players') {
+    const db = supabaseAdmin()
+    const value = new Date().toISOString()
+    const { data: existing } = await db.from('studio_settings').select('key').eq('key', PLAYER_RELOAD_KEY).maybeSingle()
+    if (existing) await db.from('studio_settings').update({ value }).eq('key', PLAYER_RELOAD_KEY)
+    else await db.from('studio_settings').insert({ key: PLAYER_RELOAD_KEY, value })
+    return NextResponse.json({ success: true, reload_at: value })
+  }
+
   if (!slug) return NextResponse.json({ error: 'Missing zone.' }, { status: 400 })
 
   const db = supabaseAdmin()

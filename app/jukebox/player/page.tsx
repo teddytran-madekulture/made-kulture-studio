@@ -52,7 +52,8 @@ export default function PlayerPage() {
   const modeRef = useRef<'request' | 'house' | 'idle' | 'paused' | 'blocked'>('idle')
   const advancing = useRef(false)
   const houseKey = useRef<string | null>(null)
-  const buildVer = useRef<string | null>(null)
+  const buildVer = useRef<string | null>(null)      // player_rev this tablet booted with
+  const reloadStamp = useRef<string | null>(null)   // manual "update players now" marker
   const needsReload = useRef(false)
 
   // youtube
@@ -69,6 +70,30 @@ export default function PlayerPage() {
   const spWasPlaying = useRef(false)
 
   const pausedLocal = useRef(false)
+
+  // ── Self-update safety ──
+  // Is sound actually coming out of the speaker right now? The house playlist
+  // counts — it's the studio's music, and it's what's on nearly all the time.
+  // Getting this wrong is what used to kill the audio on every deploy.
+  const audiblyPlaying = (): boolean => {
+    if (pausedLocal.current) return false
+    const m = modeRef.current
+    if (m === 'idle' || m === 'paused' || m === 'blocked') return false
+    if (currentSource.current === 'youtube') {
+      try {
+        const YT = (window as any).YT
+        const st = yt.current?.getPlayerState?.()
+        return st === YT?.PlayerState?.PLAYING || st === YT?.PlayerState?.BUFFERING
+      } catch { return true }   // can't tell → assume playing, never cut the music
+    }
+    return true                 // spotify request/house — playing unless paused
+  }
+  // Take a pending update only in a silent moment. Returns true if it reloaded.
+  const reloadIfQuiet = (): boolean => {
+    if (!needsReload.current || audiblyPlaying()) return false
+    window.location.reload()
+    return true
+  }
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
@@ -165,7 +190,13 @@ export default function PlayerPage() {
               }
               refreshHouseNowPlaying()
             }
-            if (e.data === YT.PlayerState.ENDED && currentSource.current === 'youtube') onSongEnd()
+            if (e.data === YT.PlayerState.ENDED && currentSource.current === 'youtube') {
+              // A house track just finished — the natural seam to take a pending
+              // update. (Never mid-run of a guest request: reloading before the
+              // server advances would replay the song it was already on.)
+              if (modeRef.current === 'house' && needsReload.current) { window.location.reload(); return }
+              onSongEnd()
+            }
           },
           onError: () => {
             if (currentSource.current !== 'youtube') return
@@ -226,7 +257,11 @@ export default function PlayerPage() {
           }
         }
         // Natural end heuristic: was playing, now paused at position 0.
-        if (spWasPlaying.current && st.paused && st.position === 0) { spWasPlaying.current = false; onSongEnd(); return }
+        if (spWasPlaying.current && st.paused && st.position === 0) {
+          spWasPlaying.current = false
+          if (modeRef.current === 'house' && needsReload.current) { window.location.reload(); return }
+          onSongEnd(); return
+        }
         if (!st.paused) spWasPlaying.current = true
       })
       sp.current.connect()
@@ -329,7 +364,7 @@ export default function PlayerPage() {
       const res = await advance(null); advancing.current = false
       if (res?.now_playing) { startTrack(res.now_playing); return }
     }
-    if (needsReload.current) { window.location.reload(); return }
+    if (reloadIfQuiet()) return
     // house / idle
     if (modeRef.current !== 'house' || houseKey.current !== (s.zone.house_playlist_url || null)) goHouse(s.zone)
   }, [advance])
@@ -347,21 +382,32 @@ export default function PlayerPage() {
     tick(); const iv = setInterval(tick, 5000); return () => clearInterval(iv)
   }, [started, apply])
 
-  // self-update (only while idle/house, never mid-request-song)
+  // Self-update. Two separate signals, on purpose:
+  //   player_rev — only changes when a deploy actually changes THIS page, so
+  //                shipping anything else never touches the tablets. When it
+  //                does change we queue the update and take it in a silent
+  //                moment (between house tracks, or while idle/paused) — the
+  //                music never cuts mid-song.
+  //   reload_at  — Admin → Jukebox "Update players now". Deliberate, so it
+  //                reloads on the spot.
   useEffect(() => {
     if (!started) return
     const check = async () => {
       try {
         const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return
-        const { version } = await r.json(); if (!version) return
-        if (buildVer.current === null) { buildVer.current = version; return }
-        if (version !== buildVer.current) {
-          if (['house', 'idle', 'paused', 'blocked'].includes(modeRef.current)) window.location.reload()
-          else needsReload.current = true
+        const { player_rev, reload_at } = await r.json()
+
+        if (reload_at !== undefined) {
+          if (reloadStamp.current === null) reloadStamp.current = reload_at ?? ''
+          else if ((reload_at ?? '') !== reloadStamp.current) { window.location.reload(); return }
         }
+
+        if (!player_rev) return
+        if (buildVer.current === null) { buildVer.current = player_rev; return }
+        if (player_rev !== buildVer.current) { needsReload.current = true; reloadIfQuiet() }
       } catch {}
     }
-    check(); const iv = setInterval(check, 120_000); return () => clearInterval(iv)
+    check(); const iv = setInterval(check, 30_000); return () => clearInterval(iv)
   }, [started])
 
   // keep screen awake where supported

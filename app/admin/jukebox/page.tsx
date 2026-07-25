@@ -23,6 +23,7 @@ export default function AdminJukeboxPage() {
   const [nowPlaying, setNowPlaying] = useState<Req | null>(null)
   const [played, setPlayed] = useState<Req[]>([])
   const [spotify, setSpotify] = useState<{ configured: boolean; connected: boolean; email?: string | null }>({ configured: false, connected: false })
+  const [reloadMsg, setReloadMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
   const [playlist, setPlaylist] = useState('')
@@ -56,6 +57,17 @@ export default function AdminJukeboxPage() {
     await fetch('/api/admin/jukebox/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: slugRef.current, action }) })
     load()
   }
+  // Push a new build to the tablets on demand. They normally wait for a gap
+  // between songs; this cuts in deliberately, so it's a button, not automatic.
+  const reloadPlayers = async () => {
+    setReloadMsg('Sending…')
+    const r = await fetch('/api/admin/jukebox/control', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reload_players' }),
+    })
+    setReloadMsg(r.ok ? 'Players will reload within ~30s' : 'Could not reach the players')
+    setTimeout(() => setReloadMsg(''), 6000)
+  }
+
   const saveSettings = async (patch: Record<string, any>) => {
     await fetch('/api/admin/jukebox/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: slugRef.current, ...patch }) })
     setSavedMsg('Saved'); setTimeout(() => setSavedMsg(''), 1500); load()
@@ -115,7 +127,12 @@ export default function AdminJukeboxPage() {
                         <option value="spotify" style={{ color: '#111' }}>Spotify</option>
                       </select>
                     </label>
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 14, fontSize: 12 }}>
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
+                      {reloadMsg && <span style={{ color: C.dim }}>{reloadMsg}</span>}
+                      <button onClick={reloadPlayers} title="Tablets normally wait for a gap between songs before taking a new build. This makes them reload right now — it will interrupt whatever is playing."
+                        style={{ background: 'none', border: `1px solid ${C.line}`, color: C.dim, borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        ⟳ Update players now
+                      </button>
                       <a href={`/jukebox/player?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.accent, textDecoration: 'none' }}>Open player ↗</a>
                       <a href={`/jukebox?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.dim, textDecoration: 'none' }}>Guest page ↗</a>
                     </div>
