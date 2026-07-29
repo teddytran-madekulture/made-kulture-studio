@@ -8,7 +8,7 @@
 //   JUNE_EMAIL_ADDRESS   e.g. june@madekulture.com  (mailbox to impersonate + send from)
 // Dormant (helpers return null / no-op) unless all three are present.
 
-import { createSign } from 'crypto'
+import { createSign, randomUUID } from 'crypto'
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const SCOPES = 'https://www.googleapis.com/auth/gmail.modify'
@@ -91,6 +91,13 @@ async function getProcessedLabelId(): Promise<string> {
 
 // ── Inbound ────────────────────────────────────────────────────────────────────
 
+export interface InboundAttachment {
+  gmailAttachmentId: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+}
+
 export interface InboundEmail {
   gmailMsgId: string
   threadId: string
@@ -98,6 +105,7 @@ export interface InboundEmail {
   fromName: string
   subject: string
   text: string
+  attachments: InboundAttachment[]
 }
 
 function header(payload: any, name: string): string {
@@ -125,6 +133,53 @@ function extractText(payload: any): string {
     if (t) return t
   }
   return ''
+}
+
+// Walk MIME parts for real attachments.
+//
+// We keep only the POINTER — Gmail stores the bytes in the june@ mailbox and
+// serves them on demand, so there's nothing to copy. Inline parts (signature
+// logos, tracking pixels, embedded images referenced by a cid: URL in the HTML
+// body) carry a Content-ID and a Content-Disposition of "inline"; those are
+// noise, not something a customer meant to send, so they're skipped.
+function extractAttachments(payload: any, out: InboundAttachment[] = []): InboundAttachment[] {
+  if (!payload) return out
+
+  const filename: string = payload.filename ?? ''
+  const attachmentId: string | undefined = payload.body?.attachmentId
+
+  if (filename && attachmentId) {
+    const disposition = header(payload, 'Content-Disposition').toLowerCase()
+    const contentId = header(payload, 'Content-ID')
+    const isInline = disposition.includes('inline') && !!contentId
+    if (!isInline) {
+      out.push({
+        gmailAttachmentId: attachmentId,
+        filename: filename.slice(0, 300),
+        mimeType: payload.mimeType || 'application/octet-stream',
+        sizeBytes: Number(payload.body?.size) || 0,
+      })
+    }
+  }
+
+  for (const part of payload.parts ?? []) extractAttachments(part, out)
+  return out
+}
+
+// Bytes for one inbound attachment, straight from Gmail. Nothing is cached on
+// our side — if the source message is deleted from the mailbox this 404s, which
+// is the correct behaviour for a pointer into someone else's store.
+export async function fetchAttachment(gmailMsgId: string, gmailAttachmentId: string): Promise<Buffer | null> {
+  const c = creds()
+  if (!c) return null
+  try {
+    const res = await gmail(`/messages/${gmailMsgId}/attachments/${gmailAttachmentId}`)
+    if (!res?.data) return null
+    return Buffer.from(res.data, 'base64url')
+  } catch (e: any) {
+    console.error('[gmail] attachment fetch failed', gmailMsgId, e?.message)
+    return null
+  }
 }
 
 // Crude quoted-history trim so June sees the new content, not the whole chain.
@@ -173,6 +228,7 @@ export async function fetchNewEmails(max = 10): Promise<InboundEmail[]> {
       fromName: fromName || fromEmail.split('@')[0],
       subject: header(full.payload, 'Subject') || '(no subject)',
       text: trimQuoted(extractText(full.payload)) || '(empty message)',
+      attachments: extractAttachments(full.payload),
     })
   }
   return out
@@ -188,11 +244,42 @@ export async function markProcessed(gmailMsgId: string): Promise<void> {
 
 // ── Outbound (threaded reply) ──────────────────────────────────────────────────
 
+export interface OutboundAttachment {
+  filename: string
+  mimeType: string
+  content: Buffer
+}
+
+// Gmail's own ceiling is 25MB per message, and base64 inflates by ~4/3, so the
+// encoded payload has to stay under it. We cap the raw total a bit below that.
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
+// RFC 2047 encoded-word, so a filename or subject with non-ASCII characters
+// doesn't corrupt the header. ASCII-only strings are left alone.
+function encodeHeaderWord(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (!/[^\x00-\x7F]/.test(value)) return value
+  return `=?utf-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`
+}
+
+// Strip CR/LF from anything interpolated into a header — otherwise a filename or
+// subject containing a newline could inject arbitrary headers into the message.
+function headerSafe(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim()
+}
+
+function splitBase64(b64: string): string {
+  return b64.replace(/(.{76})/g, '$1\r\n')
+}
+
 export async function sendReply(opts: {
-  threadId: string
+  threadId?: string
   to: string
   subject: string
   body: string
+  cc?: string[]
+  bcc?: string[]
+  attachments?: OutboundAttachment[]
   inReplyToMsgId?: string    // Gmail message id we're replying to (for headers)
 }): Promise<string | null> {
   const c = creds()
@@ -208,20 +295,68 @@ export async function sendReply(opts: {
     } catch {}
   }
 
-  const subject = opts.subject.startsWith('Re:') ? opts.subject : `Re: ${opts.subject}`
-  const raw = [
+  const rawSubject = headerSafe(opts.subject)
+  const subject = rawSubject.startsWith('Re:') ? rawSubject : `Re: ${rawSubject}`
+  const cc = (opts.cc ?? []).map(headerSafe).filter(Boolean)
+  const bcc = (opts.bcc ?? []).map(headerSafe).filter(Boolean)
+  const files = opts.attachments ?? []
+
+  const total = files.reduce((n, f) => n + f.content.length, 0)
+  if (total > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`Attachments total ${(total / 1048576).toFixed(1)}MB — over the ${MAX_ATTACHMENT_BYTES / 1048576}MB limit`)
+  }
+
+  const headers = [
     `From: June at Made Kulture <${c.mailbox}>`,
-    `To: ${opts.to}`,
-    `Subject: ${subject}`,
+    `To: ${headerSafe(opts.to)}`,
+    cc.length ? `Cc: ${cc.join(', ')}` : '',
+    bcc.length ? `Bcc: ${bcc.join(', ')}` : '',
+    `Subject: ${encodeHeaderWord(subject)}`,
     refHeader.trimEnd(),
-    'Content-Type: text/plain; charset=utf-8',
-    '',
-    opts.body,
-  ].filter(l => l !== '').join('\r\n')
+  ].filter(Boolean)
+
+  let raw: string
+  if (!files.length) {
+    raw = [...headers, 'Content-Type: text/plain; charset=utf-8', '', opts.body].join('\r\n')
+  } else {
+    // multipart/mixed: the text body as the first part, then one part per file.
+    // The boundary must not appear anywhere in the content; a random-free
+    // constant plus the thread id would risk a collision, so use a UUID.
+    const boundary = `mk_${randomUUID().replace(/-/g, '')}`
+    const parts = [
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      opts.body,
+    ]
+    for (const f of files) {
+      const name = encodeHeaderWord(headerSafe(f.filename) || 'attachment')
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${headerSafe(f.mimeType) || 'application/octet-stream'}; name="${name}"`,
+        `Content-Disposition: attachment; filename="${name}"`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        splitBase64(f.content.toString('base64')),
+      )
+    }
+    parts.push(`--${boundary}--`, '')
+    raw = [
+      ...headers,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      ...parts,
+    ].join('\r\n')
+  }
 
   const sent = await gmail('/messages/send', {
     method: 'POST',
-    body: JSON.stringify({ raw: Buffer.from(raw).toString('base64url'), threadId: opts.threadId }),
+    body: JSON.stringify({
+      raw: Buffer.from(raw, 'utf8').toString('base64url'),
+      ...(opts.threadId ? { threadId: opts.threadId } : {}),
+    }),
   })
   return sent.id ?? null
 }

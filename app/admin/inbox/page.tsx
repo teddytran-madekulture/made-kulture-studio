@@ -14,8 +14,32 @@ interface Convo {
   subject?: string | null
   last_message_at: string; created_at: string; preview: string
 }
-interface Msg { id: string; role: string; content: string; created_at: string }
+interface Msg {
+  id: string; role: string; content: string; created_at: string
+  cc_emails?: string[] | null; bcc_emails?: string[] | null
+}
 interface KbEntry { id: string; topic: string; content: string; enabled: boolean; updated_at: string }
+interface Attachment {
+  id: string; message_id: string | null; direction: 'in' | 'out'
+  filename: string; mime_type: string; size_bytes: number
+}
+
+function fileSize(bytes: number): string {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1048576) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1048576).toFixed(1)} MB`
+}
+
+function fileGlyph(mime: string): string {
+  if (mime.startsWith('image/')) return '🖼'
+  if (mime === 'application/pdf') return '📕'
+  if (mime.startsWith('video/')) return '🎬'
+  if (mime.startsWith('audio/')) return '🎵'
+  if (/zip|compressed|tar/.test(mime)) return '🗜'
+  if (/sheet|excel|csv/.test(mime)) return '📊'
+  return '📎'
+}
 
 export default function AdminInboxPage() {
   const [unauth, setUnauth]   = useState(false)
@@ -26,6 +50,18 @@ export default function AdminInboxPage() {
   const [reply, setReply]     = useState('')
   const [busy, setBusy]       = useState(false)
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({})
+  // Email composer state — files already delivered, files staged for the next
+  // send, and the optional CC/BCC/subject controls (collapsed until asked for).
+  const [attachments, setAttachments]       = useState<Attachment[]>([])
+  const [pending, setPending]               = useState<Attachment[]>([])
+  const [uploading, setUploading]           = useState<string[]>([])
+  const [emailBody, setEmailBody]           = useState('')
+  const [showHeaders, setShowHeaders]       = useState(false)
+  const [cc, setCc]                         = useState('')
+  const [bcc, setBcc]                       = useState('')
+  const [subjectEdit, setSubjectEdit]       = useState<string | null>(null)
+  const [sendError, setSendError]           = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab]               = useState<'convos' | 'kb' | 'tours'>('convos')
   const [tours, setTours]           = useState<any[]>([])
   const [tourBusy, setTourBusy]     = useState<string | null>(null)
@@ -122,6 +158,8 @@ export default function AdminInboxPage() {
       lastCountRef.current = next.length
 
       setMsgs(next)
+      setAttachments(d.attachments ?? [])
+      setPending(d.pendingAttachments ?? [])
       setSel(s => (s && s.id === id ? { ...s, ...d.conversation } : s))
 
       // Opening a conversation always lands you at the newest message. After
@@ -152,6 +190,9 @@ export default function AdminInboxPage() {
     setAtBottom(true)
     setHasNewBelow(false)
     lastCountRef.current = 0
+    // Composer is per-thread — don't carry a half-written reply or a CC across.
+    setEmailBody(''); setCc(''); setBcc(''); setShowHeaders(false)
+    setSubjectEdit(null); setSendError(null); setAttachments([]); setPending([])
     loadConvo(sel.id)
     const iv = setInterval(() => loadConvo(sel.id), 5000)
     return () => clearInterval(iv)
@@ -193,6 +234,73 @@ export default function AdminInboxPage() {
       setPolishing(null)
     }
   }, [polishing])
+
+  // ── Attachments ─────────────────────────────────────────────────────────────
+  // The file never passes through our server: we ask the API for a signed URL,
+  // then PUT the bytes straight to Supabase storage. That's what lets a 15MB set
+  // photo through — a normal upload would die on Vercel's 4.5MB body cap.
+  const uploadFiles = useCallback(async (files: FileList | null) => {
+    if (!sel || !files?.length) return
+    setSendError(null)
+    for (const file of Array.from(files)) {
+      setUploading(u => [...u, file.name])
+      try {
+        const r = await fetch(`/api/admin/inbox/${sel.id}/attachments`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, mimeType: file.type, sizeBytes: file.size }),
+        })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) { setSendError(d?.error || `Couldn't attach ${file.name}`); continue }
+
+        const put = await fetch(d.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        })
+        if (!put.ok) {
+          // Roll the row back so a half-finished upload can't be sent.
+          await fetch(`/api/admin/inbox/${sel.id}/attachments?attachmentId=${d.attachmentId}`, { method: 'DELETE' })
+          setSendError(`Upload failed for ${file.name}`)
+          continue
+        }
+      } catch {
+        setSendError(`Upload failed for ${file.name}`)
+      } finally {
+        setUploading(u => u.filter(n => n !== file.name))
+      }
+    }
+    await loadConvo(sel.id)
+  }, [sel, loadConvo])
+
+  const removeAttachment = useCallback(async (attachmentId: string) => {
+    if (!sel) return
+    await fetch(`/api/admin/inbox/${sel.id}/attachments?attachmentId=${attachmentId}`, { method: 'DELETE' })
+    await loadConvo(sel.id)
+  }, [sel, loadConvo])
+
+  // Write your own email reply — independent of whether June drafted anything.
+  const sendEmail = async () => {
+    if (!sel || busy) return
+    if (!emailBody.trim() && !pending.length) return
+    setBusy(true)
+    setSendError(null)
+    try {
+      const r = await fetch(`/api/admin/inbox/${sel.id}/email`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          body: emailBody,
+          subject: subjectEdit ?? sel.subject ?? '',
+          cc, bcc,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setSendError(d?.error || 'Could not send'); return }
+      setEmailBody(''); setCc(''); setBcc(''); setShowHeaders(false); setSubjectEdit(null)
+      await loadConvo(sel.id); await loadList()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const sendReply = async () => {
     if (!sel || !reply.trim() || busy) return
@@ -306,11 +414,19 @@ export default function AdminInboxPage() {
     setBusy(true)
     const res = await fetch(`/api/admin/inbox/${sel.id}/draft`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messageId, action, content: draftEdits[messageId] }),
+      body: JSON.stringify({
+        messageId, action, content: draftEdits[messageId],
+        // Approving a draft carries whatever's staged on the thread — files,
+        // CC/BCC, an edited subject — so June's draft and your own reply behave
+        // identically once you hit send.
+        ...(action === 'send' ? { cc, bcc, subject: subjectEdit ?? sel.subject ?? '' } : {}),
+      }),
     })
     if (!res.ok) {
       const d = await res.json().catch(() => ({}))
-      alert(d.error || 'Draft action failed')
+      setSendError(d.error || 'Draft action failed')
+    } else if (action === 'send') {
+      setCc(''); setBcc(''); setShowHeaders(false); setSubjectEdit(null)
     }
     setDraftEdits(e => { const { [messageId]: _, ...rest } = e; return rest })
     await Promise.all([loadConvo(sel.id), loadList(), loadCounts()])
@@ -644,6 +760,8 @@ export default function AdminInboxPage() {
                     }
                     const mine = m.role === 'teddy'
                     const user = m.role === 'user'
+                    const dim = mine ? 'rgba(0,0,0,0.55)' : user ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)'
+                    const files = attachments.filter(a => a.message_id === m.id)
                     return (
                       <div key={m.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
                         <div style={{
@@ -652,12 +770,37 @@ export default function AdminInboxPage() {
                           color: mine || user ? '#080808' : 'rgba(255,255,255,0.9)',
                           borderRadius: 8,
                         }}>
-                          <div style={{ ...label, marginBottom: 3, color: mine ? 'rgba(0,0,0,0.55)' : user ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)' }}>
+                          <div style={{ ...label, marginBottom: 3, color: dim }}>
                             {mine ? 'YOU' : user ? 'CUSTOMER' : m.role === 'agent' ? 'JUNE' : 'SYSTEM'}
                             {' · '}
                             {new Date(m.created_at).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })}
                           </div>
+                          {!!m.cc_emails?.length && (
+                            <div style={{ fontSize: 11, color: dim, marginBottom: 4, whiteSpace: 'normal' }}>
+                              cc: {m.cc_emails.join(', ')}
+                              {!!m.bcc_emails?.length && ` · bcc: ${m.bcc_emails.join(', ')}`}
+                            </div>
+                          )}
                           {m.content}
+                          {!!files.length && (
+                            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {files.map(f => (
+                                <a key={f.id} href={`/api/admin/attachments/${f.id}`} target="_blank" rel="noreferrer"
+                                  title={`${f.filename} — ${fileSize(f.size_bytes)}`}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none',
+                                    fontSize: 12, padding: '6px 9px', borderRadius: 5, whiteSpace: 'normal',
+                                    border: `1px solid ${mine || user ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.18)'}`,
+                                    background: mine || user ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)',
+                                    color: mine || user ? '#080808' : 'rgba(255,255,255,0.9)',
+                                  }}>
+                                  <span>{fileGlyph(f.mime_type)}</span>
+                                  <span style={{ flex: 1, wordBreak: 'break-all' }}>{f.filename}</span>
+                                  <span style={{ opacity: 0.6, fontSize: 11 }}>{fileSize(f.size_bytes)}</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -683,8 +826,97 @@ export default function AdminInboxPage() {
                 </div>
 
                 {sel.channel === 'email' ? (
-                  <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                    Email thread — approve or edit June's draft above. (To write your own reply, edit her draft before sending, or reply from your mailbox.)
+                  <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                    {/* Staged files — these ride along with whichever you send:
+                        your own reply below, or June's draft above. */}
+                    {(!!pending.length || !!uploading.length) && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        {pending.map(a => (
+                          <span key={a.id} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
+                            background: 'rgba(212,168,67,0.12)', border: `1px solid ${GOLD}`,
+                            color: '#fff', padding: '5px 8px', borderRadius: 4, maxWidth: 280,
+                          }}>
+                            <span>{fileGlyph(a.mime_type)}</span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.filename}</span>
+                            <span style={{ opacity: 0.55, fontSize: 11 }}>{fileSize(a.size_bytes)}</span>
+                            <button onClick={() => removeAttachment(a.id)} title="Remove"
+                              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                          </span>
+                        ))}
+                        {uploading.map(name => (
+                          <span key={name} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
+                            background: 'rgba(255,255,255,0.06)', border: '1px dashed rgba(255,255,255,0.25)',
+                            color: 'rgba(255,255,255,0.6)', padding: '5px 8px', borderRadius: 4, maxWidth: 280,
+                          }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                            <span style={{ opacity: 0.7 }}>uploading…</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {showHeaders && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                        <input value={subjectEdit ?? sel.subject ?? ''} onChange={e => setSubjectEdit(e.target.value)}
+                          placeholder="Subject" spellCheck
+                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, padding: '8px 10px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif' }} />
+                        <input value={cc} onChange={e => setCc(e.target.value)}
+                          placeholder="Cc — comma separated" spellCheck={false}
+                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, padding: '8px 10px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif' }} />
+                        <input value={bcc} onChange={e => setBcc(e.target.value)}
+                          placeholder="Bcc — comma separated" spellCheck={false}
+                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, padding: '8px 10px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif' }} />
+                      </div>
+                    )}
+
+                    <textarea
+                      value={emailBody}
+                      onChange={e => setEmailBody(e.target.value)}
+                      rows={Math.min(12, Math.max(3, emailBody.split('\n').length + 1))}
+                      spellCheck
+                      placeholder={`Write your own reply to ${sel.visitor_name || 'them'}…  (June signs off for you)`}
+                      style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, lineHeight: 1.5, padding: 10, outline: 'none', borderRadius: 6, fontFamily: 'Inter, sans-serif', resize: 'vertical' }}
+                    />
+
+                    <input ref={fileInputRef} type="file" multiple hidden
+                      onChange={e => { uploadFiles(e.target.files); if (fileInputRef.current) fileInputRef.current.value = '' }} />
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={sendEmail}
+                        disabled={busy || (!emailBody.trim() && !pending.length) || !!uploading.length}
+                        style={{ ...label, background: (emailBody.trim() || pending.length) && !uploading.length ? '#fff' : 'rgba(255,255,255,0.1)', color: (emailBody.trim() || pending.length) && !uploading.length ? '#080808' : 'rgba(255,255,255,0.3)', border: 'none', padding: '9px 16px', cursor: 'pointer', borderRadius: 4 }}>
+                        {busy ? 'SENDING…' : 'SEND EMAIL'}
+                      </button>
+                      <button onClick={() => fileInputRef.current?.click()} disabled={busy}
+                        title="Attach a file. Uploads straight to storage, so big photos are fine."
+                        style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.75)', padding: '9px 12px', cursor: 'pointer', borderRadius: 4 }}>
+                        📎 ATTACH
+                      </button>
+                      <button
+                        onClick={async () => { const fixed = await polish('email', emailBody); if (fixed !== null) setEmailBody(fixed) }}
+                        disabled={busy || !emailBody.trim() || polishing === 'email'}
+                        title="Fix spelling, grammar and typos before you send."
+                        style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: emailBody.trim() ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.25)', padding: '9px 12px', cursor: 'pointer', borderRadius: 4 }}>
+                        {polishing === 'email' ? 'CHECKING…' : '✓ SPELL & GRAMMAR'}
+                      </button>
+                      <button onClick={() => setShowHeaders(v => !v)}
+                        style={{ ...label, background: 'transparent', border: 'none', color: showHeaders ? GOLD : 'rgba(255,255,255,0.45)', padding: '9px 4px', cursor: 'pointer' }}>
+                        {showHeaders ? 'HIDE CC/BCC' : 'CC / BCC / SUBJECT'}
+                      </button>
+                    </div>
+
+                    {polishNote?.key === 'email' && (
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>{polishNote.text}</div>
+                    )}
+                    {sendError && (
+                      <div style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>{sendError}</div>
+                    )}
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.32)', marginTop: 6 }}>
+                      Sends from june@ on this thread. Attached files go with whichever you send — this reply, or June's draft above.
+                    </div>
                   </div>
                 ) : (
                 <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: 8, alignItems: 'center' }}>

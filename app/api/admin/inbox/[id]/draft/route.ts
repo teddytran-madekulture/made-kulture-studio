@@ -1,15 +1,17 @@
 // Admin — approve / edit / discard June's pending email drafts.
 //
 // POST /api/admin/inbox/[id]/draft
-//   { messageId, action: 'send' | 'discard', content? }
+//   { messageId, action: 'send' | 'discard', content?, subject?, cc?, bcc? }
 //   'send'    → email the (optionally edited) draft as a threaded reply from
-//               june@, then flip the message role draft → agent.
-//   'discard' → delete the draft (Teddy can reply manually or ignore).
+//               june@ — including any files staged on the thread and any CC/BCC —
+//               then flip the message role draft → agent.
+//   'discard' → delete the draft (Teddy can write his own reply or ignore it).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
-import { sendReply, juneEmailConfigured } from '@/lib/agent/gmail'
+import { juneEmailConfigured } from '@/lib/agent/gmail'
+import { sendConversationEmail, parseAddresses, SIGNATURE } from '@/lib/agent/email-send'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,7 +21,8 @@ const supabase = createClient(
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { messageId, action, content } = await req.json()
+  const payload = await req.json().catch(() => ({}))
+  const { messageId, action, content } = payload
   if (!messageId || !action) return NextResponse.json({ error: 'messageId and action required' }, { status: 400 })
 
   const { data: msg } = await supabase
@@ -46,8 +49,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Not an email conversation' }, { status: 400 })
   }
 
-  const finalBody = (typeof content === 'string' && content.trim() ? content.trim() : msg.content)
-    + '\n\n— June\nMade Kulture · 4825 Gulf Freeway, Houston TX\nmadekulture.com · (832) 408-1631 (text)'
+  const cc = parseAddresses(payload?.cc)
+  const bcc = parseAddresses(payload?.bcc)
+  const subject = String(payload?.subject ?? '').trim().slice(0, 300) || convo.subject || 'Made Kulture'
+  const finalBody = (typeof content === 'string' && content.trim() ? content.trim() : msg.content) + SIGNATURE
 
   // Reply to the most recent inbound gmail message in the thread.
   const { data: lastInbound } = await supabase
@@ -57,21 +62,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
 
   try {
-    const sentId = await sendReply({
+    const { sentId, attachmentCount } = await sendConversationEmail({
+      conversationId: params.id,
+      messageId: msg.id,
       threadId: convo.gmail_thread_id,
       to: convo.contact_email,
-      subject: convo.subject || 'Made Kulture',
+      subject,
       body: finalBody,
+      cc, bcc,
       inReplyToMsgId: lastInbound?.external_id ?? undefined,
     })
+
     await supabase.from('agent_messages')
-      .update({ role: 'agent', content: finalBody, external_id: sentId })
+      .update({
+        role: 'agent',
+        content: finalBody,
+        external_id: sentId,
+        cc_emails: cc.length ? cc : null,
+        bcc_emails: bcc.length ? bcc : null,
+      })
       .eq('id', msg.id)
     await supabase.from('agent_conversations')
-      .update({ status: 'open', last_message_at: new Date().toISOString() })
+      .update({ status: 'open', subject, last_message_at: new Date().toISOString() })
       .eq('id', convo.id)
-    return NextResponse.json({ success: true })
+
+    return NextResponse.json({ success: true, attachmentCount })
   } catch (e: any) {
+    // The draft stays a draft on failure, so nothing is lost and it can be retried.
     console.error('[draft send] error:', e)
     return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
