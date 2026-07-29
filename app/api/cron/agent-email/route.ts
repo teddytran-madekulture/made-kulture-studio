@@ -10,8 +10,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { fetchNewEmails, markProcessed, juneEmailConfigured } from '@/lib/agent/gmail'
-import { runJune, juneConfigured, JuneTurn } from '@/lib/agent/june'
+import { fetchNewEmails, markProcessed, juneEmailConfigured, fetchAttachment } from '@/lib/agent/gmail'
+import {
+  runJune, juneConfigured, JuneTurn, JuneImage,
+  VISION_MIME_TYPES, VISION_MAX_BYTES, VISION_MAX_IMAGES,
+} from '@/lib/agent/june'
 import { sendOwnerPush } from '@/lib/push'
 
 const supabase = createClient(
@@ -114,12 +117,39 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: true })
         .limit(30)
 
+      // Let June actually LOOK at any photos on this email. Recording the
+      // attachment only told her a file existed — she still asked customers to
+      // describe props they'd already photographed. We pull the bytes from Gmail
+      // (nothing stored) and pass them as image blocks on the newest turn.
+      // Images only, small enough for the API, capped in count; a PDF still just
+      // gets named in the text so she says it arrived rather than "reading" it.
+      const visionImages: JuneImage[] = []
+      for (const a of em.attachments) {
+        if (visionImages.length >= VISION_MAX_IMAGES) break
+        if (!VISION_MIME_TYPES.includes(a.mimeType)) continue
+        if (a.sizeBytes > VISION_MAX_BYTES) {
+          console.warn('[agent-email] skipping oversized image for vision:', a.filename, a.sizeBytes)
+          continue
+        }
+        try {
+          const bytes = await fetchAttachment(em.gmailMsgId, a.gmailAttachmentId)
+          if (bytes) visionImages.push({ mediaType: a.mimeType, dataBase64: bytes.toString('base64') })
+        } catch (e) {
+          console.error('[agent-email] vision fetch failed:', a.filename, e)
+        }
+      }
+
+      const turns = (historyRows ?? []).map((m: any) =>
+        m.role === 'draft' ? { ...m, role: 'agent' } : m) as JuneTurn[]
+      // The row we just inserted is last; hang the images off it.
+      const newest = turns[turns.length - 1]
+      if (newest && newest.role === 'user' && visionImages.length) newest.images = visionImages
+
       try {
         const result = await runJune({
           supabase,
           conversationId: convoId,
-          history: (historyRows ?? []).map((m: any) =>
-            m.role === 'draft' ? { ...m, role: 'agent' } : m) as JuneTurn[],
+          history: turns,
           authUserId: null,
           visitorName: em.fromName,
           page: `email:${em.subject}`,

@@ -315,6 +315,8 @@ HARD RULES (never break these):
 
 BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio → pick set(s), date, and hours → add equipment if wanted → guest count → pay online. Bookings run in 30-minute increments with a 1-hour minimum, and need 48h notice; the site enforces it. Short-notice requests exist for logged-in members (subject to approval).
 
+IMAGES: Emails sometimes include photos — attached or pasted into the message. You can see them. When someone sends a picture of a prop, a set, or a look they want, SAY what you can see so they know it arrived ("that vintage rotary phone —"), then act on it: search the catalog with get_props using words describing the object to check whether we have it or something close. If you genuinely can't tell what it is, say so and ask — don't guess, and never claim we have something get_props didn't return. If a file came through that you cannot see (a PDF, a document), say it arrived and that the team will look at it rather than pretending to have read it.
+
 PRICING: Use get_sets_and_pricing for live numbers (a set's base member rate plus the per-hour guest surcharge = the guest rate). BY DEFAULT quote the guest rate as the price and invite people to sign up free for member rates — don't volunteer a "members $X vs guests $Y" breakdown. If someone directly asks what the member rate is, answer honestly and tell them it's free with an account. Don't quote prices from memory. The full-studio buyout is a flat rate and is not surcharged. Booking is BY APPOINTMENT ONLY — online in advance, no walk-ins.
 
 KNOWLEDGE:
@@ -332,9 +334,24 @@ EXTENSIONS AT THE KIOSK: If a guest wants extra time on their CURRENT session, u
 
 // ── Main entry ─────────────────────────────────────────────────────────────────
 
+// Claude accepts these; anything else (PDF, HEIC, zip) we deliberately don't send.
+export const VISION_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+// The API caps a single image at ~5MB of base64. Stay under it on the raw bytes.
+export const VISION_MAX_BYTES = 3_500_000
+// Cost/latency guard — plenty for "here's the prop I mean".
+export const VISION_MAX_IMAGES = 3
+
+export interface JuneImage {
+  mediaType: string     // must be one of VISION_MIME_TYPES
+  dataBase64: string
+}
+
 export interface JuneTurn {
   role: 'user' | 'agent' | 'teddy' | 'system'
   content: string
+  // Images that came in with THIS turn (email attachments / body-embedded
+  // photos). Only meaningful on a 'user' turn.
+  images?: JuneImage[]
 }
 
 export interface JuneResult {
@@ -369,10 +386,24 @@ export async function runJune(opts: {
 
   // Map stored roles → API roles. Teddy's messages appear as assistant turns
   // prefixed so June knows the human owner said it.
-  const messages: any[] = opts.history.slice(-24).map(m => ({
-    role: m.role === 'user' ? 'user' : 'assistant',
-    content: m.role === 'teddy' ? `[Teddy, the owner, said]: ${m.content}` : m.content,
-  }))
+  const messages: any[] = opts.history.slice(-24).map(m => {
+    const role = m.role === 'user' ? 'user' : 'assistant'
+    const text = m.role === 'teddy' ? `[Teddy, the owner, said]: ${m.content}` : m.content
+    const imgs = (role === 'user' ? m.images : undefined) ?? []
+    if (!imgs.length) return { role, content: text }
+    // Images first, then the text — Claude reads a trailing question as being
+    // about the images above it.
+    return {
+      role,
+      content: [
+        ...imgs.slice(0, VISION_MAX_IMAGES).map(img => ({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mediaType, data: img.dataBase64 },
+        })),
+        { type: 'text', text },
+      ],
+    }
+  })
 
   let escalated = false
 

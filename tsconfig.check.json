@@ -28,12 +28,9 @@
     ]
   },
   "files": [
+    "lib/agent/june.ts",
     "lib/agent/gmail.ts",
-    "lib/agent/email-send.ts",
     "app/api/cron/agent-email/route.ts",
-    "app/api/admin/inbox/[id]/attachments/route.ts",
-    "app/api/admin/attachments/[id]/route.ts",
-    "app/api/admin/inbox/[id]/email/route.ts",
-    "app/api/admin/inbox/[id]/draft/route.ts"
+    "app/api/agent/chat/route.ts"
   ]
 }
