@@ -84,6 +84,38 @@ export default function AdminInboxPage() {
   // Desktop + the conversations tab is the only place we take over the viewport.
   const deskInbox = !isMobile && tab === 'convos'
 
+  // The admin shell sets `body { zoom: 1.25 }`. Chrome's zoom scales RENDERED
+  // pixels but not CSS lengths, so `height: 100vh` in here lays out as 100vh and
+  // then paints 25% taller than the screen — which pushed the composer below the
+  // fold and gave the page its own scrollbar on top of the two inner ones.
+  // Measure the real factor rather than hard-coding 1.25, so this stays correct
+  // if the shell's zoom ever changes (and is a no-op at zoom 1).
+  const shellRef = useRef<HTMLDivElement>(null)
+  const [viewportH, setViewportH] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!deskInbox) { setViewportH(null); return }
+    const measure = () => {
+      let z = 1
+      for (let n: HTMLElement | null = shellRef.current; n; n = n.parentElement) {
+        const v = parseFloat(getComputedStyle(n).zoom || '1')
+        if (v && !Number.isNaN(v)) z *= v
+      }
+      setViewportH(window.innerHeight / (z || 1))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    // The shell's own wrappers are `min-height: 100vh` and so are over-tall for
+    // the same reason. We can't resize them from here, so just stop the page
+    // scrolling — everything the user needs is inside our own bounded panes.
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('resize', measure)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [deskInbox])
+
   const loadCounts = useCallback(async () => {
     try {
       const r = await fetch('/api/admin/badge')
@@ -491,12 +523,14 @@ export default function AdminInboxPage() {
           one viewport tall, no page scroll — the list and the transcript each
           scroll inside themselves. KB/Tours keep the 1200px reading column, and
           mobile is untouched (it stacks and scrolls the page as before). */}
-      <div style={{
+      <div ref={shellRef} style={{
         maxWidth: deskInbox ? '100%' : 1200,
         margin: '0 auto',
         padding: '32px 20px',
         boxSizing: 'border-box',
-        ...(deskInbox ? { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {}),
+        ...(deskInbox
+          ? { height: viewportH ?? '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+          : {}),
       }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24, flexShrink: 0 }}>
