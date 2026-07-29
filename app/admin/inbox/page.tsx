@@ -72,6 +72,36 @@ export default function AdminInboxPage() {
   const selRef = useRef<string | null>(null)
   selRef.current = sel?.id ?? null
 
+  // ── Scroll behaviour ────────────────────────────────────────────────────────
+  // The transcript polls every 5s. It used to jam scrollTop to the bottom on
+  // every poll, which yanked you away mid-read. Now we only auto-scroll when
+  // you're already parked at the bottom (or when you open a different
+  // conversation). Scroll up to read and you stay put.
+  const PIN_SLACK = 80 // px from the bottom that still counts as "at the bottom"
+  const pinnedRef = useRef(true)
+  const [atBottom, setAtBottom] = useState(true)
+  const [hasNewBelow, setHasNewBelow] = useState(false)
+  const lastConvoRef = useRef<string | null>(null)
+  const lastCountRef = useRef(0)
+
+  const scrollToBottom = useCallback((smooth = false) => {
+    const el = listRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+    pinnedRef.current = true
+    setAtBottom(true)
+    setHasNewBelow(false)
+  }, [])
+
+  const onListScroll = useCallback(() => {
+    const el = listRef.current
+    if (!el) return
+    const pinned = el.scrollHeight - el.scrollTop - el.clientHeight <= PIN_SLACK
+    pinnedRef.current = pinned
+    setAtBottom(pinned)
+    if (pinned) setHasNewBelow(false)
+  }, [])
+
   const loadList = useCallback(async () => {
     const r = await fetch('/api/admin/inbox')
     if (r.status === 401) { setUnauth(true); setLoading(false); return }
@@ -85,11 +115,25 @@ export default function AdminInboxPage() {
     if (!r.ok) return
     const d = await r.json()
     if (selRef.current === id) {
-      setMsgs(d.messages ?? [])
+      const next = d.messages ?? []
+      const isNewConvo = lastConvoRef.current !== id
+      const grew = next.length > lastCountRef.current
+      lastConvoRef.current = id
+      lastCountRef.current = next.length
+
+      setMsgs(next)
       setSel(s => (s && s.id === id ? { ...s, ...d.conversation } : s))
-      requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight })
+
+      // Opening a conversation always lands you at the newest message. After
+      // that, a poll only scrolls if you were already at the bottom — otherwise
+      // we just flag that something arrived below you.
+      if (isNewConvo || pinnedRef.current) {
+        requestAnimationFrame(() => scrollToBottom(false))
+      } else if (grew) {
+        setHasNewBelow(true)
+      }
     }
-  }, [])
+  }, [scrollToBottom])
 
   useEffect(() => {
     loadList()
@@ -103,6 +147,11 @@ export default function AdminInboxPage() {
 
   useEffect(() => {
     if (!sel) return
+    // A freshly opened conversation starts pinned to the newest message.
+    pinnedRef.current = true
+    setAtBottom(true)
+    setHasNewBelow(false)
+    lastCountRef.current = 0
     loadConvo(sel.id)
     const iv = setInterval(() => loadConvo(sel.id), 5000)
     return () => clearInterval(iv)
@@ -117,6 +166,33 @@ export default function AdminInboxPage() {
     await Promise.all([loadList(), sel ? loadConvo(id) : Promise.resolve()])
     setBusy(false)
   }
+
+  // ── Spelling / grammar polish ───────────────────────────────────────────────
+  // Fixes mechanics only — never rewrites voice or touches facts. Server side
+  // is /api/admin/polish. Returns the corrected text, or null if it failed.
+  const [polishing, setPolishing] = useState<string | null>(null)  // key of what's being polished
+  const [polishNote, setPolishNote] = useState<{ key: string; text: string } | null>(null)
+
+  const polish = useCallback(async (key: string, text: string): Promise<string | null> => {
+    if (!text.trim() || polishing) return null
+    setPolishing(key)
+    setPolishNote(null)
+    try {
+      const r = await fetch('/api/admin/polish', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setPolishNote({ key, text: d?.error || 'Could not proofread that.' }); return null }
+      setPolishNote({ key, text: d.changed ? 'Fixed — check it before sending.' : 'Already clean.' })
+      return d.text as string
+    } catch {
+      setPolishNote({ key, text: 'Could not proofread that.' })
+      return null
+    } finally {
+      setPolishing(null)
+    }
+  }, [polishing])
 
   const sendReply = async () => {
     if (!sel || !reply.trim() || busy) return
@@ -526,7 +602,8 @@ export default function AdminInboxPage() {
                   </div>
                 </div>
 
-                <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: 16, maxHeight: 520 }}>
+                <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                <div ref={listRef} onScroll={onListScroll} style={{ flex: 1, overflowY: 'auto', padding: 16, maxHeight: 520 }}>
                   {msgs.map(m => {
                     if (m.role === 'draft') {
                       return (
@@ -536,18 +613,32 @@ export default function AdminInboxPage() {
                             value={draftEdits[m.id] ?? m.content}
                             onChange={e => setDraftEdits(d => ({ ...d, [m.id]: e.target.value }))}
                             rows={Math.min(14, Math.max(5, (draftEdits[m.id] ?? m.content).split('\n').length + 1))}
+                            spellCheck
                             style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, lineHeight: 1.5, padding: 10, outline: 'none', borderRadius: 6, fontFamily: 'Inter, sans-serif', resize: 'vertical' }}
                           />
-                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                             <button disabled={busy} onClick={() => draftAction(m.id, 'send')}
                               style={{ ...label, background: GOLD, border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', borderRadius: 4 }}>
                               APPROVE & SEND
+                            </button>
+                            <button
+                              disabled={busy || polishing === m.id}
+                              title="Fix spelling, grammar and typos. Doesn't change your wording or any facts."
+                              onClick={async () => {
+                                const fixed = await polish(m.id, draftEdits[m.id] ?? m.content)
+                                if (fixed !== null) setDraftEdits(d => ({ ...d, [m.id]: fixed }))
+                              }}
+                              style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.75)', padding: '8px 12px', cursor: 'pointer', borderRadius: 4 }}>
+                              {polishing === m.id ? 'CHECKING…' : '✓ SPELL & GRAMMAR'}
                             </button>
                             <button disabled={busy} onClick={() => { if (window.confirm('Discard this draft?')) draftAction(m.id, 'discard') }}
                               style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '8px 14px', cursor: 'pointer', borderRadius: 4 }}>
                               DISCARD
                             </button>
                           </div>
+                          {polishNote?.key === m.id && (
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>{polishNote.text}</div>
+                          )}
                         </div>
                       )
                     }
@@ -573,20 +664,46 @@ export default function AdminInboxPage() {
                   })}
                 </div>
 
+                {/* Only shows when you've scrolled up. Nothing moves under you
+                    while it's visible — click it to rejoin the live bottom. */}
+                {!atBottom && (
+                  <button
+                    onClick={() => scrollToBottom(true)}
+                    style={{
+                      ...label, position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+                      background: hasNewBelow ? GOLD : 'rgba(20,20,20,0.92)',
+                      color: hasNewBelow ? '#080808' : 'rgba(255,255,255,0.8)',
+                      border: hasNewBelow ? 'none' : '1px solid rgba(255,255,255,0.2)',
+                      padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.5)', whiteSpace: 'nowrap',
+                    }}>
+                    {hasNewBelow ? '↓ NEW MESSAGE' : '↓ JUMP TO LATEST'}
+                  </button>
+                )}
+                </div>
+
                 {sel.channel === 'email' ? (
                   <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
                     Email thread — approve or edit June's draft above. (To write your own reply, edit her draft before sending, or reply from your mailbox.)
                   </div>
                 ) : (
-                <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: 8 }}>
+                <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: 8, alignItems: 'center' }}>
                   <input
                     value={reply}
                     onChange={e => setReply(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') sendReply() }}
+                    spellCheck
                     placeholder={sel.human_takeover ? 'Reply as yourself…' : 'Replying takes over from June…'}
                     style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, padding: '10px 12px', outline: 'none', borderRadius: 4, fontFamily: 'Inter, sans-serif' }}
                   />
-                  <button onClick={sendReply} disabled={busy || !reply.trim()} style={{ ...label, background: reply.trim() ? '#fff' : 'rgba(255,255,255,0.1)', color: reply.trim() ? '#080808' : 'rgba(255,255,255,0.3)', border: 'none', padding: '0 16px', cursor: reply.trim() ? 'pointer' : 'default', borderRadius: 4 }}>SEND</button>
+                  <button
+                    onClick={async () => { const fixed = await polish('reply', reply); if (fixed !== null) setReply(fixed) }}
+                    disabled={busy || !reply.trim() || polishing === 'reply'}
+                    title="Fix spelling, grammar and typos before you send."
+                    style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: reply.trim() ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.25)', padding: '0 12px', height: 38, cursor: reply.trim() ? 'pointer' : 'default', borderRadius: 4 }}>
+                    {polishing === 'reply' ? '…' : '✓ ABC'}
+                  </button>
+                  <button onClick={sendReply} disabled={busy || !reply.trim()} style={{ ...label, background: reply.trim() ? '#fff' : 'rgba(255,255,255,0.1)', color: reply.trim() ? '#080808' : 'rgba(255,255,255,0.3)', border: 'none', padding: '0 16px', height: 38, cursor: reply.trim() ? 'pointer' : 'default', borderRadius: 4 }}>SEND</button>
                 </div>
                 )}
               </>
