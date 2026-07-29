@@ -9,7 +9,7 @@ export default async function WorkLayout({ children }: { children: React.ReactNo
   if (!user) redirect('/login?next=/work/onboarding')
 
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff' }}>
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '0 24px' }}>
         <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <Link href="/" style={{ textDecoration: 'none' }}>

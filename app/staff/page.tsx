@@ -49,7 +49,7 @@ export default function StaffConsole() {
 // ── Layout shell ───────────────────────────────────────────────────────────────
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Inter Tight, system-ui, sans-serif', display: 'flex', justifyContent: 'center', padding: '40px 16px' }}>
+    <div style={{ minHeight: 'var(--vh-full)', background: C.bg, color: C.text, fontFamily: 'Inter Tight, system-ui, sans-serif', display: 'flex', justifyContent: 'center', padding: '40px 16px' }}>
       <div style={{ width: '100%', maxWidth: 960 }}>{children}</div>
     </div>
   )

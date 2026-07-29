@@ -77,7 +77,7 @@ export default function SetGallery({ images, name }: { images: string[]; name: s
             src={images[open]}
             alt={`${name} — enlarged photo ${open + 2}`}
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '92vw', maxHeight: '88vh', objectFit: 'contain', cursor: 'default', boxShadow: '0 24px 70px rgba(0,0,0,0.6)' }}
+            style={{ maxWidth: 'calc(92 * var(--svw))', maxHeight: 'calc(88 * var(--svh))', objectFit: 'contain', cursor: 'default', boxShadow: '0 24px 70px rgba(0,0,0,0.6)' }}
           />
 
           {images.length > 1 && (

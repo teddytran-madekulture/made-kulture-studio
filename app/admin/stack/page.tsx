@@ -61,9 +61,9 @@ export default function AdminStackPage() {
     }).catch(() => setChecked(true))
   }, [])
 
-  if (!checked) return <div style={{ background: '#080808', minHeight: '100vh' }} />
+  if (!checked) return <div style={{ background: '#080808', minHeight: 'var(--vh-full)' }} />
   if (unauth) return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
       <div>Not authorized — <a href="/admin" style={{ color: GOLD }}>log in</a></div>
     </div>
   )
@@ -71,7 +71,7 @@ export default function AdminStackPage() {
   const groups = Array.from(new Set(SERVICES.map(s => s.group)))
 
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px 80px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
           <a href="/admin/dashboard" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>← Dashboard</a>

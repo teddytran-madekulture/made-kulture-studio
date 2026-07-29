@@ -25,7 +25,7 @@ export default function CheckinKioskPage() {
   }
 
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
       <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 40, lineHeight: 1 }}>MADE<br />KULTURE</div>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 12 }}>CHECK IN</h1>

@@ -89,7 +89,7 @@ export default function AdminJukeboxPage() {
   )
 
   return (
-    <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>JUKEBOX</h1>

@@ -252,9 +252,9 @@ export default function PageEditor({ slug }: { slug: string }) {
     }, 400)
   }
 
-  if (loading) return <main style={{ background: C.bg, minHeight: '100vh', color: C.dim, padding: 40, fontFamily: 'Inter, sans-serif' }}>Loading…</main>
-  if (unauth) return <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: 40, fontFamily: 'Inter, sans-serif' }}>Please <a href="/admin" style={{ color: C.accent }}>log in</a> to edit the site.</main>
-  if (!page) return <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: 40, fontFamily: 'Inter, sans-serif' }}>No page selected.</main>
+  if (loading) return <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.dim, padding: 40, fontFamily: 'Inter, sans-serif' }}>Loading…</main>
+  if (unauth) return <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.text, padding: 40, fontFamily: 'Inter, sans-serif' }}>Please <a href="/admin" style={{ color: C.accent }}>log in</a> to edit the site.</main>
+  if (!page) return <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.text, padding: 40, fontFamily: 'Inter, sans-serif' }}>No page selected.</main>
 
   const sections = isHome
     ? HOME_SECTIONS
@@ -333,7 +333,7 @@ export default function PageEditor({ slug }: { slug: string }) {
   }
 
   return (
-    <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: '40px 24px 80px', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.text, padding: '40px 24px 80px', fontFamily: 'Inter, sans-serif' }}>
       <input ref={fileInput} type="file" accept="image/*" onChange={onFile} style={{ display: 'none' }} />
       <div style={{ maxWidth: 820, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>

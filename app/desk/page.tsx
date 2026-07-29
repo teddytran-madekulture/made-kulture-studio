@@ -268,7 +268,7 @@ function StatusBadge({ b }: { b: Booking }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Inter Tight, system-ui, sans-serif', padding: '32px 16px' }}>
+    <div style={{ minHeight: 'var(--vh-full)', background: C.bg, color: C.text, fontFamily: 'Inter Tight, system-ui, sans-serif', padding: '32px 16px' }}>
       <div style={{ width: '100%', maxWidth: 820, margin: '0 auto' }}>{children}</div>
     </div>
   )

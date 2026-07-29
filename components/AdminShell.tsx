@@ -137,7 +137,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       }}>
         <SidebarInner />
       </aside>
-      <div style={{ marginLeft: isMobile ? 0 : 220, paddingTop: isMobile ? 52 : 0, minHeight: '100vh' }}>{children}</div>
+      <div style={{ marginLeft: isMobile ? 0 : 220, paddingTop: isMobile ? 52 : 0, minHeight: 'var(--vh-full)' }}>{children}</div>
     </>
   )
 }

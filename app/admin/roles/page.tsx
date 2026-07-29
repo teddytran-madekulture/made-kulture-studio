@@ -37,7 +37,7 @@ export default function AdminRolesPage() {
     loadRoles()
   }
 
-  const wrap: React.CSSProperties = { background: '#080808', minHeight: '100vh', color: '#fff', padding: '48px 24px', fontFamily: 'Inter, sans-serif' }
+  const wrap: React.CSSProperties = { background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', padding: '48px 24px', fontFamily: 'Inter, sans-serif' }
   const inner: React.CSSProperties = { maxWidth: 720, margin: '0 auto' }
   const pill = (extra: React.CSSProperties = {}): React.CSSProperties => ({ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', borderRadius: 4, padding: '2px 6px', ...extra })
 

@@ -14,8 +14,36 @@ html { background: var(--black); color: var(--white); scroll-behavior: smooth; }
 /* Scale the whole site to 1.25x on desktop for readability — mirrors viewing
    at 125% browser zoom. Mobile (<=768px) is left at 1x since its layout is
    already tuned for small screens and scaling up would overflow. */
+
+/* ⚠️ THE ZOOM/VIEWPORT-UNIT TRAP — read before using vh or vw anywhere.
+   `zoom` scales RENDERED pixels but does NOT change how CSS lengths resolve.
+   So inside body, `100vh` still resolves against the real viewport and is THEN
+   multiplied by 1.25 — it paints 25% TALLER than the screen. Same for vw.
+   Symptoms: a `maxHeight: 90vh` modal that overflows the window, a page that
+   scrolls ~25% with no content down there, a fixed layout whose footer sits
+   below the fold.
+
+   Use these instead of raw vh/vw whenever you mean "as big as the viewport".
+   They cancel the zoom on desktop and are plain vh/vw on mobile, so they are
+   correct in both places and stay correct if the zoom value ever changes:
+
+     height: var(--vh-full)                 // was: 100vh
+     maxHeight: calc(90 * var(--svh))       // was: 90vh
+     maxWidth:  calc(92 * var(--svw))       // was: 92vw
+
+   Raw vw inside clamp() for display type — clamp(48px, 8vw, 100px) — is fine
+   and deliberately left alone: that type was sized by eye with the zoom on. */
+:root {
+  --vh-full: 100vh; --vw-full: 100vw;   /* one full viewport */
+  --svh: 1vh;       --svw: 1vw;         /* one percent, for calc() */
+}
 @media (min-width: 769px) {
-  body { zoom: 1.25; }
+  body {
+    zoom: 1.25;
+    /* 1 / 1.25 = 0.8 — exactly cancels the zoom above. */
+    --vh-full: 80vh; --vw-full: 80vw;
+    --svh: 0.8vh;    --svw: 0.8vw;
+  }
 }
 
 body {

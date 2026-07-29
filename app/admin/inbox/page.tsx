@@ -84,36 +84,16 @@ export default function AdminInboxPage() {
   // Desktop + the conversations tab is the only place we take over the viewport.
   const deskInbox = !isMobile && tab === 'convos'
 
-  // The admin shell sets `body { zoom: 1.25 }`. Chrome's zoom scales RENDERED
-  // pixels but not CSS lengths, so `height: 100vh` in here lays out as 100vh and
-  // then paints 25% taller than the screen — which pushed the composer below the
-  // fold and gave the page its own scrollbar on top of the two inner ones.
-  // Measure the real factor rather than hard-coding 1.25, so this stays correct
-  // if the shell's zoom ever changes (and is a no-op at zoom 1).
-  const shellRef = useRef<HTMLDivElement>(null)
-  const [viewportH, setViewportH] = useState<number | null>(null)
-
+  // `var(--vh-full)` is one real viewport height, corrected for the site's
+  // `body { zoom: 1.25 }` — see the trap note at the top of app/globals.css.
+  // Raw 100vh here would paint 25% taller than the screen and push the composer
+  // below the fold. Belt-and-braces: lock page scrolling while the inbox owns
+  // the viewport, so the only scrollbars are the two inside our panes.
   useEffect(() => {
-    if (!deskInbox) { setViewportH(null); return }
-    const measure = () => {
-      let z = 1
-      for (let n: HTMLElement | null = shellRef.current; n; n = n.parentElement) {
-        const v = parseFloat(getComputedStyle(n).zoom || '1')
-        if (v && !Number.isNaN(v)) z *= v
-      }
-      setViewportH(window.innerHeight / (z || 1))
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    // The shell's own wrappers are `min-height: 100vh` and so are over-tall for
-    // the same reason. We can't resize them from here, so just stop the page
-    // scrolling — everything the user needs is inside our own bounded panes.
+    if (!deskInbox) return
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('resize', measure)
-      document.body.style.overflow = prevOverflow
-    }
+    return () => { document.body.style.overflow = prevOverflow }
   }, [deskInbox])
 
   const loadCounts = useCallback(async () => {
@@ -512,24 +492,24 @@ export default function AdminInboxPage() {
   }
 
   if (unauth) return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
       <div>Not authorized — <a href="/admin" style={{ color: GOLD }}>log in</a></div>
     </div>
   )
 
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
       {/* On desktop the INBOX tab runs as a proper mail client: full width, exactly
           one viewport tall, no page scroll — the list and the transcript each
           scroll inside themselves. KB/Tours keep the 1200px reading column, and
           mobile is untouched (it stacks and scrolls the page as before). */}
-      <div ref={shellRef} style={{
+      <div style={{
         maxWidth: deskInbox ? '100%' : 1200,
         margin: '0 auto',
         padding: '32px 20px',
         boxSizing: 'border-box',
         ...(deskInbox
-          ? { height: viewportH ?? '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+          ? { height: 'var(--vh-full)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
           : {}),
       }}>
         {/* Header */}

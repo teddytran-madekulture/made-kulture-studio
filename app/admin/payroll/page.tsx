@@ -90,7 +90,7 @@ export default function PayrollPage() {
   const card: React.CSSProperties = { background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: 20, marginBottom: 20 }
 
   return (
-    <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: 920, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>PAYROLL</h1>

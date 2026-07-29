@@ -182,7 +182,7 @@ export default function AddChargeModal({
     <div
       onClick={e => { if (e.target === e.currentTarget && !busy) onClose() }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', padding: 32, boxSizing: 'border-box' }}>
+      <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 480, maxHeight: 'calc(90 * var(--svh))', overflowY: 'auto', padding: 32, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>ADD CHARGE</div>
           <button onClick={onClose} disabled={busy}

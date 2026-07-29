@@ -28,15 +28,22 @@
     ]
   },
   "files": [
-    "lib/agent/gmail.ts",
-    "lib/agent/email-send.ts",
-    "app/api/admin/polish/route.ts",
-    "app/api/admin/inbox/[id]/route.ts",
-    "app/api/admin/inbox/[id]/draft/route.ts",
-    "app/api/admin/inbox/[id]/email/route.ts",
-    "app/api/admin/inbox/[id]/attachments/route.ts",
-    "app/api/admin/attachments/[id]/route.ts",
-    "app/api/cron/agent-email/route.ts",
+    "components/AdminShell.tsx",
+    "components/AddChargeModal.tsx",
+    "components/AddSetModal.tsx",
+    "components/SetGallery.tsx",
+    "components/PageEditor.tsx",
+    "components/WebsiteShell.tsx",
+    "app/admin/dashboard/page.tsx",
+    "app/admin/shifts/page.tsx",
+    "app/admin/payroll/page.tsx",
+    "app/admin/workers/page.tsx",
+    "app/admin/stack/page.tsx",
+    "app/desk/page.tsx",
+    "app/staff/page.tsx",
+    "app/work/layout.tsx",
+    "app/checkin/page.tsx",
+    "app/account/directory/[id]/page.tsx",
     "app/admin/inbox/page.tsx"
   ]
 }

@@ -1226,7 +1226,7 @@ export default function AdminDashboard() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
 
       {/* ── MOBILE TOP BAR ──────────────────────────────────────────────────── */}
       {isMobile && (
@@ -3670,7 +3670,7 @@ export default function AdminDashboard() {
       {editBooking && (
         <div onClick={(e) => { if (e.target === e.currentTarget && !editAction) setEditBooking(null) }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', padding: 36 }}>
+          <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 560, maxHeight: 'calc(90 * var(--svh))', overflowY: 'auto', padding: 36 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
               <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>EDIT BOOKING</div>
               <button onClick={() => { if (!editAction) setEditBooking(null) }}
@@ -3862,7 +3862,7 @@ export default function AdminDashboard() {
       {showManual && (
         <div onClick={handleBackdropClick}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', padding: 36 }}>
+          <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 560, maxHeight: 'calc(90 * var(--svh))', overflowY: 'auto', padding: 36 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
               <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.05em' }}>MANUAL BOOKING</div>
               <button onClick={closeModal}

@@ -436,7 +436,7 @@ export default function AdminShiftsPage() {
   const smallBtn = (color: string): React.CSSProperties => ({ background: 'none', border: `1px solid ${C.line}`, color, borderRadius: 6, padding: '6px 12px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' })
 
   return (
-    <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: 920, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>SHIFTS</h1>

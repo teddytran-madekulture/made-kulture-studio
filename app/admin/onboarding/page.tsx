@@ -109,7 +109,7 @@ export default function OnboardingAdminPage() {
   const mono: React.CSSProperties = { ...inp, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, minHeight: 120, resize: 'vertical' }
 
   return (
-    <main style={{ background: C.bg, minHeight: '100vh', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
+    <main style={{ background: C.bg, minHeight: 'var(--vh-full)', color: C.text, padding: '40px 24px', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: 920, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>ONBOARDING</h1>

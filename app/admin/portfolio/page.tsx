@@ -54,7 +54,7 @@ export default function AdminPortfolioPage() {
   const shown = items.filter(i =>
     filter === 'all' ? true : filter === 'mature' ? i.is_mature : i.hidden)
 
-  const wrap: React.CSSProperties = { background: '#080808', minHeight: '100vh', color: '#fff', padding: '40px 20px', fontFamily: 'Inter, sans-serif' }
+  const wrap: React.CSSProperties = { background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', padding: '40px 20px', fontFamily: 'Inter, sans-serif' }
   const inner: React.CSSProperties = { maxWidth: 1000, margin: '0 auto' }
   const chip = (f: Filter, label: string) => (
     <button onClick={() => setFilter(f)} style={{

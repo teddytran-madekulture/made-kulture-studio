@@ -40,7 +40,7 @@ export default function AdminSignupsPage() {
       .catch(() => setLoad(false))
   }, [])
 
-  const wrap: React.CSSProperties = { background: '#080808', minHeight: '100vh', color: '#fff', padding: '40px 20px', fontFamily: 'Inter, sans-serif' }
+  const wrap: React.CSSProperties = { background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', padding: '40px 20px', fontFamily: 'Inter, sans-serif' }
   const inner: React.CSSProperties = { maxWidth: 760, margin: '0 auto' }
   const pill = (bg: string, fg: string, txt: string) => (
     <span style={{ background: bg, color: fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap' }}>{txt}</span>

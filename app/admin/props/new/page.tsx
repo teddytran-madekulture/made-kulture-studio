@@ -130,7 +130,7 @@ export default function AddPropByPhoto() {
   const applyLabel = busy ? 'WORKING…' : method === 'free' ? 'REMOVE BACKGROUND' : method === 'chatgpt' ? 'EDIT WITH CHATGPT' : 'USE PHOTOS AS-IS'
 
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', padding: '40px 20px 90px' }}>
+    <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', padding: '40px 20px 90px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <a href="/admin/dashboard" style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>← ADMIN</a>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, letterSpacing: '0.01em', margin: '14px 0 4px' }}>ADD PROP BY PHOTO</h1>
