@@ -13,7 +13,7 @@ const supabase = createClient(
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const [{ data: convo }, { data: messages }, { data: attachments }] = await Promise.all([
+  const [{ data: convo }, msgRes, attRes] = await Promise.all([
     supabase.from('agent_conversations')
       .select('id, channel, status, human_takeover, visitor_name, visitor_email, page, subject, contact_email, created_at')
       .eq('id', params.id).single(),
@@ -29,10 +29,25 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   ])
   if (!convo) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
-  const all = attachments ?? []
+  // NEVER coalesce a failed transcript query to an empty array. Doing that once
+  // turned "migration 090 hasn't run yet" into a screen that read as "all your
+  // email is gone" — the transcript must fail loudly or not at all.
+  if (msgRes.error) {
+    console.error('[inbox transcript] query failed:', msgRes.error.message)
+    return NextResponse.json(
+      { error: `Couldn't load this conversation: ${msgRes.error.message}` },
+      { status: 500 }
+    )
+  }
+
+  // Attachments are additive — if that table isn't there yet, you should still
+  // be able to read your mail.
+  if (attRes.error) console.error('[inbox attachments] query failed:', attRes.error.message)
+  const all = attRes.data ?? []
+
   return NextResponse.json({
     conversation: convo,
-    messages: messages ?? [],
+    messages: msgRes.data ?? [],
     // Files already delivered, grouped by the message they belong to.
     attachments: all.filter(a => a.message_id),
     // Files staged for the next outgoing email but not sent yet.

@@ -73,13 +73,36 @@ export async function GET(req: NextRequest) {
       }
       if (!convoId) continue
 
-      // Store inbound.
-      await supabase.from('agent_messages').insert({
+      // Store inbound. Attachments are named in the message body so June knows a
+      // file arrived and doesn't reply as though the customer forgot to attach
+      // it — she can't read the contents, but "you sent me X" beats silence.
+      const fileNote = em.attachments.length
+        ? `\n\n[Attached: ${em.attachments.map(a => a.filename).join(', ')}]`
+        : ''
+      const { data: inboundMsg } = await supabase.from('agent_messages').insert({
         conversation_id: convoId,
         role: 'user',
-        content: `[Email] Subject: ${em.subject}\n\n${em.text}`,
+        content: `[Email] Subject: ${em.subject}\n\n${em.text}${fileNote}`,
         external_id: em.gmailMsgId,
-      })
+      }).select('id').single()
+
+      // Pointers only — Google keeps the bytes in the june@ mailbox and serves
+      // them on demand, so there is nothing to copy or pay to store here.
+      if (inboundMsg && em.attachments.length) {
+        await supabase.from('email_attachments').insert(
+          em.attachments.map(a => ({
+            conversation_id: convoId,
+            message_id: inboundMsg.id,
+            direction: 'in',
+            filename: a.filename,
+            mime_type: a.mimeType,
+            size_bytes: a.sizeBytes,
+            gmail_msg_id: em.gmailMsgId,
+            gmail_attachment_id: a.gmailAttachmentId,
+          }))
+        )
+      }
+
       await markProcessed(em.gmailMsgId)
       processed++
 

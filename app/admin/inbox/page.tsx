@@ -61,6 +61,7 @@ export default function AdminInboxPage() {
   const [bcc, setBcc]                       = useState('')
   const [subjectEdit, setSubjectEdit]       = useState<string | null>(null)
   const [sendError, setSendError]           = useState<string | null>(null)
+  const [loadError, setLoadError]           = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab]               = useState<'convos' | 'kb' | 'tours'>('convos')
   const [tours, setTours]           = useState<any[]>([])
@@ -148,8 +149,14 @@ export default function AdminInboxPage() {
 
   const loadConvo = useCallback(async (id: string) => {
     const r = await fetch(`/api/admin/inbox/${id}`)
-    if (!r.ok) return
+    if (!r.ok) {
+      // Surface it. An empty transcript with no explanation looks like data loss.
+      const d = await r.json().catch(() => ({}))
+      if (selRef.current === id) setLoadError(d?.error || `Couldn't load this conversation (${r.status})`)
+      return
+    }
     const d = await r.json()
+    if (selRef.current === id) setLoadError(null)
     if (selRef.current === id) {
       const next = d.messages ?? []
       const isNewConvo = lastConvoRef.current !== id
@@ -720,6 +727,18 @@ export default function AdminInboxPage() {
 
                 <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <div ref={listRef} onScroll={onListScroll} style={{ flex: 1, overflowY: 'auto', padding: 16, maxHeight: 520 }}>
+                  {loadError && (
+                    <div style={{ border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.08)', borderRadius: 6, padding: 12, marginBottom: 12 }}>
+                      <div style={{ ...label, color: '#f87171', marginBottom: 6 }}>COULDN'T LOAD THIS THREAD</div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>
+                        {loadError}
+                        <br />
+                        <span style={{ color: 'rgba(255,255,255,0.5)' }}>
+                          Nothing has been deleted — the messages are still in the database, this query just failed.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   {msgs.map(m => {
                     if (m.role === 'draft') {
                       return (
