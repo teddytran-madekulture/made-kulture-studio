@@ -9,11 +9,12 @@
 // Email is draft-tier by design: nothing sends without approval.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { fetchNewEmails, markProcessed, juneEmailConfigured, fetchAttachment } from '@/lib/agent/gmail'
 import {
   runJune, juneConfigured, JuneTurn, JuneImage,
-  VISION_MIME_TYPES, VISION_MAX_BYTES, VISION_MAX_IMAGES,
+  VISION_MIME_TYPES, VISION_MAX_BYTES, VISION_BASE64_MAX_BYTES, VISION_MAX_IMAGES,
 } from '@/lib/agent/june'
 import { sendOwnerPush } from '@/lib/push'
 
@@ -124,18 +125,43 @@ export async function GET(req: NextRequest) {
       // Images only, small enough for the API, capped in count; a PDF still just
       // gets named in the text so she says it arrived rather than "reading" it.
       const visionImages: JuneImage[] = []
+      // Big images go via a short-lived signed URL rather than inline bytes (see
+      // VISION_BASE64_MAX_BYTES). These objects are TRANSIENT — deleted in the
+      // finally below as soon as the model call is done, so the "inbound is
+      // pointers only, nothing stored" rule still holds.
+      const visionTempPaths: string[] = []
+
       for (const a of em.attachments) {
         if (visionImages.length >= VISION_MAX_IMAGES) break
         if (!VISION_MIME_TYPES.includes(a.mimeType)) continue
         if (a.sizeBytes > VISION_MAX_BYTES) {
-          console.warn('[agent-email] skipping oversized image for vision:', a.filename, a.sizeBytes)
+          console.warn('[agent-email] image too big to show June:', a.filename, a.sizeBytes)
           continue
         }
         try {
           const bytes = await fetchAttachment(em.gmailMsgId, a.gmailAttachmentId)
-          if (bytes) visionImages.push({ mediaType: a.mimeType, dataBase64: bytes.toString('base64') })
+          if (!bytes) continue
+
+          if (bytes.length <= VISION_BASE64_MAX_BYTES) {
+            visionImages.push({ mediaType: a.mimeType, dataBase64: bytes.toString('base64') })
+            continue
+          }
+
+          // Too large to inline once base64-encoded — hand Anthropic a URL.
+          const path = `vision/${convoId}/${randomUUID()}`
+          const up = await supabase.storage.from('email-media')
+            .upload(path, bytes, { contentType: a.mimeType, upsert: true })
+          if (up.error) { console.error('[agent-email] vision upload failed:', up.error.message); continue }
+          visionTempPaths.push(path)
+
+          const signed = await supabase.storage.from('email-media').createSignedUrl(path, 600)
+          if (signed.error || !signed.data?.signedUrl) {
+            console.error('[agent-email] vision sign failed:', signed.error?.message)
+            continue
+          }
+          visionImages.push({ mediaType: a.mimeType, url: signed.data.signedUrl })
         } catch (e) {
-          console.error('[agent-email] vision fetch failed:', a.filename, e)
+          console.error('[agent-email] vision prep failed:', a.filename, e)
         }
       }
 
@@ -167,6 +193,13 @@ export async function GET(req: NextRequest) {
         console.error('[agent-email] June draft error:', e)
         await supabase.from('agent_conversations')
           .update({ status: 'needs_teddy' }).eq('id', convoId)
+      } finally {
+        // Nothing we uploaded purely so the model could look at it survives the
+        // request — success or failure.
+        if (visionTempPaths.length) {
+          try { await supabase.storage.from('email-media').remove(visionTempPaths) }
+          catch (e) { console.error('[agent-email] vision cleanup failed:', e) }
+        }
       }
     }
 

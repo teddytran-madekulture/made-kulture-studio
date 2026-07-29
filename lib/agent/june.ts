@@ -336,14 +336,22 @@ EXTENSIONS AT THE KIOSK: If a guest wants extra time on their CURRENT session, u
 
 // Claude accepts these; anything else (PDF, HEIC, zip) we deliberately don't send.
 export const VISION_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-// The API caps a single image at ~5MB of base64. Stay under it on the raw bytes.
-export const VISION_MAX_BYTES = 3_500_000
+// Hard per-image ceiling on the API side (~5MB). A photo bigger than this can't
+// be shown either way, so we name it in the text and let a human look.
+export const VISION_MAX_BYTES = 5_000_000
+// base64 inflates by ~4/3, so anything above this would breach the 5MB limit
+// once encoded even though the raw file is fine. Those go by URL instead —
+// Anthropic fetches the bytes itself, so the encoding penalty disappears.
+// A 4MB phone photo lands in exactly this gap, which is why the cap alone made
+// vision useless in practice.
+export const VISION_BASE64_MAX_BYTES = 3_500_000
 // Cost/latency guard — plenty for "here's the prop I mean".
 export const VISION_MAX_IMAGES = 3
 
 export interface JuneImage {
   mediaType: string     // must be one of VISION_MIME_TYPES
-  dataBase64: string
+  dataBase64?: string   // inline bytes (small images)
+  url?: string          // publicly fetchable, short-lived (large images)
 }
 
 export interface JuneTurn {
@@ -396,10 +404,14 @@ export async function runJune(opts: {
     return {
       role,
       content: [
-        ...imgs.slice(0, VISION_MAX_IMAGES).map(img => ({
-          type: 'image',
-          source: { type: 'base64', media_type: img.mediaType, data: img.dataBase64 },
-        })),
+        ...imgs.slice(0, VISION_MAX_IMAGES)
+          .filter(img => img.dataBase64 || img.url)
+          .map(img => ({
+            type: 'image',
+            source: img.url
+              ? { type: 'url', url: img.url }
+              : { type: 'base64', media_type: img.mediaType, data: img.dataBase64 },
+          })),
         { type: 'text', text },
       ],
     }
