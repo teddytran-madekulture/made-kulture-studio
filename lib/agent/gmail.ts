@@ -91,11 +91,17 @@ async function getProcessedLabelId(): Promise<string> {
 
 // ── Inbound ────────────────────────────────────────────────────────────────────
 
+// Below this, an inline image is almost certainly a signature logo or a tracking
+// pixel rather than something the sender meant us to see. Phone photos and
+// screenshots are comfortably above it.
+const INLINE_IMAGE_MIN_BYTES = 20 * 1024
+
 export interface InboundAttachment {
   gmailAttachmentId: string
   filename: string
   mimeType: string
   sizeBytes: number
+  inline: boolean       // embedded in the body rather than attached as a file
 }
 
 export interface InboundEmail {
@@ -152,12 +158,24 @@ function extractAttachments(payload: any, out: InboundAttachment[] = []): Inboun
     const disposition = header(payload, 'Content-Disposition').toLowerCase()
     const contentId = header(payload, 'Content-ID')
     const isInline = disposition.includes('inline') && !!contentId
-    if (!isInline) {
+    const size = Number(payload.body?.size) || 0
+
+    // An inline part is EITHER noise (signature logo, tracking pixel) OR a photo
+    // the sender dropped into the message body — Gmail marks both the same way.
+    // Size is what separates them: logos and pixels are a few KB, a real photo or
+    // screenshot is hundreds. We bias towards keeping it, because a missed photo
+    // means June replies "can you describe it?" to someone who already showed us
+    // (which is exactly what happened on the first live test), whereas a stray
+    // logo chip is just mild clutter.
+    const keep = !isInline || size >= INLINE_IMAGE_MIN_BYTES
+
+    if (keep) {
       out.push({
         gmailAttachmentId: attachmentId,
         filename: filename.slice(0, 300),
         mimeType: payload.mimeType || 'application/octet-stream',
-        sizeBytes: Number(payload.body?.size) || 0,
+        sizeBytes: size,
+        inline: isInline,
       })
     }
   }
