@@ -28,9 +28,9 @@
     ]
   },
   "files": [
+    "app/api/admin/vision-test/route.ts",
     "lib/agent/june.ts",
     "lib/agent/gmail.ts",
-    "app/api/cron/agent-email/route.ts",
-    "app/api/agent/chat/route.ts"
+    "app/api/cron/agent-email/route.ts"
   ]
 }
