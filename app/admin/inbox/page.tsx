@@ -81,6 +81,9 @@ export default function AdminInboxPage() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
+  // Desktop + the conversations tab is the only place we take over the viewport.
+  const deskInbox = !isMobile && tab === 'convos'
+
   const loadCounts = useCallback(async () => {
     try {
       const r = await fetch('/api/admin/badge')
@@ -484,9 +487,19 @@ export default function AdminInboxPage() {
 
   return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 20px' }}>
+      {/* On desktop the INBOX tab runs as a proper mail client: full width, exactly
+          one viewport tall, no page scroll — the list and the transcript each
+          scroll inside themselves. KB/Tours keep the 1200px reading column, and
+          mobile is untouched (it stacks and scrolls the page as before). */}
+      <div style={{
+        maxWidth: deskInbox ? '100%' : 1200,
+        margin: '0 auto',
+        padding: '32px 20px',
+        boxSizing: 'border-box',
+        ...(deskInbox ? { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {}),
+      }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <a href="/admin/dashboard" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>← Dashboard</a>
             <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>JUNE</h1>
@@ -651,10 +664,24 @@ export default function AdminInboxPage() {
           </div>
         )}
 
-        <div style={{ display: tab === 'convos' ? 'flex' : 'none', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{
+          display: tab === 'convos' ? 'flex' : 'none', gap: 16,
+          alignItems: isMobile ? 'flex-start' : 'stretch',
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
+          // Fill the leftover viewport height and allow children to shrink —
+          // min-height:0 is what lets the inner scroll areas actually bound.
+          ...(isMobile ? {} : { flex: 1, minHeight: 0 }),
+        }}>
           {/* Conversation list */}
           {(!isMobile || !sel) && (
-          <div style={{ flex: isMobile ? '1 1 100%' : '0 0 340px', maxWidth: '100%', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{
+            flex: isMobile ? '1 1 100%' : '0 0 360px', maxWidth: '100%',
+            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6,
+            // Desktop: the list scrolls inside itself instead of stretching the
+            // page to 50-odd conversations tall. Mobile keeps the old clip.
+            overflowX: 'hidden',
+            overflowY: isMobile ? 'hidden' : 'auto',
+          }}>
             {loading && <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Loading…</div>}
             {!loading && convos.length === 0 && (
               <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No conversations yet. June's widget is live on the site.</div>
@@ -689,7 +716,7 @@ export default function AdminInboxPage() {
 
           {/* Transcript */}
           {(!isMobile || sel) && (
-          <div style={{ flex: 1, minWidth: isMobile ? 0 : 320, width: isMobile ? '100%' : undefined, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, display: 'flex', flexDirection: 'column', minHeight: 480 }}>
+          <div style={{ flex: 1, minWidth: isMobile ? 0 : 320, width: isMobile ? '100%' : undefined, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, display: 'flex', flexDirection: 'column', minHeight: isMobile ? 480 : 0 }}>
             {!sel ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                 Select a conversation
@@ -726,7 +753,9 @@ export default function AdminInboxPage() {
                 </div>
 
                 <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <div ref={listRef} onScroll={onListScroll} style={{ flex: 1, overflowY: 'auto', padding: 16, maxHeight: 520 }}>
+                {/* Desktop lets this flex to whatever the viewport allows; mobile
+                    keeps the fixed cap so the composer stays reachable. */}
+                <div ref={listRef} onScroll={onListScroll} style={{ flex: 1, overflowY: 'auto', padding: 16, ...(isMobile ? { maxHeight: 520 } : {}) }}>
                   {loadError && (
                     <div style={{ border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.08)', borderRadius: 6, padding: 12, marginBottom: 12 }}>
                       <div style={{ ...label, color: '#f87171', marginBottom: 6 }}>COULDN'T LOAD THIS THREAD</div>
