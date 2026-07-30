@@ -157,7 +157,7 @@ const STUDIO_RULES_FIELDS: ContentField[] = [
     { q: 'What does my set booking include?', a: 'Each set comes with one Amaran 200x LED light. Additional lights can be added for $25 each. Props are available on a first-come, first-served basis during shared studio hours and are included with your standard rental.' },
     { q: 'Can I switch sets during my session?', a: 'No. Your reservation is for the specific set you booked. If you need multiple sets, you must book them at the same time or upgrade to a full studio buyout.' },
     { q: 'Do I need to clean up before I leave?', a: 'Yes. All props and support equipment must be returned to their original locations before your session ends. The space should be left the way you found it for the next booking.' },
-    { q: 'What if I go over my time?', a: 'Overages past 15 minutes are automatically charged an additional full hour at your set rate.' },
+    { q: 'What if I go over my time?', a: 'Overages past 15 minutes are charged an additional full hour at your set rate.' },
   ]) },
 
   { key: 'faq4Title', label: 'Section title', type: 'text', group: 'Section 4 \u00b7 Studio rules',  default: 'STUDIO RULES' },

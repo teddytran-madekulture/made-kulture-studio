@@ -368,7 +368,7 @@ export default function KioskPage() {
             {ciResult.setName} · {ciResult.startsAt ? `starts ${ciResult.startsAt}, ` : ''}until {ciResult.until}
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', marginTop: 16, maxWidth: 430, lineHeight: 1.7 }}>
-            Wrap up and return props before your time ends — overages past 15 minutes auto-charge an hour. Have a great shoot.
+            Wrap up and return props before your time ends — overages past 15 minutes are charged an hour. Have a great shoot.
           </div>
           <button onClick={resetToHome} style={{ ...champBtn, marginTop: 28 }}>DONE</button>
         </div>
