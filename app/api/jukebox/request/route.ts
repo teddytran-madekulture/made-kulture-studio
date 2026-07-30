@@ -3,6 +3,12 @@
 // Anyone can request; nothing plays until Teddy approves. Guardrails: zone must
 // be open, one pending request per device, best-effort explicit-title block.
 // Pings Teddy via web push.
+//
+// DELETE /api/jukebox/request?id=…&device=…
+// Take it back. Ownership is the device id that made the request — the same
+// anonymous id the per-device queue cap uses — so a guest can only cancel their
+// own song, and only before it starts. Once it's playing the room is listening
+// to it and pulling it mid-song is the wrong call.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -114,4 +120,42 @@ export async function POST(req: NextRequest) {
     id: created.id,
     message: autoApprove ? 'Added to the queue! 🎶' : 'Added! The team will approve it shortly.',
   })
+}
+
+export async function DELETE(req: NextRequest) {
+  const id = (req.nextUrl.searchParams.get('id') || '').trim()
+  const device = (req.nextUrl.searchParams.get('device') || '').trim()
+  if (!id || !device) return NextResponse.json({ error: 'Missing request.' }, { status: 400 })
+
+  const { data: row } = await supabase
+    .from('jukebox_requests')
+    .select('id, status, requester_device')
+    .eq('id', id).maybeSingle()
+  // Same 404 whether it's gone or someone else's — no probing other people's
+  // requests by id.
+  if (!row || row.requester_device !== device) {
+    return NextResponse.json({ error: 'That request is no longer yours to cancel.' }, { status: 404 })
+  }
+
+  if (row.status === 'playing') {
+    return NextResponse.json({ error: "That one's playing right now — it'll be over in a moment." }, { status: 409 })
+  }
+  if (row.status !== 'pending' && row.status !== 'approved') {
+    return NextResponse.json({ error: 'That song already played.' }, { status: 409 })
+  }
+
+  // 'cancelled' rather than deleting the row: it keeps the history, and it's
+  // outside both the queue statuses and the played/skipped set the admin
+  // "Recently played" list reads, so a change of mind never shows up as if it
+  // had played. It also frees the guest's slot under the per-device cap.
+  const { error } = await supabase
+    .from('jukebox_requests')
+    .update({ status: 'cancelled' })
+    .eq('id', row.id)
+    // Guard against the race where it starts playing between the read and the
+    // write — losing that race must not yank a song off the speakers.
+    .in('status', ['pending', 'approved'])
+  if (error) return NextResponse.json({ error: 'Could not cancel that — try again.' }, { status: 500 })
+
+  return NextResponse.json({ success: true, message: 'Removed from the queue.' })
 }

@@ -10,7 +10,8 @@ const BG = '#080808'
 
 interface Zone { slug: string; name: string; is_open: boolean }
 interface Result { source: string; external_id: string; title: string; artist: string; thumbnail: string | null; duration: number | null; explicit?: boolean }
-interface Track { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name?: string | null; status?: string }
+interface Track { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name?: string | null; status?: string; mine?: boolean }
+interface HouseNow { title: string; artist: string | null }
 
 function fmtDur(s: number | null | undefined): string {
   if (!s && s !== 0) return ''
@@ -40,6 +41,7 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
   const [submitting, setSubmitting] = useState('')
   const [toast, setToast] = useState('')
   const [err, setErr] = useState('')
+  const [cancelling, setCancelling] = useState('')
   const device = useRef('anon')
 
   useEffect(() => { device.current = deviceId() }, [])
@@ -96,6 +98,20 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
     setSubmitting('')
   }
 
+  // Take back your own song. Allowed while it's waiting or queued; the server
+  // refuses once it's actually playing.
+  const cancel = async (id: string) => {
+    setCancelling(id); setErr('')
+    try {
+      const r = await fetch(`/api/jukebox/request?id=${encodeURIComponent(id)}&device=${encodeURIComponent(device.current)}`, { method: 'DELETE' })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok) { setToast(d.message || 'Removed from the queue.'); setTimeout(() => setToast(''), 3000) }
+      else setErr(d.error || 'Could not cancel that.')
+      loadState()
+    } catch { setErr('Connection problem — try again.') }
+    setCancelling('')
+  }
+
   // ── Styles ──
   const wrap: React.CSSProperties = { background: BG, minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif', padding: '28px 18px 60px' }
   const card: React.CSSProperties = { background: '#141416', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 14 }
@@ -122,6 +138,7 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
   const zone: Zone | undefined = state?.zone
   const closed = zone && !zone.is_open
   const nowPlaying: Track | null = state?.now_playing ?? null
+  const houseNow: HouseNow | null = state?.house_now ?? null
   const upNext: Track[] = state?.up_next ?? []
   const mine: any[] = state?.mine ?? []
 
@@ -173,11 +190,22 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
               <div style={{ marginTop: 20 }}>
                 <div style={{ fontSize: 11, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>YOUR REQUESTS</div>
                 {mine.map(m => (
-                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '9px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</span>
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
+                    <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</span>
                     <span style={{ flexShrink: 0, color: m.status === 'playing' ? GOLD : m.status === 'approved' ? '#6ee7a8' : 'rgba(255,255,255,0.4)' }}>
                       {m.status === 'playing' ? 'Now playing' : m.status === 'approved' ? 'Up next ✓' : 'Waiting…'}
                     </span>
+                    {/* No take-backs once it's on the speakers — the room is listening to it. */}
+                    {m.status !== 'playing' && (
+                      <button
+                        onClick={() => cancel(m.id)}
+                        disabled={cancelling === m.id}
+                        aria-label={`Cancel ${m.title}`}
+                        style={{ flexShrink: 0, background: 'transparent', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.55)', borderRadius: 7, width: 26, height: 26, lineHeight: '1', fontSize: 14, cursor: cancelling === m.id ? 'default' : 'pointer', padding: 0 }}
+                      >
+                        {cancelling === m.id ? '·' : '✕'}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -196,6 +224,16 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{nowPlaying.artist}</div>
               </div>
             </div>
+          ) : houseNow ? (
+            // Nobody's request is up, but music IS playing — show the actual
+            // track the player reported, tagged so it's clear it's the house mix
+            // and not something a guest queued.
+            <div style={{ ...card }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: GOLD, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{decode(houseNow.title)}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                {houseNow.artist ? `${decode(houseNow.artist)} · ` : ''}House mix
+              </div>
+            </div>
           ) : (
             <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>House playlist</div>
           )}
@@ -205,8 +243,10 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
               <div style={{ fontSize: 11, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.4)', margin: '18px 0 8px' }}>UP NEXT</div>
               {upNext.map((t, i) => (
                 <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', fontSize: 13 }}>
-                  <span style={{ color: 'rgba(255,255,255,0.3)', width: 16 }}>{i + 1}</span>
-                  <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                  <span style={{ color: t.mine ? GOLD : 'rgba(255,255,255,0.3)', width: 16 }}>{i + 1}</span>
+                  <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: t.mine ? '#fff' : 'rgba(255,255,255,0.8)' }}>{t.title}</span>
+                  {/* Your own songs are marked so you can see your place in line. */}
+                  {t.mine && <span style={{ flexShrink: 0, fontSize: 10, letterSpacing: '0.1em', color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 5, padding: '1px 5px' }}>YOURS</span>}
                   <span style={{ color: 'rgba(255,255,255,0.4)' }}>{fmtDur(t.duration_sec)}</span>
                 </div>
               ))}

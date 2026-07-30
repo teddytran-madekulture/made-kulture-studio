@@ -68,6 +68,10 @@ export default function PlayerPage() {
   const spReady = useRef(false)
   const spTok = useRef<{ token: string; exp: number } | null>(null)
   const spWasPlaying = useRef(false)
+  // Have we applied shuffle+repeat to the current house context yet? Mirrors the
+  // YouTube `shuffled` ref — applied once playback is actually running, because
+  // Spotify's shuffle/repeat endpoints need a live device.
+  const spHouseTuned = useRef(false)
 
   const pausedLocal = useRef(false)
 
@@ -255,6 +259,19 @@ export default function PlayerPage() {
             const a = (cur.artists || []).map((x: any) => x.name).join(', ')
             setDisplay({ title: cur.name, artist: a, source: 'house' }); reportHouse(cur.name, a)
           }
+          // Parity with the YouTube zone, which calls setShuffle+setLoop the
+          // moment the house playlist starts. Spotify was never told either, so
+          // the zone inherited whatever the account was last left on — and with
+          // repeat off it played the playlist in order and then stopped dead,
+          // leaving the area silent for the rest of the day.
+          if (!st.paused && !spHouseTuned.current) {
+            spHouseTuned.current = true
+            ;(async () => {
+              await spSetMode('shuffle', 'true')
+              await spSetMode('repeat', 'context')
+              await spSkip()   // jump into the shuffled order, like ytHouse's nextVideo()
+            })()
+          }
         }
         // Natural end heuristic: was playing, now paused at position 0.
         if (spWasPlaying.current && st.paused && st.position === 0) {
@@ -285,8 +302,45 @@ export default function PlayerPage() {
       })
     } catch {}
   }
-  const spPlayTrack = (id: string) => { spWasPlaying.current = false; spApiPlay({ uris: [`spotify:track:${id}`] }) }
-  const spHouse = (uri: string) => { spWasPlaying.current = false; spApiPlay({ context_uri: uri }) }
+  // PUT /me/player/{shuffle,repeat}. Fire-and-forget: if Spotify rejects one of
+  // these the music still plays, it just plays with the account's old settings.
+  const spSetMode = async (endpoint: 'shuffle' | 'repeat', state: string) => {
+    const token = await spotifyToken(); const device = spDevice.current
+    if (!token || !device) return
+    try {
+      await fetch(`https://api.spotify.com/v1/me/player/${endpoint}?state=${encodeURIComponent(state)}&device_id=${device}`, {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {}
+  }
+  const spSkip = async () => {
+    const token = await spotifyToken(); const device = spDevice.current
+    if (!token || !device) return
+    try {
+      await fetch(`https://api.spotify.com/v1/me/player/next?device_id=${device}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {}
+  }
+
+  const spPlayTrack = (id: string) => {
+    spWasPlaying.current = false
+    spHouseTuned.current = false
+    ;(async () => {
+      await spApiPlay({ uris: [`spotify:track:${id}`] })
+      // Repeat MUST be off for a guest request. With repeat on, the track loops
+      // forever, the "paused at position 0" end heuristic never fires, and the
+      // whole queue wedges on one song.
+      await spSetMode('repeat', 'off')
+    })()
+  }
+  const spHouse = (uri: string) => {
+    spWasPlaying.current = false
+    // Shuffle/repeat get applied in player_state_changed once this is actually
+    // playing — see spHouseTuned.
+    spHouseTuned.current = false
+    spApiPlay({ context_uri: uri })
+  }
   const spStop = () => { try { sp.current?.pause() } catch {} }
   const spResume = () => { try { sp.current?.resume() } catch {} }
 

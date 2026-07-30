@@ -11,7 +11,7 @@
 // Leave it alone for every other change and the tablets will never notice the
 // deploy. When it does change, a tablet finishes the song it's on before
 // reloading — see the self-update effect in the player page.
-export const JUKEBOX_PLAYER_REV = '2026-07-25.1'
+export const JUKEBOX_PLAYER_REV = '2026-07-30.1'
 
 // studio_settings key holding the timestamp of the last "Update players now"
 // press in Admin → Jukebox. Any change to it reloads every player on the spot.
