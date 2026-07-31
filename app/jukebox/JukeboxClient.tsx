@@ -42,7 +42,13 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
   const [toast, setToast] = useState('')
   const [err, setErr] = useState('')
   const [cancelling, setCancelling] = useState('')
+  // external_ids added during this search, so a row can show it's already in.
+  const [added, setAdded] = useState<string[]>([])
   const device = useRef('anon')
+
+  // Back to the plain now-playing view: drop the results, the query and the
+  // ticks. Without this there was no way out of a search except reloading.
+  const goHome = () => { setResults(null); setQ(''); setErr(''); setAdded([]) }
 
   useEffect(() => { device.current = deviceId() }, [])
 
@@ -70,7 +76,7 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
   const search = async () => {
     const term = q.trim()
     if (!term) return
-    setSearching(true); setErr(''); setResults(null)
+    setSearching(true); setErr(''); setResults(null); setAdded([])
     try {
       const r = await fetch(`/api/jukebox/search?q=${encodeURIComponent(term)}&zone=${encodeURIComponent(zoneSlug)}`)
       const d = await r.json()
@@ -92,7 +98,15 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
         }),
       })
       const d = await r.json()
-      if (r.ok) { setToast(d.message || 'Added!'); setResults(null); setQ(''); loadState(); setTimeout(() => setToast(''), 4000) }
+      if (r.ok) {
+        // Keep the results up. Clearing them meant searching "bruno mars" again
+        // for every single song you wanted — three songs, three searches. The
+        // row you just added is ticked off instead.
+        setToast(d.message || 'Added!')
+        setAdded(prev => prev.includes(t.external_id) ? prev : [...prev, t.external_id])
+        loadState()
+        setTimeout(() => setToast(''), 4000)
+      }
       else setErr(d.error || 'Could not add that song.')
     } catch { setErr('Connection problem — try again.') }
     setSubmitting('')
@@ -168,20 +182,45 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
             </div>
             {err && <div style={{ color: '#f87171', fontSize: 13, margin: '8px 0' }}>{err}</div>}
 
-            {/* Results */}
+            {/* Results — these STAY up after an add so you can queue several
+                songs off one search. */}
             {results && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '12px 0 8px' }}>
-                {results.length === 0 && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>No results — try different words.</div>}
-                {results.map(t => (
-                  <button key={t.external_id} onClick={() => request(t)} disabled={!!submitting} style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: 'pointer', color: '#fff', padding: 10 }}>
-                    {t.thumbnail && <img src={t.thumbnail} alt="" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{decode(t.title)}</div>
-                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{t.artist}{t.duration ? ` · ${fmtDur(t.duration)}` : ''}</div>
-                    </div>
-                    <span style={{ color: GOLD, fontSize: 22, flexShrink: 0 }}>{submitting === t.external_id ? '…' : '+'}</span>
+              <div style={{ margin: '14px 0 8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.4)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    RESULTS{added.length ? ` · ${added.length} ADDED` : ''}
+                  </div>
+                  <button
+                    onClick={goHome}
+                    style={{ flexShrink: 0, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer' }}
+                  >
+                    ← DONE
                   </button>
-                ))}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {results.length === 0 && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>No results — try different words.</div>}
+                  {results.map(t => {
+                    const isAdded = added.includes(t.external_id)
+                    return (
+                      <button
+                        key={t.external_id}
+                        onClick={() => request(t)}
+                        disabled={!!submitting || isAdded}
+                        style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: isAdded ? 'default' : 'pointer', color: '#fff', padding: 10, opacity: isAdded ? 0.5 : 1 }}
+                      >
+                        {t.thumbnail && <img src={t.thumbnail} alt="" style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{decode(t.title)}</div>
+                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{t.artist}{t.duration ? ` · ${fmtDur(t.duration)}` : ''}</div>
+                        </div>
+                        <span style={{ color: GOLD, fontSize: isAdded ? 16 : 22, flexShrink: 0 }}>
+                          {submitting === t.external_id ? '…' : isAdded ? '✓' : '+'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
