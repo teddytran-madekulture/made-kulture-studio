@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendOwnerPush } from '@/lib/push'
+import { tooLongToRequest, fmtLimit } from '@/lib/jukebox'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,6 +59,17 @@ export async function POST(req: NextRequest) {
 
   if (!zoneSlug || !external_id || !title) {
     return NextResponse.json({ error: 'Pick a song first.' }, { status: 400 })
+  }
+
+  // Backstop for the length cap. Search already filters both sources, but the
+  // filter lives on the way IN to the page — this is the rule the queue itself
+  // enforces, so a stale result or a hand-rolled request can't park an hour-long
+  // mix on the speakers.
+  if (tooLongToRequest(duration)) {
+    return NextResponse.json(
+      { error: `That one's over ${fmtLimit()} long — pick something shorter so everyone gets a turn.` },
+      { status: 422 }
+    )
   }
 
   const { data: zone } = await supabase
@@ -129,7 +141,7 @@ export async function DELETE(req: NextRequest) {
 
   const { data: row } = await supabase
     .from('jukebox_requests')
-    .select('id, status, requester_device')
+    .select('id, status, requester_device, zone_id')
     .eq('id', id).maybeSingle()
   // Same 404 whether it's gone or someone else's — no probing other people's
   // requests by id.
@@ -137,11 +149,34 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'That request is no longer yours to cancel.' }, { status: 404 })
   }
 
+  // Mid-song. Teddy 2026-07-30: someone queued a very long track and had no way
+  // out of it, so your own song can now be pulled while it plays. This has to
+  // move the player on, not just mark the row — same two steps as the admin
+  // skip: retire the row, then clear the zone pointer so the player promotes
+  // the next approved song (or drops back to the house playlist).
   if (row.status === 'playing') {
-    return NextResponse.json({ error: "That one's playing right now — it'll be over in a moment." }, { status: 409 })
+    const { data: stopped, error: stopErr } = await supabase
+      .from('jukebox_requests')
+      .update({ status: 'cancelled', played_at: new Date().toISOString() })
+      .eq('id', row.id).eq('status', 'playing')
+      .select('id')
+    if (stopErr) return NextResponse.json({ error: 'Could not skip that — try again.' }, { status: 500 })
+    // It ended on its own between the read and the write; the pointer has
+    // already moved on and must not be touched.
+    if (!stopped?.length) return NextResponse.json({ success: true, message: 'That one already finished.' })
+
+    // Guarded on the id so a pointer that has since advanced to somebody else's
+    // song can't be cleared out from under them.
+    await supabase.from('jukebox_zones')
+      .update({ now_playing_id: null })
+      .eq('id', row.zone_id).eq('now_playing_id', row.id)
+    // Deliberately NOT touching `paused` — a guest skipping their own track
+    // shouldn't override the team having paused the zone.
+    return NextResponse.json({ success: true, message: 'Skipped — next song coming up.' })
   }
+
   if (row.status !== 'pending' && row.status !== 'approved') {
-    return NextResponse.json({ error: 'That song already played.' }, { status: 409 })
+    return NextResponse.json({ error: 'That song already finished.' }, { status: 409 })
   }
 
   // 'cancelled' rather than deleting the row: it keeps the history, and it's
@@ -152,8 +187,8 @@ export async function DELETE(req: NextRequest) {
     .from('jukebox_requests')
     .update({ status: 'cancelled' })
     .eq('id', row.id)
-    // Guard against the race where it starts playing between the read and the
-    // write — losing that race must not yank a song off the speakers.
+    // If it started playing between the read and the write, fall through rather
+    // than silently doing nothing — the caller re-polls and gets the SKIP button.
     .in('status', ['pending', 'approved'])
   if (error) return NextResponse.json({ error: 'Could not cancel that — try again.' }, { status: 500 })
 

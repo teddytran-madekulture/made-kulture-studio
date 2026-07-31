@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { searchTracks as spotifySearch } from '@/lib/spotify'
+import { tooLongToRequest } from '@/lib/jukebox'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -61,7 +62,7 @@ async function youtubeSearch(q: string) {
       thumbnail: i.snippet?.thumbnails?.medium?.url || i.snippet?.thumbnails?.default?.url || null,
       duration: durById[i.id.videoId] ?? null,
     }))
-    .filter((r: any) => !r.duration || r.duration <= 900)
+    .filter((r: any) => !tooLongToRequest(r.duration))
     // Keep unknowns (details call may have been skipped), drop known-unplayable.
     .filter((r: any) => playableById[r.external_id] !== false)
   return { results }
@@ -83,7 +84,10 @@ export async function GET(req: NextRequest) {
     if (source === 'spotify') {
       const r = await spotifySearch(q)
       if (r.error) return NextResponse.json({ error: r.error === 'not-configured' ? 'Spotify search is not configured.' : 'Spotify search unavailable.', results: [] }, { status: 503 })
-      return NextResponse.json({ results: r.results })
+      // Spotify had NO length cap while YouTube did — and the vanity zone runs on
+      // Spotify, so hour-long ambient tracks and DJ sets went straight into the
+      // shared queue. Same rule on both sources now.
+      return NextResponse.json({ results: (r.results ?? []).filter((t: any) => !tooLongToRequest(t.duration)) })
     }
     return NextResponse.json(await youtubeSearch(q))
   } catch {

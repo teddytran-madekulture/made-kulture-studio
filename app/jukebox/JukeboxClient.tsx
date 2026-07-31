@@ -195,17 +195,26 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
                     <span style={{ flexShrink: 0, color: m.status === 'playing' ? GOLD : m.status === 'approved' ? '#6ee7a8' : 'rgba(255,255,255,0.4)' }}>
                       {m.status === 'playing' ? 'Now playing' : m.status === 'approved' ? 'Up next ✓' : 'Waiting…'}
                     </span>
-                    {/* No take-backs once it's on the speakers — the room is listening to it. */}
-                    {m.status !== 'playing' && (
-                      <button
-                        onClick={() => cancel(m.id)}
-                        disabled={cancelling === m.id}
-                        aria-label={`Cancel ${m.title}`}
-                        style={{ flexShrink: 0, background: 'transparent', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.55)', borderRadius: 7, width: 26, height: 26, lineHeight: '1', fontSize: 14, cursor: cancelling === m.id ? 'default' : 'pointer', padding: 0 }}
-                      >
-                        {cancelling === m.id ? '·' : '✕'}
-                      </button>
-                    )}
+                    {/* Playing songs can be pulled too — a long track used to be
+                        inescapable. Labelled SKIP rather than ✕ so it reads as
+                        "stop this now", not "take it out of the queue". */}
+                    <button
+                      onClick={() => cancel(m.id)}
+                      disabled={cancelling === m.id}
+                      aria-label={m.status === 'playing' ? `Skip ${m.title}` : `Cancel ${m.title}`}
+                      style={{
+                        flexShrink: 0, background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.18)',
+                        color: 'rgba(255,255,255,0.55)', borderRadius: 7,
+                        height: 26, minWidth: 26,
+                        padding: m.status === 'playing' ? '0 9px' : 0,
+                        lineHeight: '1', fontSize: m.status === 'playing' ? 10 : 14,
+                        letterSpacing: m.status === 'playing' ? '0.1em' : undefined,
+                        cursor: cancelling === m.id ? 'default' : 'pointer',
+                      }}
+                    >
+                      {cancelling === m.id ? '·' : m.status === 'playing' ? 'SKIP' : '✕'}
+                    </button>
                   </div>
                 ))}
               </div>
