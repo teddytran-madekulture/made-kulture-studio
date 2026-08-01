@@ -34,6 +34,46 @@ function spotifyPlaylistUri(url: string | null): string | null {
   return null
 }
 
+// ── How often this tablet talks to the server ────────────────────────────────
+//
+// This used to be a flat 5 seconds, forever. Two tablets × every 5s × 24h is
+// ~29,000 requests a day BEFORE a single guest opens the page, and most of them
+// land at 3am in a locked, empty building. That one interval was two thirds of
+// the whole project's compute budget and it blew the hosting plan's CPU cap.
+//
+// So the poll now matches what's actually happening in the room. The fast rate
+// is kept for the only case that needs it — a guest's song is playing or
+// waiting, where the server has to be asked promptly so the queue advances on
+// time. House music needs no such precision: nothing is waiting on us.
+const POLL_ACTIVE_MS = 5_000    // a request is playing or queued — unchanged
+const POLL_HOUSE_MS  = 15_000   // house music, studio open
+const POLL_IDLE_MS   = 60_000   // closed, paused, or outside studio hours
+
+// Studio hours are 9am–10pm Central. Outside them nobody can request anything,
+// so the tablet only needs a slow heartbeat — but it must NEVER stop entirely:
+// outside-hours buyouts are a real booking, and a guest at one should still get
+// their song, just within a minute instead of five seconds. A tablet that
+// stopped polling would need waking by hand, which is exactly the kind of thing
+// nobody remembers at 11pm.
+function withinStudioHours(): boolean {
+  try {
+    const h = Number(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago', hour: 'numeric', hour12: false,
+    }).format(new Date()))
+    return h >= 9 && h < 22
+  } catch {
+    return true   // never let a clock problem slow the jukebox down
+  }
+}
+
+// Picks the next delay from the state we just received.
+function pollDelayFor(s: any): number {
+  if (!s?.zone) return POLL_HOUSE_MS
+  if (!s.zone.is_open || s.zone.paused) return POLL_IDLE_MS
+  if (s.now_playing || (s.up_next?.length ?? 0) > 0) return POLL_ACTIVE_MS
+  return withinStudioHours() ? POLL_HOUSE_MS : POLL_IDLE_MS
+}
+
 export default function PlayerPage() {
   const [started, setStarted] = useState(false)
   const [display, setDisplay] = useState<{ title: string; artist: string; source: 'request' | 'house' | 'idle' | 'paused' | 'blocked' }>({ title: '', artist: '', source: 'idle' })
@@ -225,9 +265,19 @@ export default function PlayerPage() {
 
   // Keep the house-playlist "now playing" label fresh — titles lag on load and
   // change as the playlist auto-advances.
+  //
+  // Was every 4s, which is far more often than a track title ever changes. The
+  // only hard constraint is HOUSE_FRESH_MS in /api/jukebox/state (45s): report
+  // less often than that and the guest page decides the tablet is asleep and
+  // shows nothing. 20s keeps a comfortable margin at a fifth of the traffic.
+  // Skipped entirely when house music isn't what's playing — there's nothing to
+  // report during a guest request, and nothing at all when the zone is shut.
   useEffect(() => {
     if (!started) return
-    const iv = setInterval(refreshHouseNowPlaying, 4000)
+    const iv = setInterval(() => {
+      if (modeRef.current !== 'house' || pausedLocal.current) return
+      refreshHouseNowPlaying()
+    }, 20_000)
     return () => clearInterval(iv)
   }, [started, refreshHouseNowPlaying])
 
@@ -423,17 +473,31 @@ export default function PlayerPage() {
     if (modeRef.current !== 'house' || houseKey.current !== (s.zone.house_playlist_url || null)) goHouse(s.zone)
   }, [advance])
 
-  // poll
+  // poll — self-rescheduling, at a rate that matches the room (see the
+  // POLL_* constants up top). A chained timeout rather than setInterval so each
+  // tick can choose its own next delay, and so a slow response can never stack
+  // up a backlog of overlapping requests the way a fixed interval can.
   useEffect(() => {
     if (!started || !zoneRef.current) return
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
     const tick = async () => {
+      let delay = POLL_HOUSE_MS
       try {
         const r = await fetch(`/api/jukebox/state?zone=${encodeURIComponent(zoneRef.current)}`)
-        if (!r.ok) return
-        const s = await r.json(); lastState.current = s; apply(s)
-      } catch {}
+        if (r.ok) {
+          const s = await r.json(); lastState.current = s; apply(s)
+          delay = pollDelayFor(s)
+        }
+      } catch {
+        // Network blip: fall back to the house rate rather than hammering.
+      }
+      if (!stopped) timer = setTimeout(tick, delay)
     }
-    tick(); const iv = setInterval(tick, 5000); return () => clearInterval(iv)
+
+    tick()
+    return () => { stopped = true; if (timer) clearTimeout(timer) }
   }, [started, apply])
 
   // Self-update. Two separate signals, on purpose:
@@ -461,7 +525,12 @@ export default function PlayerPage() {
         if (player_rev !== buildVer.current) { needsReload.current = true; reloadIfQuiet() }
       } catch {}
     }
-    check(); const iv = setInterval(check, 30_000); return () => clearInterval(iv)
+    // Every 2 min rather than every 30s. This only exists to notice a deploy or
+    // an "Update players now" press, neither of which is urgent — and at 30s it
+    // was quietly making ~5,800 requests a day across the two tablets just to
+    // be told nothing had changed. The trade: the Admin → Jukebox "Update
+    // players now" button can now take up to two minutes to land.
+    check(); const iv = setInterval(check, 120_000); return () => clearInterval(iv)
   }, [started])
 
   // keep screen awake where supported

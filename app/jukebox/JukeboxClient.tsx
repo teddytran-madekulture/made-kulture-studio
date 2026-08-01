@@ -66,11 +66,28 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
     } catch {}
   }, [zoneSlug])
 
+  // Poll only while the guest is actually LOOKING at this page.
+  //
+  // A guest scans the QR once and then leaves the tab open for the rest of a
+  // four-hour shoot. At a flat 6s that's ~2,400 requests per phone per session,
+  // nearly all of them refreshing a screen sitting dark in someone's pocket.
+  // Pausing on a hidden tab costs the guest nothing — state is refreshed the
+  // instant they look again, so it's current by the time anyone can read it.
   useEffect(() => {
     if (!zoneSlug) return
+    let iv: ReturnType<typeof setInterval> | null = null
+    const stop = () => { if (iv) { clearInterval(iv); iv = null } }
+    const start = () => { if (!iv) iv = setInterval(loadState, 6000) }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') { loadState(); start() }
+      else stop()
+    }
+
     loadState()
-    const iv = setInterval(loadState, 6000)
-    return () => clearInterval(iv)
+    if (document.visibilityState === 'visible') start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { document.removeEventListener('visibilitychange', onVisibility); stop() }
   }, [zoneSlug, loadState])
 
   const search = async () => {
