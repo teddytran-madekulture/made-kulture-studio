@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
       // Nobody's waiting. Offer the hour rather than let the room sit empty —
       // the link charges the card already on file, and it's minted per booking
       // so it only ever applies to this session.
-      const ext = await createExtensionRequest(b.id, 1, 45 * 60 * 1000).catch(() => null)
+      const ext = await createExtensionRequest(b.id, 1, { ttlMs: 45 * 60 * 1000, createdBy: 'cron' }).catch(() => null)
       if (ext && !('error' in ext)) {
         tailLines = [
           `Need more time? Nobody's booked after you — add an hour on ${setName} for $${(ext.priceCents / 100).toFixed(2)}, charged to your card on file:`,

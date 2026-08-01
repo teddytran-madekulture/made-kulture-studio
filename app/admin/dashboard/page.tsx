@@ -7,6 +7,7 @@ import ReviewSettingsCard from '@/components/ReviewSettingsCard'
 import AdminCardCharge from '@/components/AdminCardCharge'
 import AddSetModal from '@/components/AddSetModal'
 import AddChargeModal from '@/components/AddChargeModal'
+import OvertimeModal from '@/components/OvertimeModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -285,6 +286,24 @@ function hourToISO(date: string, hour: number): string {
   return `${date}T${String(h).padStart(2, '0')}:${m}:00-05:00`
 }
 
+// How far past its booked end did this session actually run?
+//
+// Reads the real checkout stamp when there is one; for a session still open,
+// the clock right now. Safe against the auto-checkout cron, which stamps
+// checked_out_at to EXACTLY end_time when a guest never checked out — that
+// lands on 0 minutes over rather than inventing an overrun.
+function overrunMinutes(b: Booking): number {
+  if (b.status === 'cancelled') return 0
+  const end = Date.parse(b.end_time)
+  if (!Number.isFinite(end)) return 0
+  if (b.checked_out_at) {
+    return Math.max(0, Math.round((Date.parse(b.checked_out_at) - end) / 60000))
+  }
+  // No checkout yet: only counts as running over if they actually showed up.
+  if (!b.checked_in_at) return 0
+  return Math.max(0, Math.round((Date.now() - end) / 60000))
+}
+
 function getNowHour(): number {
   const t = new Date().toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Chicago',
@@ -403,6 +422,8 @@ export default function AdminDashboard() {
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   const [addSetFor,     setAddSetFor]     = useState<Booking | null>(null)  // "add another set" modal
   const [addChargeFor,  setAddChargeFor]  = useState<Booking | null>(null)  // "add charge" (equipment/fees) modal
+  const [overtimeFor,   setOvertimeFor]   = useState<Booking | null>(null)  // "charge overtime" modal
+  const [textConfirmMsg, setTextConfirmMsg] = useState<string | null>(null) // extension text result
   const [nowHour,       setNowHour]       = useState(getNowHour)
 
   // Customer search
@@ -423,7 +444,7 @@ export default function AdminDashboard() {
   const [editCards,   setEditCards]   = useState<SquareCard[]>([])
   const [editCard,    setEditCard]    = useState<SquareCard | null>(null)
   const [editSquareCustId, setEditSquareCustId] = useState<string | null>(null)
-  const [editAction,        setEditAction]        = useState<'save' | 'link' | 'charge' | null>(null)
+  const [editAction,        setEditAction]        = useState<'save' | 'link' | 'charge' | 'text' | null>(null)
   const [editPayLink,       setEditPayLink]       = useState<string | null>(null)
   const [editError,         setEditError]         = useState('')
   const [editCopied,        setEditCopied]        = useState(false)
@@ -1010,7 +1031,7 @@ export default function AdminDashboard() {
     })
     setEditCards([]); setEditCard(null); setEditSquareCustId(null)
     setEditPayLink(null); setEditError(''); setEditAction(null); setEditCopied(false)
-    setEditSmsStatus(null); setEditChargeSuccess(false)
+    setEditSmsStatus(null); setEditChargeSuccess(false); setTextConfirmMsg(null)
 
     // Look up saved cards ROBUSTLY: searches every Square profile for this
     // customer's email (handles duplicate Square records) plus the card saved on
@@ -1080,6 +1101,30 @@ export default function AdminDashboard() {
     if (editState.sendSms) setEditSmsStatus(linkData.smsError || 'sent')
     setEditAction(null)
     fetchBookings()
+  }
+
+  // Text the guest a confirm-and-pay link for the extra time instead of charging
+  // them outright. Deliberately does NOT save the booking first: the customer's
+  // tap is what moves end_time (and refreshes their door code, and re-checks
+  // staffing coverage). Saving here would hand out time nobody has paid for.
+  const handleEditTextConfirm = async () => {
+    if (!editBooking || editAction || !editIsPureExtension) return
+    setEditAction('text'); setEditError(''); setTextConfirmMsg(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${editBooking.id}/extension`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hours: editAddedHours, kind: 'extend' }),
+      })
+      const d = await res.json()
+      if (res.ok && d.success) {
+        setTextConfirmMsg(`Sent to ${d.sentTo} — ${d.durationLabel} for $${Number(d.amount).toFixed(2)}. The booking moves when they confirm.`)
+      } else {
+        setEditError(d.error || 'Could not send the text.')
+      }
+    } catch {
+      setEditError('Connection problem — try again.')
+    }
+    setEditAction(null)
   }
 
   const handleEditCharge = async () => {
@@ -1205,6 +1250,17 @@ export default function AdminDashboard() {
   const editRate     = SET_RATES[editState.setName] ?? 40
   const editNewTotal = Math.max(editDuration * editRate, 0)
   const editDiff     = editBooking ? editNewTotal - (editBooking.total_amount || 0) : 0
+
+  // "Text to confirm" only makes sense when the edit is PURELY extra time on the
+  // end of an unchanged booking — same set, same day, same start. Anything else
+  // is a reschedule, and the confirm endpoint (which re-plans from the booking's
+  // current end_time) would apply something different from what's on screen.
+  const editAddedHours = editBooking ? editState.endHour - localHour(editBooking.end_time) : 0
+  const editIsPureExtension = !!editBooking
+    && editAddedHours > 0
+    && editState.setName === (editBooking.sets?.name || '')
+    && editState.date === localDateStr(editBooking.start_time)
+    && editState.startHour === localHour(editBooking.start_time)
 
   // Calendar
   const isToday     = calDate === todayStr()
@@ -1700,6 +1756,7 @@ export default function AdminDashboard() {
                 {displayed.map(b => {
                   const isOpen      = expanded === b.id
                   const isCancelled = b.status === 'cancelled'
+                  const over        = overrunMinutes(b)
                   return (
                     <div key={b.id} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)' }}>
                       <div onClick={() => setExpanded(isOpen ? null : b.id)}
@@ -1712,6 +1769,13 @@ export default function AdminDashboard() {
                             )}
                             {!b.customers?.banned && b.customers?.status === 'warning' && (
                               <span title="WARNING" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#f97316', background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.4)', padding: '2px 6px' }}>⚠ WARNING</span>
+                            )}
+                            {over > 0 && (
+                              <span
+                                title={b.checked_out_at ? 'Checked out past the booked end time' : 'Still in the room past the booked end time'}
+                                style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ffb066', background: 'rgba(255,176,102,0.12)', border: '1px solid rgba(255,176,102,0.45)', padding: '2px 6px' }}>
+                                {over >= 60 ? `RAN ${Math.floor(over / 60)}H ${over % 60}M OVER` : `RAN ${over} MIN OVER`}
+                              </span>
                             )}
                           </div>
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{b.customers?.email}</div>
@@ -1756,6 +1820,10 @@ export default function AdminDashboard() {
                                 {(b.checked_in_at || b.checked_out_at) && (
                                   <button onClick={() => setCheckStatus(b, { checked_in_at: null, checked_out_at: null })}
                                     style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', padding: '5px 6px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em' }}>RESET</button>
+                                )}
+                                {over > 0 && b.sets?.name && (
+                                  <button onClick={() => setOvertimeFor(b)}
+                                    style={{ background: 'rgba(255,176,102,0.12)', border: '1px solid rgba(255,176,102,0.45)', color: '#ffb066', padding: '5px 12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em' }}>CHARGE OVERTIME</button>
                                 )}
                               </div>
                             )}
@@ -3638,6 +3706,14 @@ export default function AdminDashboard() {
                 + ADD CHARGE (EQUIPMENT / FEES)
               </button>
             )}
+            {detailBooking.status !== 'cancelled' && detailBooking.sets?.name && (
+              <button onClick={() => setOvertimeFor(detailBooking)}
+                style={{ background: 'rgba(255,176,102,0.12)', border: '1px solid rgba(255,176,102,0.45)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ffb066' }}>
+                {overrunMinutes(detailBooking) > 0
+                  ? `CHARGE OVERTIME · RAN ${overrunMinutes(detailBooking)} MIN OVER`
+                  : 'CHARGE OVERTIME'}
+              </button>
+            )}
             {detailBooking.customers?.phone && (
               <button onClick={() => window.open(`sms:${detailBooking.customers?.phone}`, '_blank')}
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
@@ -3784,6 +3860,12 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {textConfirmMsg && (
+              <div style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.35)', padding: '12px 16px', marginTop: 16, fontSize: 12, color: '#e6c07a', lineHeight: 1.6 }}>
+                {textConfirmMsg}
+              </div>
+            )}
+
             {editError && (
               <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 12 }}>{editError}</div>
             )}
@@ -3793,6 +3875,17 @@ export default function AdminDashboard() {
                 style={{ flex: 1, minWidth: 120, background: editAction === 'save' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '12px', cursor: editAction ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
                 {editAction === 'save' ? 'SAVING...' : 'SAVE ONLY'}
               </button>
+              {editIsPureExtension && (
+                <button onClick={handleEditTextConfirm} disabled={!!editAction}
+                  style={{ flex: 1, minWidth: 160, background: editAction === 'text' ? 'rgba(212,168,67,0.4)' : 'linear-gradient(135deg, #d7c08b, #9c8250)', border: 'none', color: '#0b0b0d', padding: '12px', cursor: editAction ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', fontWeight: 700 }}>
+                  {/* Labelled by DURATION, not dollars: the confirm flow prices from
+                      lib/extensions (which honours per-customer rate overrides), while
+                      editDiff is this modal's own SET_RATES arithmetic. On a discounted
+                      booking the two disagree — so promise the time, and report the real
+                      amount from the response. */}
+                  {editAction === 'text' ? 'SENDING...' : `TEXT TO CONFIRM +${editAddedHours < 1 ? `${Math.round(editAddedHours * 60)} MIN` : `${editAddedHours} HR`}`}
+                </button>
+              )}
               {editDiff > 0 && (
                 <>
                   <button onClick={handleEditLink} disabled={!!editAction}
@@ -3834,6 +3927,16 @@ export default function AdminDashboard() {
           booking={addChargeFor as any}
           onClose={() => setAddChargeFor(null)}
           onSuccess={() => { setAddChargeFor(null); setDetailBooking(null); fetchBookings() }}
+        />
+      )}
+
+      {/* CHARGE OVERTIME — a session that ran past its booked end time */}
+      {overtimeFor && (
+        <OvertimeModal
+          booking={overtimeFor as any}
+          rate={SET_RATES[overtimeFor.sets?.name ?? ''] ?? 40}
+          onClose={() => setOvertimeFor(null)}
+          onSuccess={() => { setOvertimeFor(null); setDetailBooking(null); fetchBookings() }}
         />
       )}
 

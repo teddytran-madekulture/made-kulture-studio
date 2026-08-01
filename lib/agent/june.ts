@@ -112,15 +112,17 @@ async function execTool(
       // One live request per booking: reuse a pending unexpired one, else create.
       const { randomUUID } = await import('crypto')
       const nowISO = new Date().toISOString()
+      // Scoped to kind='extend' so June never cancels an admin overtime request
+      // sitting on the same booking — different money, different conversation.
       const { data: existing } = await ctx.supabase
         .from('extension_requests')
         .select('id, confirm_token, hours')
-        .eq('booking_id', bookingId).eq('status', 'pending')
+        .eq('booking_id', bookingId).eq('status', 'pending').eq('kind', 'extend')
         .gt('expires_at', nowISO)
         .maybeSingle()
 
       let token: string
-      if (existing && existing.hours === hours) {
+      if (existing && Number(existing.hours) === hours) {
         token = existing.confirm_token
       } else {
         if (existing) {
@@ -130,6 +132,8 @@ async function execTool(
         const { error } = await ctx.supabase.from('extension_requests').insert({
           booking_id: bookingId,
           hours,
+          kind: 'extend',
+          created_by: 'june',
           amount_cents: p.priceCents,
           confirm_token: token,
           expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
