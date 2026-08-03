@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { enablePush } from '@/components/AdminPwa'
+import JuneCoach, { runLearn } from '@/components/JuneCoach'
 
 const GOLD = '#d4a843'
 
@@ -233,8 +234,15 @@ export default function AdminInboxPage() {
   // ── Spelling / grammar polish ───────────────────────────────────────────────
   // Fixes mechanics only — never rewrites voice or touches facts. Server side
   // is /api/admin/polish. Returns the corrected text, or null if it failed.
+  // Bumped after a send so June's coach re-pulls any knowledge she proposed
+  // from the reply that just went out.
+  const [coachKey, setCoachKey] = useState(0)
   const [polishing, setPolishing] = useState<string | null>(null)  // key of what's being polished
   const [polishNote, setPolishNote] = useState<{ key: string; text: string } | null>(null)
+
+  // The draft June is holding, if any. There's normally at most one, but take
+  // the newest so a stale row can never capture the coach.
+  const latestDraft = [...msgs].reverse().find(m => m.role === 'draft') ?? null
 
   const polish = useCallback(async (key: string, text: string): Promise<string | null> => {
     if (!text.trim() || polishing) return null
@@ -317,8 +325,19 @@ export default function AdminInboxPage() {
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { setSendError(d?.error || 'Could not send'); return }
+      // Grab the text before the box is cleared — this is the reply June learns
+      // from, and it's the whole point of the learn pass: the moment you fix
+      // something by hand is the moment you'd otherwise forget to teach her.
+      const sentText = emailBody
+      const convoId = sel.id
       setEmailBody(''); setCc(''); setBcc(''); setShowHeaders(false); setSubjectEdit(null)
-      await loadConvo(sel.id); await loadList()
+      await loadConvo(convoId); await loadList()
+      // Not awaited: the mail is already gone, so this must never delay the UI
+      // or turn a successful send into a spinner. runLearn swallows its own
+      // errors for the same reason.
+      if (sentText.trim()) {
+        runLearn(convoId, sentText).then(() => setCoachKey(k => k + 1))
+      }
     } finally {
       setBusy(false)
     }
@@ -889,6 +908,23 @@ export default function AdminInboxPage() {
 
                 {sel.channel === 'email' ? (
                   <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                    {/* Coach June: revise the draft by talking to her, and approve
+                        what she wants to remember. Rendered ONCE, here rather than
+                        under the draft, because the learn pass fires right after
+                        you send your own reply — when there is no draft on screen
+                        at all, and her proposals would have nowhere to appear. */}
+                    <JuneCoach
+                      conversationId={sel.id}
+                      draftId={latestDraft?.id ?? null}
+                      // What's ON SCREEN including unsaved edits, so she revises
+                      // your version rather than the stale copy in the database.
+                      draftBody={latestDraft ? (draftEdits[latestDraft.id] ?? latestDraft.content) : null}
+                      refreshKey={coachKey}
+                      onDraftRevised={body => {
+                        if (latestDraft) setDraftEdits(d => ({ ...d, [latestDraft.id]: body }))
+                      }}
+                    />
+
                     {/* Staged files — these ride along with whichever you send:
                         your own reply below, or June's draft above. */}
                     {(!!pending.length || !!uploading.length) && (
