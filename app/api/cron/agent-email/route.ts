@@ -17,6 +17,7 @@ import {
   VISION_MIME_TYPES, VISION_MAX_BYTES, VISION_BASE64_MAX_BYTES, VISION_MAX_IMAGES,
 } from '@/lib/agent/june'
 import { sendOwnerPush } from '@/lib/push'
+import { demarkdownLinks } from '@/lib/agent/email-send'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -183,7 +184,14 @@ export async function GET(req: NextRequest) {
         await supabase.from('agent_messages').insert({
           conversation_id: convoId,
           role: 'draft',
-          content: result.reply,
+          // Convert markdown links HERE, at draft time, not on the way out.
+          // The inbox shows a draft as raw text in a textarea — there is no
+          // markdown rendering and no preview — so "[our props](/props)" reads
+          // like a working link and gets approved. Whatever is in this box is
+          // what a human signs off on, so it has to be the literal text the
+          // customer will receive. The same conversion still runs in the send
+          // path as a last resort, for markdown typed by hand.
+          content: demarkdownLinks(result.reply),
         })
         await supabase.from('agent_conversations')
           .update({ status: 'needs_teddy', last_message_at: new Date().toISOString() })
