@@ -19,6 +19,49 @@ const BUCKET = 'email-media'
 export const SIGNATURE =
   '\n\n— June\nMade Kulture · 4825 Gulf Freeway, Houston TX\nmadekulture.com · (832) 408-1631 (text)'
 
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app')
+  .replace(/\/$/, '')
+
+// Mail clients render no markdown, so a link written as [our props](/props) —
+// which is exactly what the chat widget wants, and what June's prompt asks for
+// everywhere except here — reaches the customer as those literal characters
+// pointing at nothing. June's email-mode prompt now tells her not to, but a
+// prompt is an instruction, not a guarantee: she can drift back, and this also
+// catches markdown typed by hand into a reply. So the send path fixes it too.
+//
+// [label](/props)                → "label: https://APP_URL/props"
+// [label](https://x.com/y)       → "label: https://x.com/y"
+// [https://x.com](https://x.com) → "https://x.com"  (no pointless doubling)
+// ![alt](url)                    → "alt", since an inline image reference
+//                                  cannot render in a plain-text body.
+export function demarkdownLinks(body: string): string {
+  return String(body ?? '')
+    // Images first — the ![...] form would otherwise match the link rule below
+    // and leave a stray "!" glued to the front of the label.
+    .replace(/!\[([^\]]*)\]\(([^)\s]*)(?:\s+"[^"]*")?\)/g, (_m, alt: string) => alt.trim())
+    .replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, label: string, href: string) => {
+      const text = label.trim()
+      let url = href.trim()
+      // Root-relative paths are the common case and the whole reason for this.
+      if (url.startsWith('/')) url = `${APP_URL}${url}`
+      // An address or phone number reads better bare — "email us: june@..." not
+      // "email us: mailto:june@...". A bare "madekulture.com" with no scheme at
+      // all we leave exactly as written rather than guessing https onto it.
+      const m = /^(mailto|tel):(.+)$/i.exec(url)
+      if (m) {
+        url = m[2]
+        // "Text (832) 408-1631: +18324081631" is the same number twice. If the
+        // label already spells it out, the label alone is the whole message.
+        const digits = (s: string) => s.replace(/\D/g, '')
+        if (m[1].toLowerCase() === 'tel' && digits(text) && digits(url).endsWith(digits(text))) {
+          return text
+        }
+      }
+      if (!text || text.toLowerCase() === url.toLowerCase()) return url
+      return `${text}: ${url}`
+    })
+}
+
 // Accepts "a@b.com, c@d.com" or an array; returns deduped, lightly validated
 // addresses. Anything that isn't plausibly an address is dropped rather than
 // failing the whole send — a stray comma shouldn't lose a written reply.
@@ -72,6 +115,12 @@ async function downloadStaged(staged: StagedAttachment[]): Promise<OutboundAttac
 export interface SendEmailResult {
   sentId: string | null
   attachmentCount: number
+  // What actually went out, after demarkdownLinks(). Callers store THIS in the
+  // transcript, not what they passed in — otherwise the admin inbox renders a
+  // tidy markdown link while the customer received something else entirely,
+  // which is how a broken link survived unnoticed until someone opened June's
+  // own mailbox to check.
+  sentBody: string
 }
 
 // Sends, then links + cleans up. `messageId` is the agent_messages row that
@@ -90,11 +139,13 @@ export async function sendConversationEmail(opts: {
   const staged = await getStagedAttachments(opts.conversationId)
   const files = await downloadStaged(staged)
 
+  const sentBody = demarkdownLinks(opts.body)
+
   const sentId = await sendReply({
     threadId: opts.threadId,
     to: opts.to,
     subject: opts.subject,
-    body: opts.body,
+    body: sentBody,
     cc: opts.cc,
     bcc: opts.bcc,
     attachments: files,
@@ -117,5 +168,5 @@ export async function sendConversationEmail(opts: {
     }
   }
 
-  return { sentId, attachmentCount: staged.length }
+  return { sentId, attachmentCount: staged.length, sentBody }
 }

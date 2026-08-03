@@ -62,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
 
   try {
-    const { sentId, attachmentCount } = await sendConversationEmail({
+    const { sentId, attachmentCount, sentBody } = await sendConversationEmail({
       conversationId: params.id,
       messageId: msg.id,
       threadId: convo.gmail_thread_id,
@@ -76,7 +76,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await supabase.from('agent_messages')
       .update({
         role: 'agent',
-        content: finalBody,
+        // What actually went out, not the draft text — the transcript should
+        // match the customer's inbox exactly.
+        content: sentBody,
         external_id: sentId,
         cc_emails: cc.length ? cc : null,
         bcc_emails: bcc.length ? bcc : null,

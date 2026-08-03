@@ -69,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
 
   try {
-    const { sentId, attachmentCount } = await sendConversationEmail({
+    const { sentId, attachmentCount, sentBody } = await sendConversationEmail({
       conversationId: params.id,
       messageId: msg.id,
       threadId: convo.gmail_thread_id,
@@ -80,7 +80,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       inReplyToMsgId: lastInbound?.external_id ?? undefined,
     })
 
-    await supabase.from('agent_messages').update({ external_id: sentId }).eq('id', msg.id)
+    // Store what actually went out, not what was typed — the transcript should
+    // match the customer's inbox exactly.
+    await supabase.from('agent_messages')
+      .update({ external_id: sentId, content: sentBody })
+      .eq('id', msg.id)
     await supabase.from('agent_conversations')
       .update({ human_takeover: true, status: 'open', subject, last_message_at: new Date().toISOString() })
       .eq('id', convo.id)
