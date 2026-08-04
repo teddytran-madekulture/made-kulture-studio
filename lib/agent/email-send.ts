@@ -19,6 +19,36 @@ const BUCKET = 'email-media'
 export const SIGNATURE =
   '\n\n— June\nMade Kulture · 4825 Gulf Freeway, Houston TX\nmadekulture.com · (832) 408-1631 (text)'
 
+// Every reply after the first. Nobody re-sends their street address mid-
+// conversation, and repeating it makes each message read like it came from
+// someone who forgot the last one — same reason June greets once per thread.
+export const SIGNATURE_SHORT = '\n\n— June'
+
+// Which of the two an outgoing message should carry. First email out on a
+// thread gets the full block; every reply after it gets the short one.
+//
+// "Already sent" means a row that actually reached Gmail (external_id set)
+// from our side. The placeholder row a send inserts before it succeeds has no
+// external_id yet, so a message can never count itself, and a failed send
+// doesn't quietly downgrade the signature on the retry.
+export async function signatureFor(conversationId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('agent_messages')
+    .select('id')
+    .eq('conversation_id', conversationId)
+    .in('role', ['agent', 'teddy'])
+    .not('external_id', 'is', null)
+    .limit(1)
+
+  // On a read failure, fall back to the full signature. Too much contact info
+  // is cosmetic; too little on a first contact is a real problem.
+  if (error) {
+    console.error('[signatureFor] lookup failed:', error.message)
+    return SIGNATURE
+  }
+  return (data ?? []).length ? SIGNATURE_SHORT : SIGNATURE
+}
+
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app')
   .replace(/\/$/, '')
 

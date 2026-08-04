@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import { juneEmailConfigured } from '@/lib/agent/gmail'
-import { sendConversationEmail, parseAddresses, SIGNATURE } from '@/lib/agent/email-send'
+import { sendConversationEmail, parseAddresses, signatureFor } from '@/lib/agent/email-send'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const cc = parseAddresses(payload?.cc)
   const bcc = parseAddresses(payload?.bcc)
   const subject = String(payload?.subject ?? '').trim().slice(0, 300) || convo.subject || 'Made Kulture'
-  const finalBody = (typeof content === 'string' && content.trim() ? content.trim() : msg.content) + SIGNATURE
+  const finalBody = (typeof content === 'string' && content.trim() ? content.trim() : msg.content) + await signatureFor(params.id)
 
   // Reply to the most recent inbound gmail message in the thread.
   const { data: lastInbound } = await supabase

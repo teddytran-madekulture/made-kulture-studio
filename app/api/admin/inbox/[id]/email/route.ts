@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import { juneEmailConfigured } from '@/lib/agent/gmail'
-import { sendConversationEmail, parseAddresses, SIGNATURE } from '@/lib/agent/email-send'
+import { sendConversationEmail, parseAddresses, signatureFor } from '@/lib/agent/email-send'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Write something or attach a file' }, { status: 400 })
   }
 
-  const finalBody = text + SIGNATURE
+  const finalBody = text + await signatureFor(params.id)
 
   // Insert first so the attachments have a message to link to, and so a send
   // failure leaves a visible record rather than silently losing what you typed.
