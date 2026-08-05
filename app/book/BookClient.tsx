@@ -1473,6 +1473,30 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
     return () => { cancelled = true }
   }, [])
 
+  // Cards this customer already has on file. Without this the page offers only
+  // Google Pay or a freshly typed card, while showing a CONFIRM & PAY button
+  // with an amount on it — a returning customer reasonably reads that as
+  // "charge the card you already have", which it never did.
+  const [savedCards, setSavedCards] = useState<{ id: string; last_4: string; card_brand: string; exp_month: number | null; exp_year: number | null }[]>([])
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch('/api/account/cards')
+        if (!r.ok) return                 // 401 for guests — type a card, as before
+        const d = await r.json()
+        const cards = Array.isArray(d?.cards) ? d.cards : []
+        if (cancelled) return
+        setSavedCards(cards)
+        // Default to the card on file. It's what they expect to be charged, and
+        // it's the option that can't be mistyped.
+        if (cards.length) setSelectedCardId(cards[0].id)
+      } catch { /* never block checkout on this */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   const promoDiscount = promoApplied?.discountCents ?? 0
   const payCents = Math.max(0, grandTotal * 100 - promoDiscount)
   const payDollars = (payCents / 100).toFixed(2)
@@ -1518,14 +1542,14 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   })
 
   // Shared booking submission used by both card and Google Pay
-  const submitBooking = async (sourceId: string) => {
+  const submitBooking = async (sourceId: string, savedCardId?: string) => {
     setPaying(true)
     setPayError(null)
     try {
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId, ...bookingPayload() }),
+        body: JSON.stringify({ sourceId, savedCardId, ...bookingPayload() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -1661,6 +1685,12 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   }, []) // eslint-disable-line
 
   const handlePay = async () => {
+    // Paying with a card on file — nothing to tokenise. The id is re-verified
+    // against the signed-in user server-side before anything is charged.
+    if (selectedCardId) {
+      await submitBooking(selectedCardId, selectedCardId)
+      return
+    }
     if (!cardRef.current) return
     setPaying(true)
     setPayError(null)
@@ -1764,9 +1794,57 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
                 <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
               </div>
             )}
+            {savedCards.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', marginBottom: 10 }}>YOUR CARDS</div>
+                {savedCards.map(c => {
+                  const on = selectedCardId === c.id
+                  return (
+                    <button key={c.id} type="button" onClick={() => setSelectedCardId(c.id)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                        background: on ? 'rgba(212,168,67,0.10)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${on ? '#d4a843' : 'rgba(255,255,255,0.12)'}`,
+                        padding: '12px 14px', marginBottom: 8, cursor: 'pointer',
+                      }}>
+                      <span style={{
+                        width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                        border: `2px solid ${on ? '#d4a843' : 'rgba(255,255,255,0.3)'}`,
+                        background: on ? '#d4a843' : 'transparent',
+                      }} />
+                      <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>
+                        {c.card_brand} •••• {c.last_4}
+                      </span>
+                      {c.exp_month && c.exp_year && (
+                        <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)', marginLeft: 'auto' }}>
+                          {String(c.exp_month).padStart(2, '0')}/{String(c.exp_year).slice(-2)}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+                <button type="button" onClick={() => setSelectedCardId(null)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                    background: selectedCardId === null ? 'rgba(212,168,67,0.10)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${selectedCardId === null ? '#d4a843' : 'rgba(255,255,255,0.12)'}`,
+                    padding: '12px 14px', cursor: 'pointer',
+                  }}>
+                  <span style={{
+                    width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${selectedCardId === null ? '#d4a843' : 'rgba(255,255,255,0.3)'}`,
+                    background: selectedCardId === null ? '#d4a843' : 'transparent',
+                  }} />
+                  <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff' }}>Use a different card</span>
+                </button>
+              </div>
+            )}
 
-            {/* Square card fields mount here */}
-            <div style={{ background: '#fff', padding: '4px 0', marginBottom: 24 }}>
+
+            {/* Square card fields mount here. Kept mounted (just hidden) when a
+                saved card is selected — unmounting detaches the SDK iframe and
+                switching back to "different card" would show an empty box. */}
+            <div style={{ background: '#fff', padding: '4px 0', marginBottom: 24, display: selectedCardId ? 'none' : 'block' }}>
               <div ref={cardContainerRef} style={{ minHeight: 89 }}>
                 {!sdkReady && (
                   <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(0,0,0,0.3)', letterSpacing: '0.1em', padding: '14px 16px' }}>
@@ -1821,16 +1899,18 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
             )}
 
             <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', marginBottom: 20 }}>
-              YOUR CARD WILL BE CHARGED ${chargeDollars} AND SAVED ON FILE FOR ANY OVERAGES.
+              {selectedCardId
+                ? `${(savedCards.find(c => c.id === selectedCardId)?.card_brand ?? 'YOUR CARD')} ••••${savedCards.find(c => c.id === selectedCardId)?.last_4 ?? ''} WILL BE CHARGED $${chargeDollars}.`
+                : `YOUR CARD WILL BE CHARGED $${chargeDollars} AND SAVED ON FILE FOR ANY OVERAGES.`}
             </div>
 
             <button
               onClick={handlePay}
-              disabled={!sdkReady || paying}
+              disabled={(!sdkReady && !selectedCardId) || paying}
               style={{
                 width: '100%',
-                background: (!sdkReady || paying) ? 'rgba(255,255,255,0.5)' : '#fff',
-                border: 'none', padding: '16px', cursor: (!sdkReady || paying) ? 'wait' : 'pointer',
+                background: ((!sdkReady && !selectedCardId) || paying) ? 'rgba(255,255,255,0.5)' : '#fff',
+                border: 'none', padding: '16px', cursor: ((!sdkReady && !selectedCardId) || paying) ? 'wait' : 'pointer',
                 fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: '#080808',
                 transition: 'background 0.2s',
               }}

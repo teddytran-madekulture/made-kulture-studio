@@ -49,6 +49,10 @@ interface SetLine {
 
 interface BookingRequest {
   sourceId: string
+  /** Square card-on-file id, when the customer picked a saved card instead
+   *  of typing one. Verified server-side against the SIGNED-IN user — never
+   *  trusted as sent. */
+  savedCardId?: string
 
   type:       'set' | 'studio'
   // Legacy single-set / studio fields (still supported):
@@ -475,12 +479,42 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Could not set up your payment profile — please try again.' }, { status: 502 })
       }
 
-      const { result: cardResult } = await square.cardsApi.createCard({
-        idempotencyKey: randomUUID(),
-        sourceId: body.sourceId,
-        card: { customerId: customerId!, referenceId: `made-kulture-${primary.date}` },
-      })
-      savedCardId = cardResult.card!.id!
+      if (body.savedCardId) {
+        // Paying with a card already on file. NEVER trust this id from the
+        // client — anyone could post someone else's card id and charge it.
+        // It has to belong to the SIGNED-IN user's Square customer, proven
+        // against Square's own list, and the session is the only identity we
+        // trust here (the email field is user-typed and not verified).
+        if (!sessionUser?.id) {
+          return NextResponse.json({ error: 'Please sign in to use a saved card.' }, { status: 401 })
+        }
+        const { data: prof } = await supabase
+          .from('customer_profiles')
+          .select('square_customer_id')
+          .eq('id', sessionUser.id)
+          .maybeSingle()
+        const ownerSquareId = prof?.square_customer_id
+        if (!ownerSquareId) {
+          return NextResponse.json({ error: 'That saved card is no longer available — please enter a card.' }, { status: 400 })
+        }
+        const owned = await square.cardsApi.listCards(undefined, ownerSquareId)
+          .then(r => (r.result.cards ?? []).some(c => c.id === body.savedCardId && c.enabled))
+          .catch(() => false)
+        if (!owned) {
+          return NextResponse.json({ error: 'That saved card is no longer available — please enter a card.' }, { status: 400 })
+        }
+        // Charge the customer profile that actually owns the card, not one
+        // resolved from the typed email — otherwise Square rejects the payment.
+        customerId = ownerSquareId
+        savedCardId = body.savedCardId
+      } else {
+        const { result: cardResult } = await square.cardsApi.createCard({
+          idempotencyKey: randomUUID(),
+          sourceId: body.sourceId,
+          card: { customerId: customerId!, referenceId: `made-kulture-${primary.date}` },
+        })
+        savedCardId = cardResult.card!.id!
+      }
 
       if (chargeCents > 0) {
         const payNote = lines.length > 1
