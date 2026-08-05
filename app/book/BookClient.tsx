@@ -1887,7 +1887,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
             {mode === 'self' && creditCents > 0 && !useCredit && (
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                  ${(creditCents / 100).toFixed(2)} studio credit saved for later.
+                  ${(creditCents / 100).toFixed(2)} credit saved for later
                 </span>
                 <button type="button" onClick={() => setUseCredit(true)}
                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: '#d4a843', textDecoration: 'underline' }}>
@@ -1898,25 +1898,32 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
 
             {creditApplied > 0 && (
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 12, marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'baseline', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                   <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: '#d4a843' }}>STUDIO CREDIT</span>
+                  <span style={{ flex: 1 }} />
                   <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#d4a843' }}>-${(creditApplied / 100).toFixed(2)}</span>
+                  {/* Removes the credit from THIS booking — it stays on the
+                      account. The state it leaves behind says "saved for later"
+                      precisely so an × next to money never reads as "deleted". */}
+                  <button type="button" onClick={() => setUseCredit(false)}
+                    title="Don't use credit on this booking — save it for later"
+                    aria-label="Don't use studio credit on this booking"
+                    style={{
+                      background: 'none', border: 'none', padding: '0 0 0 2px', cursor: 'pointer',
+                      fontFamily: 'Inter', fontSize: 16, lineHeight: 1, color: 'rgba(255,255,255,0.35)',
+                    }}>
+                    ×
+                  </button>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.6)' }}>CARD TOTAL</span>
                   <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, color: '#fff' }}>${chargeDollars}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginTop: 6 }}>
-                  {creditCents > creditApplied ? (
-                    <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                      ${((creditCents - creditApplied) / 100).toFixed(2)} credit left for next time.
-                    </span>
-                  ) : <span />}
-                  <button type="button" onClick={() => setUseCredit(false)}
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.45)', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
-                    Save it for later
-                  </button>
-                </div>
+                {creditCents > creditApplied && (
+                  <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
+                    ${((creditCents - creditApplied) / 100).toFixed(2)} credit left for next time.
+                  </div>
+                )}
               </div>
             )}
 
