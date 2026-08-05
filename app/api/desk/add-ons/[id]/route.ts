@@ -39,7 +39,18 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       console.error('[remove add-on] refund failed', e)
       return NextResponse.json({ error: e?.errors?.[0]?.detail || 'Refund failed — not removed.' }, { status: 402 })
     }
-    await db.from('booking_add_ons').delete().eq('id', params.id)
+    // The refund has ALREADY gone through. If the row survives, the item is still
+    // on the booking and removing it again issues a SECOND refund (refundPayment
+    // uses a fresh idempotency key, so nothing dedupes it). Check the delete and
+    // make the failure unmistakable rather than returning success.
+    const { error: delErr } = await db.from('booking_add_ons').delete().eq('id', params.id)
+    if (delErr) {
+      console.error('[remove add-on] REFUNDED BUT NOT REMOVED —', params.id, delErr)
+      return NextResponse.json({
+        error: `The $${(amountCents / 100).toFixed(2)} refund WAS issued, but the item could not be removed from the booking. Do not remove it again — that would refund twice. Remove it in Square/admin by hand.`,
+        refunded: true, removed: false, amountCents,
+      }, { status: 500 })
+    }
     await audit(g, 'booking.remove_gear', { entityType: 'booking', entityId: addon.booking_id ?? undefined, amountCents, details: { name, refunded: true } })
     return NextResponse.json({ success: true, refunded: true, amountCents })
   }

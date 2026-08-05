@@ -71,7 +71,10 @@ function MineCard({ s, reload }: { s: MyShift; reload: () => void }) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
     })
     setBusy(false)
-    if (!r.ok) { const d = await r.json().catch(() => ({})); setErr(d.error || 'Something went wrong.'); }
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) setErr(d.error || 'Something went wrong.')
+    // A 200 can still carry something they must act on — don't drop it.
+    else if (d.notice) setErr(d.notice)
     reload()
   }
   const drop = async () => {

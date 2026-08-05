@@ -20,5 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ? await clockIn(user.id, params.id)
     : await clockOut(user.id, params.id)
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
-  return NextResponse.json({ success: true })
+  // `notice` = it worked, but something the worker needs to know (e.g. the
+  // auto-handoff into their next shift didn't land, so they must punch in).
+  return NextResponse.json({ success: true, ...((r as any).notice ? { notice: (r as any).notice } : {}) })
 }

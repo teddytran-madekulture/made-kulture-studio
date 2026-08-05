@@ -122,7 +122,12 @@ export async function pushTimecard(shiftId: string): Promise<{ ok: boolean; erro
 
   try {
     const res = await client().laborApi.createShift({
-      idempotencyKey: randomUUID(),
+      // DETERMINISTIC, derived from the shift. Was randomUUID(), which meant a
+      // second push for the same shift looked brand new to Square and created a
+      // SECOND timecard for the same hours — someone gets paid twice. Keyed on
+      // the shift id, Square itself dedupes the retry and hands back the
+      // original. This is the real guard; the DB stamp below is the bookkeeping.
+      idempotencyKey: `shift-${shiftId}`,
       shift: {
         locationId: LOCATION_ID,
         teamMemberId: prov.teamMemberId,
@@ -131,7 +136,22 @@ export async function pushTimecard(shiftId: string): Promise<{ ok: boolean; erro
       },
     })
     const tid = res.result.shift?.id
-    await admin.from('shifts').update({ timecard_id: tid ?? 'synced', timecard_synced_at: new Date().toISOString() }).eq('id', shiftId)
+
+    // The timecard now EXISTS in Square. If we can't record that, say so loudly
+    // rather than reporting success — an unstamped shift falls back into the
+    // payroll queue looking unsynced, and the operator pushes it again.
+    const { error: stampErr } = await admin
+      .from('shifts')
+      .update({ timecard_id: tid ?? 'synced', timecard_synced_at: new Date().toISOString() })
+      .eq('id', shiftId)
+    if (stampErr) {
+      console.error('[payroll] TIMECARD CREATED IN SQUARE BUT NOT STAMPED —', shiftId, tid, stampErr)
+      return {
+        ok: false,
+        timecardId: tid,
+        error: `The timecard WAS created in Square (${tid ?? 'id unknown'}) but we could not record it here. Do not push it again — mark it by hand or contact support.`,
+      }
+    }
     return { ok: true, timecardId: tid }
   } catch (e: any) { return { ok: false, error: squareErr(e) } }
 }

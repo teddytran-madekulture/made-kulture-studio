@@ -402,7 +402,7 @@ async function closeoutLabelsForChain(workerId: string, shift: Shift): Promise<s
   return [...labels]
 }
 
-export async function clockOut(accountId: string, shiftId: string): Promise<{ ok: boolean; error?: string; handoff?: boolean }> {
+export async function clockOut(accountId: string, shiftId: string): Promise<{ ok: boolean; error?: string; handoff?: boolean; notice?: string }> {
   const r = await loadOwnedShift(accountId, shiftId)
   if ('error' in r) return { ok: false, error: r.error }
   const { worker, shift } = r
@@ -419,8 +419,22 @@ export async function clockOut(accountId: string, shiftId: string): Promise<{ ok
     const { error: e1 } = await admin.from('shifts').update({ clock_out_at: now, updated_at: now })
       .eq('id', shiftId).eq('claimed_by', worker.id).not('clock_in_at', 'is', null).is('clock_out_at', null)
     if (e1) return { ok: false, error: e1.message }
-    await admin.from('shifts').update({ clock_in_at: now, updated_at: now })
+
+    // Assert the handoff clock-in actually landed. Unchecked, a zero-row match
+    // (the next shift got started or cancelled between findAdjacentNextShift and
+    // here) still returned handoff:true — the worker looks clocked in, clock_in_at
+    // stays null, and the shift never accrues hours. They work for free.
+    const { data: startedRows, error: e2 } = await admin.from('shifts')
+      .update({ clock_in_at: now, updated_at: now })
       .eq('id', next.id).eq('claimed_by', worker.id).is('clock_in_at', null).is('clock_out_at', null)
+      .select('id')
+    if (e2 || !startedRows || startedRows.length === 0) {
+      // They ARE correctly clocked out of the shift that just ended — that write
+      // succeeded. Only the auto-start of the next one failed, and they can punch
+      // in manually. Report it honestly instead of claiming a handoff.
+      console.error('[shifts] HANDOFF CLOCK-IN DID NOT LAND —', { from: shiftId, to: next.id, worker: worker.id, error: e2 })
+      return { ok: true, handoff: false, notice: 'You are clocked out. Your next shift did NOT start automatically — clock in for it manually.' }
+    }
     return { ok: true, handoff: true }
   }
 
