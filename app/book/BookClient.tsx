@@ -1455,9 +1455,32 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
 
   useEffect(() => { grandTotalRef.current = grandTotal }, [grandTotal])
 
+  // Store credit. The SERVER already deducts this (see /api/bookings) — it just
+  // never told anyone, so the page showed full price while the card was charged
+  // less. This is display only: the numbers below mirror the server's own
+  // arithmetic so what you see is what you get charged.
+  const [creditCents, setCreditCents] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch('/api/account/credit')
+        if (!r.ok) return               // 401 for guests — no credit, no noise
+        const d = await r.json()
+        if (!cancelled) setCreditCents(Number(d?.balanceCents) || 0)
+      } catch { /* never block checkout on this */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   const promoDiscount = promoApplied?.discountCents ?? 0
   const payCents = Math.max(0, grandTotal * 100 - promoDiscount)
   const payDollars = (payCents / 100).toFixed(2)
+  // Credit applies to YOUR card only. In "someone else pays" mode the payer is
+  // a different person, and the server keys credit off the signed-in session.
+  const creditApplied = mode === 'self' ? Math.min(creditCents, payCents) : 0
+  const chargeCents = Math.max(0, payCents - creditApplied)
+  const chargeDollars = (chargeCents / 100).toFixed(2)
 
   const applyPromo = async () => {
     if (!promo.trim() || promoBusy) return
@@ -1779,8 +1802,26 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
               {promoErr && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginTop: 8 }}>{promoErr}</div>}
             </div>
 
+            {creditApplied > 0 && (
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 12, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: '#d4a843' }}>STUDIO CREDIT</span>
+                  <span style={{ fontFamily: 'Inter', fontSize: 13, color: '#d4a843' }}>-${(creditApplied / 100).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.6)' }}>CARD TOTAL</span>
+                  <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, color: '#fff' }}>${chargeDollars}</span>
+                </div>
+                {creditCents > creditApplied && (
+                  <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
+                    ${((creditCents - creditApplied) / 100).toFixed(2)} credit left for next time.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', marginBottom: 20 }}>
-              YOUR CARD WILL BE CHARGED ${payDollars} AND SAVED ON FILE FOR ANY OVERAGES.
+              YOUR CARD WILL BE CHARGED ${chargeDollars} AND SAVED ON FILE FOR ANY OVERAGES.
             </div>
 
             <button
@@ -1794,7 +1835,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
                 transition: 'background 0.2s',
               }}
             >
-              {paying ? 'PROCESSING...' : `CONFIRM & PAY $${payDollars}`}
+              {paying ? 'PROCESSING...' : `CONFIRM & PAY $${chargeDollars}`}
             </button>
           </>
         )}
