@@ -119,13 +119,16 @@ interface BookingConfirmationData {
   startISO?: string        // primary window start/end (raw ISO) for calendar links
   endISO?: string
   checkInToken?: string    // gates the downloadable .ics link
+  receiptUrl?: string      // Square's itemised card receipt. Square does NOT
+                           // email one on its own, so without this link the
+                           // customer never gets an itemised record at all.
 }
 
 export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode, doorCodeBack, startISO, endISO, checkInToken } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode, doorCodeBack, startISO, endISO, checkInToken, receiptUrl } = data
   const isBuyout = /full studio takeover/i.test(setName) // buyouts are private — skip the shared-studio note
 
   const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', doorCodeBack ? `Back-door code: ${doorCodeBack}.` : '', `Manage: ${APP_URL}/account`].filter(Boolean).join(' ')
@@ -174,7 +177,8 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
       <tr>
         <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
           <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Total Paid</span><br/>
-          <span style="font-size:15px;color:#fff;font-weight:600;">$${totalAmount.toFixed(2)}</span>
+          <span style="font-size:15px;color:#fff;font-weight:600;">$${totalAmount.toFixed(2)}</span>${receiptUrl ? `<br/>
+          <a href="${receiptUrl}" style="font-size:12px;color:#d4a843;text-decoration:underline;">View your card receipt</a>` : ''}
         </td>
       </tr>
       ${notes ? `

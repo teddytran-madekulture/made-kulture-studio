@@ -734,6 +734,10 @@ export async function POST(req: NextRequest) {
           startTime: formatTimeLabel(primary.startHour),
           endTime: formatTimeLabel(primary.endHour),
           totalAmount: verifiedCents / 100, bookingId: firstBookingId,
+          // Square never emails a receipt by itself — Teddy has been sending
+          // them by hand on request. This link is the only itemised record the
+          // customer gets otherwise.
+          receiptUrl: squarePaymentId ? `https://squareup.com/receipt/preview/${squarePaymentId}` : undefined,
           notes: body.notes || undefined, scheduleLines,
           guestCount: guestCount || undefined,
           doorCode: doorCode || undefined,
