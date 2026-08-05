@@ -11,6 +11,7 @@ import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
+import { createOrderForPayment } from '@/lib/square-order'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendOwnerPush } from '@/lib/push'
 import { createClient as createServerClient } from '@/lib/supabase/server'
@@ -485,10 +486,35 @@ export async function POST(req: NextRequest) {
         const payNote = lines.length > 1
           ? `Made Kulture — ${lines.length} sets — ${body.name}`
           : `Made Kulture — ${primary.setName} — ${primary.date} ${fmt12(primary.startHour)}–${fmt12(primary.endHour)}`
+        // Itemise the card receipt. Without an order Square prints
+        // "Custom Amount" and the customer can't tell what they bought — see
+        // lib/square-order.ts. Returns null on ANY problem, in which case this
+        // charges exactly as it always has.
+        const orderId = await createOrderForPayment(square, {
+          locationId: process.env.SQUARE_LOCATION_ID!,
+          customerId,
+          referenceId: `mk-${primary.date}`,
+          expectedTotalCents: chargeCents,
+          lineItems: [
+            ...lines.map(l => ({
+              name: `${l.setName} — ${l.date} ${fmt12(l.startHour)}\u2013${fmt12(l.endHour)}`,
+              amountCents: Math.round(l.spaceDollars * 100),
+            })),
+            { name: 'Equipment rental', amountCents: Math.round(equipCustom * 100) },
+            { name: 'Additional guests', amountCents: Math.round(guestFeeDollars * 100) },
+            { name: 'Guest surcharge', amountCents: Math.round(guestSurchargeDollars * 100) },
+          ],
+          discounts: [
+            { name: 'Promo code', amountCents: promoDiscountCents },
+            { name: 'Account credit', amountCents: creditAppliedCents },
+          ],
+        })
+
         const { result: paymentResult } = await square.paymentsApi.createPayment({
           sourceId: savedCardId, idempotencyKey: randomUUID(),
           amountMoney: { amount: BigInt(chargeCents), currency: 'USD' },
           customerId: customerId!, locationId: process.env.SQUARE_LOCATION_ID!,
+          ...(orderId ? { orderId } : {}),
           note: payNote, buyerEmailAddress: body.email,
         })
         squarePaymentId = paymentResult.payment!.id!
