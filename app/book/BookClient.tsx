@@ -1460,6 +1460,9 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   // less. This is display only: the numbers below mirror the server's own
   // arithmetic so what you see is what you get charged.
   const [creditCents, setCreditCents] = useState(0)
+  // Credit is opt-OUT: on by default (people expect it spent), but you can
+  // bank it for a bigger session. The server already honours applyCredit:false.
+  const [useCredit, setUseCredit] = useState(true)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -1502,7 +1505,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   const payDollars = (payCents / 100).toFixed(2)
   // Credit applies to YOUR card only. In "someone else pays" mode the payer is
   // a different person, and the server keys credit off the signed-in session.
-  const creditApplied = mode === 'self' ? Math.min(creditCents, payCents) : 0
+  const creditApplied = (mode === 'self' && useCredit) ? Math.min(creditCents, payCents) : 0
   const chargeCents = Math.max(0, payCents - creditApplied)
   const chargeDollars = (chargeCents / 100).toFixed(2)
 
@@ -1538,6 +1541,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
     notes:      booking.notes,
     guests:     booking.guests,
     promoCode:  promoApplied?.code,
+    applyCredit: useCredit,
     totalCents: grandTotalRef.current * 100,
   })
 
@@ -1880,6 +1884,18 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
               {promoErr && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginTop: 8 }}>{promoErr}</div>}
             </div>
 
+            {mode === 'self' && creditCents > 0 && !useCredit && (
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 12, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                  ${(creditCents / 100).toFixed(2)} studio credit saved for later.
+                </span>
+                <button type="button" onClick={() => setUseCredit(true)}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: '#d4a843', textDecoration: 'underline' }}>
+                  Use it
+                </button>
+              </div>
+            )}
+
             {creditApplied > 0 && (
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 12, marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -1890,11 +1906,17 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
                   <span style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.6)' }}>CARD TOTAL</span>
                   <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, color: '#fff' }}>${chargeDollars}</span>
                 </div>
-                {creditCents > creditApplied && (
-                  <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
-                    ${((creditCents - creditApplied) / 100).toFixed(2)} credit left for next time.
-                  </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginTop: 6 }}>
+                  {creditCents > creditApplied ? (
+                    <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+                      ${((creditCents - creditApplied) / 100).toFixed(2)} credit left for next time.
+                    </span>
+                  ) : <span />}
+                  <button type="button" onClick={() => setUseCredit(false)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.45)', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+                    Save it for later
+                  </button>
+                </div>
               </div>
             )}
 
