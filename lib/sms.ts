@@ -16,8 +16,19 @@ export async function sendSMS(to: string, body: string): Promise<void> {
     console.error('[sms] NOT sent — Twilio env not configured')
     return
   }
+  // Normalise here, not at every call site. Phones are stored as bare 10-digit
+  // strings ("8322476374"); Twilio needs E.164 ("+18322476374") and rejects
+  // anything else. Because this function deliberately swallows errors, a caller
+  // that forgot to normalise got total silence — no text, no complaint. That
+  // cost the cancellation SMS its first outing. Numbers already in E.164 pass
+  // through toE164 unchanged, so this is safe for every existing caller.
+  const num = toE164(to)
+  if (!num) {
+    console.error('[sms] NOT sent — unusable phone number:', JSON.stringify(to))
+    return
+  }
   try {
-    await client().messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to })
+    await client().messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: num })
   } catch (e) {
     console.error('[sms] send failed:', e)
   }
