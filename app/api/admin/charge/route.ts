@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
+import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { randomUUID } from 'crypto'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
@@ -19,23 +19,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-)
-
-
 function fmt12(h: number) {
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12  = h % 12 === 0 ? 12 : h % 12
   return `${h12}:00${ampm}`
-}
-
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  if (digits.length === 10) return `+1${digits}`
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
-  return `+${digits}`
 }
 
 const SLUG_TO_NAME: Record<string, string> = {
@@ -163,17 +150,8 @@ export async function POST(req: NextRequest) {
         `Questions? Text or call (832) 408-1631.`,
       ].join('\n')
 
-      await twilioClient.messages.create({
-        body: msg,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to:   normalizePhone(phone),
-      }).catch(e => console.error('SMS error:', e))
-
-      await twilioClient.messages.create({
-        body: `🆕 Manual booking: ${name} | ${setName} | ${date} ${fmt12(startHour)}–${fmt12(endHour)} | $${dollars}`,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to:   '+18324081631',
-      }).catch(e => console.error('SMS error:', e))
+      await sendSMS(phone, msg)
+      await sendOwnerSMS(`🆕 Manual booking: ${name} | ${setName} | ${date} ${fmt12(startHour)}–${fmt12(endHour)} | $${dollars}`)
     }
 
     return NextResponse.json({ success: true, bookingId: booking?.id, squarePaymentId })

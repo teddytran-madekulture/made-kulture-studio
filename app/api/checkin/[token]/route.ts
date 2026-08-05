@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
+import { sendOwnerSMS } from '@/lib/sms'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-const OWNER_PHONE = '+18324081631'
 
 // Studio location — exact Google-Maps pin for 4825 Gulf Freeway.
 const STUDIO_LAT = 29.72444224187077
@@ -111,10 +109,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       const guestLine = arrived
         ? `\n👥 party of ${arrived}${over ? ` ⚠️ (limit ${limit})` : ''}`
         : ''
-      twilioClient.messages.create({
-        body: `✅ ARRIVED — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}\n${locNote}`,
-        from: process.env.TWILIO_PHONE_NUMBER, to: OWNER_PHONE,
-      }).catch(e => console.error('[checkin] owner SMS error:', e))
+      // AWAITED. Un-awaited, Vercel can freeze the promise the moment this
+      // function suspends after responding — the same reason the booking route
+      // collects its notifications and allSettles them. A dropped arrival alert
+      // means you don't know someone walked in.
+      await sendOwnerSMS(`✅ ARRIVED — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}\n${locNote}`)
 
       return NextResponse.json({ success: true, checkedIn: true })
     }
@@ -123,10 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       if (!b.checked_in_at) return NextResponse.json({ error: 'Please check in first.' }, { status: 400 })
       await supabase.from('bookings').update({ checked_out_at: new Date().toISOString() }).eq('id', b.id)
 
-      twilioClient.messages.create({
-        body: `👋 CHECKED OUT — ${customer?.name ?? 'Guest'}\n📍 ${setName} is now free.`,
-        from: process.env.TWILIO_PHONE_NUMBER, to: OWNER_PHONE,
-      }).catch(e => console.error('[checkin] owner SMS error:', e))
+      await sendOwnerSMS(`👋 CHECKED OUT — ${customer?.name ?? 'Guest'}\n📍 ${setName} is now free.`)
 
       return NextResponse.json({ success: true, checkedOut: true })
     }

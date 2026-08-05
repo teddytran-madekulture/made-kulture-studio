@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
-import twilio from 'twilio'
+import { sendSMSResult } from '@/lib/sms'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
@@ -12,14 +12,6 @@ const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
   environment: process.env.SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox,
 })
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-
-function normalizePhone(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  if (d.length === 10) return `+1${d}`
-  if (d.length === 11 && d.startsWith('1')) return `+${d}`
-  return `+${d}`
-}
 
 // POST /api/desk/bookings/[id]/payment-link  { amountCents, description? }
 // Creates a Square checkout link for the amount and texts it to the booking's
@@ -59,19 +51,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   let smsSent = false, smsError: string | null = null
   if (customer?.phone) {
-    try {
-      await twilioClient.messages.create({
-        body: [
-          `Hi ${customer?.name ?? 'there'}! Please pay $${(amountCents / 100).toFixed(2)} for your Made Kulture booking:`,
-          url, ``, `Questions? Text (832) 408-1631`,
-        ].join('\n'),
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to: normalizePhone(customer.phone),
-      })
-      smsSent = true
-    } catch (e: any) {
-      smsError = e?.message || 'SMS failed to send'
-    }
+    const r = await sendSMSResult(customer.phone, [
+      `Hi ${customer?.name ?? 'there'}! Please pay $${(amountCents / 100).toFixed(2)} for your Made Kulture booking:`,
+      url, ``, `Questions? Text (832) 408-1631`,
+    ].join('\n'))
+    smsSent = r.ok
+    if (!r.ok) smsError = r.error ?? 'SMS failed to send'
   }
 
   await audit(g, 'booking.payment_link', { entityType: 'booking', entityId: params.id, amountCents, details: { description: body.description ?? null, smsSent } })

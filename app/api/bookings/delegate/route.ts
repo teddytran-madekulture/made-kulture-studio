@@ -6,9 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { validateAndPriceOrder, normalizePhone, fmt12, type BookingCoreInput } from '@/lib/booking-core'
+import { validateAndPriceOrder, fmt12, type BookingCoreInput } from '@/lib/booking-core'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { sendSMS } from '@/lib/sms'
+import { sendSMS, toE164 } from '@/lib/sms'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendOwnerPush } from '@/lib/push'
 
@@ -59,6 +59,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Enter who should pay (their phone or email).' }, { status: 400 })
     }
     const channel = body.payerChannel || inferChannel(body.payerContact)
+
+    // Validate the payer's number NOW, not at send time. The old normalizePhone
+    // turned anything into `+<digits>` and stored it, so a typo'd number meant
+    // the pay link silently went nowhere, the hold quietly expired, and the slot
+    // reopened — with the booker believing their friend had been texted.
+    const payerPhone = channel === 'sms' ? toE164(body.payerContact) : null
+    if (channel === 'sms' && !payerPhone) {
+      return NextResponse.json({ error: 'That phone number doesn\'t look right — check it and try again.' }, { status: 400 })
+    }
 
     // 1. Validate + price (shared with checkout). Booker's login = member rate.
     let isMember = false
@@ -162,7 +171,7 @@ export async function POST(req: NextRequest) {
     // 5. Create the delegation + token.
     const payToken = randomUUID()
     const expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000).toISOString()
-    const payerContact = channel === 'sms' ? normalizePhone(body.payerContact) : body.payerContact.trim()
+    const payerContact = payerPhone ?? body.payerContact.trim()
 
     const { error: delErr } = await supabase.from('payment_delegations').insert({
       order_group:   orderGroup,

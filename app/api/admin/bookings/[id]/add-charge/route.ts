@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
+import { sendSMSResult } from '@/lib/sms'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 
@@ -27,15 +27,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-
-function normalizePhone(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  if (d.length === 10) return `+1${d}`
-  if (d.length === 11 && d.startsWith('1')) return `+${d}`
-  return `+${d}`
-}
 
 interface RawLine {
   label?: string
@@ -195,16 +186,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let smsError: string | null = null
     const toPhone = phone || customer?.phone
     if (sendSms && toPhone) {
-      try {
-        await twilioClient.messages.create({
-          body: `Made Kulture: Hi ${customer?.name || customerName || 'there'}, we've charged $${total.toFixed(2)} for ${summary}. Questions? Text (832) 408-1631.`,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to:   normalizePhone(toPhone),
-        })
-      } catch (e: any) {
-        console.error('[add-charge] SMS error:', e)
-        smsError = e?.message || 'SMS failed to send'
-      }
+      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${customer?.name || customerName || 'there'}, we've charged $${total.toFixed(2)} for ${summary}. Questions? Text (832) 408-1631.`)
+      if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
     return NextResponse.json({ success: true, squarePaymentId, cardSaved: !!savedCardId, total, smsError })

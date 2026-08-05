@@ -9,12 +9,21 @@ function client() {
 
 export const OWNER_PHONE = '+18324081631'
 
-// Send an SMS. Non-fatal: logs and swallows errors (e.g. while the toll-free
-// number is still in Twilio review) so callers never break on a failed text.
-export async function sendSMS(to: string, body: string): Promise<void> {
+export type SmsResult = { ok: boolean; error?: string }
+
+// Send an SMS and REPORT what happened. Use this where the outcome is shown to
+// a human — several admin screens surface an `smsError` next to the charge they
+// just made, and that feedback is worth keeping. Everything else should use
+// sendSMS below, which is the same call with the result discarded.
+//
+// This is the ONE place that talks to Twilio. Before 2026-08-05 there were 19
+// others scattered across 14 files, each with its own copy of a phone
+// normaliser; the copies had already drifted from toE164 and that drift is what
+// let a bad number through. One door in, one normaliser, one place to fix.
+export async function sendSMSResult(to: string, body: string): Promise<SmsResult> {
   if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
     console.error('[sms] NOT sent — Twilio env not configured')
-    return
+    return { ok: false, error: 'Texting is not configured.' }
   }
   // Normalise here, not at every call site. Phones are stored as bare 10-digit
   // strings ("8322476374"); Twilio needs E.164 ("+18322476374") and rejects
@@ -25,13 +34,21 @@ export async function sendSMS(to: string, body: string): Promise<void> {
   const num = toE164(to)
   if (!num) {
     console.error('[sms] NOT sent — unusable phone number:', JSON.stringify(to))
-    return
+    return { ok: false, error: 'That phone number is not usable.' }
   }
   try {
     await client().messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: num })
-  } catch (e) {
+    return { ok: true }
+  } catch (e: any) {
     console.error('[sms] send failed:', e)
+    return { ok: false, error: e?.message || 'SMS failed to send' }
   }
+}
+
+// Fire-and-forget. Never throws and never reports — a failed text must not
+// break the booking/charge/cancel that triggered it. Failures are logged above.
+export async function sendSMS(to: string, body: string): Promise<void> {
+  await sendSMSResult(to, body)
 }
 
 export async function sendOwnerSMS(body: string): Promise<void> {

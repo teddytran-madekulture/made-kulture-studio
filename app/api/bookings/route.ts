@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
+import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { randomUUID } from 'crypto'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged-customer'
@@ -30,11 +30,6 @@ const square = new Client({
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
 )
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -153,13 +148,6 @@ function hoursToISO(date: string, h: number): string {
   return `${date}T${String(hour).padStart(2, '0')}:${mins}:00-05:00`
 }
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  if (digits.length === 10) return `+1${digits}`
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
-  return `+${digits}`
-}
-
 // ─── Normalized order line ──────────────────────────────────────────────────
 
 interface OrderLine {
@@ -209,19 +197,13 @@ async function sendConfirmationSMS(
     `Reply STOP to opt out.`,
   ].join('\n')
 
-  // Each send owns its failure. These were two bare awaits, so a bad customer
-  // phone (empty string -> normalizePhone('') === '+') made Twilio reject HERE
-  // and the owner's new-booking text below never ran at all.
-  await twilioClient.messages.create({
-    body: message, from: process.env.TWILIO_PHONE_NUMBER, to: normalizePhone(body.phone),
-  }).catch(e => console.error('[bookings] customer confirmation SMS failed:', e))
+  // sendSMS never throws, so a bad customer phone can no longer take the
+  // owner's new-booking text down with it (it used to — two bare awaits).
+  await sendSMS(body.phone, message)
 
   const ownerSummary = lines.map(l => `${l.setName} ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join(' | ')
   const ownerGuests = body.guests ? ` | 👥 ${body.guests}` : ''
-  await twilioClient.messages.create({
-    body: `🆕 New booking: ${body.name} | ${ownerSummary}${ownerGuests} | $${dollars}`,
-    from: process.env.TWILIO_PHONE_NUMBER, to: '+18324081631',
-  }).catch(e => console.error('[bookings] owner new-booking SMS failed:', e))
+  await sendOwnerSMS(`🆕 New booking: ${body.name} | ${ownerSummary}${ownerGuests} | $${dollars}`)
 }
 
 // ─── POST /api/bookings ───────────────────────────────────────────────────────

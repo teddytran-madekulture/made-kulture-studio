@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
+import { sendSMSResult } from '@/lib/sms'
 import { randomUUID } from 'crypto'
 
 const square = new Client({
@@ -15,15 +15,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-
-function normalizePhone(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  if (d.length === 10) return `+1${d}`
-  if (d.length === 11 && d.startsWith('1')) return `+${d}`
-  return `+${d}`
-}
 
 // POST /api/admin/bookings/[id]/cleaning-fee  { amount, sendSms }
 // Discretionary post-booking cleaning charge to the card on file. Records the
@@ -79,15 +70,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     let smsError: string | null = null
     if (sendSms && customer?.phone) {
-      try {
-        await twilioClient.messages.create({
-          body: `Made Kulture: a $${amt.toFixed(2)} cleaning fee was charged to your card on file for your recent booking. Questions? Text (832) 408-1631.`,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to:   normalizePhone(customer.phone),
-        })
-      } catch (e: any) {
-        smsError = e?.message || 'SMS failed to send'
-      }
+      const r = await sendSMSResult(customer.phone, `Made Kulture: a $${amt.toFixed(2)} cleaning fee was charged to your card on file for your recent booking. Questions? Text (832) 408-1631.`)
+      if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
     return NextResponse.json({ success: true, amount: amt, squarePaymentId, smsError })

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
+import { sendSMS } from '@/lib/sms'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
 import { randomUUID } from 'crypto'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
@@ -25,18 +25,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-
 function fmt12(h: number) {
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12  = h % 12 === 0 ? 12 : h % 12
   return `${h12}:00${ampm}`
-}
-function normalizePhone(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  if (d.length === 10) return `+1${d}`
-  if (d.length === 11 && d.startsWith('1')) return `+${d}`
-  return `+${d}`
 }
 function isoFor(date: string, hour: number): string {
   return `${date}T${String(hour).padStart(2, '0')}:00:00-05:00`
@@ -226,9 +218,7 @@ export async function POST(req: NextRequest) {
             `4825 Gulf Freeway, Houston TX 77023`,
             `Questions? Text (832) 408-1631.`,
           ].join('\n')
-      await twilioClient.messages.create({
-        body: msg, from: process.env.TWILIO_PHONE_NUMBER, to: normalizePhone(phone),
-      }).catch(e => console.error('[add-set] SMS error:', e))
+      await sendSMS(phone, msg)
     }
 
     return NextResponse.json({ success: true, bookingId: booking.id, squarePaymentId, doorCode })

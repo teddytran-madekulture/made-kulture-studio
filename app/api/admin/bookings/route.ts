@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
+import { sendSMS } from '@/lib/sms'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
@@ -12,19 +12,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-)
-
-function normalizePhone(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  if (d.length === 10) return `+1${d}`
-  if (d.length === 11 && d.startsWith('1')) return `+${d}`
-  return `+${d}`
-}
-
 
 // ─── GET /api/admin/bookings ──────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -178,11 +165,7 @@ export async function POST(req: NextRequest) {
       `Questions? Text (832) 408-1631`,
     ].join('\n')
 
-    await twilioClient.messages.create({
-      body: msg,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to:   normalizePhone(phone),
-    }).catch(e => console.error('Confirmation SMS error:', e))
+    await sendSMS(phone, msg)
   }
 
   // Send emails (non-blocking)

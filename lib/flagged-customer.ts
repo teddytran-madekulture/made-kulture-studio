@@ -1,7 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import twilio from 'twilio'
+import { sendOwnerSMS } from '@/lib/sms'
 
-const OWNER_PHONE = '+18324081631'
 const OWNER_EMAIL = 'teddytran@madekulture.com'
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
@@ -34,24 +33,15 @@ export async function checkBannedAndAlert(
 
   // Fire alert (non-blocking from caller's perspective — we await here but
   // the caller doesn't need to wait for this before returning the error)
-  try {
-    const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-    await twilioClient.messages.create({
-      body: [
-        `⛔ BANNED CUSTOMER ATTEMPTED TO BOOK`,
-        ``,
-        `${customer.name || email} (${email})`,
-        `📍 ${attempt.setName}`,
-        `📅 ${attempt.date} · ${attempt.startTime}–${attempt.endTime}`,
-        ``,
-        `Booking was BLOCKED before payment.`,
-      ].join('\n'),
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to:   OWNER_PHONE,
-    })
-  } catch (err) {
-    console.error('Ban attempt SMS error:', err)
-  }
+  await sendOwnerSMS([
+    `⛔ BANNED CUSTOMER ATTEMPTED TO BOOK`,
+    ``,
+    `${customer.name || email} (${email})`,
+    `📍 ${attempt.setName}`,
+    `📅 ${attempt.date} · ${attempt.startTime}–${attempt.endTime}`,
+    ``,
+    `Booking was BLOCKED before payment.`,
+  ].join('\n'))
 
   try {
     const { Resend } = await import('resend')
@@ -141,12 +131,7 @@ export async function checkAndAlertFlaggedCustomer(
   const flagLine = flags.join(' · ')
 
   // ── SMS alert ─────────────────────────────────────────────────────────────
-  try {
-    const twilioClient = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    )
-
+  {
     const smsBody = [
       `⚠️ FLAGGED CUSTOMER BOOKED`,
       ``,
@@ -159,13 +144,7 @@ export async function checkAndAlertFlaggedCustomer(
       `Review at ${APP_URL.replace(/^https?:\/\//, '')}/admin`,
     ].join('\n')
 
-    await twilioClient.messages.create({
-      body: smsBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to:   OWNER_PHONE,
-    })
-  } catch (err) {
-    console.error('Flagged customer SMS error:', err)
+    await sendOwnerSMS(smsBody)
   }
 
   // ── Email alert ───────────────────────────────────────────────────────────

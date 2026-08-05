@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import twilio from 'twilio'
+import { sendOwnerSMS } from '@/lib/sms'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
 import { audit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
-
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-const OWNER_PHONE = '+18324081631'
 
 const SELECT = `
   id, start_time, end_time, status, guest_count, arrived_guest_count,
@@ -51,10 +48,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const over = arrived && b.guest_count && arrived > b.guest_count
     const guestLine = arrived ? `\n👥 ${arrived} here${over ? ` ⚠️ (booked ${b.guest_count})` : ''}` : ''
-    twilioClient.messages.create({
-      body: `✅ ARRIVED (desk: ${g.name}) — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}`,
-      from: process.env.TWILIO_PHONE_NUMBER, to: OWNER_PHONE,
-    }).catch(e => console.error('[desk checkin] SMS error:', e))
+    // AWAITED — see the note in app/api/checkin/[token]/route.ts.
+    await sendOwnerSMS(`✅ ARRIVED (desk: ${g.name}) — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}`)
 
     return NextResponse.json({ success: true, checkedIn: true })
   }
@@ -64,10 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await db.from('bookings').update({ checked_out_at: new Date().toISOString() }).eq('id', b.id)
     await audit(g, 'booking.checkout', { entityType: 'booking', entityId: b.id, details: { by: 'desk' } })
 
-    twilioClient.messages.create({
-      body: `👋 CHECKED OUT (desk: ${g.name}) — ${customer?.name ?? 'Guest'}\n📍 ${setName} is now free.`,
-      from: process.env.TWILIO_PHONE_NUMBER, to: OWNER_PHONE,
-    }).catch(e => console.error('[desk checkout] SMS error:', e))
+    await sendOwnerSMS(`👋 CHECKED OUT (desk: ${g.name}) — ${customer?.name ?? 'Guest'}\n📍 ${setName} is now free.`)
 
     return NextResponse.json({ success: true, checkedOut: true })
   }

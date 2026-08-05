@@ -132,13 +132,6 @@ function isoToHour(iso: string): number {
   return hh + (mm === '30' ? 0.5 : 0)
 }
 
-export function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  if (digits.length === 10) return `+1${digits}`
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
-  return `+${digits}`
-}
-
 async function getSetId(supabase: SupabaseClient, slug: string): Promise<string | null> {
   const name = SLUG_TO_NAME[slug]
   if (!name) return null
