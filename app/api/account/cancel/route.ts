@@ -6,6 +6,7 @@ import { plusActive } from '@/lib/short-notice'
 import { issueCredit } from '@/lib/credits'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 import { deleteCalendarEvent } from '@/lib/gcal'
+import { sendSMS } from '@/lib/sms'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest) {
   const customerEmail = (booking.customers as any)?.email
   if (booking.auth_user_id !== user.id && customerEmail !== user.email) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // Already cancelled? Stop here. Without this, hitting cancel twice ran the
+  // whole flow again and issued the Plus credit a SECOND time — free money for
+  // anyone who clicked twice. (The real cause of the double-credit report was
+  // that the status update below silently did nothing, so the booking never
+  // left the list and could be cancelled over and over.)
+  if (booking.status === 'cancelled') {
+    return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
   }
 
   // Plus members get cancellation protection: they can cancel at any time and the
@@ -80,13 +90,30 @@ export async function POST(req: NextRequest) {
     catch (e) { console.error('[account cancel] gcal delete error (non-fatal):', e) }
   }
 
-  // Update Supabase booking status
-  const { error: updateError } = await supabase
+  // Update the booking status.
+  //
+  // Two things here are load-bearing:
+  //  1. SERVICE client, not the user-scoped one. The user client is subject to
+  //     RLS, and a blocked UPDATE returns NO error — it just matches zero rows.
+  //     That's why cancelling appeared to succeed while the booking stayed in
+  //     the list, and why it could be cancelled (and credited) again and again.
+  //  2. `.neq('status','cancelled')` + `.select()` makes this a claim, not a
+  //     blind write: exactly one caller can flip it, and we only issue credit if
+  //     WE were that caller. Two taps in quick succession can't double-credit.
+  const { data: cancelledRows, error: updateError } = await service
     .from('bookings')
     .update({ status: 'cancelled', acuity_block_ids: [], gcal_event_id: null })
     .eq('id', booking_id)
+    .neq('status', 'cancelled')
+    .select('id')
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+
+  // Zero rows = someone else cancelled it between our read and our write.
+  // Do NOT issue credit for a cancellation we didn't perform.
+  if (!cancelledRows || cancelledRows.length === 0) {
+    return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
+  }
 
   // Plus cancellation protection → bank the booking's full value as studio credit.
   let creditCents = 0
@@ -135,6 +162,16 @@ export async function POST(req: NextRequest) {
       }).catch(e => console.error('Cancellation email error:', e)))
     }
   }
+  // Text them too. Cancellation was email-only, and a booking disappearing with
+  // no text is exactly the kind of silence that makes people call to check.
+  const customerPhone = (booking.customers as any)?.phone
+  if (customerPhone) {
+    const smsBody = (isPlus && creditCents > 0)
+      ? `Made Kulture: your ${setName} session on ${dateLabel} is cancelled. $${(creditCents / 100).toFixed(2)} has been added to your account as studio credit — it never expires.`
+      : `Made Kulture: your ${setName} session on ${dateLabel} at ${startLbl} is cancelled. Questions? Just reply to this text.`
+    notifications.push(sendSMS(customerPhone, smsBody).catch(e => console.error('Cancellation SMS error:', e)))
+  }
+
   // Always alert the owner (not gated by template settings).
   notifications.push(sendCancellationOwnerAlert({
     customerName, customerEmail, customerPhone: (booking.customers as any)?.phone ?? undefined,
