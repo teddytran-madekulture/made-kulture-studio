@@ -47,8 +47,22 @@ export async function GET() {
 
   const square = getSquare()
   const res = await square.cardsApi.listCards(undefined, profile.square_customer_id)
+
+  // Deduplicate. Checkout used to call createCard on every booking, so the SAME
+  // physical card is stored under several Square card ids — the picker showed
+  // "VISA ····1097" three times with no way to tell them apart. Square's
+  // `fingerprint` identifies the underlying card across those records; fall
+  // back to brand+last4+expiry where it's missing.
+  const seen = new Set<string>()
   const cards = (res.result.cards ?? [])
     .filter(c => c.enabled)
+    .filter(c => {
+      const key = c.fingerprint
+        || `${c.cardBrand}-${c.last4}-${c.expMonth}-${c.expYear}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
     .map(c => ({
       id: c.id,
       last_4: c.last4,
