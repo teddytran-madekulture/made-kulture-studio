@@ -32,7 +32,7 @@ async function ensureSquareCustomer(userId: string, email: string, name: string 
   return customerId
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -48,15 +48,20 @@ export async function GET() {
   const square = getSquare()
   const res = await square.cardsApi.listCards(undefined, profile.square_customer_id)
 
-  // Deduplicate. Checkout used to call createCard on every booking, so the SAME
-  // physical card is stored under several Square card ids — the picker showed
-  // "VISA ····1097" three times with no way to tell them apart. Square's
-  // `fingerprint` identifies the underlying card across those records; fall
-  // back to brand+last4+expiry where it's missing.
+  // Deduplicate — but ONLY when asked (checkout does; ?dedupe=1). Checkout used
+  // to call createCard on every booking, so the SAME physical card is stored
+  // under several Square card ids and the picker showed "VISA ····1097" twice
+  // with no way to tell them apart. Square's `fingerprint` identifies the
+  // underlying card across those records; fall back to brand+last4+expiry.
+  //
+  // The Payment Methods page must NOT dedupe: it's where you go to delete the
+  // extras, and hiding them there would make them unremovable.
+  const dedupe = req.nextUrl.searchParams.get('dedupe') === '1'
   const seen = new Set<string>()
   const cards = (res.result.cards ?? [])
     .filter(c => c.enabled)
     .filter(c => {
+      if (!dedupe) return true
       const key = c.fingerprint
         || `${c.cardBrand}-${c.last4}-${c.expMonth}-${c.expYear}`
       if (seen.has(key)) return false

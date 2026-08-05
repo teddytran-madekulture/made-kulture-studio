@@ -1483,7 +1483,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
     let cancelled = false
     ;(async () => {
       try {
-        const r = await fetch('/api/account/cards')
+        const r = await fetch('/api/account/cards?dedupe=1')
         if (!r.ok) return                 // 401 for guests — type a card, as before
         const d = await r.json()
         const cards = Array.isArray(d?.cards) ? d.cards : []
