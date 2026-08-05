@@ -438,7 +438,10 @@ export async function finalizeBooking(
       ``, `4825 Gulf Freeway, Houston TX 77023`,
       `Questions? Text or call (832) 408-1631.`, `Reply STOP to opt out.`,
     ].join('\n')
-    notifications.push(sendSMS(normalizePhone(custPhone), message).catch(err => console.error('[finalize] SMS error:', err)))
+    // Pass the raw phone: sendSMS normalises via toE164, which REJECTS an
+    // unusable number. Pre-wrapping in normalizePhone turns garbage into
+    // '+<digits>', which toE164 then waves through to Twilio.
+    notifications.push(sendSMS(custPhone, message).catch(err => console.error('[finalize] SMS error:', err)))
   }
 
   if (custEmail) {

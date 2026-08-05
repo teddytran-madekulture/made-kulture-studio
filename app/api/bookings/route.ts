@@ -209,16 +209,19 @@ async function sendConfirmationSMS(
     `Reply STOP to opt out.`,
   ].join('\n')
 
+  // Each send owns its failure. These were two bare awaits, so a bad customer
+  // phone (empty string -> normalizePhone('') === '+') made Twilio reject HERE
+  // and the owner's new-booking text below never ran at all.
   await twilioClient.messages.create({
     body: message, from: process.env.TWILIO_PHONE_NUMBER, to: normalizePhone(body.phone),
-  })
+  }).catch(e => console.error('[bookings] customer confirmation SMS failed:', e))
 
   const ownerSummary = lines.map(l => `${l.setName} ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join(' | ')
   const ownerGuests = body.guests ? ` | 👥 ${body.guests}` : ''
   await twilioClient.messages.create({
     body: `🆕 New booking: ${body.name} | ${ownerSummary}${ownerGuests} | $${dollars}`,
     from: process.env.TWILIO_PHONE_NUMBER, to: '+18324081631',
-  })
+  }).catch(e => console.error('[bookings] owner new-booking SMS failed:', e))
 }
 
 // ─── POST /api/bookings ───────────────────────────────────────────────────────

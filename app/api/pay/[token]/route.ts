@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
-import { finalizeBooking, normalizePhone } from '@/lib/booking-core'
+import { finalizeBooking } from '@/lib/booking-core'
 import { sendSMS } from '@/lib/sms'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendOwnerPush } from '@/lib/push'
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       })
     } else {
       await sendSMS(
-        normalizePhone(d.payer_contact),
+        d.payer_contact,
         `✅ Payment received — $${dollars} for ${d.booker_name || 'the'} Made Kulture booking is confirmed. Thanks!\n— Made Kulture`
       )
     }
