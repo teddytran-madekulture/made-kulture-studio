@@ -49,12 +49,39 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const recipients = await getSegmentRecipients(c.segment_key as SegmentKey)
   if (recipients.length === 0) return NextResponse.json({ error: 'No recipients in that segment.' }, { status: 400 })
 
-  const r = await sendCampaignEmails(c.subject, body, recipients, c.id)
-  if (r.error && r.sent === 0) return NextResponse.json({ error: r.error }, { status: 502 })
+  // CLAIM THE CAMPAIGN BEFORE SENDING, not after.
+  //
+  // The guard above is a read-check-write: two clicks a second apart both read
+  // 'draft' and both mail the entire segment. And the status write used to
+  // happen only AFTER the send with its error unread — so if it failed, the
+  // campaign stayed 'draft', the UI still offered SEND, and one more click
+  // re-mailed everyone. Flipping draft -> sending here, conditionally and with
+  // .select(), means exactly one caller can ever get past this line.
+  const { data: claimed, error: claimErr } = await db
+    .from('marketing_campaigns')
+    .update({ status: 'sending' })
+    .eq('id', params.id)
+    .eq('status', 'draft')
+    .select('id')
+  if (claimErr) return NextResponse.json({ error: claimErr.message }, { status: 500 })
+  if (!claimed || claimed.length === 0) {
+    return NextResponse.json({ error: 'This campaign is already sending or was already sent.' }, { status: 409 })
+  }
 
-  await db.from('marketing_campaigns')
+  const r = await sendCampaignEmails(c.subject, body, recipients, c.id)
+
+  // Nothing went out — release the claim so it can be retried.
+  if (r.error && r.sent === 0) {
+    await db.from('marketing_campaigns').update({ status: 'draft' }).eq('id', params.id)
+    return NextResponse.json({ error: r.error }, { status: 502 })
+  }
+
+  const { error: stampErr } = await db.from('marketing_campaigns')
     .update({ status: 'sent', recipient_count: r.sent, sent_at: new Date().toISOString() })
     .eq('id', params.id)
+  // Mail is already out. The campaign stays 'sending', which still fails the
+  // claim above, so the worst case is a stuck row — never a second mailing.
+  if (stampErr) console.error('[marketing send] SENT BUT NOT STAMPED —', params.id, stampErr)
 
   return NextResponse.json({ success: true, sent: r.sent, partialError: r.error ?? null })
 }

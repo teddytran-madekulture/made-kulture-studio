@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 import { deleteCalendarEvent } from '@/lib/gcal'
@@ -16,6 +17,7 @@ export const dynamic = 'force-dynamic'
 // value comes back as account credit instead of a refund.
 export async function POST(req: NextRequest) {
   const supabase = createClient()
+  const service = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -70,11 +72,31 @@ export async function POST(req: NextRequest) {
   }
 
   // Cancel the booking.
-  const { error: updateError } = await supabase
+  //
+  // Identical to the fix in app/api/account/cancel/route.ts, and load-bearing
+  // for the same reason:
+  //  1. SERVICE client, not the user-scoped one. The user client is subject to
+  //     RLS, and a blocked UPDATE returns NO error — it just matches zero rows.
+  //     issueCredit() below runs on the service client either way, so the credit
+  //     posts regardless. That combination means the booking stays live, the
+  //     status guard above keeps passing, and this route can be re-hit for the
+  //     booking's full value again and again.
+  //  2. `.neq('status','cancelled')` + `.select()` makes this a claim, not a
+  //     blind write: exactly one caller flips it, and we only bank credit if WE
+  //     were that caller. Two taps in quick succession can't double-credit.
+  const { data: cancelledRows, error: updateError } = await service
     .from('bookings')
     .update({ status: 'cancelled', acuity_block_ids: [], gcal_event_id: null })
     .eq('id', booking_id)
+    .neq('status', 'cancelled')
+    .select('id')
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+
+  // Zero rows = someone else cancelled it between our read and our write.
+  // Do NOT bank credit for a cancellation we didn't perform.
+  if (!cancelledRows || cancelledRows.length === 0) {
+    return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
+  }
 
   // Bank the value as credit on THIS account.
   const credit = await issueCredit(user.id, creditCents, {

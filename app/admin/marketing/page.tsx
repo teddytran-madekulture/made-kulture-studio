@@ -212,11 +212,13 @@ export default function MarketingPage() {
                         <div style={{ fontSize: 15, fontWeight: 600 }}>{c.name}</div>
                         <div style={{ fontSize: 12, color: C.dim, marginTop: 3 }}>
                           {c.subject} · {c.segment_key}{c.code ? ` · code ${c.code}` : ''}
-                          {c.status === 'sent' ? ` · sent to ${c.recipient_count}` : ` · draft`}
+                          {c.status === 'sent' ? ` · sent to ${c.recipient_count}` : c.status === 'sending' ? ` · sending…` : ` · draft`}
                         </div>
                       </div>
                       {c.status === 'sent'
                         ? <span style={{ fontSize: 11, color: '#6bffaa', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>SENT</span>
+                        : c.status === 'sending'
+                        ? <span style={{ fontSize: 11, color: C.accent, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>SENDING…</span>
                         : (
                           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                             <button onClick={() => sendTest(c.id)} style={{ background: 'none', border: `1px solid ${C.line}`, color: C.dim, borderRadius: 6, padding: '7px 12px', fontSize: 11, cursor: 'pointer' }}>TEST</button>

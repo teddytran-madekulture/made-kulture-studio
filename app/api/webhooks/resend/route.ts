@@ -64,18 +64,38 @@ export async function POST(req: NextRequest) {
   const campaignId = campaignIdOf(data)
 
   const db = supabaseAdmin()
-  try {
-    await db.from('marketing_events').insert({ campaign_id: campaignId, email, type })
-    // Stop emailing addresses that hard-bounce or complain.
-    if (type === 'bounced' || type === 'complained') {
-      await db.from('email_suppressions').upsert(
-        { email, reason: type === 'bounced' ? 'bounce' : 'complaint', campaign_id: campaignId },
+
+  // Analytics — best-effort, must not cost us the suppression below.
+  const { error: evtErr } = await db
+    .from('marketing_events')
+    .insert({ campaign_id: campaignId, email, type })
+  if (evtErr) console.error('[resend-webhook] event log failed (non-fatal):', evtErr)
+
+  // Stop emailing addresses that hard-bounce or complain.
+  //
+  // This one matters. supabase-js RESOLVES on a Postgres error instead of
+  // throwing, so the old try/catch never saw a DB rejection and we returned 200
+  // regardless. Resend does not retry a 200, so a dropped suppression meant the
+  // bouncing address stayed in the audience and got mailed again — which is how
+  // sender reputation dies. Read the error, and 500 so Resend retries.
+  if (type === 'bounced' || type === 'complained') {
+    let { error: supErr } = await db.from('email_suppressions').upsert(
+      { email, reason: type === 'bounced' ? 'bounce' : 'complaint', campaign_id: campaignId },
+      { onConflict: 'email' }
+    )
+    // campaign_id is an FK; a deleted campaign must not block the suppression.
+    if (supErr && campaignId) {
+      console.error('[resend-webhook] attributed suppression failed, retrying unattributed:', supErr)
+      ;({ error: supErr } = await db.from('email_suppressions').upsert(
+        { email, reason: type === 'bounced' ? 'bounce' : 'complaint', campaign_id: null },
         { onConflict: 'email' }
-      )
+      ))
     }
-  } catch (e) {
-    console.error('[resend-webhook] insert failed', e)
-    return NextResponse.json({ error: 'store failed' }, { status: 500 })
+    if (supErr) {
+      console.error('[resend-webhook] SUPPRESSION FAILED —', email, supErr)
+      return NextResponse.json({ error: 'store failed' }, { status: 500 })
+    }
   }
+
   return NextResponse.json({ ok: true })
 }
