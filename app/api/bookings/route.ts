@@ -515,7 +515,13 @@ export async function POST(req: NextRequest) {
           amountMoney: { amount: BigInt(chargeCents), currency: 'USD' },
           customerId: customerId!, locationId: process.env.SQUARE_LOCATION_ID!,
           ...(orderId ? { orderId } : {}),
-          note: payNote, buyerEmailAddress: body.email,
+          // With an order linked, the line items already spell out the set,
+          // date and times — repeating that here prints it twice on the
+          // receipt. Name the customer instead; that's what the Acuity
+          // transactions show and it's the useful bit at a glance. Without
+          // an order the note is the ONLY description, so keep the long one.
+          note: orderId ? `Made Kulture — ${body.name}` : payNote,
+          buyerEmailAddress: body.email,
         })
         squarePaymentId = paymentResult.payment!.id!
       }
