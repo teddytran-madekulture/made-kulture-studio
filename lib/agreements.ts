@@ -49,6 +49,7 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Bookings outside these hours may be avail
 - Nudity: Not permitted during shared bookings unless your party is the only booking in the studio at that time.
 - Audio recording: The studio is not soundproofed and sits near the I-45 freeway. A full-warehouse buyout is recommended for audio work.
 - Special effects (fog, haze, smoke bombs, etc.): Not permitted during shared bookings; available for full-warehouse buyouts or solo bookings only, and must be pre-approved.
+- Drones and other unmanned aircraft: Not permitted. Flying indoors around people, sets, and lighting carries a real risk of injury and damage.
 - Messy concepts (paint, fake blood, glitter, excessive oils, etc.) must be approved in advance. Floors and surfaces must be protected with plastic or other suitable material so they are not damaged.
 - Children are welcome but count toward the guest limit; shared-studio conditions may not be suitable for young children.
 - No illegal activity of any kind is permitted on the premises at any time.
@@ -125,6 +126,7 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Outside-hours bookings are available by r
 - During your buyout you have private, exclusive use of the entire warehouse and all sets.
 - Nudity is permitted, as your party is the only booking on site.
 - Special effects (fog, haze, smoke bombs, etc.), studio blackout, and projector use are available during a buyout. Messy concepts (paint, fake blood, glitter, excessive oils, etc.) must be approved in advance, and floors and surfaces must be protected with plastic or other suitable material so they are not damaged.
+- Drones and other unmanned aircraft: Not permitted without advance written approval. Where approved, the operator must provide proof of drone liability coverage naming Made Kulture as an additional insured before any flight, and remains responsible for any injury or damage caused.
 - Audio recording: The building is not soundproofed and sits near the I-45 freeway, so ambient noise may be present even during a private buyout.
 - No illegal activity of any kind is permitted on the premises at any time.
 
