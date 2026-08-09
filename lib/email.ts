@@ -113,7 +113,8 @@ interface BookingConfirmationData {
   bookingId: string
   notes?: string
   scheduleLines?: string[] // multi-set orders: one line per set, e.g. "Set A — Sat Jul 12, 2pm–5pm"
-  guestCount?: number      // declared party size (the booked limit)
+  guestCount?: number      // declared party size
+  guestCapacity?: number   // people allowed on a set; omitted for a full-studio buyout
   doorCode?: string        // per-booking front-door code (igloohome algoPIN)
   doorCodeBack?: string    // per-booking back-door code (igloohome algoPIN; when a back-door lock is configured)
   startISO?: string        // primary window start/end (raw ISO) for calendar links
@@ -128,7 +129,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, doorCode, doorCodeBack, startISO, endISO, checkInToken, receiptUrl } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, guestCapacity, doorCode, doorCodeBack, startISO, endISO, checkInToken, receiptUrl } = data
   const isBuyout = /full studio takeover/i.test(setName) // buyouts are private — skip the shared-studio note
 
   const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', doorCodeBack ? `Back-door code: ${doorCodeBack}.` : '', `Manage: ${APP_URL}/account`].filter(Boolean).join(' ')
@@ -171,7 +172,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
       <tr>
         <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
           <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Party Size</span><br/>
-          <span style="font-size:15px;color:#fff;font-weight:600;">${guestCount} ${guestCount === 1 ? 'person' : 'people'} — your booked limit</span>
+          <span style="font-size:15px;color:#fff;font-weight:600;">${formatGuestLine(guestCount, guestCapacity)}</span>
         </td>
       </tr>` : ''}
       <tr>
@@ -532,6 +533,23 @@ export async function sendBookingReminder(data: BookingReminderData) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Party size, phrased so it doesn't read as a restriction.
+//
+// ⚠️ The declared party size is NOT the customer's ceiling — the SET's capacity
+// is, and that is what the penalty in the rental agreement is measured against
+// ("extra guests beyond the 5-person limit"). The old wording, "1 guests — this
+// is your booked limit", told someone who booked alone that they were capped at
+// one person. It also said "1 guests".
+//
+// Pass capacityPerSet = null when there isn't one to quote (a full-studio
+// buyout) and the clause is simply dropped.
+export function formatGuestLine(guestCount: number, capacityPerSet?: number | null): string {
+  const noun = guestCount === 1 ? 'guest' : 'guests'
+  return capacityPerSet && capacityPerSet > 0
+    ? `${guestCount} ${noun} booked — up to ${capacityPerSet} allowed on your set`
+    : `${guestCount} ${noun} booked`
+}
+
 export function formatTimeLabel(hour: number): string {
   const h = Math.floor(hour)
   const m = hour % 1 >= 0.5 ? 30 : 0

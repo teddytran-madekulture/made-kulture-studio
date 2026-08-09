@@ -29,18 +29,10 @@
     "incremental": false
   },
   "files": [
-    "app/admin/dashboard/page.tsx",
-    "app/book/BookClient.tsx",
-    "app/tour/TourClient.tsx",
-    "app/api/bookings/route.ts",
-    "app/api/availability/route.ts",
-    "app/api/equipment/route.ts",
-    "app/api/admin/add-set/route.ts",
-    "app/api/admin/bookings/route.ts",
-    "app/api/admin/charge/route.ts",
-    "app/api/admin/bookings/[id]/route.ts",
+    "lib/email.ts",
     "lib/booking-core.ts",
-    "lib/booking-times.ts",
-    "lib/igloohome.ts"
+    "app/api/bookings/route.ts",
+    "app/book/BookClient.tsx",
+    "app/admin/dashboard/page.tsx"
   ]
 }

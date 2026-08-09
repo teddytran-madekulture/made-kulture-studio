@@ -9,7 +9,7 @@
 // verified — until then, keep the two in sync if you touch pricing/guest rules.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
+import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel, formatGuestLine } from '@/lib/email'
 import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
@@ -350,6 +350,17 @@ export async function finalizeBooking(
   })
   const lines = rows.map(lineFor)
   const primary = lines[0]
+
+  // Party-size wording quotes the SET capacity, which lives in studio_settings
+  // and can be changed without a deploy — don't hardcode 5 here. A full-studio
+  // buyout (every row has set_id null) has no per-set number to quote.
+  const isBuyout = (rows as any[]).every(r => r.set_id == null)
+  let guestCapacity: number | null = null
+  if (!isBuyout) {
+    const { data: capRow } = await supabase
+      .from('studio_settings').select('value').eq('key', 'guest_capacity_per_set').maybeSingle()
+    guestCapacity = Number(capRow?.value) || 5
+  }
   const totalAmount = rows.reduce((s: number, r: any) => s + Number(r.total_amount ?? 0), 0)
 
   // Door code across the whole window — front door, plus the back door when a
@@ -417,7 +428,7 @@ export async function finalizeBooking(
       doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
     ].filter(Boolean) as string[]
     if (codeLines.length) codeLines.push('(each works during your booked time only)')
-    const guestLine = guestCount ? `👥 ${guestCount} guests — this is your booked limit` : null
+    const guestLine = guestCount ? `👥 ${formatGuestLine(guestCount, guestCapacity)}` : null
     const message = [
       `✅ Made Kulture — Booking Confirmed!`, ``,
       `${custName}, you're locked in.`, sched,
@@ -448,6 +459,7 @@ export async function finalizeBooking(
         totalAmount, bookingId: first.id,
         notes: notes || undefined, scheduleLines,
         guestCount: guestCount || undefined,
+        guestCapacity: guestCapacity ?? undefined,
         doorCode: doorCode || undefined,
         doorCodeBack: doorCodeBack || undefined,
         startISO: primary.startISO, endISO: primary.endISO,

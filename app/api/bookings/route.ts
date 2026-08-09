@@ -3,7 +3,7 @@ import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { randomUUID } from 'crypto'
-import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
+import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel, formatGuestLine } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
@@ -165,12 +165,14 @@ interface OrderLine {
 
 async function sendConfirmationSMS(
   body: BookingRequest, lines: OrderLine[], totalCents: number, checkInToken?: string | null,
-  doorCode?: string | null, doorCodeBack?: string | null
+  doorCode?: string | null, doorCodeBack?: string | null, guestCapacity?: number | null
 ) {
   const dollars = (totalCents / 100).toFixed(2)
   const sched = lines.map(l =>
     `📍 ${l.setName} — ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join('\n')
-  const guestLine = body.guests ? `👥 ${body.guests} guests — this is your booked limit` : null
+  const guestLine = body.guests
+    ? `👥 ${formatGuestLine(body.guests, body.type === 'studio' ? null : guestCapacity)}`
+    : null
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
   const checkInLine = checkInToken ? `📲 Check in when you arrive: ${appUrl}/checkin/${checkInToken}` : null
   const doorDisplay = doorCode ? doorCode.replace(/(\d{3})(?=\d)/g, '$1 ') : null
@@ -735,7 +737,7 @@ export async function POST(req: NextRequest) {
     //     right after responding, delaying the email/SMS by minutes. Each send
     //     still .catch()es so a failure stays non-fatal.
     const notifications: Promise<any>[] = [
-      sendConfirmationSMS(body, lines, chargeCents, checkInToken, doorCode, doorCodeBack)
+      sendConfirmationSMS(body, lines, chargeCents, checkInToken, doorCode, doorCodeBack, guestCapacity)
         .catch(err => console.error('SMS error (non-fatal):', err)),
     ]
 
@@ -758,6 +760,7 @@ export async function POST(req: NextRequest) {
           receiptUrl: squarePaymentId ? `https://squareup.com/receipt/preview/${squarePaymentId}` : undefined,
           notes: body.notes || undefined, scheduleLines,
           guestCount: guestCount || undefined,
+          guestCapacity: body.type === 'studio' ? undefined : guestCapacity,
           doorCode: doorCode || undefined,
           doorCodeBack: doorCodeBack || undefined,
           startISO: primary.startISO, endISO: primary.endISO,
