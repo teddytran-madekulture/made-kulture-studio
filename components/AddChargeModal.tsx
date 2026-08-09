@@ -127,6 +127,7 @@ export default function AddChargeModal({
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: total,
+          lines,   // recorded as unpaid add-ons so the Square webhook can reconcile the payment
           description: lines.map(l => l.label).join(', ').slice(0, 120) || 'Made Kulture — Additional Charges',
           phone: booking.customers?.phone || '',
           customerName: booking.customers?.name || 'there',

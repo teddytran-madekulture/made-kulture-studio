@@ -31,7 +31,14 @@ function verifySignature(body: string, signature: string | null): boolean {
 }
 
 // POST /api/webhooks/square
-// Marks equipment add-ons paid when their Square payment-link order completes.
+//
+// Marks equipment add-ons paid when their Square payment-link order completes,
+// and bumps the booking total to match — so a link the CUSTOMER pays lands on
+// the record the same way the admin Charge button does.
+//
+// ⚠️ Square retries a delivery until it gets a 200, so every handler here has
+// to be safe to run twice. The add-on update is written as a CLAIM
+// (`.eq('paid', false)`) for exactly that reason.
 export async function POST(req: NextRequest) {
   const body      = await req.text()
   const signature = req.headers.get('x-square-hmacsha256-signature')
@@ -48,13 +55,42 @@ export async function POST(req: NextRequest) {
     const payment = event?.data?.object?.payment
     const orderId = payment?.order_id
     if (payment?.status === 'COMPLETED' && orderId) {
-      const { error, count } = await supabase
+      // CLAIM the rows: `.eq('paid', false)` + `.select()` means a retried
+      // delivery (Square retries for ~72h) claims zero rows and does nothing.
+      // Without that guard the total below would be added twice.
+      const { data: claimed, error } = await supabase
         .from('booking_add_ons')
-        .update({ paid: true }, { count: 'exact' })
+        .update({ paid: true })
         .eq('square_order_id', orderId)
         .eq('paid', false)
-      if (error) console.error('[Square webhook] update error:', error)
-      else console.log(`[Square webhook] marked ${count ?? 0} add-on(s) paid for order ${orderId}`)
+        .select('id, booking_id, rate, quantity')
+
+      if (error) {
+        console.error('[Square webhook] update error:', error)
+      } else if (!claimed?.length) {
+        console.log(`[Square webhook] order ${orderId} — nothing left to claim (already handled, or not ours)`)
+      } else {
+        console.log(`[Square webhook] marked ${claimed.length} add-on(s) paid for order ${orderId}`)
+
+        // Bump each affected booking's total so a link paid by the customer
+        // lands on the record the same way the admin Charge button does.
+        const byBooking = new Map<string, number>()
+        for (const r of claimed as any[]) {
+          const amt = Number(r.rate || 0) * Number(r.quantity || 1)
+          byBooking.set(r.booking_id, (byBooking.get(r.booking_id) ?? 0) + amt)
+        }
+        for (const [bookingId, addAmount] of byBooking) {
+          if (!bookingId || addAmount <= 0) continue
+          const { data: bk } = await supabase
+            .from('bookings').select('total_amount').eq('id', bookingId).single()
+          const newTotal = Math.round((Number(bk?.total_amount || 0) + addAmount) * 100) / 100
+          const { data: bumped, error: bumpErr } = await supabase
+            .from('bookings').update({ total_amount: newTotal }).eq('id', bookingId).select('id')
+          if (bumpErr || !bumped?.length) {
+            console.error(`[Square webhook] add-ons marked paid but booking ${bookingId} total NOT bumped by ${addAmount}`, bumpErr)
+          }
+        }
+      }
     }
   }
 

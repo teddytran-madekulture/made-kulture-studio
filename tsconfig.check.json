@@ -30,8 +30,7 @@
   },
   "files": [
     "components/AddChargeModal.tsx",
-    "lib/email.ts",
-    "lib/booking-core.ts",
-    "app/api/bookings/route.ts"
+    "app/api/webhooks/square/route.ts",
+    "app/api/admin/bookings/[id]/payment-link/route.ts"
   ]
 }
