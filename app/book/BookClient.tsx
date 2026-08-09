@@ -1742,13 +1742,24 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           </div>
         )}
 
-        {/* Mode toggle — hidden once a link is sent */}
+        {/* Mode toggle — hidden once a link is sent.
+            ⚠️ The selected option must NOT use solid white. Solid white is this
+            page's primary-action styling, and it belongs to CONFIRM & PAY alone.
+            When both were white the page showed two equally-loud buttons where
+            only one does anything — and with studio credit covering the total,
+            CONFIRM & PAY reads "$0.00" and looks inert, so the eye lands on the
+            toggle as the thing about to charge you. Exactly backwards.
+            This is a segmented control showing WHICH MODE you're in, so it gets
+            a quiet fill and a brighter border instead. */}
         <div style={{ display: sent ? 'none' : 'flex', gap: 8, marginBottom: 24 }}>
           {(['self', 'delegate'] as const).map(m => (
             <button key={m} onClick={() => { setMode(m); setDelegateError(null); setPayError(null) }}
-              style={{ flex: 1, padding: '12px', cursor: 'pointer', background: mode === m ? '#fff' : 'transparent',
-                border: '1px solid rgba(255,255,255,0.18)', color: mode === m ? '#080808' : 'rgba(255,255,255,0.6)',
-                fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em' }}>
+              style={{ flex: 1, padding: '12px', cursor: 'pointer',
+                background: mode === m ? 'rgba(255,255,255,0.10)' : 'transparent',
+                border: mode === m ? '1px solid rgba(255,255,255,0.45)' : '1px solid rgba(255,255,255,0.14)',
+                color: mode === m ? '#fff' : 'rgba(255,255,255,0.45)',
+                fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
+                transition: 'background 0.15s, border-color 0.15s, color 0.15s' }}>
               {m === 'self' ? 'PAY NOW' : 'SOMEONE ELSE PAYS'}
             </button>
           ))}
