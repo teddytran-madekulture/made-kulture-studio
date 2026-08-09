@@ -1091,7 +1091,17 @@ export default function AdminDashboard() {
         end_time:     endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:      editState.setName,
         notes:        editState.notes,
-        total_amount: editNewTotal,
+        // ⚠️ total_amount is deliberately NOT sent. This used to write
+        // editNewTotal — the modal's own SET_RATES arithmetic — on a button
+        // that moves no money, so shortening a booking silently rewrote what
+        // the record said the customer paid, with no refund and no prompt.
+        // (Cost: a real booking's total dropped 130 -> 97.50 while Square still
+        // held the full amount. Only base_amount made it recoverable.)
+        //
+        // Every other button here already follows this rule: SEND LINK saves
+        // without the total, CHARGE lets the charge endpoint set it once the
+        // payment clears, and TEXT TO CONFIRM doesn't save at all. SAVE ONLY was
+        // the lone exception. The price changes when money changes, never here.
       }),
     })
     const data = await res.json()
@@ -3890,6 +3900,12 @@ export default function AdminDashboard() {
                   {editDiff > 0 ? `+$${editDiff.toFixed(2)}` : editDiff < 0 ? `-$${Math.abs(editDiff).toFixed(2)}` : 'No change'}
                 </span>
               </div>
+              {editDiff !== 0 && (
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 10, lineHeight: 1.5 }}>
+                  SAVE ONLY changes the time &mdash; the booking keeps its recorded
+                  ${(editBooking.total_amount || 0).toFixed(2)}. Use a payment button to move money.
+                </div>
+              )}
             </div>
 
             {editCards.length > 0 && editDiff > 0 && (
