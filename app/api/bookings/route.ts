@@ -9,6 +9,7 @@ import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
+import { bookingHourToISO } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { createOrderForPayment } from '@/lib/square-order'
@@ -143,9 +144,7 @@ function fmt12(h: number) {
 }
 
 function hoursToISO(date: string, h: number): string {
-  const hour = Math.floor(h)
-  const mins = h % 1 !== 0 ? '30' : '00'
-  return `${date}T${String(hour).padStart(2, '0')}:${mins}:00-05:00`
+  return bookingHourToISO(date, h)
 }
 
 // ─── Normalized order line ──────────────────────────────────────────────────

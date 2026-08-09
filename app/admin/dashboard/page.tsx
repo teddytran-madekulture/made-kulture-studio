@@ -8,6 +8,7 @@ import AdminCardCharge from '@/components/AdminCardCharge'
 import AddSetModal from '@/components/AddSetModal'
 import AddChargeModal from '@/components/AddChargeModal'
 import OvertimeModal from '@/components/OvertimeModal'
+import { bookingHourToISO } from '@/lib/booking-times'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -297,11 +298,8 @@ function cardLabel(c: SquareCard) {
   return `${c.brand?.replace('_', ' ')} **** ${c.last4}  (exp ${c.expMonth}/${c.expYear})${prepaid}`
 }
 
-function hourToISO(date: string, hour: number): string {
-  const h = Math.floor(hour)
-  const m = hour % 1 !== 0 ? '30' : '00'
-  return `${date}T${String(h).padStart(2, '0')}:${m}:00-05:00`
-}
+// Offset computed for the date rather than assumed — see lib/booking-times.
+const hourToISO = bookingHourToISO
 
 // An off-hours session can run past midnight (10 PM – 1 AM). The modal collects
 // ONE date, so an end at or before the start means the next calendar day —

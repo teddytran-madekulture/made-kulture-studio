@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
+import { bookingHourToISO } from '@/lib/booking-times'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 
@@ -31,7 +32,7 @@ function fmt12(h: number) {
   return `${h12}:00${ampm}`
 }
 function isoFor(date: string, hour: number): string {
-  return `${date}T${String(hour).padStart(2, '0')}:00:00-05:00`
+  return bookingHourToISO(date, hour)
 }
 
 // Resolve set + rate, and whether it's free for [startISO, endISO). A full-studio

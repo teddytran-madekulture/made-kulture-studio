@@ -9,6 +9,7 @@ import DatePicker from '@/components/DatePicker'
 import StudioConditions from '@/components/StudioConditions'
 import { shortNoticeActive, todayDateStr, chiTodayStr, chiNowDecimal } from '@/lib/short-notice'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
+import { bookingHourToISO } from '@/lib/booking-times'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -1299,7 +1300,7 @@ function SuccessScreen({ booking, setCart, loggedIn }: { booking: BookingState; 
   const calFirst: any = booking.type === 'set'
     ? setCart[0]
     : (booking.startHour != null && booking.endHour != null ? { date: booking.date, startHour: booking.startHour, endHour: booking.endHour, setName: 'Full Studio Takeover' } : null)
-  const isoAt = (d: string, h: number) => { const hh = Math.floor(h), mm = h % 1 ? '30' : '00'; return `${d}T${String(hh).padStart(2, '0')}:${mm}:00-05:00` }
+  const isoAt = bookingHourToISO
   const gcal = calFirst
     ? googleCalUrl({ title: `Made Kulture — ${calFirst.setName}`, startISO: isoAt(calFirst.date, calFirst.startHour), endISO: isoAt(calFirst.date, calFirst.endHour), location: STUDIO_ADDRESS, details: 'Your Made Kulture session. Check your email for the door code and full details.' })
     : null

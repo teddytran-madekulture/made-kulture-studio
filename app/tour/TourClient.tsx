@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PageContent } from '@/lib/site-content'
 import { fmt as nl } from '@/lib/fmt'
+import { centralOffset } from '@/lib/booking-times'
 
 const GOLD = '#d4a843'
 
@@ -70,9 +71,9 @@ export default function TourClient({ content = {} }: { content?: PageContent }) 
       startISO = picked
       if (!startISO) { setError('Pick a time slot first.'); return }
     } else {
-      // Custom: Houston-local time → ISO with Central offset handled server-side
-      // via a full ISO string; -05:00 covers CDT (studio summer default).
-      startISO = `${date}T${customTime}:00-05:00`
+      // Custom: Houston-local time → full ISO. The offset is computed for the
+      // chosen date so a winter tour isn't booked an hour early.
+      startISO = `${date}T${customTime}:00${centralOffset(date, Number(customTime.slice(0, 2)))}`
     }
     if (!name.trim() || !phone.trim()) { setError('Name and phone number are required.'); return }
     setBusy(true)

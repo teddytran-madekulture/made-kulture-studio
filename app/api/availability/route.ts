@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { centralOffset } from '@/lib/booking-times'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -57,8 +58,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'date is required' }, { status: 400 })
   }
 
-  const dayStart = `${date}T00:00:00-05:00`
-  const dayEnd   = `${date}T23:59:59-05:00`
+  const dayStart = `${date}T00:00:00${centralOffset(date, 0)}`
+  const dayEnd   = `${date}T23:59:59${centralOffset(date, 23)}`
 
   // ── Single set (existing behaviour) ────────────────────────────────────────
   if (set_id) {

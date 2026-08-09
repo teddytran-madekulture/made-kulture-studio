@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { bookingHourToISO } from '@/lib/booking-times'
 import { createClient } from '@supabase/supabase-js'
 import { getReservedQuantities } from '@/lib/equipment-availability'
 
@@ -31,11 +32,7 @@ export async function GET(req: NextRequest) {
   let reserved: Record<string, number> = {}
   // If a concrete window was provided, compute true availability for it.
   if (date && start && end) {
-    const toISO = (h: string) => {
-      const hr = Math.floor(Number(h))
-      const mn = Number(h) % 1 !== 0 ? '30' : '00'
-      return `${date}T${String(hr).padStart(2, '0')}:${mn}:00-05:00`
-    }
+    const toISO = (h: string) => bookingHourToISO(date, Number(h))
     try {
       reserved = await getReservedQuantities(supabase, toISO(start), toISO(end))
     } catch { /* fall back to total quantities */ }

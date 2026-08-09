@@ -23,6 +23,8 @@
 // feature is dormant (createBookingPin returns null) so bookings keep working
 // before the env vars are wired up.
 
+import { centralOffsetMinutesAt } from '@/lib/booking-times'
+
 const AUTH_URL = 'https://auth.igloohome.co/oauth2/token'
 const API_BASE = 'https://api.igloodeveloper.co'
 const PIN_SCOPE = 'igloohomeapi/algopin-hourly'
@@ -68,13 +70,19 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
   return cachedToken.value
 }
 
-// Format an absolute instant as wall-clock at Central (UTC-05:00), matching the
-// -05:00 ISO the booking flow already uses (studio is America/Chicago; DST/CDT).
+// Format an absolute instant as Central wall-clock, matching the shape the
+// booking flow stores. The offset is read from the timezone database for THIS
+// instant, not assumed to be CDT — a PIN minted an hour off doesn't look wrong,
+// it locks a guest out of the building.
 function toCentralISO(ms: number): string {
-  const d = new Date(ms - 5 * 3600 * 1000)
+  const offMin = centralOffsetMinutesAt(new Date(ms))
+  const d = new Date(ms + offMin * 60_000)
   const p = (n: number) => String(n).padStart(2, '0')
+  const sign = offMin <= 0 ? '-' : '+'
+  const abs  = Math.abs(offMin)
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}` +
-    `T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}-05:00`
+    `T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}` +
+    `${sign}${p(Math.floor(abs / 60))}:${p(abs % 60)}`
 }
 
 export interface BookingPin {

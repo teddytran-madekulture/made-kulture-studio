@@ -14,6 +14,7 @@ import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
+import { bookingHourToISO } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
@@ -120,9 +121,8 @@ export function fmt12(h: number) {
 }
 
 export function hoursToISO(date: string, h: number): string {
-  const hour = Math.floor(h)
-  const mins = h % 1 !== 0 ? '30' : '00'
-  return `${date}T${String(hour).padStart(2, '0')}:${mins}:00-05:00`
+  // Offset is computed for the date, not assumed — see lib/booking-times.
+  return bookingHourToISO(date, h)
 }
 
 // Inverse of hoursToISO — safe because we control the stored format.
