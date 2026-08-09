@@ -14,7 +14,7 @@ import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
-import { bookingHourToISO } from '@/lib/booking-times'
+import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
@@ -123,13 +123,6 @@ export function fmt12(h: number) {
 export function hoursToISO(date: string, h: number): string {
   // Offset is computed for the date, not assumed — see lib/booking-times.
   return bookingHourToISO(date, h)
-}
-
-// Inverse of hoursToISO — safe because we control the stored format.
-function isoToHour(iso: string): number {
-  const hh = Number(iso.slice(11, 13))
-  const mm = iso.slice(14, 16)
-  return hh + (mm === '30' ? 0.5 : 0)
 }
 
 async function getSetId(supabase: SupabaseClient, slug: string): Promise<string | null> {
@@ -343,11 +336,15 @@ export async function finalizeBooking(
     return s?.name ?? 'Full Studio Takeover'
   }
 
+  // ⚠️ These come straight from Supabase, which returns timestamptz in UTC —
+  // an 11 PM Central booking arrives as `...T04:00:00+00:00` on the NEXT day.
+  // Reading them positionally (as this did until 2026-08-09) put the wrong time
+  // AND the wrong date into every delegated-payment confirmation.
   const lineFor = (r: any) => ({
     setName:   setNameOf(r),
-    date:      String(r.start_time).slice(0, 10),
-    startHour: isoToHour(r.start_time),
-    endHour:   isoToHour(r.end_time),
+    date:      centralDateStr(r.start_time),
+    startHour: centralHourDecimal(r.start_time),
+    endHour:   centralHourDecimal(r.end_time),
     startISO:  r.start_time as string,
     endISO:    r.end_time as string,
   })

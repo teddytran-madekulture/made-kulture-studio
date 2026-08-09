@@ -10,25 +10,15 @@ import { issueCredit } from '@/lib/credits'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { notifyCoverageGap } from '@/lib/coverage'
 import { issueDoorCodes } from '@/lib/igloohome'
+import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Central-time helpers so the cancellation email reads in the studio's timezone
-// regardless of how the timestamp offset was stored.
-function centralDateStr(iso: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(iso))
-}
-function centralHourDecimal(iso: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date(iso))
-  const hh = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
-  const mm = Number(parts.find(p => p.type === 'minute')?.value ?? 0)
-  return (hh % 24) + (mm >= 30 ? 0.5 : 0)
-}
+// Central-time readers now live in lib/booking-times (imported above) so there
+// is one copy — these were right, and booking-core's positional version wasn't.
 
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

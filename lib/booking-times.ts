@@ -90,6 +90,28 @@ export function nextDay(date: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+// ─── Reading a stored timestamp BACK ─────────────────────────────────────────
+//
+// ⚠️ Supabase returns `timestamptz` in UTC. An 11:00 PM Central booking comes
+// back as `2026-08-11T04:00:00+00:00`. So you can NEVER read the studio's hour
+// or date off a stored value positionally — `iso.slice(11, 13)` gives the UTC
+// hour, which is 5–6 ahead and frequently on the following calendar day.
+// (`lib/booking-core.ts` did exactly that until 2026-08-09.)
+//
+// Always go through these two.
+export function centralDateStr(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: STUDIO_TZ }).format(new Date(iso))
+}
+
+export function centralHourDecimal(iso: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: STUDIO_TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso))
+  const hh = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
+  const mm = Number(parts.find(p => p.type === 'minute')?.value ?? 0)
+  return (hh % 24) + (mm >= 30 ? 0.5 : 0)
+}
+
 export function bookingSpanHours(startHour: number, endHour: number): number {
   return endHour <= startHour ? endHour + 24 - startHour : endHour - startHour
 }
