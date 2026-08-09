@@ -76,3 +76,61 @@ export function shortNoticeViewActive(po: any): boolean {
   if (!po) return false
   return !!po.short_notice_view || plusActive(po) || shortNoticeActive(po)
 }
+
+// ── The advance-booking window, SERVER SIDE ─────────────────────────────────
+// The public booking UI refuses to show dates inside the advance window, but
+// until now that was the ONLY place it was enforced — a direct POST to
+// /api/bookings could reserve a slot for two hours from now. Door PINs,
+// cleaning and turnaround all assume notice, so this is enforced on the
+// server too.
+//
+// ⚠️ The rule is deliberately a CALENDAR-DAY floor, not a literal 48-hour
+// subtraction, because that is what `today()` in app/book/BookClient.tsx
+// actually does (`d.setDate(d.getDate() + 2)`). Real notice therefore ranges
+// from roughly 34 to 57 hours depending on the time of day. A strict 48-hour
+// check here would REJECT bookings the UI happily offers, which is worse than
+// the hole it closes. The copy says "48 hours"; the code says "two days".
+// Reconcile them deliberately, not by tightening one side in isolation.
+export const ADVANCE_DAYS = 2
+
+// Earliest date the public may book, as YYYY-MM-DD in the studio's timezone.
+// Uses Central rather than the browser's UTC-tinged date, so this is never
+// STRICTER than the client — after 7 PM Houston the client is a day more
+// conservative than this, which is fine. It must never be the other way round.
+export function minAdvanceDateStr(): string {
+  const [y, m, d] = chiTodayStr().split('-').map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d))
+  t.setUTCDate(t.getUTCDate() + ADVANCE_DAYS)
+  return t.toISOString().slice(0, 10)
+}
+
+// True if ANY of the requested dates falls inside the advance window.
+export function violatesAdvanceWindow(dates: (string | null | undefined)[]): boolean {
+  const min = minAdvanceDateStr()
+  return dates.some(d => !!d && d < min)
+}
+
+// Whether the SIGNED-IN customer carries an explicit short-notice BOOKING
+// grant. Takes the caller's supabase client so this file stays importable
+// from client components.
+//
+// ⚠️ Pass the email from the verified auth session, NEVER the email field on
+// the request body — that is attacker-controlled, and trusting it would let
+// anyone borrow an approved customer's short-notice window by typing their
+// address into the checkout form.
+//
+// Plus membership alone does NOT qualify. Plus grants short-notice VIEW plus
+// eligibility to REQUEST; approving a request is what writes the timed grant
+// that shortNoticeActive() reads.
+export async function sessionMayBookShortNotice(supabase: any, sessionEmail: string | null | undefined): Promise<boolean> {
+  if (!sessionEmail) return false
+  const { data } = await supabase
+    .from('customers')
+    .select('pricing_overrides')
+    .eq('email', String(sessionEmail).toLowerCase().trim())
+    .maybeSingle()
+  return shortNoticeActive(data?.pricing_overrides ?? null)
+}
+
+export const ADVANCE_WINDOW_ERROR =
+  'Sessions need to be booked at least two days out. Text (832) 408-1631 and we\u2019ll see what we can do about a short-notice session.'

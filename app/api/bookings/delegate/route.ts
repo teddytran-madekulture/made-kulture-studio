@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { validateAndPriceOrder, fmt12, type BookingCoreInput } from '@/lib/booking-core'
+import { sessionMayBookShortNotice } from '@/lib/short-notice'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { sendSMS, toE164 } from '@/lib/sms'
 import { sendSimpleEmail } from '@/lib/email'
@@ -71,8 +72,15 @@ export async function POST(req: NextRequest) {
 
     // 1. Validate + price (shared with checkout). Booker's login = member rate.
     let isMember = false
-    try { const { data } = await createServerClient().auth.getUser(); isMember = !!data.user } catch { /* guest */ }
-    const v = await validateAndPriceOrder(supabase, body, { isMember })
+    let sessionEmail: string | null = null
+    try {
+      const { data } = await createServerClient().auth.getUser()
+      isMember = !!data.user
+      sessionEmail = data.user?.email ?? null
+    } catch { /* guest */ }
+    // Short-notice eligibility comes from the VERIFIED session, never body.email.
+    const allowShortNotice = await sessionMayBookShortNotice(supabase, sessionEmail)
+    const v = await validateAndPriceOrder(supabase, body, { isMember, allowShortNotice })
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: v.status })
     const { lines, verifiedCents, guestCount, guestFeeDollars, guestSurchargeDollars, equipRates } = v.order
 

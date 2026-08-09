@@ -10,6 +10,7 @@ import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { bookingHourToISO } from '@/lib/booking-times'
+import { violatesAdvanceWindow, sessionMayBookShortNotice, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { createOrderForPayment } from '@/lib/square-order'
@@ -215,10 +216,10 @@ export async function POST(req: NextRequest) {
 
     // ── 0. Membership (verified session, not the email field) ──────────────
     //     Logged-in = member rate; everyone else pays the guest surcharge.
-    let sessionUser: { id: string } | null = null
+    let sessionUser: { id: string; email: string | null } | null = null
     try {
       const { data } = await createServerClient().auth.getUser()
-      sessionUser = data.user ? { id: data.user.id } : null
+      sessionUser = data.user ? { id: data.user.id, email: data.user.email ?? null } : null
     } catch { /* guest */ }
     const isMember = !!sessionUser
 
@@ -285,6 +286,17 @@ export async function POST(req: NextRequest) {
           spaceDollars: rate * (l.endHour - l.startHour),
           stdSpaceDollars: rateStd * (l.endHour - l.startHour),
         })
+      }
+    }
+
+    // ── 3b. Advance-booking window (SERVER SIDE) ───────────────────────
+    //     Until this existed the window was enforced ONLY in the booking UI,
+    //     so a direct POST could reserve a slot hours from now. See
+    //     lib/short-notice.ts for why the rule is a two-CALENDAR-DAY floor
+    //     rather than a literal 48-hour subtraction.
+    if (violatesAdvanceWindow(lines.map(l => l.date))) {
+      if (!(await sessionMayBookShortNotice(supabase, sessionUser?.email))) {
+        return NextResponse.json({ error: ADVANCE_WINDOW_ERROR }, { status: 400 })
       }
     }
 

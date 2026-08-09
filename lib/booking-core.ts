@@ -13,6 +13,7 @@ import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDa
 import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
+import { violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
@@ -141,7 +142,7 @@ export type ValidateResult =
 export async function validateAndPriceOrder(
   supabase: SupabaseClient,
   body: BookingCoreInput,
-  opts: { isMember?: boolean } = {}
+  opts: { isMember?: boolean; allowShortNotice?: boolean } = {}
 ): Promise<ValidateResult> {
   // 1. Customer pricing overrides
   let customerPricingOverrides: any = null
@@ -202,6 +203,15 @@ export async function validateAndPriceOrder(
         stdSpaceDollars: rateStd * (l.endHour - l.startHour),
       })
     }
+  }
+
+  // 3b. Advance-booking window. Enforced here as well as in POST /api/bookings
+  //     because this path also inserts booking rows (the delegated-payment
+  //     hold), so skipping it would leave the hole open on a second door.
+  //     `allowShortNotice` must be resolved by the CALLER from the verified
+  //     session — never from body.email.
+  if (!opts.allowShortNotice && violatesAdvanceWindow(lines.map(l => l.date))) {
+    return { ok: false, error: ADVANCE_WINDOW_ERROR, status: 400 }
   }
 
   // 4. Minimum hours
