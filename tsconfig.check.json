@@ -29,12 +29,6 @@
     "incremental": false
   },
   "files": [
-    "app/api/account/cancel/route.ts",
-    "lib/email.ts",
-    "lib/site-content.ts",
-    "lib/agreements.ts",
-    "app/terms/page.tsx",
-    "app/account/bookings/page.tsx",
-    "app/api/admin/email-preview/[key]/route.ts"
+    "app/plus/page.tsx"
   ]
 }
