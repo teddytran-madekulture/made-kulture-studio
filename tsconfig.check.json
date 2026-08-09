@@ -29,10 +29,9 @@
     "incremental": false
   },
   "files": [
+    "components/AddChargeModal.tsx",
     "lib/email.ts",
     "lib/booking-core.ts",
-    "app/api/bookings/route.ts",
-    "app/book/BookClient.tsx",
-    "app/admin/dashboard/page.tsx"
+    "app/api/bookings/route.ts"
   ]
 }

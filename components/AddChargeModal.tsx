@@ -62,6 +62,8 @@ export default function AddChargeModal({
   const [error, setError]         = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)  // cardId pending removal
   const [removing, setRemoving]   = useState(false)
+  const [payLink, setPayLink]     = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   // Load the equipment catalog + the customer's saved cards.
   useEffect(() => {
@@ -105,6 +107,42 @@ export default function AddChargeModal({
 
   const total = useMemo(() => Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100, [lines])
   const chosenCard = cards.find(c => c.id === chosenCardId) || null
+
+  // Send the customer a Square link to pay it themselves. This is the way out
+  // when the card on file declines — a GENERIC_DECLINE is the issuer refusing
+  // without a reason (commonly a card locked in their banking app), and Square's
+  // own guidance is not to retry it.
+  //
+  // ⚠️ UNLIKE the charge buttons, this records NOTHING. The payment-link route
+  // mints a Square quick-pay link and texts it; when they pay, the money lands
+  // in Square and this app never finds out — no booking total change, no note on
+  // the customer. The button says so, because two adjacent buttons where one
+  // bookkeeps and one doesn't is exactly the kind of thing nobody remembers.
+  // Reconciling paid links belongs with the Square webhook work.
+  const sendPayLink = useCallback(async () => {
+    if (busy || total <= 0) return
+    setBusy(true); setError(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/payment-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: total,
+          description: lines.map(l => l.label).join(', ').slice(0, 120) || 'Made Kulture — Additional Charges',
+          phone: booking.customers?.phone || '',
+          customerName: booking.customers?.name || 'there',
+          sendSms,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Could not create a payment link'); return }
+      setPayLink(data.url)
+      if (sendSms && data.smsError) setError(`Link created, but the text failed: ${data.smsError}`)
+    } catch (e: any) {
+      setError(e?.message || 'Could not create a payment link')
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, total, lines, booking, sendSms])
 
   // Charge a saved card straight through — no card entry needed.
   const chargeSaved = useCallback(async () => {
@@ -320,8 +358,34 @@ export default function AddChargeModal({
               </button>
             )}
 
+            {/* Outside the branch on purpose: a booking with NO card on file is
+                the case that needs this most, and the first version hid it there. */}
+            <button onClick={sendPayLink} disabled={busy || total <= 0}
+              style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.14em', cursor: busy || total <= 0 ? 'default' : 'pointer' }}>
+              {busy ? 'WORKING…' : `SEND THEM A PAYMENT LINK${sendSms ? ' (TEXT)' : ''}`}
+            </button>
+
+            {payLink && (
+              <div style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.25)', padding: '12px 14px', marginTop: 14 }}>
+                <div style={{ fontSize: 10, color: '#e6c07a', letterSpacing: '0.1em', marginBottom: 8 }}>
+                  PAYMENT LINK CREATED{sendSms ? ' — TEXTED TO THEM' : ''}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#fff', wordBreak: 'break-all', flex: 1 }}>{payLink}</span>
+                  <button onClick={() => { navigator.clipboard.writeText(payLink); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000) }}
+                    style={{ background: '#e6c07a', border: 'none', padding: '5px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', color: '#080808', flexShrink: 0 }}>
+                    {linkCopied ? 'COPIED' : 'COPY'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 8, lineHeight: 1.6 }}>
+                  They pay in Square. This does NOT add to the booking total or log a note — check Square to confirm it was paid.
+                </div>
+              </div>
+            )}
+
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 12, lineHeight: 1.6 }}>
-              Charges via Square. Adds to the booking total and logs a note on the customer.
+              The two card buttons charge via Square, add to the booking total and log a note.
+              A payment link does none of that &mdash; it just gets you paid.
             </div>
           </>
         )}
