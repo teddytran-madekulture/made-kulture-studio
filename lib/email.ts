@@ -279,8 +279,9 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
         <td>
           <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Cancellation Policy</p>
           <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
-            <li style="margin-bottom:6px;"><strong style="color:#ddd;">48+ hours before:</strong> Full refund.</li>
-            <li><strong style="color:#ddd;">Less than 48 hours:</strong> No refund.</li>
+            <li style="margin-bottom:6px;"><strong style="color:#ddd;">48+ hours before:</strong> Full value back as studio credit. Credit never expires.</li>
+            <li style="margin-bottom:6px;"><strong style="color:#ddd;">Less than 48 hours:</strong> Not credited &mdash; unless you're Made Kulture Plus, which is credited in full any time before your session starts.</li>
+            <li><strong style="color:#ddd;">Full warehouse, less than 48 hours:</strong> 25% late cancellation fee; the remaining 75% comes back as studio credit.</li>
           </ul>
           <p style="margin:10px 0 0;font-size:12px;color:#666;">To cancel or reschedule, use the button above or text us at (832) 408-1631.</p>
         </td>

@@ -76,8 +76,10 @@ export default function TermsPage() {
 
           <Section title="CANCELLATION POLICY">
             <UL items={[
-              <><strong style={{ color: '#fff' }}>Full refund</strong> if cancelled 48 or more hours before your booking start time</>,
-              <><strong style={{ color: '#fff' }}>No refund</strong> for cancellations within 48 hours of the booking start time</>,
+              <>Made Kulture issues <strong style={{ color: '#fff' }}>studio credit, not refunds</strong>. Credit never expires and applies automatically to your next booking.</>,
+              <><strong style={{ color: '#fff' }}>Full value back as studio credit</strong> if cancelled 48 or more hours before your booking start time</>,
+              <><strong style={{ color: '#fff' }}>Not credited</strong> for cancellations within 48 hours of the booking start time</>,
+              <><strong style={{ color: '#fff' }}>Full-warehouse bookings cancelled within 48 hours</strong> carry a <strong style={{ color: '#fff' }}>25% late cancellation fee</strong>; the remaining 75% returns as studio credit. Because a full-warehouse booking takes the entire building out of availability and cannot be partially re-booked at short notice, this applies to all customers, including Plus.</>,
               <>Made Kulture <strong style={{ color: '#fff' }}>Plus</strong> members receive full studio credit (never a forfeit) when they cancel a booking, and may be credited for a no-show on request — see Membership below</>,
             ]} />
           </Section>

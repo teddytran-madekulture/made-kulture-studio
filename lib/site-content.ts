@@ -119,7 +119,7 @@ const SETS_FIELDS: ContentField[] = [
   { key: 'buyoutIncludes', label: 'Includes', type: 'text', group: 'Full studio takeover', default: 'All sets + Studio One' },
   { key: 'buyoutTags',     label: 'Tags',     type: 'text', group: 'Full studio takeover', default: 'Full Warehouse, All Sets, Studio One, Private, Up to 30 People', hint: 'Comma-separated.' },
 
-  { key: 'footerNote',     label: 'Bottom note',       type: 'multiline', group: 'Bottom bar', default: 'All bookings require 48hr advance notice. Cancellations within 48hrs are non-refundable.\nText us at (832) 408-1631 with questions.' },
+  { key: 'footerNote',     label: 'Bottom note',       type: 'multiline', group: 'Bottom bar', default: 'All bookings require 48hr advance notice. Cancel 48+ hrs ahead and the full value comes back as studio credit.\nText us at (832) 408-1631 with questions.' },
   { key: 'footerCtaLabel', label: 'Bottom button label', type: 'text',    group: 'Bottom bar', default: 'BOOK NOW' },
   { key: 'footerCtaHref',  label: 'Bottom button link',  type: 'url',     group: 'Bottom bar', default: '/book' },
 ]
@@ -138,7 +138,7 @@ const STUDIO_RULES_FIELDS: ContentField[] = [
   { key: 'faq1Title', label: 'Section title', type: 'text', group: 'Section 1 \u00b7 Booking',       default: 'BOOKING' },
   { key: 'faq1Items', label: 'Questions',     type: 'list', group: 'Section 1 \u00b7 Booking',       item: FAQ_ITEM, default: JSON.stringify([
     { q: 'How far in advance do I need to book?', a: 'All bookings must be made at least 48 hours in advance. A card on file is required at checkout to cover any session overages.' },
-    { q: 'What is the cancellation policy?', a: 'You may cancel or reschedule up to 48 hours before your session start time for a full refund, including all fees. Cancellations made less than 48 hours before your session are non-refundable.' },
+    { q: 'What is the cancellation policy?', a: 'We issue studio credit rather than refunds \u2014 it never expires and applies automatically to your next booking. Cancel or reschedule up to 48 hours before your start time and the full value of your booking comes back as credit. Cancellations inside 48 hours are not credited, unless you\u2019re a Made Kulture Plus member (credited in full any time before your session starts). Full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee, with the remaining 75% returned as credit \u2014 a full warehouse takes the entire building out of availability and can\u2019t be partially re-booked at short notice.' },
     { q: 'Can I arrive early?', a: 'Your set unlocks at your booked start time \u2014 the door code activates then, so you will not be able to get in before your session begins. We still recommend arriving a few minutes early so you are ready to make the most of your time. All setup, shooting, and breakdown happen within your booked hours.' },
     { q: 'Can I book outside of business hours?', a: 'Yes. Outside-hours bookings are available upon request and are billed at the full warehouse rate. Overages that run past closing time are also charged at the full warehouse rate.' },
     { q: 'Can I add more time during my session?', a: 'Yes \u2014 if no booking immediately follows yours on that set, you can extend your session on the spot. Additional time is charged at the standard hourly rate for your set.' },

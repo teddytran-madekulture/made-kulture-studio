@@ -63,10 +63,13 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Bookings outside these hours may be avail
 
 Made Kulture is a smoke-free facility. Smoking and vaping are not permitted anywhere on the premises. Violations are subject to applicable state and local law and will result in cleaning and airing-out charges — including the set's hourly rate for any time it cannot be used while airing out, plus a cleaning fee based on the cleanup required.
 
-## Cancellations & Refunds
+## Cancellations
 
-- Full refund if you cancel at least 48 hours before your reserved start time.
-- No refund for cancellations made within 48 hours of the reserved start time.
+Made Kulture issues **studio credit**, not refunds. Credit never expires and applies automatically to your next booking.
+
+- Cancel at least 48 hours before your reserved start time and the full value of your booking returns to your account as studio credit.
+- Cancellations made within 48 hours of the reserved start time are not credited. **Made Kulture Plus members are protected inside this window** — a Plus cancellation returns the full value as studio credit at any time before the session starts.
+- Once your session has started, it can no longer be cancelled online. Contact the studio.
 
 ## Release and Waiver of Liability
 
@@ -139,10 +142,14 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Outside-hours bookings are available by r
 
 Made Kulture is a smoke-free facility. Smoking and vaping are not permitted anywhere on the premises. Violations are subject to applicable state and local law and will result in cleaning and airing-out charges — including the hourly rate for any time the space cannot be used while airing out, plus a cleaning fee based on the cleanup required.
 
-## Cancellations & Refunds
+## Cancellations
 
-- Full refund if you cancel at least 48 hours before your reserved start time.
-- No refund for cancellations made within 48 hours of the reserved start time.
+Made Kulture issues **studio credit**, not refunds. Credit never expires and applies automatically to your next booking.
+
+- Cancel at least 48 hours before your reserved start time and the full value of your booking returns to your account as studio credit.
+- Cancel within 48 hours of the reserved start time and a **25% late cancellation fee** applies. The remaining 75% returns to your account as studio credit.
+- Because a full-warehouse booking takes the entire building out of availability and cannot be partially re-booked at short notice, the late cancellation fee applies to all full-warehouse bookings regardless of membership, including Made Kulture Plus.
+- Once your session has started, it can no longer be cancelled online. Contact the studio.
 
 ## Release and Waiver of Liability
 

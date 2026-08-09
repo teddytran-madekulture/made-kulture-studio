@@ -29,8 +29,12 @@
     "incremental": false
   },
   "files": [
-    "components/AddChargeModal.tsx",
-    "app/api/webhooks/square/route.ts",
-    "app/api/admin/bookings/[id]/payment-link/route.ts"
+    "app/api/account/cancel/route.ts",
+    "lib/email.ts",
+    "lib/site-content.ts",
+    "lib/agreements.ts",
+    "app/terms/page.tsx",
+    "app/account/bookings/page.tsx",
+    "app/api/admin/email-preview/[key]/route.ts"
   ]
 }

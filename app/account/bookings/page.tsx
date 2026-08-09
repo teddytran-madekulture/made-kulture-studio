@@ -199,7 +199,7 @@ export default function BookingsPage() {
     <div>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>MY BOOKINGS</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 32 }}>
-        Cancellations must be made 48+ hours before the session for a full refund.
+        Cancel 48+ hours before your session and the full value comes back as studio credit. Full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee.
       </p>
 
       {error && (

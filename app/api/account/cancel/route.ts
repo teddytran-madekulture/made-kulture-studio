@@ -7,6 +7,7 @@ import { issueCredit } from '@/lib/credits'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 import { deleteCalendarEvent } from '@/lib/gcal'
 import { sendSMS } from '@/lib/sms'
+import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   // Fetch the booking — verify it belongs to this user
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, status, total_amount, acuity_appointment_id, acuity_block_ids, gcal_event_id, auth_user_id, customers(name, email, phone), sets(name)')
+    .select('id, start_time, end_time, status, total_amount, set_id, acuity_appointment_id, acuity_block_ids, gcal_event_id, auth_user_id, customers(name, email, phone), sets(name)')
     .eq('id', booking_id)
     .single()
 
@@ -54,8 +55,16 @@ export async function POST(req: NextRequest) {
   if (hoursUntil <= 0) {
     return NextResponse.json({ error: 'This session has already started — reach out to the studio if you couldn’t make it.' }, { status: 400 })
   }
-  if (hoursUntil < 48 && !isPlus) {
-    return NextResponse.json({ error: 'Cancellations must be made at least 48 hours in advance. No refund will be issued per our cancellation policy.' }, { status: 400 })
+  // A FULL WAREHOUSE booking (set_id null) is its own case. Cancelling one takes
+  // the entire building out of availability and there is no way to partially
+  // resell a warehouse at short notice — so unlike an individual set, it is
+  // never simply forfeited. Inside 48h it carries a late cancellation fee and
+  // the rest comes back as credit, the same for Plus and standard alike.
+  // Policy decided 2026-08-09 — see Cancellation_Policy_Decision.md.
+  const isBuyout = booking.set_id == null
+
+  if (hoursUntil < 48 && !isPlus && !isBuyout) {
+    return NextResponse.json({ error: 'Cancellations must be made at least 48 hours in advance to receive studio credit. Text (832) 408-1631 if something has come up.' }, { status: 400 })
   }
 
   // Cancel in Acuity if we have an appointment ID
@@ -115,24 +124,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
   }
 
-  // Plus cancellation protection → bank the booking's full value as studio credit.
+  // ── What comes back ──────────────────────────────────────────────────────
+  //
+  // The studio is CREDIT-ONLY — no refunds anywhere in this route, by design.
+  //
+  //   • Outside 48h, anyone           → 100% credit. Previously a standard
+  //     customer who cancelled a week out got NOTHING: the booking cancelled
+  //     and no credit was ever issued. That was not policy, it was a gap.
+  //   • Inside 48h, individual set    → Plus 100%, standard never reaches here
+  //     (blocked by the gate above — that forfeiture is what Plus exists to fix).
+  //   • Inside 48h, FULL WAREHOUSE    → 25% late cancellation fee, 75% credit,
+  //     regardless of membership.
+  const LATE_BUYOUT_FEE_RATE = 0.25
+  const totalCents = Math.round(Number((booking as any).total_amount || 0) * 100)
+  const lateBuyout = isBuyout && hoursUntil < 48
+
+  let feeCents = 0
   let creditCents = 0
-  if (isPlus) {
-    creditCents = Math.round(Number((booking as any).total_amount || 0) * 100)
-    if (creditCents > 0) {
-      await issueCredit(user.id, creditCents, {
-        kind: 'issued', reason: 'Plus cancellation protection → studio credit', bookingId: booking_id, createdBy: 'system',
-      })
-    }
+  if (lateBuyout) {
+    feeCents = Math.round(totalCents * LATE_BUYOUT_FEE_RATE)
+    creditCents = totalCents - feeCents
+  } else {
+    creditCents = totalCents
+  }
+
+  if (creditCents > 0) {
+    await issueCredit(user.id, creditCents, {
+      kind: 'issued',
+      reason: lateBuyout
+        ? 'Full warehouse cancelled inside 48h — 25% late cancellation fee applied'
+        : (hoursUntil < 48 ? 'Plus cancellation protection → studio credit' : 'Cancelled booking → studio credit'),
+      bookingId: booking_id, createdBy: 'system',
+    })
   }
 
   // Send cancellation email (non-blocking)
   const startTime2 = new Date(booking.start_time)
   const endTime2   = new Date(booking.end_time)
   const setName = (booking.sets as any)?.name ?? 'Studio'
-  const dateLabel = formatDateLabel(startTime2.toISOString().slice(0, 10))
-  const startLbl = formatTimeLabel(startTime2.getHours())
-  const endLbl = formatTimeLabel(endTime2.getHours())
+  // ⚠️ These used to be toISOString().slice(0,10) and getHours() — i.e. the
+  // SERVER's clock, which on Vercel is UTC. An evening booking was emailed with
+  // the wrong hour and often the wrong DATE. Same read-side bug fixed in
+  // booking-core on 2026-08-09; this copy was missed.
+  const dateLabel = formatDateLabel(centralDateStr(booking.start_time as string))
+  const startLbl = formatTimeLabel(centralHourDecimal(booking.start_time as string))
+  const endLbl = formatTimeLabel(centralHourDecimal(booking.end_time as string))
   const customerName = (booking.customers as any)?.name ?? 'there'
 
   // AWAIT the emails — on Vercel, un-awaited promises get frozen when the
@@ -141,19 +177,37 @@ export async function POST(req: NextRequest) {
   // failure stays non-fatal.
   const notifications: Promise<any>[] = []
   if (customerEmail) {
-    if (isPlus && creditCents > 0) {
+    if (creditCents > 0) {
       const dollars = (creditCents / 100).toFixed(2)
+      const feeDollars = (feeCents / 100).toFixed(2)
       const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
+      // Say plainly what was kept and why. A silent deduction is the fastest way
+      // to turn a cancellation into a dispute.
+      const body = lateBuyout
+        ? [
+            `Your full warehouse booking on ${dateLabel} was cancelled inside 48 hours.`,
+            `Because a full warehouse booking takes the entire building out of availability, a 25% late cancellation fee of <strong style="color:#fff;">$${feeDollars}</strong> applies. The remaining <strong style="color:#fff;">$${dollars}</strong> is now studio credit on your account.`,
+            `It never expires and applies automatically the next time you book.`,
+          ]
+        : isPlus && hoursUntil < 48
+          ? [
+              `Your ${setName} session on ${dateLabel} was cancelled. As a Plus member, its full value — <strong style="color:#fff;">$${dollars}</strong> — is now studio credit on your account.`,
+              `It never expires and applies automatically the next time you book.`,
+            ]
+          : [
+              `Your ${setName} session on ${dateLabel} was cancelled.`,
+              `Its full value — <strong style="color:#fff;">$${dollars}</strong> — is now studio credit on your account.`,
+              `It never expires and applies automatically the next time you book.`,
+            ]
       notifications.push(sendSimpleEmail({
         to: customerEmail,
-        subject: `$${dollars} studio credit added — Plus cancellation`,
+        subject: lateBuyout
+          ? `Booking cancelled — $${dollars} studio credit added`
+          : `$${dollars} studio credit added — booking cancelled`,
         heading: 'Studio credit added',
-        paragraphs: [
-          `Your ${setName} session on ${dateLabel} was cancelled. As a Plus member, its full value — <strong style="color:#fff;">$${dollars}</strong> — is now studio credit on your account.`,
-          `It never expires and applies automatically the next time you book.`,
-        ],
-        ctaText: 'Book your next session', ctaUrl: `${appUrl}/availability`, label: 'plus_cancel_credit',
-      }).catch(e => console.error('Plus credit email error:', e)))
+        paragraphs: body,
+        ctaText: 'Book your next session', ctaUrl: `${appUrl}/availability`, label: 'cancel_credit',
+      }).catch(e => console.error('Cancel credit email error:', e)))
     } else {
       notifications.push(sendCancellationEmail({
         customerName, customerEmail, setName,
@@ -166,9 +220,11 @@ export async function POST(req: NextRequest) {
   // no text is exactly the kind of silence that makes people call to check.
   const customerPhone = (booking.customers as any)?.phone
   if (customerPhone) {
-    const smsBody = (isPlus && creditCents > 0)
-      ? `Made Kulture: your ${setName} session on ${dateLabel} is cancelled. $${(creditCents / 100).toFixed(2)} has been added to your account as studio credit — it never expires.`
-      : `Made Kulture: your ${setName} session on ${dateLabel} at ${startLbl} is cancelled. Questions? Just reply to this text.`
+    const smsBody = lateBuyout
+      ? `Made Kulture: your full warehouse booking on ${dateLabel} is cancelled. A 25% late cancellation fee ($${(feeCents / 100).toFixed(2)}) applies inside 48 hours; $${(creditCents / 100).toFixed(2)} has been added as studio credit — it never expires.`
+      : creditCents > 0
+        ? `Made Kulture: your ${setName} session on ${dateLabel} is cancelled. $${(creditCents / 100).toFixed(2)} has been added to your account as studio credit — it never expires.`
+        : `Made Kulture: your ${setName} session on ${dateLabel} at ${startLbl} is cancelled. Questions? Just reply to this text.`
     notifications.push(sendSMS(customerPhone, smsBody).catch(e => console.error('Cancellation SMS error:', e)))
   }
 
@@ -180,5 +236,5 @@ export async function POST(req: NextRequest) {
   }).catch(e => console.error('Cancellation owner alert error:', e)))
   await Promise.allSettled(notifications)
 
-  return NextResponse.json({ success: true, creditCents })
+  return NextResponse.json({ success: true, creditCents, feeCents })
 }
