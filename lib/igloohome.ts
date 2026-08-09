@@ -166,3 +166,69 @@ export function doorCodesEnabled(): boolean {
 export function backDoorEnabled(): boolean {
   return apiCreds() !== null && backDeviceId() !== null
 }
+
+// ─── Issue + store both codes for one booking ─────────────────────────────────
+//
+// Mints the front-door algoPIN (and the back-door one when that lock is
+// configured) for [startISO, endISO] and writes them onto the booking row.
+//
+// NON-FATAL BY DESIGN: a lock or network failure must never fail a booking that
+// is already confirmed and possibly paid for. Every failure is logged and the
+// caller gets nulls back.
+//
+// Front and back are written SEPARATELY so a missing `door_code_back` column
+// (migration 081 not run on this environment) can never roll back the
+// front-door code, which is the one that matters.
+//
+// ⚠️ algoPINs cannot be revoked — they are derived from the lock's clock, not
+// stored on it. Re-minting for a NEW window does not kill the old code; the old
+// code simply stops working at its own end time. So when a booking moves
+// EARLIER, the guest still holds a working code for the original window.
+export async function issueDoorCodes(
+  supabase: any,
+  bookingId: string,
+  opts: { startISO: string; endISO: string; accessName: string }
+): Promise<{ doorCode: string | null; doorCodeBack: string | null }> {
+  let doorCode: string | null = null
+  let doorCodeBack: string | null = null
+
+  try {
+    const pin = await createBookingPin(opts)
+    if (pin) {
+      // .select() so a blocked/no-op write is visible instead of silently
+      // reporting success — see the silent-failure rules.
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({ door_code: pin.pin, door_code_pin_id: pin.pinId })
+        .eq('id', bookingId)
+        .select('id')
+      if (error || !data?.length) {
+        console.error('[igloohome] front-door code minted but NOT stored on booking', bookingId, error)
+      }
+      // Return it either way — a minted code the guest can use beats nothing,
+      // even if the row write failed.
+      doorCode = pin.pin
+    }
+  } catch (e) {
+    console.error('[igloohome] front-door code error (non-fatal):', e)
+  }
+
+  try {
+    const pinBack = await createBackDoorPin({ ...opts, accessName: `${opts.accessName} back`.slice(0, 40) })
+    if (pinBack) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({ door_code_back: pinBack.pin, door_code_back_pin_id: pinBack.pinId })
+        .eq('id', bookingId)
+        .select('id')
+      if (error || !data?.length) {
+        console.error('[igloohome] back-door code minted but NOT stored on booking', bookingId, error)
+      }
+      doorCodeBack = pinBack.pin
+    }
+  } catch (e) {
+    console.error('[igloohome] back-door code error (non-fatal):', e)
+  }
+
+  return { doorCode, doorCodeBack }
+}

@@ -6,6 +6,8 @@ import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { randomUUID } from 'crypto'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
+import { bookingHourToISO, bookingEndISO, bookingSpanHours } from '@/lib/booking-times'
+import { issueDoorCodes } from '@/lib/igloohome'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -20,9 +22,11 @@ const supabase = createClient(
 )
 
 function fmt12(h: number) {
-  const ampm = h >= 12 ? 'PM' : 'AM'
-  const h12  = h % 12 === 0 ? 12 : h % 12
-  return `${h12}:00${ampm}`
+  const hour = Math.floor(h)
+  const mins = h % 1 !== 0 ? '30' : '00'
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12  = hour % 12 === 0 ? 12 : hour % 12
+  return `${h12}:${mins}${ampm}`
 }
 
 const SLUG_TO_NAME: Record<string, string> = {
@@ -86,8 +90,10 @@ export async function POST(req: NextRequest) {
       setId = setData?.id ?? null
     }
 
-    const startISO = `${date}T${String(startHour).padStart(2, '0')}:00:00-05:00`
-    const endISO   = `${date}T${String(endHour).padStart(2, '0')}:00:00-05:00`
+    // Decimal hours (20.5 = 8:30 PM) and overnight spans both land here — see
+    // lib/booking-times. The old inline template broke on either.
+    const startISO = bookingHourToISO(date, startHour)
+    const endISO   = bookingEndISO(date, startHour, endHour)
 
     // 4. Insert booking
     const { data: booking, error: bookingError } = await supabase
@@ -109,6 +115,19 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (bookingError) console.error('Supabase error:', bookingError)
+
+    // 4a. Door codes — same gap as /api/admin/bookings: a manually charged
+    //     booking never got one. Skipped for an already-ended window.
+    let doorCode: string | null = null
+    let doorCodeBack: string | null = null
+    if (booking?.id && Date.parse(endISO) > Date.now()) {
+      const codes = await issueDoorCodes(supabase, booking.id, {
+        startISO, endISO,
+        accessName: `MK ${setName} ${name || ''}`.slice(0, 40),
+      })
+      doorCode = codes.doorCode
+      doorCodeBack = codes.doorCodeBack
+    }
 
     // 4b. Google Calendar sync (gated on the admin toggle + GCAL_* env; non-fatal)
     if (booking?.id) {
@@ -135,7 +154,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Send SMS if requested
     if (sendSms && phone) {
-      const hours   = endHour - startHour
+      const hours   = bookingSpanHours(startHour, endHour)
       const dollars = totalAmount.toFixed(2)
       const msg = [
         `✅ Made Kulture — Booking Confirmed!`,
@@ -145,6 +164,8 @@ export async function POST(req: NextRequest) {
         `⏰ ${fmt12(startHour)} – ${fmt12(endHour)} (${hours}hr)`,
         `📍 ${setName}`,
         `💳 $${dollars} charged`,
+        ...(doorCode ? [`🔑 Front-door code: ${doorCode}`] : []),
+        ...(doorCodeBack ? [`🔑 Back-door code: ${doorCodeBack}`] : []),
         ``,
         `4825 Gulf Freeway, Houston TX 77023`,
         `Questions? Text or call (832) 408-1631.`,

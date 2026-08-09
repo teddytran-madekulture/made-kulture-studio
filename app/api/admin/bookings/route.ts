@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
+import { bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
+import { issueDoorCodes } from '@/lib/igloohome'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS } from '@/lib/sms'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
@@ -76,8 +78,10 @@ export async function POST(req: NextRequest) {
     setId = setData?.id ?? null
   }
 
-  const startISO = `${date}T${String(startHour).padStart(2, '0')}:00:00-05:00`
-  const endISO   = `${date}T${String(endHour).padStart(2, '0')}:00:00-05:00`
+  // Decimal hours (20.5 = 8:30 PM) and overnight spans both land here — see
+  // lib/booking-times. The old inline template broke on either.
+  const startISO = bookingHourToISO(date, startHour)
+  const endISO   = bookingEndISO(date, startHour, endHour)
 
   const { data: booking, error } = await supabase
     .from('bookings')
@@ -96,6 +100,21 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Door codes. A manual booking used to get NONE — createBookingPin was wired
+  // into the public flow, booking-core, add-set and extensions, but never here,
+  // so anything booked by hand in the dashboard had a null door_code.
+  // Skipped for a window that has already ended, where a code is useless.
+  let doorCode: string | null = null
+  let doorCodeBack: string | null = null
+  if (booking?.id && Date.parse(endISO) > Date.now()) {
+    const codes = await issueDoorCodes(supabase, booking.id, {
+      startISO, endISO,
+      accessName: `MK ${SLUG_TO_NAME[setSlug] ?? 'Studio'} ${name || ''}`.slice(0, 40),
+    })
+    doorCode = codes.doorCode
+    doorCodeBack = codes.doorCodeBack
+  }
 
   // Two-way Acuity sync — block this time on Acuity (best-effort)
   if (booking?.id) {
@@ -153,14 +172,16 @@ export async function POST(req: NextRequest) {
   // Send confirmation SMS if requested
   if (sendSms && phone) {
     const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    const startLabel = startHour >= 12 ? `${startHour === 12 ? 12 : startHour - 12}pm` : `${startHour}am`
-    const endLabel   = endHour   >= 12 ? `${endHour   === 12 ? 12 : endHour   - 12}pm` : `${endHour}am`
+    const startLabel = formatTimeLabel(startHour)
+    const endLabel   = formatTimeLabel(endHour)
     const msg = [
       `Hi ${name}! Your Made Kulture booking is confirmed.`,
       ``,
       `📍 4825 Gulf Freeway, Houston TX 77023`,
       `📅 ${dateLabel}`,
       `🕐 ${startLabel} – ${endLabel}`,
+      ...(doorCode ? [``, `🔑 Front-door code: ${doorCode}`] : []),
+      ...(doorCodeBack ? [`🔑 Back-door code: ${doorCodeBack}`] : []),
       ``,
       `Questions? Text (832) 408-1631`,
     ].join('\n')
@@ -185,6 +206,10 @@ export async function POST(req: NextRequest) {
       totalAmount:   totalAmount,
       bookingId:     booking.id,
       notes:         notes || undefined,
+      doorCode:      doorCode || undefined,
+      doorCodeBack:  doorCodeBack || undefined,
+      startISO,
+      endISO,
     }).catch(e => console.error('Email confirmation error:', e))
 
     sendNewBookingAlert({

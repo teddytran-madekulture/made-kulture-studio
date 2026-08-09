@@ -173,6 +173,23 @@ const SETS = [
 
 const CAL_SETS   = ['Set A', 'Set B', 'Set C', 'Set D', 'Concrete', 'Vintage', 'Cottage', 'The Watering Hole', 'The Tank', 'Studio One']
 const TIME_SLOTS = Array.from({ length: 27 }, (_, i) => 9 + i * 0.5)  // 9:00 – 22:00 in 30-min steps
+// Off-hours. Same 30-minute decimal-hour units as TIME_SLOTS, but the whole
+// clock — an admin booking an after-hours buyout is not bound by the public
+// 9 AM – 10 PM window. ADMIN SURFACES ONLY; the customer booking flow still
+// offers TIME_SLOTS and nothing here widens it.
+const ANY_TIME_SLOTS = Array.from({ length: 48 }, (_, i) => i * 0.5)  // 0:00 – 23:30
+const inBusinessHours = (h: number) => h >= 9 && h <= 22
+// Pull an off-hours value back into the business-hours list. Used when the
+// off-hours toggle is switched OFF — a <select> whose value has no matching
+// <option> renders the FIRST option instead, so leaving it would silently move
+// the session on the next save.
+const clampToBusiness = (h: number) => Math.min(22, Math.max(9, Math.round(h * 2) / 2))
+// End-time options in CHRONOLOGICAL order from the start, wrapping past
+// midnight — so a 8:30 PM start reads 9:00 PM, 9:30, 10:00 … 11:30 PM, then
+// 12:00 AM (next day). Sorting these by raw number instead buries every
+// same-evening option under a full day of next-day ones, because 0:30 < 20.5.
+const rotateFrom = (slots: number[], start: number) =>
+  slots.filter(h => h !== start).sort((a, b) => ((a - start + 24) % 24) - ((b - start + 24) % 24))
 const SET_RATES: Record<string, number> = {
   'Set A': 40, 'Set B': 40, 'Set C': 40, 'Set D': 40,
   'Concrete': 40, 'Vintage': 40, 'Cottage': 40,
@@ -284,6 +301,16 @@ function hourToISO(date: string, hour: number): string {
   const h = Math.floor(hour)
   const m = hour % 1 !== 0 ? '30' : '00'
   return `${date}T${String(h).padStart(2, '0')}:${m}:00-05:00`
+}
+
+// An off-hours session can run past midnight (10 PM – 1 AM). The modal collects
+// ONE date, so an end at or before the start means the next calendar day —
+// without this the end timestamp lands BEFORE the start and the row is garbage.
+function endHourToISO(date: string, startHour: number, endHour: number): string {
+  return hourToISO(endHour <= startHour ? addDays(date, 1) : date, endHour)
+}
+function spanHours(startHour: number, endHour: number): number {
+  return endHour <= startHour ? endHour + 24 - startHour : endHour - startHour
 }
 
 // How far past its booked end did this session actually run?
@@ -441,6 +468,8 @@ export default function AdminDashboard() {
   // Edit booking modal
   const [editBooking, setEditBooking] = useState<Booking | null>(null)
   const [editState,   setEditState]   = useState({ setName: '', date: '', startHour: 9, endHour: 11, notes: '', sendSms: true })
+  const [editAnyTime, setEditAnyTime] = useState(false)
+  const [editDoorCode, setEditDoorCode] = useState<{ front: string | null; back: string | null } | null>(null)
   const [editCards,   setEditCards]   = useState<SquareCard[]>([])
   const [editCard,    setEditCard]    = useState<SquareCard | null>(null)
   const [editSquareCustId, setEditSquareCustId] = useState<string | null>(null)
@@ -468,6 +497,7 @@ export default function AdminDashboard() {
     setSlug: 'set-a', date: tomorrow(), startHour: 10, endHour: 12,
     name: '', email: '', phone: '', notes: '', totalAmount: 0, sendSms: true,
   })
+  const [manualAnyTime, setManualAnyTime] = useState(false)
   const [submitting,   setSubmitting]   = useState(false)
   const [submitError,  setSubmitError]  = useState('')
   const [submitSuccess,setSubmitSuccess]= useState(false)
@@ -944,6 +974,7 @@ export default function AdminDashboard() {
   const resetModal = () => {
     clearCustomer()
     setManual({ setSlug: 'set-a', date: tomorrow(), startHour: 10, endHour: 12, name: '', email: '', phone: '', notes: '', totalAmount: 0, sendSms: true })
+    setManualAnyTime(false)
     setSubmitError(''); setSubmitSuccess(false)
   }
 
@@ -1029,9 +1060,14 @@ export default function AdminDashboard() {
       notes:     b.notes || '',
       sendSms:   true,
     })
+    // A booking already outside business hours has to open with the full clock
+    // showing, or its <select> would have no <option> for its own value and a
+    // plain SAVE would move the session without anyone touching the time.
+    setEditAnyTime(!inBusinessHours(localHour(b.start_time)) || !inBusinessHours(localHour(b.end_time)))
     setEditCards([]); setEditCard(null); setEditSquareCustId(null)
     setEditPayLink(null); setEditError(''); setEditAction(null); setEditCopied(false)
     setEditSmsStatus(null); setEditChargeSuccess(false); setTextConfirmMsg(null)
+    setEditDoorCode(null)
 
     // Look up saved cards ROBUSTLY: searches every Square profile for this
     // customer's email (handles duplicate Square records) plus the card saved on
@@ -1054,7 +1090,7 @@ export default function AdminDashboard() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         start_time:   hourToISO(editState.date, editState.startHour),
-        end_time:     hourToISO(editState.date, editState.endHour),
+        end_time:     endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:      editState.setName,
         notes:        editState.notes,
         total_amount: editNewTotal,
@@ -1062,8 +1098,15 @@ export default function AdminDashboard() {
     })
     const data = await res.json()
     if (!res.ok) { setEditError(data.error || 'Failed to save'); setEditAction(null); return }
-    setEditBooking(null); setEditAction(null)
+    setEditAction(null)
     fetchBookings()
+    // A moved window mints a fresh door code and the old one dies at the old end
+    // time. Nothing texts it, so keep the modal open until the admin has seen it.
+    if (data.doorCode || data.doorCodeBack) {
+      setEditDoorCode({ front: data.doorCode ?? null, back: data.doorCodeBack ?? null })
+      return
+    }
+    setEditBooking(null)
     if (detailBooking?.id === editBooking.id) setDetailBooking(null)
   }
 
@@ -1075,7 +1118,7 @@ export default function AdminDashboard() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         start_time: hourToISO(editState.date, editState.startHour),
-        end_time:   hourToISO(editState.date, editState.endHour),
+        end_time:   endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:    editState.setName,
         notes:      editState.notes,
       }),
@@ -1135,7 +1178,7 @@ export default function AdminDashboard() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         start_time: hourToISO(editState.date, editState.startHour),
-        end_time:   hourToISO(editState.date, editState.endHour),
+        end_time:   endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:    editState.setName,
         notes:      editState.notes,
       }),
@@ -1179,7 +1222,7 @@ export default function AdminDashboard() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         start_time: hourToISO(editState.date, editState.startHour),
-        end_time:   hourToISO(editState.date, editState.endHour),
+        end_time:   endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:    editState.setName,
         notes:      editState.notes,
       }),
@@ -1246,7 +1289,18 @@ export default function AdminDashboard() {
       : 'ADD BOOKING'
 
   // Edit modal derived values
-  const editDuration = editState.endHour - editState.startHour
+  const editSlots     = editAnyTime ? ANY_TIME_SLOTS : TIME_SLOTS
+  const editEndSlots  = editAnyTime
+    ? rotateFrom(editSlots, editState.startHour)
+    : editSlots.filter(h => h > editState.startHour)
+  const editOvernight = editState.endHour <= editState.startHour
+
+  // Manual "add booking" modal — same off-hours rules as the edit modal
+  const manualSlots    = manualAnyTime ? ANY_TIME_SLOTS : TIME_SLOTS
+  const manualEndSlots = manualAnyTime
+    ? rotateFrom(manualSlots, manual.startHour)
+    : manualSlots.filter(h => h > manual.startHour)
+  const editDuration = spanHours(editState.startHour, editState.endHour)
   const editRate     = SET_RATES[editState.setName] ?? 40
   const editNewTotal = Math.max(editDuration * editRate, 0)
   const editDiff     = editBooking ? editNewTotal - (editBooking.total_amount || 0) : 0
@@ -1255,7 +1309,9 @@ export default function AdminDashboard() {
   // end of an unchanged booking — same set, same day, same start. Anything else
   // is a reschedule, and the confirm endpoint (which re-plans from the booking's
   // current end_time) would apply something different from what's on screen.
-  const editAddedHours = editBooking ? editState.endHour - localHour(editBooking.end_time) : 0
+  const editAddedHours = editBooking
+    ? spanHours(editState.startHour, editState.endHour) - spanHours(editState.startHour, localHour(editBooking.end_time))
+    : 0
   const editIsPureExtension = !!editBooking
     && editAddedHours > 0
     && editState.setName === (editBooking.sets?.name || '')
@@ -3779,18 +3835,43 @@ export default function AdminDashboard() {
                 <Field label="START TIME">
                   <select value={editState.startHour} onChange={e => setEditState(s => ({ ...s, startHour: Number(e.target.value) }))}
                     style={{ ...inputStyle, appearance: 'none' as const }}>
-                    {TIME_SLOTS.map(h => <option key={h} value={h} style={{ background: '#111' }}>{fmt12(h)}</option>)}
+                    {editSlots.map(h => <option key={h} value={h} style={{ background: '#111' }}>{fmt12(h)}</option>)}
                   </select>
                 </Field>
                 <Field label="END TIME">
                   <select value={editState.endHour} onChange={e => setEditState(s => ({ ...s, endHour: Number(e.target.value) }))}
                     style={{ ...inputStyle, appearance: 'none' as const }}>
-                    {TIME_SLOTS.filter(h => h > editState.startHour).map(h => (
-                      <option key={h} value={h} style={{ background: '#111' }}>{fmt12(h)}</option>
+                    {editEndSlots.map(h => (
+                      <option key={h} value={h} style={{ background: '#111' }}>
+                        {fmt12(h)}{h <= editState.startHour ? ' (next day)' : ''}
+                      </option>
                     ))}
                   </select>
                 </Field>
               </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: -8 }}>
+                <input type="checkbox" id="edit-anytime" checked={editAnyTime}
+                  onChange={e => {
+                    const on = e.target.checked
+                    setEditAnyTime(on)
+                    if (!on) setEditState(s => {
+                      let start = clampToBusiness(s.startHour)
+                      let end   = clampToBusiness(s.endHour)
+                      if (end <= start) { start = Math.min(start, 21); end = Math.min(22, start + 1) }
+                      return { ...s, startHour: start, endHour: end }
+                    })
+                  }} />
+                <label htmlFor="edit-anytime" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>
+                  OFF-HOURS TIME (FULL 24 HOURS)
+                </label>
+              </div>
+
+              {editOvernight && (
+                <div style={{ fontSize: 11, color: '#e6c07a', marginTop: -8, lineHeight: 1.5 }}>
+                  Overnight &mdash; runs to {fmt12(editState.endHour)} on {shortDayLabel(addDays(editState.date, 1))} ({editDuration} hrs).
+                </div>
+              )}
 
               <Field label="NOTES">
                 <textarea value={editState.notes} onChange={e => setEditState(s => ({ ...s, notes: e.target.value }))}
@@ -3863,6 +3944,23 @@ export default function AdminDashboard() {
             {textConfirmMsg && (
               <div style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.35)', padding: '12px 16px', marginTop: 16, fontSize: 12, color: '#e6c07a', lineHeight: 1.6 }}>
                 {textConfirmMsg}
+              </div>
+            )}
+
+            {editDoorCode && (
+              <div style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.35)', padding: '14px 16px', marginTop: 16 }}>
+                <div style={{ fontSize: 11, color: '#e6c07a', letterSpacing: '0.1em', marginBottom: 8 }}>NEW DOOR CODE &mdash; SEND THIS TO THEM</div>
+                {editDoorCode.front && (
+                  <div style={{ fontFamily: 'monospace', fontSize: 26, color: '#fff', letterSpacing: '0.18em' }}>{editDoorCode.front}</div>
+                )}
+                {editDoorCode.back && (
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 6 }}>
+                    Back door: <span style={{ fontFamily: 'monospace', letterSpacing: '0.14em', color: '#fff' }}>{editDoorCode.back}</span>
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 8, lineHeight: 1.5 }}>
+                  Texted to you as well, so you can forward it. Their old code stops working at the original end time. The customer has not been notified.
+                </div>
               </div>
             )}
 
@@ -4043,15 +4141,46 @@ export default function AdminDashboard() {
                 </Field>
 
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
-                  <Field label="START HOUR (24h)">
-                    <input type="number" min={9} max={21} value={manual.startHour}
-                      onChange={e => setManual(m => ({ ...m, startHour: Number(e.target.value) }))} style={inputStyle} />
+                  <Field label="START TIME">
+                    <select value={manual.startHour} onChange={e => setManual(m => ({ ...m, startHour: Number(e.target.value) }))}
+                      style={{ ...inputStyle, appearance: 'none' as const }}>
+                      {manualSlots.map(h => <option key={h} value={h} style={{ background: '#111' }}>{fmt12(h)}</option>)}
+                    </select>
                   </Field>
-                  <Field label="END HOUR (24h)">
-                    <input type="number" min={10} max={22} value={manual.endHour}
-                      onChange={e => setManual(m => ({ ...m, endHour: Number(e.target.value) }))} style={inputStyle} />
+                  <Field label="END TIME">
+                    <select value={manual.endHour} onChange={e => setManual(m => ({ ...m, endHour: Number(e.target.value) }))}
+                      style={{ ...inputStyle, appearance: 'none' as const }}>
+                      {manualEndSlots.map(h => (
+                        <option key={h} value={h} style={{ background: '#111' }}>
+                          {fmt12(h)}{h <= manual.startHour ? ' (next day)' : ''}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: -6 }}>
+                  <input type="checkbox" id="manual-anytime" checked={manualAnyTime}
+                    onChange={e => {
+                      const on = e.target.checked
+                      setManualAnyTime(on)
+                      if (!on) setManual(m => {
+                        let start = clampToBusiness(m.startHour)
+                        let end   = clampToBusiness(m.endHour)
+                        if (end <= start) { start = Math.min(start, 21); end = Math.min(22, start + 1) }
+                        return { ...m, startHour: start, endHour: end }
+                      })
+                    }} />
+                  <label htmlFor="manual-anytime" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>
+                    OFF-HOURS TIME (FULL 24 HOURS)
+                  </label>
+                </div>
+
+                {manual.endHour <= manual.startHour && (
+                  <div style={{ fontSize: 11, color: '#e6c07a', marginTop: -6, lineHeight: 1.5 }}>
+                    Overnight &mdash; runs to {fmt12(manual.endHour)} on {shortDayLabel(addDays(manual.date, 1))} ({spanHours(manual.startHour, manual.endHour)} hrs).
+                  </div>
+                )}
 
                 <Field label="TOTAL AMOUNT ($)">
                   <input type="number" min={0} step={0.01} value={manual.totalAmount}

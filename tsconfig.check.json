@@ -5,7 +5,7 @@
       "dom.iterable",
       "esnext"
     ],
-    "target": "es2017",
+    "target": "ES2020",
     "allowJs": true,
     "skipLibCheck": true,
     "strict": false,
@@ -25,12 +25,15 @@
     "types": [
       "node",
       "react"
-    ]
+    ],
+    "incremental": false
   },
   "files": [
-    "app/api/admin/vision-test/route.ts",
-    "lib/agent/june.ts",
-    "lib/agent/gmail.ts",
-    "app/api/cron/agent-email/route.ts"
+    "app/admin/dashboard/page.tsx",
+    "app/api/admin/bookings/route.ts",
+    "app/api/admin/charge/route.ts",
+    "app/api/admin/bookings/[id]/route.ts",
+    "lib/booking-times.ts",
+    "lib/igloohome.ts"
   ]
 }

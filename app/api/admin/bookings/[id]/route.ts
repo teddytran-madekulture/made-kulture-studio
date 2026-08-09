@@ -7,8 +7,9 @@ import { sendCancellationEmail, sendSimpleEmail, formatDateLabel, formatTimeLabe
 import { refundPayment } from '@/lib/square-refund'
 import { notifyDelegatedRefund } from '@/lib/refund-notify'
 import { issueCredit } from '@/lib/credits'
-import { sendSMS } from '@/lib/sms'
+import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { notifyCoverageGap } from '@/lib/coverage'
+import { issueDoorCodes } from '@/lib/igloohome'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -154,17 +155,55 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
+  // A rescheduled window needs a fresh door code; handed back to the caller so
+  // the admin can pass it to the customer.
+  let newDoorCode: string | null = null
+  let newDoorCodeBack: string | null = null
+
   // If the time window changed (admin reschedule), move the mirrored Google
   // Calendar event too. Non-fatal.
   if (body.status !== 'cancelled' && (body.start_time !== undefined || body.end_time !== undefined)) {
+    const { data: bk } = await supabase
+      .from('bookings').select('gcal_event_id, start_time, end_time, customers(name), sets(name)').eq('id', params.id).single()
     try {
-      const { data: bk } = await supabase
-        .from('bookings').select('gcal_event_id, start_time, end_time').eq('id', params.id).single()
       if (bk?.gcal_event_id) {
         await patchCalendarEvent(bk.gcal_event_id, { startISO: bk.start_time, endISO: bk.end_time })
       }
     } catch (e) {
       console.error('[admin reschedule] gcal patch error (non-fatal):', e)
+    }
+
+    // The existing algoPIN was minted for the OLD window and dies at the old end
+    // time — extend a session and the guest is locked out for the added part.
+    // Mint one for the new window. Self-gating: issueDoorCodes returns nulls
+    // when the lock feature isn't configured.
+    //
+    // ⚠️ The code goes to the OWNER, never straight to the customer. A plain
+    // SAVE in this modal sends the customer nothing today, so firing a text at
+    // them off a calendar tidy-up would be a surprise — and quietly changing
+    // their code while telling them nothing is worse still. Teddy gets it by SMS
+    // (forwardable) and in the modal, and decides.
+    if (bk && Date.parse(bk.end_time) > Date.now()) {
+      const cust: any = (bk as any).customers
+      const setRow: any = (bk as any).sets
+      const codes = await issueDoorCodes(supabase, params.id, {
+        startISO: bk.start_time,
+        endISO:   bk.end_time,
+        accessName: `MK ${cust?.name || 'booking'}`.slice(0, 40),
+      })
+      newDoorCode = codes.doorCode
+      newDoorCodeBack = codes.doorCodeBack
+
+      if (newDoorCode || newDoorCodeBack) {
+        const when = `${formatDateLabel(centralDateStr(bk.start_time))} ${formatTimeLabel(centralHourDecimal(bk.start_time))}–${formatTimeLabel(centralHourDecimal(bk.end_time))}`
+        await sendOwnerSMS([
+          `🔑 New door code — ${cust?.name || 'booking'}, ${setRow?.name || 'Full Studio'}`,
+          when,
+          ...(newDoorCode ? [`Front: ${newDoorCode}`] : []),
+          ...(newDoorCodeBack ? [`Back: ${newDoorCodeBack}`] : []),
+          `Their old code dies at the original end time — send this to them.`,
+        ].join('\n')).catch(e => console.error('[admin reschedule] owner door-code SMS error:', e))
+      }
     }
     // A reschedule can push the session past whoever is covering it — warn on a
     // resulting staffing gap. Non-fatal.
@@ -196,5 +235,5 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  return NextResponse.json({ success: true, refund: refundResult, credit: creditResult })
+  return NextResponse.json({ success: true, refund: refundResult, credit: creditResult, doorCode: newDoorCode, doorCodeBack: newDoorCodeBack })
 }
