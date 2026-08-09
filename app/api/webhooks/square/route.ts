@@ -15,9 +15,14 @@ const NOTIFICATION_URL =
 function verifySignature(body: string, signature: string | null): boolean {
   const key = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
   if (!key) {
-    // Allow processing before the key is configured, but warn loudly.
-    console.warn('[Square webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not set — skipping signature verification')
-    return true
+    // FAIL CLOSED. This endpoint marks add-ons paid and bumps booking totals
+    // off an unauthenticated public URL, so an unverifiable request has to be
+    // refused — anyone who knows the URL could otherwise post a fake
+    // `payment.updated` and move money on the record. If this ever fires, the
+    // env var is missing on this deployment; Square will retry for ~72h, so
+    // setting the key recovers the deliveries rather than losing them.
+    console.error('[Square webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not set — rejecting request')
+    return false
   }
   if (!signature) return false
   const expected = createHmac('sha256', key).update(NOTIFICATION_URL + body).digest('base64')
