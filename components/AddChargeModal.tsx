@@ -28,6 +28,9 @@ interface SavedCard {
   isBookingCard?: boolean
   prepaidType?: string | null   // 'PREPAID' | 'NOT_PREPAID' | 'UNKNOWN'
   cardType?: string | null      // 'CREDIT' | 'DEBIT' | ...
+  // The issuer told Square this card changed — reissued, expiry moved, or the
+  // account closed. Advance warning that a charge is likely to decline.
+  alert?: { type: string; at: string } | null
 }
 
 export interface AddChargeBooking {
@@ -311,6 +314,13 @@ export default function AddChargeModal({
                             {(c.brand || 'Card').replace('_', ' ')} ····{c.last4}
                             {c.isBookingCard && <span style={{ color: '#d4a843', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8 }}>ON FILE</span>}
                             {prepaid && <span style={{ color: '#f5a623', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8, border: '1px solid rgba(245,166,35,0.4)', padding: '1px 5px' }}>PREPAID</span>}
+                            {c.alert && (
+                              <span
+                                title={`Square reported ${c.alert.type === 'card.disabled' ? 'this card was disabled' : 'the issuer updated this card'} on ${new Date(c.alert.at).toLocaleDateString()}. It is likely to decline — ask for a different card.`}
+                                style={{ color: '#ff6b6b', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8, border: '1px solid rgba(255,107,107,0.45)', padding: '1px 5px' }}>
+                                {c.alert.type === 'card.disabled' ? 'DISABLED BY ISSUER' : 'ISSUER UPDATED'}
+                              </span>
+                            )}
                           </span>
                         </label>
                         {confirmRemove === c.id ? (

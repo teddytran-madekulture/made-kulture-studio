@@ -90,6 +90,36 @@ export async function GET(req: NextRequest) {
     const cards = [...byFingerprint.values()]
       .sort((a, b) => (b.isBookingCard ? 1 : 0) - (a.isBookingCard ? 1 : 0))
 
+    // ── Issuer warnings, if any ──────────────────────────────────────────────
+    //
+    // ⚠️ STRICTLY ADDITIVE. If this fails — migration 093 not run yet, table
+    // missing, anything — the cards themselves must still come back. A failed
+    // secondary read that empties the primary list is exactly how the June
+    // inbox once rendered "all your email is gone" over a missing column.
+    try {
+      const ids = cards.map(c => c.id).filter(Boolean)
+      if (ids.length) {
+        const { data: alerts, error: alertErr } = await supabase
+          .from('card_alerts')
+          .select('square_card_id, event_type, created_at')
+          .in('square_card_id', ids)
+          .is('dismissed_at', null)
+          .order('created_at', { ascending: false })
+        if (alertErr) {
+          console.error('[booking-cards] card_alerts lookup failed (non-fatal):', alertErr)
+        } else {
+          const newest = new Map<string, any>()
+          for (const a of alerts ?? []) if (!newest.has(a.square_card_id)) newest.set(a.square_card_id, a)
+          for (const c of cards) {
+            const a = newest.get(c.id)
+            c.alert = a ? { type: a.event_type, at: a.created_at } : null
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[booking-cards] card_alerts lookup threw (non-fatal):', e)
+    }
+
     return NextResponse.json({ cards })
   } catch (err: any) {
     console.error('[booking-cards] error:', err)

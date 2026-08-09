@@ -29,6 +29,8 @@
     "incremental": false
   },
   "files": [
-    "app/plus/page.tsx"
+    "components/AddChargeModal.tsx",
+    "app/api/admin/booking-cards/route.ts",
+    "app/api/webhooks/square/route.ts"
   ]
 }

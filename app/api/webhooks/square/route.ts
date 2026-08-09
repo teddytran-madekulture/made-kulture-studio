@@ -94,6 +94,32 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── A card on file went bad ──────────────────────────────────────────────
+  //
+  // Square emits these when the ISSUER tells it something changed: the card was
+  // reissued, the expiry moved, or the account closed. Recording them is the
+  // difference between finding out days early and finding out as a
+  // GENERIC_DECLINE while the customer is standing there.
+  //
+  // Recorded, never acted on automatically — we don't delete cards or cancel
+  // anything off an issuer notice. It surfaces as a warning next to the card.
+  if (type === 'card.automatically_updated' || type === 'card.disabled') {
+    const card = event?.data?.object?.card
+    const cardId = card?.id ?? event?.data?.id
+    if (cardId) {
+      const { error } = await supabase.from('card_alerts').insert({
+        square_card_id:     cardId,
+        square_customer_id: card?.customer_id ?? null,
+        event_type:         type,
+        detail:             card ?? null,
+      })
+      // Loud on failure: a swallowed insert here means the warning never
+      // appears and we're back to discovering the decline at the counter.
+      if (error) console.error('[Square webhook] card_alerts insert failed for', cardId, error)
+      else console.log(`[Square webhook] recorded ${type} for card ${cardId}`)
+    }
+  }
+
   // Always 200 for handled/ignored events so Square doesn't retry.
   return NextResponse.json({ ok: true })
 }
