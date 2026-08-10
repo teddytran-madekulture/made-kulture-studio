@@ -77,6 +77,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         paid:                   false,
         square_order_id:        orderId,
         square_payment_link_id: linkId,
+        // Starts the 48-hour clock for /api/cron/unpaid-links. Without this the
+        // sweep can never see the row — it deliberately skips NULLs so it won't
+        // back-date old links and text people about weeks-old charges.
+        link_sent_at:           new Date().toISOString(),
         // Store what the line IS. An equipment line reads its name through
         // equipment_id; a free-form line had nothing and rendered as "Item".
         label:                  (l.label ?? '').trim() || null,
