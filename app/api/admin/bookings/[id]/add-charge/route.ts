@@ -3,6 +3,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMSResult } from '@/lib/sms'
+import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 
@@ -154,23 +155,44 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // ── Record the line items on the booking (best-effort) ──────────────────
     // booking_add_ons.rate is per-unit: equipment stores its unit rate; a
     // free-form line stores its flat amount as the rate with quantity 1.
-    try {
-      const rows = clean.map(l => ({
-        booking_id:   booking.id,
-        equipment_id: l.equipmentId,
-        quantity:     l.quantity,
-        rate:         l.equipmentId && l.unitRate != null ? l.unitRate : l.amount,
-      }))
-      await supabase.from('booking_add_ons').insert(rows)
-    } catch (e) {
-      console.error('[add-charge] add_ons insert failed', e)
-    }
+    // ⚠️ `paid` defaults to FALSE on booking_add_ons (migration 005). These lines
+    // have just been paid for, so they must say so explicitly — otherwise the card
+    // is charged and the dashboard prints "(UNPAID)" beside the gear forever.
+    const rows = clean.map(l => ({
+      booking_id:   booking.id,
+      equipment_id: l.equipmentId,
+      quantity:     l.quantity,
+      rate:         l.equipmentId && l.unitRate != null ? l.unitRate : l.amount,
+      paid:         true,
+    }))
+    // ⚠️ try/catch was DEAD CODE here — supabase-js resolves with an `error`
+    // property rather than throwing, so a rejected insert vanished silently after
+    // the card had already been charged. Read `error`.
+    const { error: addOnErr } = await supabase.from('booking_add_ons').insert(rows)
+    if (addOnErr) console.error('[add-charge] add_ons insert failed', addOnErr)
 
     // ── Reflect the charge on the booking total ─────────────────────────────
-    await supabase
+    // The money is already gone, so this write is verified, not assumed: an
+    // RLS-blocked update returns error:null having matched zero rows, so only the
+    // .select() proves it landed. A silent miss means the customer paid and the
+    // booking still shows the old price.
+    const bumped = Math.round(((Number(booking.total_amount) || 0) + total) * 100) / 100
+    let totalWarning: string | null = null
+    const { data: upRows, error: upErr } = await supabase
       .from('bookings')
-      .update({ total_amount: (Number(booking.total_amount) || 0) + total })
+      .update({ total_amount: bumped })
       .eq('id', booking.id)
+      .select('id')
+
+    if (upErr || !upRows?.length) {
+      console.error('[add-charge] CRITICAL: charged but total_amount not updated', upErr)
+      totalWarning = `Card charged $${total.toFixed(2)} (${squarePaymentId}) but the booking total did not update — fix it by hand.`
+      await sendOwnerPush({
+        title: '⚠️ Charged, total not updated',
+        body:  `$${total.toFixed(2)} taken for ${summary} but booking ${booking.id} total didn't move. Payment ${squarePaymentId}.`,
+        url:   '/admin/dashboard',
+      }).catch(() => {})
+    }
 
     // ── Log a customer note ──────────────────────────────────────────────────
     if (booking.customer_id) {
@@ -190,7 +212,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
-    return NextResponse.json({ success: true, squarePaymentId, cardSaved: !!savedCardId, total, smsError })
+    return NextResponse.json({ success: true, squarePaymentId, cardSaved: !!savedCardId, total, smsError, totalWarning })
   } catch (err: any) {
     console.error('[add-charge] error:', err)
     const msg = err?.errors?.[0]?.detail || err?.message || 'Charge failed'

@@ -467,6 +467,9 @@ export default function AdminDashboard() {
   const [editBooking, setEditBooking] = useState<Booking | null>(null)
   const [editState,   setEditState]   = useState({ setName: '', date: '', startHour: 9, endHour: 11, notes: '', sendSms: true })
   const [editAnyTime, setEditAnyTime] = useState(false)
+  // What this booking's CURRENT window is worth in set time alone — the baseline
+  // editDiff subtracts. Snapshotted on open so add-ons/fees can never leak in.
+  const [editOrigTotal, setEditOrigTotal] = useState(0)
   const [editDoorCode, setEditDoorCode] = useState<{ front: string | null; back: string | null } | null>(null)
   const [editCards,   setEditCards]   = useState<SquareCard[]>([])
   const [editCard,    setEditCard]    = useState<SquareCard | null>(null)
@@ -1058,6 +1061,14 @@ export default function AdminDashboard() {
       notes:     b.notes || '',
       sendSms:   true,
     })
+    // Baseline for editDiff — the set-time value of the window as it stands,
+    // computed with the same helpers the form uses so an untouched booking
+    // subtracts to exactly zero. See the editDiff comment for why this is not
+    // total_amount.
+    setEditOrigTotal(Math.max(
+      spanHours(localHour(b.start_time), localHour(b.end_time)) * (SET_RATES[b.sets?.name || ''] ?? 40),
+      0,
+    ))
     // A booking already outside business hours has to open with the full clock
     // showing, or its <select> would have no <option> for its own value and a
     // plain SAVE would move the session without anyone touching the time.
@@ -1099,7 +1110,7 @@ export default function AdminDashboard() {
         // held the full amount. Only base_amount made it recoverable.)
         //
         // Every other button here already follows this rule: SEND LINK saves
-        // without the total, CHARGE lets the charge endpoint set it once the
+        // without the total, CHARGE lets the charge endpoint INCREMENT it once the
         // payment clears, and TEXT TO CONFIRM doesn't save at all. SAVE ONLY was
         // the lone exception. The price changes when money changes, never here.
       }),
@@ -1207,11 +1218,17 @@ export default function AdminDashboard() {
         customerName:     editBooking.customers?.name || '',
         email:            editBooking.customers?.email || '',
         sendSms:          editState.sendSms,
-        newTotal:         editNewTotal,
+        // ⚠️ No newTotal. The server increments total_amount by the amount it
+        // actually charged. Sending an absolute total from here meant the client's
+        // set-rate arithmetic became the record — which wiped equipment add-ons
+        // and fees off the booking the moment you charged for extra time.
       }),
     })
     const chargeData = await chargeRes.json()
     if (!chargeRes.ok) { setEditError(chargeData.error || 'Charge failed'); setEditAction(null); return }
+    // The charge succeeded but the total may not have moved — the server pushes
+    // an alert too, but say it here while the person who did it is still looking.
+    if (chargeData.totalWarning) setEditError(chargeData.totalWarning)
     if (editState.sendSms) setEditSmsStatus(chargeData.smsError || 'sent')
     setEditChargeSuccess(true); setEditAction(null)
     fetchBookings()
@@ -1245,7 +1262,8 @@ export default function AdminDashboard() {
       title:       'CHARGE CARD',
       description: `Made Kulture — ${editState.setName} Booking Extension`,
       bookingId:   editBooking.id,
-      newTotal:    editNewTotal,
+      // No newTotal — charge-manual increments by the amount it charged. See
+      // handleEditCharge.
       customerId:  editBooking.customer_id,
       email:       editBooking.customers?.email,
       phone:       editBooking.customers?.phone,
@@ -1311,7 +1329,27 @@ export default function AdminDashboard() {
   const editDuration = spanHours(editState.startHour, editState.endHour)
   const editRate     = SET_RATES[editState.setName] ?? 40
   const editNewTotal = Math.max(editDuration * editRate, 0)
-  const editDiff     = editBooking ? editNewTotal - (editBooking.total_amount || 0) : 0
+
+  // ⚠️ The baseline is the booking's ORIGINAL SET TIME, not total_amount.
+  //
+  // editNewTotal is set-rate × hours and nothing else. total_amount also carries
+  // equipment add-ons, one-off fees, guest fees and past overtime — none of which
+  // change when you move the window. Subtracting the two compared unlike things:
+  //
+  //   Vintage 6–8pm, $80 of time + a $25 light = $105 recorded.
+  //   Modal showed "DIFFERENCE −$25.00" on a booking nobody had touched, and the
+  //   label under it invited you to charge the customer for the light twice.
+  //
+  //   Worse, extending it to 3 hrs asked for $120 − $105 = $15 when the extra
+  //   hour is worth $40 — a silent $25 UNDERCHARGE, every time, on any booking
+  //   with an add-on.
+  //
+  // editOrigTotal is snapshotted in openEdit() from the SAME SET_RATES/spanHours
+  // arithmetic that produces editNewTotal, so the two cancel exactly: an untouched
+  // booking always reads "No change", and a custom or unknown set rate cancels out
+  // instead of leaking into the difference. Consistency on both sides of the
+  // subtraction matters more here than either side being independently right.
+  const editDiff     = editBooking ? editNewTotal - editOrigTotal : 0
 
   // "Text to confirm" only makes sense when the edit is PURELY extra time on the
   // end of an unchanged booking — same set, same day, same start. Anything else
@@ -3894,6 +3932,12 @@ export default function AdminDashboard() {
                 </span>
                 <span style={{ fontSize: 12, color: '#fff' }}>${editNewTotal}</span>
               </div>
+              {editDiff !== 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>WAS &mdash; SET TIME AS BOOKED</span>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>${editOrigTotal}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}>
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>DIFFERENCE</span>
                 <span style={{ fontSize: 14, fontWeight: 600, color: editDiff > 0 ? '#4ade80' : editDiff < 0 ? '#ff6b6b' : 'rgba(255,255,255,0.4)' }}>

@@ -3,6 +3,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMSResult } from '@/lib/sms'
+import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
 
 const square = new Client({
@@ -30,7 +31,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     customerName,
     email,
     sendSms,
-    newTotal,       // new total_amount to save on the booking
+    // ⚠️ `newTotal` is deliberately NO LONGER read. It used to be an ABSOLUTE
+    // total computed in the browser from a hardcoded set-rate map, and writing it
+    // here overwrote the recorded price — silently dropping equipment add-ons,
+    // one-off fees and past overtime off any booking charged for extra time.
+    // The total now moves by exactly what Square accepted, computed server-side.
   } = await req.json()
 
   if (!amount || amount <= 0) {
@@ -53,12 +58,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const squarePaymentId = result.payment!.id!
 
-    // Update booking total
-    if (newTotal !== undefined) {
-      await supabase
-        .from('bookings')
-        .update({ total_amount: newTotal })
-        .eq('id', params.id)
+    // ── Reflect the charge on the booking total ──────────────────────────────
+    // Increment, never assign: whatever else is on this booking stays on it.
+    // The money is already gone, so a failure here is reported loudly rather
+    // than swallowed — supabase-js does NOT throw on a Postgres error, and an
+    // RLS-blocked update returns error:null with zero rows matched, so the
+    // .select() is what actually proves the write landed.
+    const charged = Math.round(Number(amount) * 100) / 100
+    const { data: bk } = await supabase
+      .from('bookings').select('total_amount').eq('id', params.id).maybeSingle()
+
+    let totalWarning: string | null = null
+    if (bk) {
+      const bumped = Math.round(((Number(bk.total_amount) || 0) + charged) * 100) / 100
+      const { data: upRows, error: upErr } = await supabase
+        .from('bookings').update({ total_amount: bumped }).eq('id', params.id).select('id')
+      if (upErr || !upRows?.length) {
+        console.error('[charge] CRITICAL: charged but total_amount not updated', upErr)
+        totalWarning = `Card charged $${charged.toFixed(2)} (${squarePaymentId}) but the booking total did not update — fix it by hand.`
+        await sendOwnerPush({
+          title: '⚠️ Charged, total not updated',
+          body:  `$${charged.toFixed(2)} taken on booking ${params.id} but total_amount didn't move. Payment ${squarePaymentId}.`,
+          url:   '/admin/dashboard',
+        }).catch(() => {})
+      }
     }
 
     // SMS confirmation
@@ -68,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
-    return NextResponse.json({ success: true, squarePaymentId, smsError })
+    return NextResponse.json({ success: true, squarePaymentId, smsError, totalWarning })
   } catch (err: any) {
     console.error('Charge error:', err)
     const msg = (err as any)?.errors?.[0]?.detail || (err as any)?.message || 'Payment failed'

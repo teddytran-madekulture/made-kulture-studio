@@ -3,6 +3,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMSResult } from '@/lib/sms'
+import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     amount,         // dollars to charge (required)
     description,    // Square note / SMS context
     bookingId,      // optional — booking to update on success
-    newTotal,       // optional — new total_amount to save on that booking
+    // ⚠️ `newTotal` is deliberately NO LONGER read — see the increment block below.
     customerId,     // optional — supabase customers.id (needed to save a card on file)
     saveCard,       // optional — save this card to the customer for next time
     email,          // buyer email (receipt)
@@ -106,13 +107,39 @@ export async function POST(req: NextRequest) {
 
     const squarePaymentId = result.payment!.id!
 
-    // Update the linked booking: new total and/or attach the saved card.
+    // Update the linked booking: bump the total by what was charged, and/or
+    // attach the saved card.
+    //
+    // ⚠️ INCREMENT, never assign. This used to write an ABSOLUTE `newTotal` sent
+    // by the browser, computed there from a hardcoded set-rate map — so charging
+    // for extra time wiped equipment add-ons and fees off the recorded price.
+    //
+    // The money is already gone by this point, so the write is verified with
+    // .select() and shouted about on failure: supabase-js does NOT throw on a
+    // Postgres error, and an RLS-blocked update returns error:null having matched
+    // zero rows, so neither try/catch nor a null `error` proves anything.
+    let totalWarning: string | null = null
     if (bookingId) {
+      const charged = Math.round(Number(amount) * 100) / 100
+      const { data: bk } = await supabase
+        .from('bookings').select('total_amount').eq('id', bookingId).maybeSingle()
+
       const upd: Record<string, any> = {}
-      if (newTotal !== undefined && newTotal !== null) upd.total_amount = newTotal
+      if (bk) upd.total_amount = Math.round(((Number(bk.total_amount) || 0) + charged) * 100) / 100
       if (savedCardId) upd.square_card_on_file_id = savedCardId
+
       if (Object.keys(upd).length) {
-        await supabase.from('bookings').update(upd).eq('id', bookingId)
+        const { data: upRows, error: upErr } = await supabase
+          .from('bookings').update(upd).eq('id', bookingId).select('id')
+        if (upErr || !upRows?.length) {
+          console.error('[charge-manual] CRITICAL: charged but booking not updated', upErr)
+          totalWarning = `Card charged $${charged.toFixed(2)} (${squarePaymentId}) but the booking total did not update — fix it by hand.`
+          await sendOwnerPush({
+            title: '⚠️ Charged, total not updated',
+            body:  `$${charged.toFixed(2)} taken on booking ${bookingId} but total_amount didn't move. Payment ${squarePaymentId}.`,
+            url:   '/admin/dashboard',
+          }).catch(() => {})
+        }
       }
     }
 
@@ -123,7 +150,7 @@ export async function POST(req: NextRequest) {
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
-    return NextResponse.json({ success: true, squarePaymentId, cardSaved: !!savedCardId, smsError })
+    return NextResponse.json({ success: true, squarePaymentId, cardSaved: !!savedCardId, smsError, totalWarning })
   } catch (err: any) {
     console.error('[charge-manual] error:', err)
     const msg = err?.errors?.[0]?.detail || err?.message || 'Payment failed'
