@@ -29,10 +29,8 @@
     "incremental": false
   },
   "files": [
-    "app/api/cron/unpaid-links/route.ts",
-    "app/api/admin/bookings/[id]/payment-link/route.ts",
-    "app/api/admin/bookings/[id]/cancel-link/route.ts",
-    "lib/sms.ts",
-    "lib/push.ts"
+    "app/sets/SetsClient.tsx",
+    "app/sets/page.tsx",
+    "components/SiteNav.tsx"
   ]
 }

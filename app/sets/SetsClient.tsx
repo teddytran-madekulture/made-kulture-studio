@@ -1,7 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
+import { createClient } from '@/lib/supabase/client'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
@@ -32,6 +33,12 @@ const DEFAULT_GRADIENT = 'linear-gradient(135deg, #141414 0%, #1e1e1e 100%)'
 // up with the same centered 1480px column and edge-to-edge divider lines.
 const PAGE_MAX = 1480
 
+// Fallback nav clearance, used only for the first paint before the real height
+// is measured. ⚠️ Don't hardcode this as the real value — a guess of 72 was
+// tried and the nav actually measures ~106 at desktop width, so the banner still
+// sat under the menu. useNavHeight() below measures the live element instead.
+const NAV_CLEAR_FALLBACK = 106
+
 // The full-warehouse buyout is a fixed offering, not a set row — kept here.
 const STUDIO = {
   name: 'Full Studio Takeover', price: 400,
@@ -41,6 +48,27 @@ const STUDIO = {
   capacity: '30 people',
   sqft: '~10,000 sq ft',
   tags: ['Full Warehouse', 'All Sets', 'Studio One', 'Private', 'Up to 30 People'],
+}
+
+// Measure the fixed SiteNav so in-flow content can clear it.
+//
+// SiteNav is `position: fixed` and transparent at the top of the page, so the
+// first element in normal flow renders UNDERNEATH it. Its height isn't a
+// constant either: padding differs by breakpoint AND animates on scroll. A
+// hardcoded guess is how the guest banner ended up behind the menu, so measure
+// the real element and let a ResizeObserver keep it current.
+function useNavHeight(): number {
+  const [h, setH] = useState(NAV_CLEAR_FALLBACK)
+  useEffect(() => {
+    const nav = document.querySelector('nav')
+    if (!nav) return
+    const measure = () => setH(nav.getBoundingClientRect().height)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(nav)
+    return () => ro.disconnect()
+  }, [])
+  return h
 }
 
 // ─── Set Card ─────────────────────────────────────────────────────────────────
@@ -133,25 +161,56 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
 
 export default function SetsClient({ content = {} }: { content?: PageContent }) {
   const isMobile = useIsMobile()
+  const navHeight = useNavHeight()
   const c = content
-  const [sets, setSets] = useState<ApiSet[]>([])
+  // Raw rows from /api/sets — always the BASE (member) rate. The guest surcharge
+  // is applied for display only, below, so it can react to signing in.
+  const [rawSets, setRawSets] = useState<ApiSet[]>([])
   const [buyoutRate, setBuyoutRate] = useState(400)
   const [surcharge, setSurcharge] = useState(0)
   const [loading, setLoading] = useState(true)
+  // null = not determined yet. Same pattern as SiteNav.
+  const [authed, setAuthed] = useState<boolean | null>(null)
 
   useEffect(() => {
     fetch('/api/sets')
       .then(r => r.json())
       .then(d => {
-        const s = d.guestSurchargePerHour != null ? Number(d.guestSurchargePerHour) : 10
-        setSurcharge(s)
-        // Catalog shows the guest rate; signed-in members are billed less at checkout.
-        setSets((d.sets ?? []).map((x: any) => ({ ...x, rate_per_hour: Number(x.rate_per_hour) + s })))
+        setSurcharge(d.guestSurchargePerHour != null ? Number(d.guestSurchargePerHour) : 10)
+        setRawSets((d.sets ?? []).map((x: any) => ({ ...x, rate_per_hour: Number(x.rate_per_hour) })))
         if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
+
+  // ⚠️ The catalogue USED to add the guest surcharge unconditionally, with a
+  // comment saying members "are billed less at checkout". That meant a signed-in
+  // member browsed at $50/hr and was charged $40/hr — the page disagreeing with
+  // the till, which reads as a pricing mistake even though the money was right.
+  //
+  // Checkout's rule is `isMember = !!sessionUser` (app/api/bookings/route.ts) —
+  // simply being signed in earns the base rate. So mirror exactly that here.
+  // `onAuthStateChange` keeps it honest if they sign in in another tab.
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => setAuthed(!!user))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setAuthed(!!s?.user))
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Unknown auth is treated as GUEST on purpose: the price may correct DOWNWARD
+  // once the session resolves, never upward. Quoting low and then raising it is
+  // the one direction that feels like a bait.
+  const guestPricing = authed !== true
+  // The banner waits for a definite `false`, so a signed-in member never sees a
+  // flash of "you're paying guest rates".
+  const showGuestBanner = authed === false && surcharge > 0
+
+  const sets = useMemo(
+    () => rawSets.map(s => ({ ...s, rate_per_hour: s.rate_per_hour + (guestPricing ? surcharge : 0) })),
+    [rawSets, guestPricing, surcharge],
+  )
 
   const standard = sets.filter(s => (s.category ?? 'standard') !== 'premium')
   const premium  = sets.filter(s => s.category === 'premium')
@@ -164,6 +223,16 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
 
   const minRate = sets.length ? Math.min(...sets.map(s => s.rate_per_hour)) : 40
 
+  // The hero normally pads itself past the fixed nav. When the guest banner is
+  // showing, the banner has already done that, so the hero only needs its own
+  // breathing room — otherwise the two stack and leave a large gap.
+  // The 104/160 defaults are the hero's own nav clearance. With the banner
+  // showing, the banner has already cleared the nav, so subtract the nav height
+  // and keep only the breathing room — otherwise the two stack into a big gap.
+  const HERO_PAD_TOP = showGuestBanner
+    ? Math.max((isMobile ? 104 : 160) - navHeight, isMobile ? 32 : 48)
+    : (isMobile ? 104 : 160)
+
   // Live-value tokens usable in editable copy (see lib/site-content.ts).
   const tok = (t: string) => (t ?? '')
     .replace(/\{sets\}/g, loading ? '—' : String(sets.length))
@@ -174,14 +243,19 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
     <main style={{ background: '#080808', minHeight: '100vh' }}>
       <SiteNav active="sets" />
 
-      {surcharge > 0 && (
-        <div style={{ background: 'rgba(201,178,126,0.08)', borderBottom: '1px solid rgba(201,178,126,0.25)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#c9b27e' }}>
+      {/* ⚠️ SiteNav is `position: fixed` and transparent at the top of the page, so
+          anything rendered first in normal flow lands UNDERNEATH it. This banner
+          did, and read as garbled text behind the menu. It now pads itself clear
+          of the nav, and the hero drops its own nav clearance to compensate (see
+          HERO_PAD_TOP below) so the spacing below stays the same either way. */}
+      {showGuestBanner && (
+        <div style={{ background: 'rgba(201,178,126,0.08)', borderBottom: '1px solid rgba(201,178,126,0.25)', paddingTop: navHeight + 10, paddingBottom: 10, paddingLeft: 20, paddingRight: 20, textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#c9b27e' }}>
           Prices shown are guest rates. <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>Sign up free for member rates</a> or <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>sign in</a>.
         </div>
       )}
 
       {/* Hero */}
-      <section style={{ paddingTop: isMobile ? 104 : 160, paddingBottom: isMobile ? 52 : 80, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <section style={{ paddingTop: HERO_PAD_TOP, paddingBottom: isMobile ? 52 : 80, paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
