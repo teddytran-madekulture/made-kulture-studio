@@ -1140,7 +1140,15 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   {booking.guestAck && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
                 </div>
                 <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
-                  I understand extra guests beyond the <strong style={{ color: '#fff' }}>{guestPricing.capacityPerSet}-person limit</strong> may be charged <strong style={{ color: '#fff' }}>${guestPricing.penaltyPerHead}/guest</strong> penalty fee. Multiple incidences can result in a note or ban on my account.
+                  {/* Two DIFFERENT charges, and this checkbox used to blur them into one.
+                      FEE  = extra guests you DECLARE (a party of 6–7 on one set) — the
+                             $/person/hour rate booking-core actually bills, itemised on
+                             the checkout summary as "EXTRA GUESTS".
+                      PENALTY = turning up with people you did NOT declare.
+                      Saying only "$50/guest" made an honest 6-person booking look like it
+                      owed a penalty. Both figures read from guestPricing (studio_settings),
+                      so changing a rate updates this text — do NOT hardcode either. */}
+                  I understand extra guests beyond the <strong style={{ color: '#fff' }}>{guestPricing.capacityPerSet}-person limit</strong> are charged <strong style={{ color: '#fff' }}>${guestPricing.perPersonFee}/person per hour</strong>, and that arriving with guests I didn’t declare may additionally result in a <strong style={{ color: '#fff' }}>${guestPricing.penaltyPerHead}/guest</strong> penalty. Multiple incidences can result in a note or ban on my account.
                 </p>
               </div>}
             </div>
