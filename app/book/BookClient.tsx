@@ -82,6 +82,17 @@ function today() {
   return d.toISOString().split('T')[0]
 }
 
+// A 'YYYY-MM-DD' rendered for humans.
+// ⚠️ Parsed at local NOON, never bare. `new Date('2026-08-12')` is parsed as UTC
+// midnight, which renders as Aug 11 anywhere behind UTC — the same class of
+// off-by-one that mislabelled bookings before lib/booking-times.ts existed.
+function prettyDay(d: string): string {
+  if (!d) return ''
+  const dt = new Date(`${d}T12:00:00`)
+  return isNaN(dt.getTime()) ? d
+    : dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type BookingType = 'set' | 'studio'
@@ -687,7 +698,23 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               )})}
             </div>
             <div ref={setNavRef}>
-              <NavRow onBack={back} onNext={() => setStep(mustFillWindow ? 4 : 3)} canNext={canNext[2]} />
+              <NavRow onBack={back} onNext={() => {
+                // ⚠️ One booking = ONE DAY. Sets on different dates would be minted a
+                // SINGLE door code spanning from the first to the last — an igloohome
+                // hourly algoPIN is valid continuously across its whole window and
+                // can't be revoked, so a two-week gap would mean two weeks of access
+                // to a shared building. Rather than police the date picker, reuse the
+                // date already in the cart and skip the step entirely: the rule is
+                // enforced by never offering the choice. The server rejects a
+                // multi-date order too — see the guard in app/api/bookings/route.ts.
+                if (setCart.length > 0) {
+                  setBooking(b => ({ ...b, date: setCart[0].date, startHour: null, endHour: null }))
+                  setBookedSlots([])
+                  setStep(4)
+                  return
+                }
+                setStep(mustFillWindow ? 4 : 3)
+              }} canNext={canNext[2]} />
             </div>
           </StepWrapper>
         )}
@@ -731,6 +758,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, marginBottom: 24 }}>
                 Your sets so far are below. Tap “+ Add another set” to choose another, or Continue to checkout.
               </p>
+            ) : setCart.length > 0 && !lockedToWindow ? (
+              <div style={{ marginBottom: 20, fontFamily: 'Inter', fontSize: 13, color: '#e6c07a' }}>
+                Adding to {prettyDay(booking.date)} · same booking.{' '}
+                <span style={{ color: 'rgba(255,255,255,0.4)' }}>A different day is a separate booking.</span>
+              </div>
             ) : lockedToWindow ? (
               <div style={{ marginBottom: 24 }}>
                 <div style={{ border: '1px solid rgba(255,255,255,0.15)', padding: '16px 18px', marginBottom: 18 }}>

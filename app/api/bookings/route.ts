@@ -300,6 +300,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── One booking = one visit ──────────────────────────────────────────────
+    //     ⚠️ A cart may hold several SETS but only ONE calendar date. Sets on
+    //     different days are separate visits and must be separate bookings.
+    //
+    //     This is a DOOR-CODE safety rule, not a preference. The front-door
+    //     algoPIN is minted once per booking from min(start) to max(end) across
+    //     all lines — and an igloohome hourly algoPIN is valid CONTINUOUSLY for
+    //     that whole window (it does not rotate; igloohome allows a single one to
+    //     span 28 days). So a booking holding Aug 12 and Aug 20 would hand the
+    //     customer one code that opens the shared warehouse for eight straight
+    //     days, gaps included — and algoPINs CANNOT BE REVOKED.
+    //
+    //     Fixing it in the door layer instead would mean multiple codes per
+    //     booking, which the confirmation email and SMS carry only one of; the
+    //     guest on day two would arrive at a locked building. Preventing the
+    //     shape is the change that cannot lock anyone out.
+    const bookingDates = Array.from(new Set(lines.map(l => l.date)))
+    if (bookingDates.length > 1) {
+      return NextResponse.json({
+        error: `A single booking has to be all on one day. You have sets on ${bookingDates.sort().join(' and ')} — please book each day separately.`,
+      }, { status: 400 })
+    }
+
     // ── 4. Minimum-hours guard (per line) ──────────────────────────────────
     for (const l of lines) {
       const minH = l.type === 'studio' ? 4 : (SET_MIN_HOURS[l.setSlug ?? ''] ?? 1)

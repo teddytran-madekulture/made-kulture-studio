@@ -29,10 +29,9 @@
     "incremental": false
   },
   "files": [
-    "lib/agreements.ts",
-    "app/admin/dashboard/page.tsx",
-    "app/api/admin/bookings/route.ts",
-    "app/api/admin/bookings/[id]/charge-overage/route.ts",
-    "app/book/BookClient.tsx"
+    "app/book/BookClient.tsx",
+    "lib/booking-core.ts",
+    "app/api/bookings/route.ts",
+    "app/api/bookings/delegate/route.ts"
   ]
 }
