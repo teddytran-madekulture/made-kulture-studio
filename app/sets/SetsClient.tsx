@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
-import { createClient } from '@/lib/supabase/client'
+import { useGuestPricing } from '@/lib/use-guest-pricing'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
@@ -163,54 +163,15 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
   const isMobile = useIsMobile()
   const navHeight = useNavHeight()
   const c = content
-  // Raw rows from /api/sets — always the BASE (member) rate. The guest surcharge
-  // is applied for display only, below, so it can react to signing in.
-  const [rawSets, setRawSets] = useState<ApiSet[]>([])
-  const [buyoutRate, setBuyoutRate] = useState(400)
-  const [surcharge, setSurcharge] = useState(0)
-  const [loading, setLoading] = useState(true)
-  // null = not determined yet. Same pattern as SiteNav.
-  const [authed, setAuthed] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    fetch('/api/sets')
-      .then(r => r.json())
-      .then(d => {
-        setSurcharge(d.guestSurchargePerHour != null ? Number(d.guestSurchargePerHour) : 10)
-        setRawSets((d.sets ?? []).map((x: any) => ({ ...x, rate_per_hour: Number(x.rate_per_hour) })))
-        if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
-
-  // ⚠️ The catalogue USED to add the guest surcharge unconditionally, with a
-  // comment saying members "are billed less at checkout". That meant a signed-in
-  // member browsed at $50/hr and was charged $40/hr — the page disagreeing with
-  // the till, which reads as a pricing mistake even though the money was right.
+  // ⚠️ This page USED to add the guest surcharge unconditionally, with a comment
+  // saying members "are billed less at checkout". A signed-in member browsed at
+  // $50/hr and was charged $40/hr — the catalogue disagreeing with the till,
+  // which reads as a pricing mistake even though the money was right.
   //
-  // Checkout's rule is `isMember = !!sessionUser` (app/api/bookings/route.ts) —
-  // simply being signed in earns the base rate. So mirror exactly that here.
-  // `onAuthStateChange` keeps it honest if they sign in in another tab.
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => setAuthed(!!user))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setAuthed(!!s?.user))
-    return () => subscription.unsubscribe()
-  }, [])
-
-  // Unknown auth is treated as GUEST on purpose: the price may correct DOWNWARD
-  // once the session resolves, never upward. Quoting low and then raising it is
-  // the one direction that feels like a bait.
-  const guestPricing = authed !== true
-  // The banner waits for a definite `false`, so a signed-in member never sees a
-  // flash of "you're paying guest rates".
-  const showGuestBanner = authed === false && surcharge > 0
-
-  const sets = useMemo(
-    () => rawSets.map(s => ({ ...s, rate_per_hour: s.rate_per_hour + (guestPricing ? surcharge : 0) })),
-    [rawSets, guestPricing, surcharge],
-  )
+  // The member/guest rule now lives in ONE place, shared with the home page, and
+  // mirrors what checkout actually does. See lib/use-guest-pricing.ts.
+  const { sets: pricedSets, buyoutRate, showGuestNote: showGuestBanner, loading } = useGuestPricing()
+  const sets = pricedSets as unknown as ApiSet[]
 
   const standard = sets.filter(s => (s.category ?? 'standard') !== 'premium')
   const premium  = sets.filter(s => s.category === 'premium')

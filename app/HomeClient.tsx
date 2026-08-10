@@ -8,6 +8,7 @@ import { SITE_SETTINGS_DEFAULTS, type SiteSettings } from '@/lib/site-settings'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
 import { fmt as nl } from '@/lib/fmt'
+import { useGuestPricing } from '@/lib/use-guest-pricing'
 
 
 const SETS = [
@@ -46,6 +47,12 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [heroHover, setHeroHover] = useState<'primary' | 'secondary' | null>(null)
   const [pathHover, setPathHover] = useState<'a' | 'b' | null>(null)
+  // ⚠️ The prices in the SETS array below are a FALLBACK for the first paint
+  // only. They're hardcoded guest rates that silently stopped matching the
+  // database — and they can't show a member the rate they'll actually be
+  // charged. rateFor() takes the live rate and applies the same member/guest
+  // rule as checkout. See lib/use-guest-pricing.ts.
+  const { rateFor, showGuestNote } = useGuestPricing()
   const isMobile = useIsMobile()
   const c = content
   const tiles = parseList(c.featureTiles)
@@ -196,9 +203,13 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
             <h2 style={{ fontSize: isMobile ? 'clamp(28px, 8.5vw, 44px)' : 'clamp(48px, 6vw, 88px)', color:'#fff', lineHeight:0.92 }}>
               {nl(c.setsHeading)}
             </h2>
-            <div style={{ marginTop:16, fontFamily:'Inter', fontSize:13, color:'#c9b27e' }}>
-              {nl(c.setsNote)}
-            </div>
+            {/* Only tell a GUEST they're seeing guest rates. It used to show for
+                everyone, including signed-in members already seeing member rates. */}
+            {showGuestNote && (
+              <div style={{ marginTop:16, fontFamily:'Inter', fontSize:13, color:'#c9b27e' }}>
+                {nl(c.setsNote)}
+              </div>
+            )}
           </div>
           <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
           <Link href="/sets"
@@ -238,7 +249,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
                 <div style={{ position:'absolute', left:18, right:18, bottom:18, display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:12 }}>
                   <div>
                     <div style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 18 : 26, color:'#fff', letterSpacing:'0.02em', lineHeight:1 }}>{set.name.toUpperCase()}</div>
-                    <div style={{ fontFamily:'Inter', fontSize:11, fontWeight:500, letterSpacing:'0.12em', color:'rgba(255,255,255,0.6)', marginTop:8 }}>{set.price} / HR</div>
+                    <div style={{ fontFamily:'Inter', fontSize:11, fontWeight:500, letterSpacing:'0.12em', color:'rgba(255,255,255,0.6)', marginTop:8 }}>${rateFor(set.slug, Number(set.price.replace('$', '')))} / HR</div>
                   </div>
                   <span data-arrow style={{ flexShrink:0, width:36, height:36, border:'1px solid rgba(255,255,255,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:14, transition:'background 0.25s ease, color 0.25s ease' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></span>
                 </div>

@@ -29,8 +29,9 @@
     "incremental": false
   },
   "files": [
+    "app/HomeClient.tsx",
     "app/sets/SetsClient.tsx",
-    "app/sets/page.tsx",
+    "lib/use-guest-pricing.ts",
     "components/SiteNav.tsx"
   ]
 }
