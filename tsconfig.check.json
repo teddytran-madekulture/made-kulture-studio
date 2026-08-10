@@ -29,9 +29,7 @@
     "incremental": false
   },
   "files": [
-    "app/HomeClient.tsx",
-    "app/sets/SetsClient.tsx",
-    "lib/use-guest-pricing.ts",
-    "components/SiteNav.tsx"
+    "app/book/BookClient.tsx",
+    "lib/booking-core.ts"
   ]
 }
