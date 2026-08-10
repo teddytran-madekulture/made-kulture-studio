@@ -93,6 +93,24 @@ function addOnName(a: { label?: string | null; equipment: { name: string } | nul
   return a.equipment?.name || (a.label ?? '').trim() || 'Item'
 }
 
+// One line of "what to pull off the shelf". Empty string when there's nothing.
+//
+// ⚠️ This is the fix for a real gap: equipment on a booking used to be visible ONLY
+// inside the expanded row of the list view, so nothing told the owner to have the gear
+// ready — not the calendar, not an email, not a reminder. It reads the SAME
+// booking_add_ons rows as GEAR TO PREP, which matters because gear arrives by two
+// different routes (the customer adding it at checkout, or an admin adding it after
+// with + ADD CHARGE) and they both write that one table. Rendering from it directly
+// means these surfaces can never disagree with each other or go stale.
+//
+// Equipment only — a waived/unpaid free-form CHARGE is not something you go and fetch.
+function gearSummary(b: Booking): string {
+  return (b.booking_add_ons ?? [])
+    .filter(a => a.equipment?.name)
+    .map(a => `${a.equipment!.name}${a.quantity > 1 ? ` ×${a.quantity}` : ''}`)
+    .join(', ')
+}
+
 interface EmailSetting {
   key: string
   label: string
@@ -1928,6 +1946,11 @@ export default function AdminDashboard() {
                         <div>
                           <div style={{ fontSize: 13, color: '#fff', marginBottom: 4 }}>{b.sets?.name || 'Full Studio Takeover'}</div>
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{fmtDate(b.start_time)}</div>
+                          {/* Gear on the COLLAPSED row — the whole point is not having to
+                              open every booking to find out something needs pulling. */}
+                          {gearSummary(b) && (
+                            <div style={{ fontSize: 11, color: '#e6c07a', marginTop: 4 }}>GEAR · {gearSummary(b)}</div>
+                          )}
                         </div>
                         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
                           {fmtTime(b.start_time)} – {fmtTime(b.end_time)}
@@ -2194,6 +2217,13 @@ export default function AdminDashboard() {
                               <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
                                 {fmtTime(b.start_time)} – {fmtTime(b.end_time)}
                               </div>
+                              {/* Third line, amber. The block clips its own overflow, so a
+                                  very short booking simply loses it rather than breaking. */}
+                              {gearSummary(b) && (
+                                <div style={{ fontSize: 9, color: '#e6c07a', marginTop: 2, lineHeight: 1.25 }}>
+                                  GEAR · {gearSummary(b)}
+                                </div>
+                              )}
                             </div>
                           )
                         })}
@@ -2242,7 +2272,13 @@ export default function AdminDashboard() {
                       </button>
                       {list.map(b => (
                         <div key={b.id} onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}>
-                          <div><div style={{ fontSize: 13, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
+                          <div>
+                            <div style={{ fontSize: 13, color: '#fff' }}>{b.customers?.name || '—'}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div>
+                            {gearSummary(b) && (
+                              <div style={{ fontSize: 10, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b)}</div>
+                            )}
+                          </div>
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>
                         </div>
                       ))}
@@ -2291,7 +2327,13 @@ export default function AdminDashboard() {
                       <div key={b.id}>
                         {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
                         <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
-                          <div><div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div></div>
+                          <div>
+                            <div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div>
+                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div>
+                            {gearSummary(b) && (
+                              <div style={{ fontSize: 11, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b)}</div>
+                            )}
+                          </div>
                           <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_amount != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_amount}</div>}</div>
                         </div>
                       </div>
