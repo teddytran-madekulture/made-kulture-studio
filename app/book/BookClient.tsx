@@ -638,19 +638,6 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
         {/* ── STEP 2: Set selection (individual only) ── */}
         {step === 2 && booking.type === 'set' && (
           <StepWrapper title="CHOOSE YOUR SET">
-            {/* ⚠️ Multi-set booking EXISTS but nobody found it — customers kept
-                making two separate transactions, same as the old site. The cause
-                isn't the "+ add another set" button at step 4; it's that intent
-                forms HERE, at a single-select grid that said nothing about it.
-                By step 4 they've picked a date and time and are finishing.
-                So: say it here, and say what it's worth. */}
-            {setCart.length === 0 && (
-              <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, margin: '0 0 20px', maxWidth: 620 }}>
-                Shooting on more than one set? Pick your first — you can add the rest before
-                checkout. <span style={{ color: '#e6c07a' }}>One booking means one payment, one
-                confirmation, and a single door code for the whole visit</span> instead of one of each per set.
-              </p>
-            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
               {sets.length === 0 && (
                 <div style={{ gridColumn: '1 / -1', padding: '28px 24px', background: '#0d0d0d', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
@@ -866,17 +853,19 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   // white buttons side by side already confused people once on
                   // checkout. Gold reads as "an offer", grey read as "utility",
                   // which is why this was being skipped.
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
-                    <button onClick={() => { commitCurrent(); setStep(2) }} disabled={lockedConflict}
-                      style={{ background: 'rgba(201,178,126,0.10)', border: '1px solid rgba(201,178,126,0.55)', color: '#e6c07a', padding: '14px 24px', cursor: lockedConflict ? 'not-allowed' : 'pointer', opacity: lockedConflict ? 0.4 : 1, fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, letterSpacing: '0.15em' }}>
+                  // The whole thing is the button, and it explains itself in six
+                  // words. An earlier version paired it with a full sentence at
+                  // step 2 AND a sentence here — Teddy's call was right that the
+                  // fix is a clearer object, not more prose to read.
+                  <button onClick={() => { commitCurrent(); setStep(2) }} disabled={lockedConflict}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, textAlign: 'left', width: '100%', maxWidth: 380, background: 'rgba(201,178,126,0.10)', border: '1px solid rgba(201,178,126,0.55)', color: '#e6c07a', padding: '16px 22px', cursor: lockedConflict ? 'not-allowed' : 'pointer', opacity: lockedConflict ? 0.4 : 1 }}>
+                    <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 13, letterSpacing: '0.15em' }}>
                       + ADD ANOTHER SET
-                    </button>
-                    {!lockedConflict && (
-                      <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5, maxWidth: 460 }}>
-                        Keep it on this booking — one payment, one confirmation, and a single door code for the whole visit.
-                      </span>
-                    )}
-                  </div>
+                    </span>
+                    <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(201,178,126,0.65)', letterSpacing: '0.02em' }}>
+                      Same booking · one payment · one door code
+                    </span>
+                  </button>
                 )}
               </div>
             )}
