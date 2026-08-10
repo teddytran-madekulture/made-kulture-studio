@@ -82,6 +82,8 @@ function today() {
   return d.toISOString().split('T')[0]
 }
 
+import { VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'
+
 // A 'YYYY-MM-DD' rendered for humans.
 // ⚠️ Parsed at local NOON, never bare. `new Date('2026-08-12')` is parsed as UTC
 // midnight, which renders as Aug 11 anywhere behind UTC — the same class of
@@ -754,15 +756,20 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
         {/* ── STEP 4: Time ── */}
         {((step === 4 && booking.type === 'set') || (step === 3 && booking.type === 'studio')) && (
           <StepWrapper title={booking.type === 'set' && !booking.setId ? 'ADD ANOTHER SET' : 'SELECT YOUR TIME'}>
-            {booking.type === 'set' && !booking.setId ? (
-              <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, marginBottom: 24 }}>
-                Your sets so far are below. Tap “+ Add another set” to choose another, or Continue to checkout.
-              </p>
-            ) : setCart.length > 0 && !lockedToWindow ? (
+            {/* Sibling, NOT a branch of the ternary below — an earlier version made this
+                a ternary arm, which swallowed the whole time grid whenever a cart
+                existed. The date is fixed for added sets (one booking = one day), so
+                say which day they're adding to since the picker was skipped. */}
+            {booking.type === 'set' && booking.setId && setCart.length > 0 && !lockedToWindow && (
               <div style={{ marginBottom: 20, fontFamily: 'Inter', fontSize: 13, color: '#e6c07a' }}>
                 Adding to {prettyDay(booking.date)} · same booking.{' '}
                 <span style={{ color: 'rgba(255,255,255,0.4)' }}>A different day is a separate booking.</span>
               </div>
+            )}
+            {booking.type === 'set' && !booking.setId ? (
+              <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, marginBottom: 24 }}>
+                Your sets so far are below. Tap “+ Add another set” to choose another, or Continue to checkout.
+              </p>
             ) : lockedToWindow ? (
               <div style={{ marginBottom: 24 }}>
                 <div style={{ border: '1px solid rgba(255,255,255,0.15)', padding: '16px 18px', marginBottom: 18 }}>
@@ -816,13 +823,26 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                                      && (h > booking.startHour && (h - booking.startHour) < minHours)
                 // Start times are on the hour; half-hour slots can only be an END.
                 const isInvalidStart = selecting === 'start' && h % 1 !== 0
+                // ⚠️ One booking = one VISIT. A gap wider than the grace window would
+                // mean the single front-door algoPIN (min start → max end, valid
+                // CONTINUOUSLY, non-revocable) covers hours the customer never paid
+                // for. Grey those starts out rather than let the server 400 them.
+                // Shares VISIT_GAP_GRACE_HOURS with the server so the two can't drift.
+                const opensGap = selecting === 'start' && setCart.length > 0 && (() => {
+                  const earliest = Math.min(...setCart.map(c => c.startHour))
+                  const latest   = Math.max(...setCart.map(c => c.endHour))
+                  // A start before the cart must reach it; one after must be reachable.
+                  if (h >= earliest && h <= latest) return false
+                  return h > latest ? h - latest > VISIT_GAP_GRACE_HOURS
+                                    : earliest - (h + minHours) > VISIT_GAP_GRACE_HOURS
+                })()
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)
                 const isPending = booking.startHour === h && booking.endHour === null
 
                 let bg = '#0d0d0d'
-                let color = (isInvalidEnd || isInvalidStart || closeAsStart) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                let color = (isInvalidEnd || isInvalidStart || closeAsStart || opensGap) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
                 if (isPast)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
                 if (inRange)      { bg = '#fff'; color = '#080808' }
@@ -830,7 +850,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
-                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart}
+                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
                       cursor: (booked || isPast) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart) ? 'default' : 'pointer',

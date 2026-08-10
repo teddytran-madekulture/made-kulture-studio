@@ -9,7 +9,7 @@ import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
-import { bookingHourToISO } from '@/lib/booking-times'
+import { bookingHourToISO, largestVisitGap, VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'
 import { violatesAdvanceWindow, sessionMayBookShortNotice, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
@@ -320,6 +320,14 @@ export async function POST(req: NextRequest) {
     if (bookingDates.length > 1) {
       return NextResponse.json({
         error: `A single booking has to be all on one day. You have sets on ${bookingDates.sort().join(' and ')} — please book each day separately.`,
+      }, { status: 400 })
+    }
+
+    //     Same rule, second half: one visit, not two visits in a day.
+    const visitGap = largestVisitGap(lines)
+    if (visitGap > VISIT_GAP_GRACE_HOURS) {
+      return NextResponse.json({
+        error: `Sets in one booking need to be part of the same visit, and this one has a ${visitGap}-hour gap. Please book the later set as a separate booking.`,
       }, { status: 400 })
     }
 

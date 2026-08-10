@@ -15,7 +15,7 @@ import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
-import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
+import { largestVisitGap, VISIT_GAP_GRACE_HOURS, bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
@@ -235,6 +235,18 @@ export async function validateAndPriceOrder(
     return {
       ok: false,
       error: `A single booking has to be all on one day. You have sets on ${bookingDates.sort().join(' and ')} — please book each day separately.`,
+      status: 400,
+    }
+  }
+
+  //     Same rule, second half: one visit, not two visits in a day. See
+  //     largestVisitGap() in lib/booking-times.ts for why this is a door-code
+  //     constraint rather than a scheduling preference.
+  const visitGap = largestVisitGap(lines)
+  if (visitGap > VISIT_GAP_GRACE_HOURS) {
+    return {
+      ok: false,
+      error: `Sets in one booking need to be part of the same visit, and this one has a ${visitGap}-hour gap. Please book the later set as a separate booking.`,
       status: 400,
     }
   }

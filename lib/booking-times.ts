@@ -115,3 +115,45 @@ export function centralHourDecimal(iso: string): number {
 export function bookingSpanHours(startHour: number, endHour: number): number {
   return endHour <= startHour ? endHour + 24 - startHour : endHour - startHour
 }
+
+// ─── One booking = one VISIT ─────────────────────────────────────────────────
+// Sets in a single booking must form one continuous stay. This is a DOOR-CODE
+// safety rule, not a scheduling preference.
+//
+// The front-door algoPIN is minted ONCE per booking, from min(start) to
+// max(end) across every line. An igloohome hourly algoPIN is valid
+// CONTINUOUSLY across that whole window — it does NOT rotate hourly, despite
+// the endpoint being named `algopin/hourly` (igloohome's own docs: "Duration
+// PINs are valid within the duration of time specified by the start date/time
+// and end date/time", and a single one may span up to 28 days). So a booking
+// holding 9–11am and 6–8pm hands the customer one code that opens a shared
+// warehouse for all eleven hours, including the seven they never paid for.
+// algoPINs also CANNOT BE REVOKED.
+//
+// The alternative fix — one PIN per contiguous cluster — means several codes
+// per booking, and `doorCode` is rendered in ten places (the email's code
+// block, the calendar invite body, the SMS, seven other mint sites). Any one
+// of them left carrying a single code puts a guest at a locked door. Making
+// the gap impossible needs no door-layer change at all.
+//
+// Overlapping lines are fine (two sets at once for a large party) — that's a
+// negative gap. Only genuine daylight between blocks counts.
+export const VISIT_GAP_GRACE_HOURS = 2
+
+/** Largest gap in hours between consecutive blocks, or 0 if the stay is continuous. */
+export function largestVisitGap(lines: { startHour: number; endHour: number }[]): number {
+  if (lines.length < 2) return 0
+  const sorted = [...lines].sort((a, b) => a.startHour - b.startHour)
+  let reach = sorted[0].endHour
+  let worst = 0
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = sorted[i].startHour - reach
+    if (gap > worst) worst = gap
+    if (sorted[i].endHour > reach) reach = sorted[i].endHour
+  }
+  return worst
+}
+
+export function violatesVisitContinuity(lines: { startHour: number; endHour: number }[]): boolean {
+  return largestVisitGap(lines) > VISIT_GAP_GRACE_HOURS
+}
