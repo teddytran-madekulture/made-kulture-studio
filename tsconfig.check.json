@@ -30,9 +30,10 @@
   },
   "files": [
     "app/admin/dashboard/page.tsx",
+    "app/api/admin/bookings/route.ts",
     "app/api/admin/bookings/[id]/add-charge/route.ts",
-    "app/api/admin/bookings/[id]/charge/route.ts",
-    "app/api/admin/charge-manual/route.ts",
-    "lib/push.ts"
+    "app/api/admin/bookings/[id]/payment-link/route.ts",
+    "app/api/admin/bookings/[id]/cancel-link/route.ts",
+    "app/api/admin/charge-manual/route.ts"
   ]
 }

@@ -60,15 +60,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // rate is per-unit, matching add-charge: equipment stores its unit rate, a
     // free-form line stores its flat amount as the rate with quantity 1.
     const orderId = result.paymentLink?.orderId ?? null
+    // ⚠️ Keep the LINK id too, not just the order id. Square payment links have
+    // NO expiry — "the link will be active as long as you don't deactivate or
+    // delete them" — and `paymentLink.id` is the only handle DeletePaymentLink
+    // accepts. Without it, a link raised for a charge that later gets waived
+    // stays payable forever with no way to kill it. (A real $80 guest-overage
+    // link did exactly that on 2026-08-10.)
+    const linkId = result.paymentLink?.id ?? null
     const clean: ChargeLine[] = Array.isArray(lines) ? lines : []
     if (orderId && clean.length) {
       const rows = clean.map(l => ({
-        booking_id:      params.id,
-        equipment_id:    l.equipmentId ?? null,
-        quantity:        l.quantity ?? 1,
-        rate:            l.equipmentId && l.unitRate != null ? l.unitRate : l.amount,
-        paid:            false,
-        square_order_id: orderId,
+        booking_id:             params.id,
+        equipment_id:           l.equipmentId ?? null,
+        quantity:               l.quantity ?? 1,
+        rate:                   l.equipmentId && l.unitRate != null ? l.unitRate : l.amount,
+        paid:                   false,
+        square_order_id:        orderId,
+        square_payment_link_id: linkId,
+        // Store what the line IS. An equipment line reads its name through
+        // equipment_id; a free-form line had nothing and rendered as "Item".
+        label:                  (l.label ?? '').trim() || null,
       }))
       const { data: inserted, error: insErr } = await supabase
         .from('booking_add_ons').insert(rows).select('id')

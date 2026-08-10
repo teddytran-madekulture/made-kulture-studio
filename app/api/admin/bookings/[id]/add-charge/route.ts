@@ -164,6 +164,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       quantity:     l.quantity,
       rate:         l.equipmentId && l.unitRate != null ? l.unitRate : l.amount,
       paid:         true,
+      // The label was already being computed for Square's note and the customer
+      // note — it just never landed on the row, so a non-equipment charge showed
+      // in the dashboard as the word "Item" and became unidentifiable later.
+      label:        l.label || null,
     }))
     // ⚠️ try/catch was DEAD CODE here — supabase-js resolves with an `error`
     // property rather than throwing, so a rejected insert vanished silently after

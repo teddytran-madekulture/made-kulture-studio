@@ -71,7 +71,26 @@ interface Booking {
   cleaning_status: 'charged' | 'waived' | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
-  booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
+  booking_add_ons?: {
+    id?: string
+    quantity: number
+    rate: number
+    paid?: boolean
+    // `label` says what a NON-equipment line is (a guest overage, a one-off fee).
+    // Before migration 094 there was no such column and those lines rendered as
+    // the literal word "Item" — see addOnName().
+    label?: string | null
+    square_order_id?: string | null
+    square_payment_link_id?: string | null
+    equipment: { name: string } | null
+  }[]
+}
+
+// What to call a charge line. Equipment names itself; everything else leans on
+// the stored label, and only falls back to "Item" for rows written before
+// migration 094 (which are exactly the ones nobody could identify).
+function addOnName(a: { label?: string | null; equipment: { name: string } | null }): string {
+  return a.equipment?.name || (a.label ?? '').trim() || 'Item'
 }
 
 interface EmailSetting {
@@ -405,6 +424,7 @@ export default function AdminDashboard() {
   const [tab,       setTab]       = useState<'upcoming' | 'past' | 'all'>('upcoming')
   const [expanded,  setExpanded]  = useState<string | null>(null)
   const [cancelling,setCancelling]= useState<string | null>(null)
+  const [cancellingLink, setCancellingLink] = useState<string | null>(null)
   const [noShowBusy, setNoShowBusy] = useState<string | null>(null)
   const [showManual,setShowManual]= useState(false)
 
@@ -1049,6 +1069,29 @@ export default function AdminDashboard() {
     setNoShowBusy(null)
     if (res.ok) alert(`$${((data.amountCents || 0) / 100).toFixed(2)} studio credit added to their account.`)
     else alert(data.error || 'Could not add credit.')
+  }
+
+  // Waive an unpaid charge: delete the Square payment link (which also cancels
+  // its order) and clear the line off the booking.
+  //
+  // ⚠️ Square payment links NEVER EXPIRE. Deciding not to charge someone used to
+  // leave a live link they could still tap and a row reading "… (UNPAID)" on the
+  // booking forever. This is the missing waive.
+  const handleCancelLink = async (bookingId: string, addOnId: string, label: string) => {
+    if (!confirm(`Cancel the unpaid "${label}" charge?\n\nThis deletes the Square payment link so it can never be paid, and removes the line from the booking. It does NOT refund anything — a paid line can't be cancelled this way.`)) return
+    setCancellingLink(addOnId)
+    try {
+      const res  = await fetch(`/api/admin/bookings/${bookingId}/cancel-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addOnId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { alert(data.error || 'Could not cancel that link.'); return }
+      alert(`Cancelled ${data.cancelled?.label ?? label} ($${Number(data.cancelled?.amount ?? 0).toFixed(2)}).\n\n${data.note ?? ''}`)
+      fetchBookings()
+    } finally {
+      setCancellingLink(null)
+    }
   }
 
   const openEdit = async (b: Booking) => {
@@ -1933,8 +1976,23 @@ export default function AdminDashboard() {
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}
                             {(b.booking_add_ons?.length ?? 0) > 0 && (
-                              <Detail label="GEAR TO PREP" value={b.booking_add_ons!.map(a => `${a.equipment?.name ?? 'Item'}${a.quantity > 1 ? ` ×${a.quantity}` : ''}${a.paid === false ? ' (UNPAID)' : ''}`).join(', ')} />
+                              <Detail label="GEAR TO PREP" value={b.booking_add_ons!.map(a => `${addOnName(a)}${a.quantity > 1 ? ` ×${a.quantity}` : ''}${a.paid === false ? ' (UNPAID)' : ''}`).join(', ')} />
                             )}
+                            {/* An UNPAID line means a payment link is still live and payable —
+                                Square links never expire. Give it a way to die. */}
+                            {b.booking_add_ons?.filter(a => a.paid === false && a.id).map(a => (
+                              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 11, color: '#ffb066', letterSpacing: '0.05em' }}>
+                                  UNPAID LINK · {addOnName(a)} · ${(Number(a.rate) * Number(a.quantity || 1)).toFixed(2)}
+                                </span>
+                                <button
+                                  onClick={e => { e.stopPropagation(); handleCancelLink(b.id, a.id!, addOnName(a)) }}
+                                  disabled={cancellingLink === a.id}
+                                  style={{ background: 'transparent', border: '1px solid rgba(255,176,102,0.5)', color: '#ffb066', padding: '4px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em' }}>
+                                  {cancellingLink === a.id ? 'CANCELLING…' : 'CANCEL LINK'}
+                                </button>
+                              </div>
+                            ))}
                             {b.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={b.square_payment_id} mono />}
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>

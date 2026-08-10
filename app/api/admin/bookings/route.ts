@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       checked_in_at, checked_out_at, arrived_guest_count, cleaning_status,
       sets ( name ),
       customers ( name, email, phone, status, banned, square_customer_id ),
-      booking_add_ons ( quantity, rate, paid, equipment ( name ) )
+      booking_add_ons ( id, quantity, rate, paid, label, square_order_id, square_payment_link_id, equipment ( name ) )
     `)
     .order('start_time', { ascending: false })
 
