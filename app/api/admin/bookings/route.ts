@@ -35,14 +35,17 @@ export async function GET(req: NextRequest) {
 
   const { data: settingRows } = await supabase
     .from('studio_settings').select('key, value')
-    .in('key', ['guest_penalty_per_head', 'cleaning_fee_set', 'cleaning_fee_studio'])
+    .in('key', ['guest_penalty_per_head', 'per_person_fee', 'cleaning_fee_set', 'cleaning_fee_studio'])
   const s: Record<string, string> = {}
   for (const r of settingRows ?? []) s[r.key] = r.value
   const guestPenaltyPerHead = Number(s['guest_penalty_per_head']) || 50
+  // The per-person-per-HOUR rate checkout uses for legitimate extra guests, as
+  // opposed to the flat punitive penalty above. The admin overage tool needs both.
+  const perPersonFee        = Number(s['per_person_fee'])          || 10
   const cleaningFeeSet      = Number(s['cleaning_fee_set'])    || 100
   const cleaningFeeStudio   = Number(s['cleaning_fee_studio']) || 150
 
-  return NextResponse.json({ bookings: data, guestPenaltyPerHead, cleaningFeeSet, cleaningFeeStudio })
+  return NextResponse.json({ bookings: data, guestPenaltyPerHead, perPersonFee, cleaningFeeSet, cleaningFeeStudio })
 }
 
 // ─── POST /api/admin/bookings — manual booking ────────────────────────────────

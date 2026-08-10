@@ -1,5 +1,13 @@
 // Default rental-agreement text (Markdown). These are the built-in versions the
-// site ships with. The admin "Legal" tab can override either one by saving to
+// site ships with.
+//
+// ⚠️ THE $10/PERSON/HOUR FIGURE IN THE SET AGREEMENT IS A HARDCODED COPY of
+// `per_person_fee` in studio_settings. This is raw markdown — /rental-agreement
+// does no token substitution — so changing that setting does NOT update this
+// text. The wording deliberately says "currently" and defers to the rate
+// itemised at checkout, so a stale number here is informative rather than
+// misleading, but if you change per_person_fee, change this line too.
+// (Same failure shape as the hardcoded home-page prices fixed 2026-08-10.) The admin "Legal" tab can override either one by saving to
 // studio_settings (keys `agreement_set` / `agreement_studio`); the public
 // /rental-agreement page falls back to these defaults when no override is set.
 
@@ -20,8 +28,9 @@ You must be at least 18 years old to book and to act as the responsible party on
 
 - Individual set rentals start at $40/hour. Certain premium sets (for example, The Watering Hole and Studio One) are priced higher and may carry their own minimum booking lengths. The rate and any minimum for each set are shown at the time of booking.
 - Each set holds up to 5 people total — this includes photographers, models, stylists, assistants, clients, and children. Everyone present with your party counts toward this limit.
-- A party of 6–7 may use a single set with a per-person buffer fee added at checkout. Larger parties require additional sets or a full-warehouse buyout.
-- Arriving with more people than your set's guest limit allows (up to 5 people per set) may result in a per-guest penalty charge to the card on file, and — for repeated or serious violations — a note or ban on your account. Extra guests are not permitted on the premises even if not actively on the set.
+- A party of 6–7 may use a single set with a per-person buffer fee added at checkout — currently $10 per person, per hour. The rate itemised on your checkout is the rate that applies. Larger parties require additional sets or a full-warehouse buyout.
+- If your party grows during your session, the extra people are charged at that same per-person hourly rate, for the hours they are on site.
+- Arriving with more people than your set's guest limit allows (up to 5 people per set) may additionally result in a per-guest penalty charge to the card on file, and — for repeated or serious violations — a note or ban on your account. Extra guests are not permitted on the premises even if not actively on the set.
 
 ## Payment
 

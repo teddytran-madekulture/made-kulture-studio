@@ -428,6 +428,12 @@ export default function AdminDashboard() {
   const [revenue,   setRevenue]   = useState<Record<string, { gross: number; net: number; count: number }> | null>(null)
   // Guest overage charging (per-row)
   const [guestPenalty,  setGuestPenalty]  = useState(50)
+  const [perPersonFee,  setPerPersonFee]  = useState(10)
+  // 'fee' = the legitimate $/person/HOUR charge checkout would have billed.
+  // 'penalty' = the flat punitive rate for undeclared guests. See the
+  // charge-overage route for why conflating them punished honest customers.
+  const [overageMode,   setOverageMode]   = useState<'fee' | 'penalty'>('fee')
+  const [overageHours,  setOverageHours]  = useState(1)
   const [overageFor,    setOverageFor]    = useState<string | null>(null)
   const [overageCount,  setOverageCount]  = useState(1)
   const [overageBusy,   setOverageBusy]   = useState(false)
@@ -761,24 +767,37 @@ export default function AdminDashboard() {
     const data = await res.json()
     setBookings(data.bookings || [])
     if (data.guestPenaltyPerHead) setGuestPenalty(Number(data.guestPenaltyPerHead))
+    if (data.perPersonFee)        setPerPersonFee(Number(data.perPersonFee))
     if (data.cleaningFeeSet)      setCleanFeeSet(Number(data.cleaningFeeSet))
     if (data.cleaningFeeStudio)   setCleanFeeStudio(Number(data.cleaningFeeStudio))
     setLoading(false)
   }, [router])
 
   // Charge a guest overage to the card on file (penalty × extra guests).
+  // What the chosen mode works out to. 'fee' bills per person PER HOUR, which is
+  // how a group that grew for part of the session should be charged; 'penalty' is
+  // flat per head and ignores hours entirely.
+  const overageAmount = (mode: 'fee' | 'penalty', heads: number, hrs: number) =>
+    mode === 'fee' ? heads * perPersonFee * hrs : heads * guestPenalty
+
   const chargeOverage = async (b: Booking) => {
     if (overageBusy) return
-    if (!confirm(`Charge ${b.customers?.name || 'this customer'} $${(overageCount * guestPenalty).toFixed(2)} for ${overageCount} extra guest(s)?`)) return
+    const amt = overageAmount(overageMode, overageCount, overageHours)
+    if (!(amt > 0)) { setOverageMsg('That works out to $0'); return }
+    const what = overageMode === 'fee'
+      ? `${overageCount} extra guest(s) for ${overageHours}hr at $${perPersonFee}/person/hr`
+      : `${overageCount} undeclared guest(s) at the flat $${guestPenalty} penalty — this also FLAGS the customer`
+    if (!confirm(`Charge ${b.customers?.name || 'this customer'} $${amt.toFixed(2)}?\n\n${what}`)) return
     setOverageBusy(true); setOverageMsg(null)
     try {
       const res = await fetch(`/api/admin/bookings/${b.id}/charge-overage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ extraGuests: overageCount, sendSms: true }),
+        body: JSON.stringify({ extraGuests: overageCount, hours: overageHours, mode: overageMode, sendSms: true }),
       })
       const data = await res.json()
       if (!res.ok) { setOverageMsg(data.error || 'Charge failed'); setOverageBusy(false); return }
+      if (data.totalWarning) { setOverageMsg(data.totalWarning); setOverageBusy(false); return }
       setOverageMsg(`Charged $${Number(data.amount).toFixed(2)} · note logged`)
       setOverageBusy(false)
       setTimeout(() => { setOverageFor(null); setOverageMsg(null); setOverageCount(1) }, 2500)
@@ -2040,15 +2059,41 @@ export default function AdminDashboard() {
                                     <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>No card on file — can’t auto-charge.</div>
                                   ) : (
                                     <>
+                                      {/* Headcount is declared ONCE for the whole booking, but a
+                                          group can be 3 people for three hours and 8 for one. FEE
+                                          bills only the hours they were actually over; PENALTY is
+                                          the flat punitive rate and flags the customer. */}
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        {([['fee', 'EXTRA GUESTS'], ['penalty', 'UNDECLARED']] as const).map(([m, label]) => (
+                                          <button key={m} onClick={() => setOverageMode(m)}
+                                            style={{ background: overageMode === m ? 'rgba(249,115,22,0.85)' : 'transparent', border: '1px solid rgba(249,115,22,0.4)', color: overageMode === m ? '#080808' : '#f97316', padding: '5px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.08em', fontWeight: overageMode === m ? 600 : 400 }}>
+                                            {label}
+                                          </button>
+                                        ))}
+                                      </div>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>GUESTS OVER LIMIT</span>
+                                        <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>PEOPLE OVER</span>
                                         <input type="number" min={1} value={overageCount}
                                           onChange={e => setOverageCount(Math.max(1, parseInt(e.target.value) || 1))}
                                           style={{ width: 56, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '6px 8px', fontFamily: 'Inter, sans-serif', fontSize: 12 }} />
                                       </div>
+                                      {overageMode === 'fee' && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>FOR HOW LONG</span>
+                                          <input type="number" min={0.5} step={0.5} value={overageHours}
+                                            onChange={e => setOverageHours(Math.max(0.5, parseFloat(e.target.value) || 0.5))}
+                                            style={{ width: 62, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '6px 8px', fontFamily: 'Inter, sans-serif', fontSize: 12 }} />
+                                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>hrs</span>
+                                        </div>
+                                      )}
+                                      <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.4)', textAlign: 'right', lineHeight: 1.5, maxWidth: 240 }}>
+                                        {overageMode === 'fee'
+                                          ? `${overageCount} × $${perPersonFee}/hr × ${overageHours}hr — the same rate checkout charges. No flag.`
+                                          : `${overageCount} × $${guestPenalty} flat, whole booking. Writes a WARNING that follows the customer.`}
+                                      </div>
                                       <button onClick={() => chargeOverage(b)} disabled={overageBusy}
                                         style={{ background: 'rgba(249,115,22,0.85)', border: 'none', padding: '8px 16px', cursor: overageBusy ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.1em', color: '#080808', fontWeight: 600 }}>
-                                        {overageBusy ? 'CHARGING…' : `CHARGE $${(overageCount * guestPenalty).toFixed(0)} + FLAG`}
+                                        {overageBusy ? 'CHARGING…' : `CHARGE $${overageAmount(overageMode, overageCount, overageHours).toFixed(2)}${overageMode === 'penalty' ? ' + FLAG' : ''}`}
                                       </button>
                                     </>
                                   )}
