@@ -198,6 +198,24 @@ interface SquareCard {
   cardType?: string | null     // 'CREDIT' | 'DEBIT' | ...
 }
 
+// A studio tour request (table `tour_requests`). Not a booking: no set, no money,
+// 30 minutes. Only an APPROVED tour reaches the Google Calendar, so a pending one
+// exists nowhere visual until it is rendered here.
+interface TourRequest {
+  id: string
+  name: string
+  phone: string
+  email: string | null
+  purpose: string | null
+  start_time: string
+  end_time: string
+  status: string          // pending | approved | declined | cancelled
+  is_custom: boolean      // true = outside the open windows; the studio must be opened for it
+  decision_token: string  // same token the approve/decline text link carries
+  cancel_token: string | null
+  created_at: string
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const SETS = [
@@ -239,6 +257,10 @@ const CAL_END    = 22
 const SLOTS_N    = (CAL_END - CAL_START) * 2  // 26
 const TIME_COL   = 64   // px
 const SET_COL    = 134  // px per set column
+// Tours get their OWN lane rather than a band across the columns. A tour is only
+// offered during a window where a shoot is already booked, so overlapping a
+// booking is the NORMAL case — a full-width band hid whichever one painted lower.
+const TOUR_COL   = 140  // px — wide enough for a name plus '3:00 PM · NEEDS YOU'
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 9)
 
@@ -423,6 +445,7 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [bookings,  setBookings]  = useState<Booking[]>([])
+  const [tours,     setTours]     = useState<TourRequest[]>([])
   const [loading,   setLoading]   = useState(true)
   // Square-sourced collected revenue, keyed "YYYY-MM" → { gross, net, count }. Null until loaded.
   const [revenue,   setRevenue]   = useState<Record<string, { gross: number; net: number; count: number }> | null>(null)
@@ -489,6 +512,12 @@ export default function AdminDashboard() {
   const [calDate,       setCalDate]       = useState(todayStr)
   const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
+  const [detailTour,    setDetailTour]    = useState<TourRequest | null>(null)
+  const [tourBusy,      setTourBusy]      = useState(false)
+  const [tourMsg,       setTourMsg]       = useState<string | null>(null)
+  // Two-step decline instead of a native confirm() — a browser dialog here would
+  // block the page (and freezes automated clicking).
+  const [tourConfirmDecline, setTourConfirmDecline] = useState(false)
   const [addSetFor,     setAddSetFor]     = useState<Booking | null>(null)  // "add another set" modal
   const [addChargeFor,  setAddChargeFor]  = useState<Booking | null>(null)  // "add charge" (equipment/fees) modal
   const [overtimeFor,   setOvertimeFor]   = useState<Booking | null>(null)  // "charge overtime" modal
@@ -773,6 +802,49 @@ export default function AdminDashboard() {
     setLoading(false)
   }, [router])
 
+  // Tours load separately on purpose: a tours failure must never blank the
+  // booking list, which is the thing the calendar exists for.
+  const fetchTours = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/tours', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setTours(data.tours || [])
+    } catch { /* non-fatal */ }
+  }, [])
+
+  // Approve / decline from the calendar. Posts to the SAME token route the text
+  // link uses, so there is one decision path — this cannot drift from the SMS one.
+  const decideTour = async (t: TourRequest, action: 'approve' | 'decline') => {
+    if (tourBusy) return
+    setTourBusy(true); setTourMsg(null)
+    try {
+      const res  = await fetch(`/api/tours/decide/${t.decision_token}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setTourMsg(data.error || 'Failed — nothing changed.'); setTourBusy(false); return }
+      const next = data.status || (action === 'approve' ? 'approved' : 'declined')
+      setTours(prev => prev.map(x => (x.id === t.id ? { ...x, status: next } : x)))
+      setDetailTour(prev => (prev && prev.id === t.id ? { ...prev, status: next } : prev))
+      setTourMsg(action === 'approve'
+        ? 'Approved — they have been texted and it is on the Google Calendar.'
+        : 'Declined — they have been texted.')
+      setTourBusy(false)
+      setTourConfirmDecline(false)
+      fetchTours()
+    } catch {
+      setTourMsg('Failed — nothing changed.'); setTourBusy(false)
+    }
+  }
+
+  const openTour = (t: TourRequest) => {
+    setDetailBooking(null)
+    setTourMsg(null); setTourConfirmDecline(false)
+    setDetailTour(t)
+  }
+
   // Charge a guest overage to the card on file (penalty × extra guests).
   // What the chosen mode works out to. 'fee' bills per person PER HOUR, which is
   // how a group that grew for part of the session should be charged; 'penalty' is
@@ -848,19 +920,20 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => { fetchBookings() }, [fetchBookings])
+  useEffect(() => { fetchTours() }, [fetchTours])
 
   // Auto-refresh bookings whenever the admin returns to this tab/window, so a
   // booking made elsewhere (or by a customer) shows up without a manual reload.
   useEffect(() => {
-    const refetch = () => fetchBookings(true)
-    const onVis   = () => { if (!document.hidden) fetchBookings(true) }
+    const refetch = () => { fetchBookings(true); fetchTours() }
+    const onVis   = () => { if (!document.hidden) { fetchBookings(true); fetchTours() } }
     window.addEventListener('focus', refetch)
     document.addEventListener('visibilitychange', onVis)
     return () => {
       window.removeEventListener('focus', refetch)
       document.removeEventListener('visibilitychange', onVis)
     }
-  }, [fetchBookings])
+  }, [fetchBookings, fetchTours])
 
   // ── Sets Manager helpers ─────────────────────────────────────────────────────
   const fetchSets = useCallback(async () => {
@@ -1455,6 +1528,14 @@ export default function AdminDashboard() {
     const d = localDateStr(b.start_time); (bkByDate[d] ||= []).push(b)
   })
   const sortByStart = (a: Booking, b: Booking) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  // Tours on the calendar: pending (not yet decided) and approved. Declined and
+  // cancelled ones stay on the Inbox TOURS tab and off the calendar.
+  const byStart = (a: { start_time: string }, b: { start_time: string }) =>
+    new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  const calTours = tours.filter(t => t.status === 'pending' || t.status === 'approved')
+  const dayTours = calTours.filter(t => localDateStr(t.start_time) === calDate)
+  const trByDate: Record<string, TourRequest[]> = {}
+  calTours.forEach(t => { const d = localDateStr(t.start_time); (trByDate[d] ||= []).push(t) })
   const calHeaderLabel = calMode === 'day' ? fmtCalHeader(calDate)
     : calMode === 'week' ? weekLabel(calDate)
     : calMode === 'month' ? monthLabel(calDate)
@@ -2203,9 +2284,12 @@ export default function AdminDashboard() {
 
             {calMode === 'day' && (
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: TIME_COL + CAL_SETS.length * SET_COL, position: 'relative' }}>
+              <div style={{ minWidth: TIME_COL + TOUR_COL + CAL_SETS.length * SET_COL, position: 'relative' }}>
                 <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 12 }}>
                   <div style={{ width: TIME_COL, flexShrink: 0 }} />
+                  <div style={{ width: TOUR_COL, flexShrink: 0, textAlign: 'center', fontSize: 10, letterSpacing: '0.12em', color: '#5eead4' }}>
+                    TOURS
+                  </div>
                   {CAL_SETS.map(s => (
                     <div key={s} style={{ width: SET_COL, flexShrink: 0, textAlign: 'center', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>
                       {s.toUpperCase()}
@@ -2222,6 +2306,44 @@ export default function AdminDashboard() {
                         </span>
                       </div>
                     ))}
+                  </div>
+
+                  {/* TOURS lane */}
+                  <div style={{ width: TOUR_COL, flexShrink: 0, position: 'relative', borderLeft: '1px solid rgba(255,255,255,0.06)', background: 'rgba(45,212,191,0.03)' }}>
+                    {HOURS.map(h => (
+                      <div key={h} style={{ height: SLOT_H * 2, borderTop: '1px solid rgba(255,255,255,0.06)' }} />
+                    ))}
+                    {dayTours.map(t => {
+                      const startH  = localHour(t.start_time)
+                      const endH    = localHour(t.end_time)
+                      const gridH   = HOURS.length * SLOT_H * 2
+                      // A custom-time tour can sit outside the 9–10 grid; clamp it into
+                      // view rather than rendering it where nobody will scroll.
+                      const top     = Math.min(Math.max((startH - CAL_START) * SLOT_H * 2, 0), gridH - 30)
+                      const height  = Math.max((endH - startH) * SLOT_H * 2 - 4, 28)
+                      const pending = t.status === 'pending'
+                      return (
+                        <div key={t.id} onClick={() => openTour(t)}
+                          title={pending ? 'Tour request — not approved yet' : 'Confirmed tour'}
+                          style={{
+                            position: 'absolute', top, left: 4, right: 4, height,
+                            background: pending ? 'rgba(45,212,191,0.10)' : 'rgba(45,212,191,0.20)',
+                            border: pending ? '1px dashed rgba(45,212,191,0.75)' : '1px solid rgba(45,212,191,0.75)',
+                            borderRadius: 2, padding: '4px 6px', cursor: 'pointer', overflow: 'hidden',
+                          }}>
+                          {/* A 30-minute block is ~40px. A wrapped name eats the second
+                              line, so both lines are pinned to one line each. */}
+                          <div style={{ fontSize: 10, color: '#5eead4', fontWeight: 600, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {t.name}
+                          </div>
+                          <div style={{ fontSize: 9, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <span style={{ color: 'rgba(255,255,255,0.55)' }}>{fmtTime(t.start_time)}</span>
+                            {pending && <span style={{ color: '#ffb066' }}> · NEEDS YOU</span>}
+                            {t.is_custom && <span style={{ color: 'rgba(255,255,255,0.4)' }}> · CUSTOM</span>}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
 
                   {CAL_SETS.map(setName => {
@@ -2284,7 +2406,7 @@ export default function AdminDashboard() {
                     const height = (endH - startH) * SLOT_H * 2
                     return (
                       <div key={b.id} onClick={() => setDetailBooking(b)}
-                        style={{ position: 'absolute', top, left: TIME_COL + 4, width: CAL_SETS.length * SET_COL - 8, height: Math.max(height - 4, 20), background: 'rgba(212,168,67,0.18)', border: '1px solid rgba(212,168,67,0.6)', borderRadius: 2, padding: '4px 8px', cursor: 'pointer', overflow: 'hidden', zIndex: 6 }}>
+                        style={{ position: 'absolute', top, left: TIME_COL + TOUR_COL + 4, width: CAL_SETS.length * SET_COL - 8, height: Math.max(height - 4, 20), background: 'rgba(212,168,67,0.18)', border: '1px solid rgba(212,168,67,0.6)', borderRadius: 2, padding: '4px 8px', cursor: 'pointer', overflow: 'hidden', zIndex: 6 }}>
                         <span style={{ fontSize: 10, color: '#fff', fontWeight: 600 }}>FULL STUDIO — {b.customers?.name || '—'}</span>
                         <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginLeft: 8 }}>{fmtTime(b.start_time)} – {fmtTime(b.end_time)}</span>
                       </div>
@@ -2308,13 +2430,30 @@ export default function AdminDashboard() {
             {calMode === 'week' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {Array.from({ length: 7 }, (_, i) => addDays(weekStart(calDate), i)).map(dateStr => {
-                  const list = (bkByDate[dateStr] || []).slice().sort(sortByStart)
+                  const list  = (bkByDate[dateStr] || []).slice().sort(sortByStart)
+                  const tlist = (trByDate[dateStr] || []).slice().sort(byStart)
                   return (
                     <div key={dateStr} style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
                       <button onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: dateStr === todayStr() ? 'rgba(212,168,67,0.12)' : 'rgba(255,255,255,0.03)', border: 'none', padding: '12px 14px', cursor: 'pointer', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600 }}>
                         <span>{shortDayLabel(dateStr)}</span>
-                        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{list.length ? `${list.length} booking${list.length > 1 ? 's' : ''}` : '—'}</span>
+                        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                          {list.length ? `${list.length} booking${list.length > 1 ? 's' : ''}` : tlist.length ? '' : '—'}
+                          {tlist.length ? <span style={{ color: '#5eead4' }}>{list.length ? ' · ' : ''}{tlist.length} tour{tlist.length > 1 ? 's' : ''}</span> : null}
+                        </span>
                       </button>
+                      {tlist.map(t => (
+                        <div key={t.id} onClick={() => openTour(t)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.05)', borderLeft: '3px solid rgba(45,212,191,0.7)', cursor: 'pointer' }}>
+                          <div>
+                            <div style={{ fontSize: 13, color: '#5eead4' }}>
+                              {t.status === 'pending' ? 'TOUR REQUEST' : 'TOUR'} · {t.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
+                              {t.phone}{t.is_custom ? ' · CUSTOM TIME' : ''}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{fmtTime(t.start_time)}–{fmtTime(t.end_time)}</div>
+                        </div>
+                      ))}
                       {list.map(b => (
                         <div key={b.id} onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}>
                           <div>
@@ -2342,12 +2481,18 @@ export default function AdminDashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
                   {monthGridDates(calDate).map(dateStr => {
                     const inMonth = dateStr.slice(0, 7) === calDate.slice(0, 7)
-                    const count = (bkByDate[dateStr] || []).length
+                    const count  = (bkByDate[dateStr] || []).length
+                    const tcount = (trByDate[dateStr] || []).length
                     const isTod = dateStr === todayStr()
                     return (
-                      <button key={dateStr} onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ aspectRatio: '1 / 1', border: '1px solid rgba(255,255,255,0.06)', background: isTod ? 'rgba(212,168,67,0.16)' : count ? 'rgba(255,255,255,0.04)' : 'transparent', cursor: 'pointer', padding: '5px 5px', display: 'flex', flexDirection: 'column', gap: 2, opacity: inMonth ? 1 : 0.3, color: '#fff' }}>
+                      <button key={dateStr} onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ aspectRatio: '1 / 1', border: '1px solid rgba(255,255,255,0.06)', background: isTod ? 'rgba(212,168,67,0.16)' : (count || tcount) ? 'rgba(255,255,255,0.04)' : 'transparent', cursor: 'pointer', padding: '5px 5px', display: 'flex', flexDirection: 'column', gap: 2, opacity: inMonth ? 1 : 0.3, color: '#fff' }}>
                         <span style={{ fontSize: 12, fontWeight: isTod ? 700 : 500, textAlign: 'left' }}>{Number(dateStr.slice(8, 10))}</span>
-                        {count > 0 && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 'auto', textAlign: 'left' }}>{count}</span>}
+                        {(count > 0 || tcount > 0) && (
+                          <span style={{ fontSize: 10, marginTop: 'auto', textAlign: 'left', display: 'flex', gap: 4, alignItems: 'baseline' }}>
+                            {count > 0 && <span style={{ color: 'rgba(255,255,255,0.6)' }}>{count}</span>}
+                            {tcount > 0 && <span style={{ color: '#5eead4' }}>{tcount}T</span>}
+                          </span>
+                        )}
                       </button>
                     )
                   })}
@@ -2355,32 +2500,58 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* AGENDA — chronological list of upcoming bookings */}
+            {/* AGENDA — chronological list of upcoming bookings and tours */}
             {calMode === 'agenda' && (() => {
               // Anchored to the selected date: shows that day and everything after,
               // grouped by day. Arrow / pick a past date to look back.
-              const list = bookings
-                .filter(b => b.status !== 'cancelled' && localDateStr(b.start_time) >= calDate)
-                .sort(sortByStart)
-              if (!list.length) return <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>No bookings on or after this date.</div>
+              // Bookings and tours are merged and sorted together so the list reads
+              // as the day actually runs, not bookings-then-tours.
+              const items: Array<{ start: string; booking?: Booking; tour?: TourRequest }> = [
+                ...bookings
+                  .filter(b => b.status !== 'cancelled' && localDateStr(b.start_time) >= calDate)
+                  .map(b => ({ start: b.start_time, booking: b })),
+                ...calTours
+                  .filter(t => localDateStr(t.start_time) >= calDate)
+                  .map(t => ({ start: t.start_time, tour: t })),
+              ].sort((x, y) => new Date(x.start).getTime() - new Date(y.start).getTime())
+              if (!items.length) return <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Nothing on or after this date.</div>
               let lastDate = ''
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {list.map(b => {
-                    const d = localDateStr(b.start_time); const showHeader = d !== lastDate; lastDate = d
+                  {items.map(item => {
+                    const d = localDateStr(item.start); const showHeader = d !== lastDate; lastDate = d
+                    const t = item.tour
+                    const b = item.booking
                     return (
-                      <div key={b.id}>
+                      <div key={t ? `tour-${t.id}` : `bk-${b!.id}`}>
                         {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
-                        <div onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
-                          <div>
-                            <div style={{ fontSize: 14, color: '#fff' }}>{b.customers?.name || '—'}</div>
-                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div>
-                            {gearSummary(b) && (
-                              <div style={{ fontSize: 11, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b)}</div>
-                            )}
+                        {t ? (
+                          <div onClick={() => openTour(t)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: t.status === 'pending' ? '1px dashed rgba(45,212,191,0.6)' : '1px solid rgba(45,212,191,0.5)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
+                            <div>
+                              <div style={{ fontSize: 14, color: '#5eead4' }}>
+                                {t.status === 'pending' ? 'TOUR REQUEST' : 'TOUR'} · {t.name}
+                              </div>
+                              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+                                {t.phone}{t.is_custom ? ' · CUSTOM TIME' : ''}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(t.start_time)}–{fmtTime(t.end_time)}</div>
+                              {t.status === 'pending' && <div style={{ fontSize: 11, color: '#ffb066' }}>NEEDS YOU</div>}
+                            </div>
                           </div>
-                          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>{b.total_amount != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b.total_amount}</div>}</div>
-                        </div>
+                        ) : (
+                          <div onClick={() => setDetailBooking(b!)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
+                            <div>
+                              <div style={{ fontSize: 14, color: '#fff' }}>{b!.customers?.name || '—'}</div>
+                              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b!.sets?.name || 'Full Studio'}</div>
+                              {gearSummary(b!) && (
+                                <div style={{ fontSize: 11, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b!)}</div>
+                              )}
+                            </div>
+                            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b!.start_time)}–{fmtTime(b!.end_time)}</div>{b!.total_amount != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b!.total_amount}</div>}</div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -3905,6 +4076,71 @@ export default function AdminDashboard() {
       )}
 
       {/* BOOKING DETAIL PANEL */}
+      {/* TOUR DETAIL — same slide-in as a booking. Carries the approve/decline the
+          text link gives you, so a tour can be settled without leaving the calendar. */}
+      {detailTour && (() => {
+        const t = detailTour
+        const pending = t.status === 'pending'
+        return (
+        <div style={{
+          position: 'fixed', right: 0, top: 0, bottom: 0, width: 380,
+          background: '#0d0d0d', borderLeft: '1px solid rgba(255,255,255,0.08)',
+          overflowY: 'auto', zIndex: 100, padding: '32px 28px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#5eead4' }}>STUDIO TOUR</div>
+            <button onClick={() => { setDetailTour(null); setTourMsg(null); setTourConfirmDecline(false) }}
+              style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>
+              &#x2715;
+            </button>
+          </div>
+          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.15em', color: pending ? '#ffb066' : '#4ade80', marginBottom: 26 }}>
+            {pending ? 'AWAITING YOUR APPROVAL' : 'CONFIRMED · ON THE GOOGLE CALENDAR'}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <Detail label="NAME"  value={t.name} />
+            <Detail label="PHONE" value={t.phone} />
+            <Detail label="EMAIL" value={t.email || '—'} />
+            <Detail label="DATE"  value={fmtDate(t.start_time)} />
+            <Detail label="TIME"  value={`${fmtTime(t.start_time)} – ${fmtTime(t.end_time)}`} />
+            <Detail label="SLOT"  value={t.is_custom
+              ? 'CUSTOM — the studio is not otherwise open, you would be opening it for them'
+              : 'Inside an open window — a shoot is already booked then'} />
+            {t.purpose && <Detail label="PLANNING TO SHOOT" value={t.purpose} />}
+            <Detail label="REQUESTED" value={fmtDate(t.created_at)} />
+          </div>
+
+          {tourMsg && (
+            <div style={{ marginTop: 22, fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.5, color: '#4ade80' }}>
+              {tourMsg}
+            </div>
+          )}
+
+          {pending && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 30 }}>
+              <button onClick={() => decideTour(t, 'approve')} disabled={tourBusy}
+                style={{ background: tourBusy ? 'rgba(255,255,255,0.5)' : '#fff', border: 'none', padding: '12px', cursor: tourBusy ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#080808', fontWeight: 600 }}>
+                {tourBusy ? 'WORKING…' : 'APPROVE TOUR'}
+              </button>
+              <button onClick={() => { if (tourConfirmDecline) { decideTour(t, 'decline') } else { setTourConfirmDecline(true) } }} disabled={tourBusy}
+                style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', padding: '12px', cursor: tourBusy ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#f87171' }}>
+                {tourConfirmDecline ? 'TAP AGAIN TO CONFIRM DECLINE' : 'DECLINE'}
+              </button>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+                Either way they get a text. Approving also puts it on the Google Calendar.
+              </div>
+            </div>
+          )}
+
+          <a href={`tel:${t.phone.replace(/[^0-9+]/g, '')}`}
+            style={{ display: 'block', textAlign: 'center', marginTop: 16, padding: '12px', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em' }}>
+            CALL {t.phone}
+          </a>
+        </div>
+        )
+      })()}
+
       {detailBooking && (
         <div style={{
           position: 'fixed', right: 0, top: 0, bottom: 0, width: 380,
