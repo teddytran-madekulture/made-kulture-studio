@@ -17,7 +17,11 @@ function fmtRemaining(ms: number) {
 }
 
 const card: React.CSSProperties = { background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '20px 24px', marginBottom: 40 }
-const input: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14 }
+const input: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, colorScheme: 'dark' }
+// Native <option> popups are drawn by the OS, not the page. Without an explicit
+// background AND color they follow the browser theme — which is how these went
+// black-on-black for a real customer. Always state both.
+const opt: React.CSSProperties = { background: '#141414', color: '#fff' }
 const label: React.CSSProperties = { display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }
 
 interface SetOpt { slug: string; name: string }
@@ -125,8 +129,8 @@ export default function ShortNoticeRequest() {
           <div style={{ marginBottom: 12 }}>
             <span style={label}>SET YOU WANT</span>
             <select value={setSlug} onChange={e => setSetSlug(e.target.value)} style={input}>
-              <option value="" style={{ color: '#000' }}>— choose a set —</option>
-              {sets.map(s => <option key={s.slug} value={s.slug} style={{ color: '#000' }}>{s.name}</option>)}
+              <option value="" style={opt}>— choose a set —</option>
+              {sets.map(s => <option key={s.slug} value={s.slug} style={opt}>{s.name}</option>)}
             </select>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
@@ -137,8 +141,8 @@ export default function ShortNoticeRequest() {
             <div>
               <span style={label}>TIME YOU WANT</span>
               <select value={time} onChange={e => setTime(e.target.value)} style={input}>
-                <option value="" style={{ color: '#000' }}>— choose a time —</option>
-                {TIME_OPTS.map(t => <option key={t} value={t} style={{ color: '#000' }}>{fmt12(t)}</option>)}
+                <option value="" style={opt}>— choose a time —</option>
+                {TIME_OPTS.map(t => <option key={t} value={t} style={opt}>{fmt12(t)}</option>)}
               </select>
             </div>
           </div>

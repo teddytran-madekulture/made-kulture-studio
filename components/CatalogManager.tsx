@@ -585,9 +585,9 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
                 </label>
                 <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Category
                   <select value={propDraft.category} onChange={e => setPropDraft(d => ({ ...d, category: e.target.value }))}
-                    style={{ width: '100%', marginTop: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', boxSizing: 'border-box' }}>
-                    <option value="" style={{ color: '#000' }}>— none —</option>
-                    {PROP_CATEGORIES.map(c => <option key={c} value={c} style={{ color: '#000' }}>{c}</option>)}
+                    style={{ width: '100%', marginTop: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', outline: 'none', boxSizing: 'border-box', colorScheme: 'dark' }}>
+                    <option value="" style={{ background: '#141414', color: '#fff' }}>— none —</option>
+                    {PROP_CATEGORIES.map(c => <option key={c} value={c} style={{ background: '#141414', color: '#fff' }}>{c}</option>)}
                   </select>
                 </label>
               </div>
@@ -677,9 +677,9 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
               <input value={propSearch} onChange={e => setPropSearch(e.target.value)} placeholder="Search name, description, tags…"
                 style={{ flex: 1, minWidth: 180, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '8px 11px', outline: 'none', boxSizing: 'border-box' }} />
               <select value={propCatFilter} onChange={e => setPropCatFilter(e.target.value)}
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '8px 11px', outline: 'none' }}>
-                <option value="" style={{ color: '#000' }}>All categories</option>
-                {PROP_CATEGORIES.map(c => <option key={c} value={c} style={{ color: '#000' }}>{c}</option>)}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '8px 11px', outline: 'none', colorScheme: 'dark' }}>
+                <option value="" style={{ background: '#141414', color: '#fff' }}>All categories</option>
+                {PROP_CATEGORIES.map(c => <option key={c} value={c} style={{ background: '#141414', color: '#fff' }}>{c}</option>)}
               </select>
               {(propSearch || propCatFilter) && (
                 <button onClick={() => { setPropSearch(''); setPropCatFilter('') }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', padding: '8px 12px', cursor: 'pointer', fontSize: 11, letterSpacing: '0.08em' }}>CLEAR</button>
