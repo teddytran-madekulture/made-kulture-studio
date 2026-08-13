@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
+import RescheduleModal from '@/components/RescheduleModal'
 
 interface Booking {
   id: string
@@ -11,7 +12,7 @@ interface Booking {
   total_price: number
   customer_name: string
   acuity_appointment_id: string | null
-  sets: { name: string } | null
+  sets: { name: string; slug?: string | null } | null
   booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
 }
 
@@ -39,6 +40,7 @@ export default function BookingsPage() {
   const [gearCart, setGearCart] = useState<GearLine[]>([])
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [isPlus, setIsPlus] = useState(false)
+  const [moving, setMoving] = useState<Booking | null>(null)
 
   const refetch = () =>
     fetch('/api/account/bookings').then(r => r.json()).then(d => { setBookings(d.bookings ?? []); setLoading(false) })
@@ -114,6 +116,12 @@ export default function BookingsPage() {
     const hoursUntil = (new Date(b.start_time).getTime() - now.getTime()) / (1000 * 60 * 60)
     const canReschedule = isUpcoming && hoursUntil > 48
     const canCancel = isUpcoming && (isPlus || hoursUntil > 48)
+    // Moving a booking in place. Plus carries it inside 48h, matching the
+    // cancellation policy. ⚠️ Acuity-sourced bookings are excluded here as well
+    // as server-side — they're held in Acuity too, so moving one on our side
+    // would leave the old slot blocked there and the new one double-bookable.
+    const canMove = isUpcoming && !b.acuity_appointment_id && !!b.sets?.slug
+      && (isPlus || hoursUntil > 48)
 
     return (
       <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '20px 24px', marginBottom: 12 }}>
@@ -149,14 +157,23 @@ export default function BookingsPage() {
             }}>
               {b.status?.toUpperCase()}
             </span>
+            {canMove && (
+              <button
+                onClick={() => setMoving(b)}
+                title="Pick a new time — same set, same length, same price"
+                style={{ background: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: '#080808', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                RESCHEDULE
+              </button>
+            )}
             {canReschedule && (
               <button
                 onClick={() => rescheduleCredit(b.id)}
                 disabled={rescheduling === b.id || cancelling === b.id}
-                title="Release this session and bank its value as studio credit to use later"
+                title="Don’t know the new date yet? Release this session and bank its full value as credit — it never expires and applies automatically when you rebook"
                 style={{ background: 'linear-gradient(135deg, rgba(201,178,126,0.16), rgba(201,178,126,0.05))', border: '1px solid rgba(201,178,126,0.4)', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: '#c9b27e', cursor: 'pointer', opacity: rescheduling === b.id ? 0.5 : 1, whiteSpace: 'nowrap' }}
               >
-                {rescheduling === b.id ? 'BANKING…' : 'RESCHEDULE → CREDIT'}
+                {rescheduling === b.id ? 'BANKING…' : 'RELEASE → CREDIT'}
               </button>
             )}
             {canCancel && (
@@ -168,8 +185,10 @@ export default function BookingsPage() {
                 {cancelling === b.id ? 'CANCELLING...' : 'CANCEL'}
               </button>
             )}
-            {isUpcoming && !canCancel && !canReschedule && !isCancelled && (
-              <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>Within 48hr window</span>
+            {isUpcoming && !canCancel && !canReschedule && !canMove && !isCancelled && (
+              <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'right', lineHeight: 1.5, maxWidth: 180 }}>
+                Inside 48 hours — text (832) 408-1631 and we’ll change it for you.
+              </span>
             )}
             {isUpcoming && !isCancelled && (
               <a href={googleCalUrl({ title: `Made Kulture — ${b.sets?.name ?? 'Studio'}`, startISO: b.start_time, endISO: b.end_time, location: STUDIO_ADDRESS, details: 'Your Made Kulture session.' })}
@@ -193,10 +212,23 @@ export default function BookingsPage() {
     )
   }
 
+  const MoveModal = moving ? (
+    <RescheduleModal
+      booking={{
+        id: moving.id, start_time: moving.start_time, end_time: moving.end_time,
+        setName: moving.sets?.name ?? 'Your session', setSlug: moving.sets?.slug ?? null,
+      }}
+      isPlus={isPlus}
+      onClose={() => setMoving(null)}
+      onDone={async (msg) => { setMoving(null); setNotice(msg); await refetch() }}
+    />
+  ) : null
+
   if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', paddingTop: 40 }}>Loading bookings...</div>
 
   return (
     <div>
+      {MoveModal}
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>MY BOOKINGS</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 32 }}>
         Cancel 48+ hours before your session and the full value comes back as studio credit. Full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee.

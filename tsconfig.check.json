@@ -45,6 +45,9 @@
     "app/api/admin/short-notice-requests/route.ts",
     "app/api/account/bookings/[id]/reschedule/route.ts",
     "lib/set-availability.ts",
-    "lib/coverage.ts"
+    "lib/coverage.ts",
+    "app/account/bookings/page.tsx",
+    "components/RescheduleModal.tsx",
+    "app/api/account/bookings/route.ts"
   ]
 }

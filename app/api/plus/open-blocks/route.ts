@@ -48,6 +48,11 @@ function centralDecimal(ms: number): number {
 
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get('date')
+  // ⚠️ RESCHEDULE. A confirmed booking OPENS a window of its own, so the booking
+  // being moved would anchor its own new slot and this route would draw blocks
+  // the server then refuses. `sessionMayInstantBook` takes the same exclusion —
+  // if these two disagree the member sees a slot they cannot actually have.
+  const exclude = req.nextUrl.searchParams.get('exclude')
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ error: 'date=YYYY-MM-DD required' }, { status: 400 })
   }
@@ -72,14 +77,15 @@ export async function GET(req: NextRequest) {
 
   const [{ data: bookings, error: bErr }, { data: sets, error: sErr }] = await Promise.all([
     admin.from('bookings')
-      .select('start_time, end_time, set_id, status')
+      .select('id, start_time, end_time, set_id, status')
       .lt('start_time', windowEnd).gt('end_time', windowStart),
     admin.from('sets').select('id, name, min_hours').eq('is_active', true).order('name'),
   ])
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 })
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
 
-  const rows = (bookings ?? []) as BookingRow[]
+  const rows = ((bookings ?? []) as any[])
+    .filter(b => !exclude || b.id !== exclude) as BookingRow[]
   const open = openWindowsFrom(rows)
   const now  = Date.now()
 
