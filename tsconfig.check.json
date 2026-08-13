@@ -40,6 +40,8 @@
     "app/api/pay/[token]/route.ts",
     "app/pay/[token]/page.tsx",
     "app/short-notice/approve/[token]/page.tsx",
-    "app/book/BookClient.tsx"
+    "app/book/BookClient.tsx",
+    "app/admin/dashboard/page.tsx",
+    "app/api/admin/short-notice-requests/route.ts"
   ]
 }

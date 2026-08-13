@@ -648,6 +648,11 @@ export default function AdminDashboard() {
   const [shortReqs,    setShortReqs]    = useState<any[]>([])
   const [shortReqUntil, setShortReqUntil] = useState<Record<string, string>>({})
   const [shortReqBusy, setShortReqBusy] = useState<string | null>(null)
+  // ⚠️ The outcome of resolving a request used to be DISCARDED — a declined card,
+  // a slot taken since the ask, or a price that moved all looked identical to
+  // success: the row just vanished. Approval moves real money now, so it has to
+  // say what happened.
+  const [shortReqNote, setShortReqNote] = useState<string | null>(null)
   const fetchShortReqs = useCallback(async () => {
     const res = await fetch('/api/admin/short-notice-requests', { cache: 'no-store' })
     const d = await res.json().catch(() => ({}))
@@ -655,8 +660,24 @@ export default function AdminDashboard() {
   }, [])
   useEffect(() => { fetchShortReqs() }, [fetchShortReqs])
   const resolveShortReq = async (token: string, action: string, until?: string) => {
-    setShortReqBusy(token)
-    await fetch(`/api/short-notice/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, until }) }).catch(() => {})
+    setShortReqBusy(token); setShortReqNote(null)
+    try {
+      const res = await fetch(`/api/short-notice/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, until }) })
+      const d = await res.json().catch(() => ({} as any))
+      if (!res.ok) {
+        setShortReqNote(`⚠️ ${d.error || 'Something went wrong — nothing was charged.'}`)
+      } else if (d.outcome === 'charged') {
+        setShortReqNote(`✅ Charged $${d.amount} — booked, confirmed, door code sent.`)
+      } else if (d.outcome === 'held') {
+        setShortReqNote(`⏳ Card didn't go through. Slot held ${d.minsHeld} min and a payment link was sent — no door code until they pay.`)
+      } else if (d.status === 'denied') {
+        setShortReqNote('Request denied.')
+      } else {
+        setShortReqNote('Approved to book themselves — nothing charged.')
+      }
+    } catch {
+      setShortReqNote('⚠️ Something went wrong — check the booking before retrying.')
+    }
     await fetchShortReqs()
     setShortReqBusy(null)
   }
@@ -1967,21 +1988,40 @@ export default function AdminDashboard() {
         })()}
 
         {/* ── SHORT-NOTICE REQUESTS (shown on every view when pending) ──────── */}
-        {shortReqs.length > 0 && (
+        {(shortReqs.length > 0 || shortReqNote) && (
           <div style={{ marginBottom: 32, border: '1px solid rgba(212,168,67,0.35)', background: 'rgba(212,168,67,0.06)' }}>
             <div style={{ padding: '12px 18px', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: '#e6c07a' }}>
               🔔 SHORT-NOTICE BOOKING REQUESTS ({shortReqs.length})
             </div>
+            {shortReqNote && (
+              <div onClick={() => setShortReqNote(null)}
+                style={{ padding: '10px 18px', fontSize: 13, color: shortReqNote.startsWith('⚠') ? '#ff8080' : 'rgba(255,255,255,0.75)', borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', lineHeight: 1.5 }}>
+                {shortReqNote}
+              </div>
+            )}
             {shortReqs.map(r => (
               <div key={r.id} style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.customer_name} <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>{r.customer_email}</span></div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-                    {r.desired_set_name ? `${r.desired_set_name} · ` : ''}{r.desired_date ? `${r.desired_date}${r.desired_start != null ? ' · ' + fmt12(Number(r.desired_start)) : ''}` : 'Any near-term slot'}{r.note ? ` · “${r.note}”` : ''}
+                    {r.desired_set_name ? `${r.desired_set_name} · ` : ''}{r.desired_date ? `${r.desired_date}${r.desired_start != null ? ' · ' + fmt12(Number(r.desired_start)) : ''}` : 'Any near-term slot'}{r.desired_hours ? ` · ${r.desired_hours} hr` : ''}{r.quoted_cents != null ? ` · $${(r.quoted_cents / 100).toFixed(2)}${r.square_card_id ? ' (card on file)' : ' (no card — link)'}` : ''}{r.note ? ` · “${r.note}”` : ''}
                   </div>
                 </div>
+                {/* ⚠️ When the request carries an agreed price, CHARGING is the
+                    primary action — the customer already consented to it. Offering
+                    only "allow them to book" here silently drops the money side. */}
+                {r.quoted_cents != null && (
+                  <button disabled={shortReqBusy === r.approve_token} onClick={() => resolveShortReq(r.approve_token, 'approve_charge')}
+                    style={{ background: '#d4a843', border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>
+                    {shortReqBusy === r.approve_token ? 'WORKING…' : (r.square_card_id ? `APPROVE & CHARGE $${(r.quoted_cents / 100).toFixed(2)}` : `APPROVE — SEND $${(r.quoted_cents / 100).toFixed(2)} LINK`)}
+                  </button>
+                )}
                 <button disabled={shortReqBusy === r.approve_token} onClick={() => resolveShortReq(r.approve_token, 'approve_1h')}
-                  style={{ background: '#d4a843', border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>ALLOW 1 HR</button>
+                  style={r.quoted_cents != null
+                    ? { background: 'transparent', border: '1px solid rgba(212,168,67,0.5)', color: '#d4a843', padding: '8px 12px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.08em' }
+                    : { background: '#d4a843', border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>
+                  {r.quoted_cents != null ? 'NO CHARGE' : 'ALLOW 1 HR'}
+                </button>
                 <input type="date" value={shortReqUntil[r.id] ?? ''} onChange={e => setShortReqUntil(m => ({ ...m, [r.id]: e.target.value }))}
                   style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, padding: '6px 8px' }} />
                 <button disabled={shortReqBusy === r.approve_token} onClick={() => shortReqUntil[r.id] ? resolveShortReq(r.approve_token, 'approve_until', shortReqUntil[r.id]) : alert('Pick a date first')}
