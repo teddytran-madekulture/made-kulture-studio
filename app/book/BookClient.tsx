@@ -338,6 +338,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   // the round trip lands exactly when speed matters ("it's 4pm, can I shoot at 7?").
   const [requestHours,   setRequestHours]   = useState<number>(1)
   const [requestCards,   setRequestCards]   = useState<{ id: string; last_4: string; card_brand: string }[]>([])
+  // null until the card fetch settles. Without this the panel renders "you don't
+  // have a card saved with us" for the first beat of EVERY open — a false
+  // negative on the one line that tells the customer whether they're about to be
+  // charged or sent a payment link.
+  const [cardsLoaded,    setCardsLoaded]    = useState(false)
   const [requestCardId,  setRequestCardId]  = useState<string>('')
   const [requestConsent, setRequestConsent] = useState(false)
   // ⚠️ Priced by the SERVER. The browser must not do this arithmetic — the
@@ -377,6 +382,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
         if (cards.length && !requestCardId) setRequestCardId(cards[0].id)
       })
       .catch(() => {})
+      .finally(() => setCardsLoaded(true))
   }, [requestHour, requestCards.length, requestCardId])
 
   // Live price for the chosen length.
@@ -1085,7 +1091,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       </div>
                     </div>
 
-                    {requestCards.length > 0 ? (
+                    {!cardsLoaded ? (
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 16 }}>
+                        CHECKING YOUR CARDS&hellip;
+                      </div>
+                    ) : requestCards.length > 0 ? (
                       <>
                         <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>CHARGE WHICH CARD?</div>
                         {/* colorScheme + explicit option colors: a native option
@@ -1121,7 +1131,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#f87171', marginBottom: 12, lineHeight: 1.5 }}>{requestErr}</div>
                     )}
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={() => sendShortNoticeRequest(requestHour)} disabled={requestBusy || !requestConsent || requestCents == null}
+                      <button onClick={() => sendShortNoticeRequest(requestHour)} disabled={requestBusy || !requestConsent || requestCents == null || !cardsLoaded}
                         style={{ background: (requestBusy || !requestConsent || requestCents == null) ? 'rgba(255,255,255,0.25)' : '#fff', border: 'none', color: (requestBusy || !requestConsent || requestCents == null) ? 'rgba(255,255,255,0.5)' : '#080808', padding: '12px 20px', cursor: requestBusy ? 'wait' : (!requestConsent || requestCents == null) ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.14em', fontWeight: 600 }}>
                         {requestBusy ? 'SENDING\u2026' : 'SEND REQUEST'}
                       </button>
