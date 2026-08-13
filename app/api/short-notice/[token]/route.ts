@@ -85,6 +85,21 @@ function dollars(cents: number): string {
   return (cents / 100).toFixed(2)
 }
 
+// ── Decline reasons ─────────────────────────────────────────────────────────
+// ⚠️ Denying used to send the customer NOTHING. They asked, the row flipped to
+// `denied`, and they were left waiting for a text that would never come — the
+// worst outcome of the three, because it looks like nobody read it.
+//
+// Canned lines so a no takes one tap, with an optional line of your own. Each
+// one ends with a way forward: a decline should teach them how to ask better,
+// not just close the door.
+const DENY_REASONS: Record<string, string> = {
+  booked: 'that time’s already booked',
+  closed: 'we’re not open then',
+  notice: 'that’s too short notice for us to get someone there',
+  other:  '',
+}
+
 // A request is chargeable only if it was priced AND consented to. Anything less
 // is a pre-auto-pay request and approval falls back to unlocking them to book.
 function isChargeable(r: ShortNoticeRow | null): boolean {
@@ -160,8 +175,41 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   if (reqRow.status !== 'pending') return NextResponse.json({ error: `Already ${reqRow.status}.`, status: reqRow.status }, { status: 409 })
 
   if (action === 'deny') {
-    await service.from('short_notice_requests').update({ status: 'denied', resolved_at: new Date().toISOString() }).eq('id', reqRow.id)
-    return NextResponse.json({ ok: true, status: 'denied' })
+    const canned = DENY_REASONS[String(body.reason || '')] ?? ''
+    const custom = typeof body.note === 'string' ? body.note.trim().slice(0, 300) : ''
+    const { error: denyErr } = await service.from('short_notice_requests')
+      .update({ status: 'denied', resolved_at: new Date().toISOString() }).eq('id', reqRow.id)
+    if (denyErr) return NextResponse.json({ error: denyErr.message }, { status: 500 })
+
+    // Tell them. Non-fatal — a failed text must not leave the row un-denied.
+    const when = reqRow.desired_date
+      ? `${reqRow.desired_date}${reqRow.desired_start != null ? ` at ${fmt12(Number(reqRow.desired_start))}` : ''}`
+      : 'that time'
+    const because = custom || canned
+    const line = because
+      ? `Sorry — we can’t do ${when}: ${because}.`
+      : `Sorry — we can’t do ${when}.`
+
+    await Promise.allSettled([
+      reqRow.customer_phone
+        ? sendSMS(reqRow.customer_phone, `${line}\n\nPick another time at ${APP_URL}/availability, or text us at (832) 408-1631 and we’ll find you one.`)
+        : Promise.resolve(),
+      reqRow.customer_email
+        ? sendSimpleEmail({
+            to: reqRow.customer_email,
+            subject: 'About your short-notice request',
+            heading: 'We couldn’t take that one',
+            paragraphs: [
+              line,
+              'Pick another time and we’ll get you in — or text us at (832) 408-1631 and we’ll sort something out.',
+            ],
+            ctaText: 'See available times', ctaUrl: `${APP_URL}/availability`,
+            label: 'short_notice_denied',
+          })
+        : Promise.resolve(),
+    ])
+
+    return NextResponse.json({ ok: true, status: 'denied', notified: !!(reqRow.customer_phone || reqRow.customer_email) })
   }
 
   // ── Approve AND take the money ────────────────────────────────────────────

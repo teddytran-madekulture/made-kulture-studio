@@ -659,10 +659,10 @@ export default function AdminDashboard() {
     setShortReqs(d.requests ?? [])
   }, [])
   useEffect(() => { fetchShortReqs() }, [fetchShortReqs])
-  const resolveShortReq = async (token: string, action: string, until?: string) => {
+  const resolveShortReq = async (token: string, action: string, until?: string, reason?: string) => {
     setShortReqBusy(token); setShortReqNote(null)
     try {
-      const res = await fetch(`/api/short-notice/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, until }) })
+      const res = await fetch(`/api/short-notice/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, until, reason }) })
       const d = await res.json().catch(() => ({} as any))
       if (!res.ok) {
         setShortReqNote(`⚠️ ${d.error || 'Something went wrong — nothing was charged.'}`)
@@ -2026,8 +2026,19 @@ export default function AdminDashboard() {
                   style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, padding: '6px 8px' }} />
                 <button disabled={shortReqBusy === r.approve_token} onClick={() => shortReqUntil[r.id] ? resolveShortReq(r.approve_token, 'approve_until', shortReqUntil[r.id]) : alert('Pick a date first')}
                   style={{ background: 'transparent', border: '1px solid rgba(212,168,67,0.5)', color: '#d4a843', padding: '8px 12px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>UNTIL</button>
-                <button disabled={shortReqBusy === r.approve_token} onClick={() => resolveShortReq(r.approve_token, 'deny')}
-                  style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff6b6b', padding: '8px 12px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>DENY</button>
+                {/* ⚠️ Declining TEXTS the customer now. The reason rides along so
+                    they aren't left guessing — this banner is the second approval
+                    surface and has to carry the same behaviour as the token page. */}
+                <select disabled={shortReqBusy === r.approve_token}
+                  defaultValue=""
+                  onChange={e => { if (e.target.value) resolveShortReq(r.approve_token, 'deny', undefined, e.target.value) }}
+                  style={{ background: '#0d0d0d', border: '1px solid rgba(255,100,100,0.35)', color: '#ff6b6b', colorScheme: 'dark', padding: '8px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>
+                  <option value=""  style={{ background: '#0d0d0d', color: '#ff6b6b' }}>DENY…</option>
+                  <option value="booked" style={{ background: '#0d0d0d', color: '#fff' }}>Already booked then</option>
+                  <option value="closed" style={{ background: '#0d0d0d', color: '#fff' }}>Not open then</option>
+                  <option value="notice" style={{ background: '#0d0d0d', color: '#fff' }}>Too short notice</option>
+                  <option value="other"  style={{ background: '#0d0d0d', color: '#fff' }}>No reason given</option>
+                </select>
               </div>
             ))}
           </div>

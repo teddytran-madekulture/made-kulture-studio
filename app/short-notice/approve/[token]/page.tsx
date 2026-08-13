@@ -43,6 +43,10 @@ export default function ApprovePage() {
   const [until, setUntil]   = useState('')
   const [grantMins, setGrantMins] = useState(60)
   const [err, setErr]       = useState('')
+  // Declining sends the customer a note. One tap picks a reason; the box is
+  // optional. They were getting silence before this.
+  const [denying, setDenying] = useState(false)
+  const [denyNote, setDenyNote] = useState('')
 
   useEffect(() => {
     fetch(`/api/short-notice/${token}`)
@@ -75,12 +79,12 @@ export default function ApprovePage() {
       .finally(() => setLoad(false))
   }, [token])
 
-  const resolve = async (action: string, untilDate?: string) => {
+  const resolve = async (action: string, untilDate?: string, reason?: string) => {
     setBusy(action); setErr('')
     try {
       const res = await fetch(`/api/short-notice/${token}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, until: untilDate }),
+        body: JSON.stringify({ action, until: untilDate, reason, note: denyNote || undefined }),
       })
       const d = await res.json().catch(() => ({}))
       // A refusal (slot taken, price moved, session already started) leaves the
@@ -208,10 +212,41 @@ export default function ApprovePage() {
         </button>
       </div>
 
-      <button onClick={() => resolve('deny')} disabled={!!busy}
-        style={{ width: '100%', background: 'transparent', color: 'rgba(255,120,120,0.8)', border: '1px solid rgba(255,100,100,0.3)', padding: '11px', cursor: busy ? 'default' : 'pointer', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.12em' }}>
-        Deny request
-      </button>
+      {!denying ? (
+        <button onClick={() => setDenying(true)} disabled={!!busy}
+          style={{ width: '100%', background: 'transparent', color: 'rgba(255,120,120,0.8)', border: '1px solid rgba(255,100,100,0.3)', padding: '11px', cursor: busy ? 'default' : 'pointer', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.12em' }}>
+          Deny request
+        </button>
+      ) : (
+        <div style={{ border: '1px solid rgba(255,100,100,0.3)', padding: '14px 16px' }}>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 10, lineHeight: 1.5 }}>
+            Why? They get a text either way — a reason just saves them guessing.
+          </div>
+          {[
+            { key: 'booked', label: 'Already booked then' },
+            { key: 'closed', label: 'We’re not open then' },
+            { key: 'notice', label: 'Too short notice' },
+          ].map(r => (
+            <button key={r.key} onClick={() => resolve('deny', undefined, r.key)} disabled={!!busy}
+              style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '10px', marginBottom: 6, cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, textAlign: 'left' }}>
+              {r.label}
+            </button>
+          ))}
+          <textarea value={denyNote} onChange={e => setDenyNote(e.target.value)} rows={2}
+            placeholder="Or say it in your own words (optional)"
+            style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '10px', fontFamily: 'Inter', fontSize: 13, boxSizing: 'border-box', marginTop: 4, marginBottom: 8, resize: 'vertical' }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => resolve('deny', undefined, 'other')} disabled={!!busy}
+              style={{ flex: 1, background: 'rgba(255,100,100,0.15)', border: '1px solid rgba(255,100,100,0.4)', color: '#ff8080', padding: '10px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em' }}>
+              {busy === 'deny' ? 'SENDING…' : 'SEND DECLINE'}
+            </button>
+            <button onClick={() => { setDenying(false); setDenyNote('') }} disabled={!!busy}
+              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em' }}>
+              BACK
+            </button>
+          </div>
+        </div>
+      )}
     </div></div>
   )
 }

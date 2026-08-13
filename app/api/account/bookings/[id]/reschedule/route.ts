@@ -126,7 +126,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (newStartMs - now < MIN_LEAD_MS) {
     return NextResponse.json({ error: 'Please pick a time at least 2 hours from now.' }, { status: 400 })
   }
-  if (newStartISO === booking.start_time && newEndISO === booking.end_time) {
+  // ⚠️ Compare INSTANTS, not strings. Supabase returns `2026-08-13T15:00:00+00:00`
+  // (UTC) while bookingHourToISO emits `2026-08-13T10:00:00-05:00` (local wall
+  // clock) — the same moment, spelled two different ways. String equality never
+  // matched, so a "move" to the time it already had returned 200: it re-minted
+  // the door codes, texted the customer a new code for no reason, and told the
+  // owner a booking had moved when nothing had. Same family as the positional
+  // slicing in dst-central-offset — never compare timestamps as text.
+  if (newStartMs === oldStartMs && Date.parse(newEndISO) === oldEndMs) {
     return NextResponse.json({ error: 'That’s the time you already have.' }, { status: 400 })
   }
 
