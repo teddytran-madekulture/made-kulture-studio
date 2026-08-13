@@ -935,7 +935,12 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 const isInvalidEnd = selecting === 'end' && booking.startHour !== null
                                      && (h > booking.startHour && (h - booking.startHour) < minHours)
                 // Start times are on the hour; half-hour slots can only be an END.
-                const isInvalidStart = selecting === 'start' && h % 1 !== 0
+                // ⚠️ That ALSO has to cover a half-hour at or BEFORE a chosen start.
+                // Clicking one there re-picks the START (see handleHourClick), which a
+                // half-hour can never be — so it rendered at full brightness and did
+                // absolutely nothing when clicked. Same family as the at-or-before-start
+                // rule that bit the Plus containment check on 2026-08-12.
+                const isInvalidStart = (selecting === 'start' || (booking.startHour !== null && h <= booking.startHour)) && h % 1 !== 0
                 // ⚠️ One booking = one VISIT. A gap wider than the grace window would
                 // mean the single front-door algoPIN (min start → max end, valid
                 // CONTINUOUSLY, non-revocable) covers hours the customer never paid
