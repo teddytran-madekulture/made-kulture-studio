@@ -333,6 +333,17 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   const [requestBusy, setRequestBusy] = useState(false)
   const [requestDone, setRequestDone] = useState<null | { replaced: boolean }>(null)
   const [requestErr,  setRequestErr]  = useState<string | null>(null)
+  // Auto-pay consent, captured WITH the request. Approving then charges without
+  // the member having to come back and book — which is the whole point, since
+  // the round trip lands exactly when speed matters ("it's 4pm, can I shoot at 7?").
+  const [requestHours,   setRequestHours]   = useState<number>(1)
+  const [requestCards,   setRequestCards]   = useState<{ id: string; last_4: string; card_brand: string }[]>([])
+  const [requestCardId,  setRequestCardId]  = useState<string>('')
+  const [requestConsent, setRequestConsent] = useState(false)
+  // ⚠️ Priced by the SERVER. The browser must not do this arithmetic — the
+  // figure shown here is the figure charged on approval, and two independent
+  // calculations of one number is how they end up disagreeing.
+  const [requestCents,   setRequestCents]   = useState<number | null>(null)
 
   // Plus instant-book blocks for the selected date (only inside the window).
   useEffect(() => {
@@ -351,6 +362,33 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
       .catch(() => { if (!dead) setPlusBlocks([]) })
     return () => { dead = true }
   }, [plusWindowDate, booking.date, booking.setId])
+
+  // Saved cards, loaded when the panel opens. Deliberately NO Square card-entry
+  // iframe here: this panel sits inside the time grid and a card form would be
+  // cramped on a phone. A member with no saved card still sends the request and
+  // gets a payment link if it's approved.
+  useEffect(() => {
+    if (requestHour === null || requestCards.length) return
+    fetch('/api/account/cards?dedupe=1', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        const cards = d?.cards ?? []
+        setRequestCards(cards)
+        if (cards.length && !requestCardId) setRequestCardId(cards[0].id)
+      })
+      .catch(() => {})
+  }, [requestHour, requestCards.length, requestCardId])
+
+  // Live price for the chosen length.
+  useEffect(() => {
+    if (requestHour === null || !booking.setId || !requestHours) { setRequestCents(null); return }
+    let dead = false
+    fetch(`/api/account/short-notice-request?set=${booking.setId}&hours=${requestHours}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (!dead) setRequestCents(typeof d?.cents === 'number' ? d.cents : null) })
+      .catch(() => { if (!dead) setRequestCents(null) })
+    return () => { dead = true }
+  }, [requestHour, requestHours, booking.setId])
 
   // Fetch availability when set + date change
   useEffect(() => {
@@ -509,7 +547,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
     try {
       const res = await fetch('/api/account/short-notice-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ desiredSet: booking.setId, desiredDate: booking.date, desiredStart: h }),
+        body: JSON.stringify({
+          desiredSet: booking.setId, desiredDate: booking.date, desiredStart: h,
+          desiredHours: requestHours, squareCardId: requestCardId || null, consent: true,
+        }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setRequestErr(d.error || 'Could not send that request.'); setRequestBusy(false); return }
@@ -948,7 +989,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 return (
                   <button key={h}
                     onClick={() => requestable
-                      ? (setRequestHour(h), setRequestDone(null), setRequestErr(null))
+                      ? (setRequestHour(h), setRequestHours(minHours), setRequestConsent(false), setRequestDone(null), setRequestErr(null))
                       : handleHourClick(h)}
                     title={requestable ? 'Not open this early/late — tap to ask' : undefined}
                     disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || (notOpenForPlus && !requestable)}
@@ -992,8 +1033,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                     </div>
                     <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55 }}>
                       {requestDone.replaced
-                        ? `We\u2019ve changed your request to ${fmt12(requestHour)}. We\u2019ll text you as soon as it\u2019s confirmed.`
-                        : `We\u2019ll text you as soon as ${fmt12(requestHour)} is confirmed. Nothing is charged until you book.`}
+                        ? `We\u2019ve changed your request to ${fmt12(requestHour)}\u2013${fmt12(requestHour + requestHours)}. We\u2019ll text you the moment it\u2019s confirmed.`
+                        : `We\u2019ll text you the moment ${fmt12(requestHour)}\u2013${fmt12(requestHour + requestHours)} is confirmed \u2014 with your door code, ready to shoot. Nothing is charged unless we approve it.`}
                     </div>
                     <button onClick={() => { setRequestHour(null); setRequestDone(null) }}
                       style={{ marginTop: 14, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
@@ -1005,15 +1046,78 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                     <div style={{ fontFamily: 'Inter', fontSize: 14, color: '#fff', marginBottom: 6 }}>
                       Ask for {fmt12(requestHour)}?
                     </div>
-                    <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 14 }}>
-                      The studio isn&rsquo;t already open then, so we have to confirm it. We&rsquo;ll text you &mdash; nothing is booked or charged yet.
+                    <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 16 }}>
+                      The studio isn&rsquo;t already open then, so we have to confirm it. Set it up here and we&rsquo;ll do the rest &mdash; you won&rsquo;t need to come back and book.
                     </div>
+
+                    {/* Length. Capped at 4 hours on purpose: a member who needs
+                        longer extends once they're on site, the same way every
+                        other session does. */}
+                    <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>HOW LONG?</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+                      {[1, 1.5, 2, 2.5, 3, 3.5, 4]
+                        .filter(n => n >= minHours && requestHour + n <= CLOSE_HOUR)
+                        .map(n => (
+                          <button key={n} onClick={() => setRequestHours(n)}
+                            style={{
+                              background: requestHours === n ? '#c9b27e' : 'transparent',
+                              border: `1px solid ${requestHours === n ? '#c9b27e' : 'rgba(255,255,255,0.2)'}`,
+                              color: requestHours === n ? '#080808' : 'rgba(255,255,255,0.7)',
+                              padding: '9px 14px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12,
+                              fontWeight: requestHours === n ? 600 : 400,
+                            }}>
+                            {n} hr
+                          </button>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '12px 0', borderTop: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 16 }}>
+                      <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+                        {fmt12(requestHour)} &ndash; {fmt12(requestHour + requestHours)}
+                      </div>
+                      <div style={{ fontFamily: 'Inter', fontSize: 20, fontWeight: 600, color: '#c9b27e' }}>
+                        {requestCents != null ? `$${(requestCents / 100).toFixed(2)}` : '\u2014'}
+                      </div>
+                    </div>
+
+                    {requestCards.length > 0 ? (
+                      <>
+                        <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>CHARGE WHICH CARD?</div>
+                        {/* colorScheme + explicit option colors: a native option
+                            popup is drawn by the OS, so black-on-default is
+                            black-on-black in a dark-mode browser. */}
+                        <select value={requestCardId} onChange={e => setRequestCardId(e.target.value)}
+                          style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', colorScheme: 'dark', padding: '12px', fontFamily: 'Inter', fontSize: 13, marginBottom: 16, boxSizing: 'border-box' }}>
+                          {requestCards.map(c => (
+                            <option key={c.id} value={c.id} style={{ background: '#0d0d0d', color: '#fff' }}>
+                              {c.card_brand} &middot;&middot;&middot;&middot;{c.last_4}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.55, marginBottom: 16 }}>
+                        You don&rsquo;t have a card saved with us. Send the request anyway &mdash; if we approve it, we&rsquo;ll text you a payment link to finish.
+                      </div>
+                    )}
+
+                    <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginBottom: 16 }}>
+                      <input type="checkbox" checked={requestConsent} onChange={e => setRequestConsent(e.target.checked)}
+                        style={{ marginTop: 2, width: 16, height: 16, accentColor: '#c9b27e', flexShrink: 0 }} />
+                      <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.55 }}>
+                        {requestCards.length > 0 && requestCents != null
+                          ? `If Made Kulture approves this, charge my card $${(requestCents / 100).toFixed(2)} and confirm the booking.`
+                          : 'If Made Kulture approves this, confirm the booking at the price above.'}
+                        {' '}You can cancel for full studio credit.
+                      </span>
+                    </label>
+
                     {requestErr && (
-                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#f87171', marginBottom: 12 }}>{requestErr}</div>
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#f87171', marginBottom: 12, lineHeight: 1.5 }}>{requestErr}</div>
                     )}
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={() => sendShortNoticeRequest(requestHour)} disabled={requestBusy}
-                        style={{ background: requestBusy ? 'rgba(255,255,255,0.4)' : '#fff', border: 'none', color: '#080808', padding: '12px 20px', cursor: requestBusy ? 'wait' : 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.14em', fontWeight: 600 }}>
+                      <button onClick={() => sendShortNoticeRequest(requestHour)} disabled={requestBusy || !requestConsent || requestCents == null}
+                        style={{ background: (requestBusy || !requestConsent || requestCents == null) ? 'rgba(255,255,255,0.25)' : '#fff', border: 'none', color: (requestBusy || !requestConsent || requestCents == null) ? 'rgba(255,255,255,0.5)' : '#080808', padding: '12px 20px', cursor: requestBusy ? 'wait' : (!requestConsent || requestCents == null) ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.14em', fontWeight: 600 }}>
                         {requestBusy ? 'SENDING\u2026' : 'SEND REQUEST'}
                       </button>
                       <button onClick={() => { setRequestHour(null); setRequestErr(null) }} disabled={requestBusy}

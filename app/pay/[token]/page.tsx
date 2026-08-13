@@ -36,6 +36,7 @@ interface Req {
   expiresAt: string
   payerName: string | null
   bookerName: string | null
+  selfPay?: boolean
   lines: Line[]
 }
 
@@ -227,9 +228,9 @@ export default function PayPage({ params }: { params: { token: string } }) {
     <main style={wrap}>{header}
       <div style={{ ...card, textAlign: 'center' }}>
         <div style={{ fontSize: 11, letterSpacing: '0.34em', color: CHAMP_DIM, marginBottom: 14 }}>PAYMENT RECEIVED</div>
-        <div style={{ fontSize: 26, fontWeight: 800, marginBottom: 12 }}>All set{req.bookerName ? `, ${req.bookerName}’s booked` : ''}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, marginBottom: 12 }}>{req.selfPay ? 'You’re booked' : `All set${req.bookerName ? `, ${req.bookerName}’s booked` : ''}`}</div>
         <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7 }}>
-          Your ${req.amount} payment is confirmed. {req.bookerName || 'The booker'} has the booking details and door code — nothing else needed from you.
+          Your ${req.amount} payment is confirmed. {req.selfPay ? 'Your booking details and door code are on their way by text and email.' : `${req.bookerName || 'The booker'} has the booking details and door code — nothing else needed from you.`}
         </div>
       </div>
     </main>
@@ -241,7 +242,7 @@ export default function PayPage({ params }: { params: { token: string } }) {
         <div style={{ fontSize: 11, letterSpacing: '0.34em', color: CHAMP_DIM, marginBottom: 14 }}>LINK EXPIRED</div>
         <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 12 }}>This hold timed out</div>
         <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7 }}>
-          The slot was only held for a short window and it’s now been released. Ask {req.bookerName || 'whoever sent this'} to start the booking again and resend a fresh link.
+          The slot was only held for a short window and it’s now been released. {req.selfPay ? 'Text (832) 408-1631 and we’ll see what we can do.' : `Ask ${req.bookerName || 'whoever sent this'} to start the booking again and resend a fresh link.`}
         </div>
       </div>
     </main>
@@ -252,7 +253,9 @@ export default function PayPage({ params }: { params: { token: string } }) {
     <main style={wrap}>{header}
       <div style={card}>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, marginBottom: 6 }}>
-          {req.bookerName ? `${req.bookerName} asked you to cover this booking` : 'You’ve been asked to cover this booking'}
+          {req.selfPay
+            ? 'Finish your booking'
+            : req.bookerName ? `${req.bookerName} asked you to cover this booking` : 'You’ve been asked to cover this booking'}
         </div>
 
         <div style={{ borderTop: `1px solid ${HAIR}`, borderBottom: `1px solid ${HAIR}`, padding: '14px 0', margin: '12px 0' }}>

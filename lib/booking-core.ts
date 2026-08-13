@@ -8,6 +8,7 @@
 // Rewiring it to import from here is a safe follow-up once the delegated flow is
 // verified — until then, keep the two in sync if you touch pricing/guest rules.
 
+import { randomUUID } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel, formatGuestLine } from '@/lib/email'
 import { checkBannedAndAlert } from '@/lib/flagged-customer'
@@ -85,9 +86,9 @@ const SET_PRICES: Record<string, number> = {
   'watering-hole': 75, 'the-tank': 75, 'studio-one': 65,
 }
 
-const SET_MIN_HOURS: Record<string, number> = { 'watering-hole': 2, 'the-tank': 2 }
+export const SET_MIN_HOURS: Record<string, number> = { 'watering-hole': 2, 'the-tank': 2 }
 
-function setRateFor(slug: string, pricingOverrides?: any): number {
+export function setRateFor(slug: string, pricingOverrides?: any): number {
   let rate = SET_PRICES[slug] ?? 0
   if (pricingOverrides) {
     const perSet = pricingOverrides.sets?.[slug]
@@ -526,7 +527,7 @@ export async function finalizeBooking(
 
   notifications.push(
     sendOwnerPush({
-      title: '🎉 Booking confirmed (delegated pay)',
+      title: '🎉 Booking confirmed',
       body: `${custName} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}`,
       url: '/admin/dashboard',
     }).catch(() => {})
@@ -534,4 +535,113 @@ export async function finalizeBooking(
 
   await Promise.allSettled(notifications)
   return { doorCode }
+}
+
+// ─── shortNoticeQuoteCents — the ONE price a short-notice request speaks ─────
+// The figure is SHOWN to the customer at consent and CHARGED at approval, so
+// both have to come from here. A browser-computed price would let the two
+// disagree, and the one they agreed to is the only defensible number to take.
+//
+// A short-notice request is always a single set, at the member rate (they are
+// signed in to make it), with no equipment and no extra guests — so this is
+// exactly what validateAndPriceOrder computes for the same order. That is not a
+// coincidence to preserve loosely: it is what makes the price check at approval
+// pass instead of 400ing on a mismatch.
+export function shortNoticeQuoteCents(slug: string, hours: number, pricingOverrides?: any): number {
+  return Math.round(setRateFor(slug, pricingOverrides) * hours * 100)
+}
+
+// ─── insertBookingRows — the shared row writer ───────────────────────────────
+// Lifted out of /api/bookings/delegate so the short-notice auto-pay path does
+// not become a THIRD place that knows how to write a booking. The two that
+// already exist have drifted before (see the price-verification comments
+// above), and a third would drift the same way.
+//
+// Writes one row per priced line. The FIRST row carries the whole order's
+// equipment, guest fee and guest surcharge — the others carry only their own
+// space cost — so summing total_amount across the order_group gives the order
+// total exactly once.
+//
+// ⚠️ On a failed insert this rolls back the rows it already wrote. A half-held
+// order is worse than no hold: it blocks a set nobody is going to pay for.
+export interface InsertRowsOptions {
+  status:     'pending_payment' | 'confirmed'
+  source:     string
+  customerId: string | null
+  authUserId: string | null
+  notes?:     string | null
+  equipment?: { equipment_id: string; quantity: number }[]
+  orderGroup?: string
+  squareCardOnFileId?: string | null
+  squarePaymentId?: string | null
+}
+
+export type InsertRowsResult =
+  | { ok: true;  bookingIds: string[]; orderGroup: string }
+  | { ok: false; error: string }
+
+export async function insertBookingRows(
+  supabase: SupabaseClient,
+  order: PricedOrder,
+  opts: InsertRowsOptions
+): Promise<InsertRowsResult> {
+  const { lines, guestCount, guestFeeDollars, guestSurchargeDollars, equipRates } = order
+  const orderGroup = opts.orderGroup ?? randomUUID()
+  const equipment  = opts.equipment ?? []
+  const equipTotal = equipment.reduce(
+    (sum, l) => sum + (equipRates[l.equipment_id] ?? 0) * (l.quantity ?? 1), 0)
+
+  const bookingIds: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]
+    const rowTotal = l.spaceDollars + (i === 0 ? equipTotal + guestFeeDollars + guestSurchargeDollars : 0)
+    const { data: row, error: insErr } = await supabase
+      .from('bookings')
+      .insert({
+        set_id:           l.setId,
+        customer_id:      opts.customerId,
+        auth_user_id:     opts.authUserId,
+        start_time:       l.startISO,
+        end_time:         l.endISO,
+        status:           opts.status,
+        base_amount:      l.spaceDollars,
+        extras_amount:    i === 0 ? equipTotal : 0,
+        total_amount:     rowTotal,
+        guest_count:      guestCount || null,
+        guest_fee_amount: i === 0 ? guestFeeDollars : 0,
+        order_group:      orderGroup,
+        source:           opts.source,
+        notes:            opts.notes ?? null,
+        ...(opts.squareCardOnFileId ? { square_card_on_file_id: opts.squareCardOnFileId } : {}),
+        ...(opts.squarePaymentId    ? { square_payment_id:      opts.squarePaymentId }    : {}),
+      })
+      .select('id').single()
+
+    // ⚠️ supabase-js does NOT throw on a Postgres error — without reading
+    // `error` this loop would happily "succeed" having written nothing.
+    if (insErr) {
+      console.error('[insertBookingRows] booking insert error:', insErr)
+      if (bookingIds.length) await supabase.from('bookings').delete().in('id', bookingIds)
+      return { ok: false, error: 'Could not hold the slot — please try again.' }
+    }
+    if (row?.id) {
+      bookingIds.push(row.id)
+      if (i === 0 && equipment.length > 0) {
+        const addons = equipment.map(e => ({
+          booking_id: row.id, equipment_id: e.equipment_id,
+          quantity: e.quantity, rate: equipRates[e.equipment_id] ?? 0,
+          // Paid state follows the booking: a confirmed order is paid, a hold
+          // is not. The Square webhook flips holds when the link is paid.
+          paid: opts.status === 'confirmed',
+        }))
+        const { error: addErr } = await supabase.from('booking_add_ons').insert(addons)
+        if (addErr) console.error('[insertBookingRows] add-on insert error:', addErr)
+      }
+    }
+  }
+
+  if (bookingIds.length === 0) {
+    return { ok: false, error: 'Could not hold the slot — please try again.' }
+  }
+  return { ok: true, bookingIds, orderGroup }
 }

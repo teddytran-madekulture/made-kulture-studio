@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { validateAndPriceOrder, fmt12, type BookingCoreInput } from '@/lib/booking-core'
+import { validateAndPriceOrder, insertBookingRows, fmt12, type BookingCoreInput } from '@/lib/booking-core'
 import { sessionMayBookShortNotice } from '@/lib/short-notice'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { sendSMS, toE164 } from '@/lib/sms'
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     const allowShortNotice = await sessionMayBookShortNotice(supabase, sessionEmail)
     const v = await validateAndPriceOrder(supabase, body, { isMember, allowShortNotice })
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: v.status })
-    const { lines, verifiedCents, guestCount, guestFeeDollars, guestSurchargeDollars, equipRates } = v.order
+    const { lines, verifiedCents } = v.order
 
     if (verifiedCents <= 0) {
       return NextResponse.json({ error: 'This order is $0 — just book it directly, no payment link needed.' }, { status: 400 })
@@ -127,54 +127,18 @@ export async function POST(req: NextRequest) {
     } catch { /* non-fatal */ }
 
     // 4. Insert the held booking row(s) — status pending_payment holds the slot.
-    const orderGroup = randomUUID()
-    const equipTotal = (body.equipment ?? []).reduce(
-      (sum, l) => sum + (equipRates[l.equipment_id] ?? 0) * (l.quantity ?? 1), 0)
-
-    const bookingIds: string[] = []
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i]
-      const rowTotal = l.spaceDollars + (i === 0 ? equipTotal + guestFeeDollars + guestSurchargeDollars : 0)
-      const { data: row, error: insErr } = await supabase
-        .from('bookings')
-        .insert({
-          set_id:           l.setId,
-          customer_id:      supabaseCustomerId,
-          auth_user_id:     authUserId,
-          start_time:       l.startISO,
-          end_time:         l.endISO,
-          status:           'pending_payment',
-          base_amount:      l.spaceDollars,
-          extras_amount:    i === 0 ? equipTotal : 0,
-          total_amount:     rowTotal,
-          guest_count:      guestCount || null,
-          guest_fee_amount: i === 0 ? guestFeeDollars : 0,
-          order_group:      orderGroup,
-          source:           'website-delegated',
-          notes:            body.notes,
-        })
-        .select('id').single()
-      if (insErr) {
-        console.error('[delegate] booking insert error:', insErr)
-        // Roll back any rows already inserted so we don't leave a half-hold.
-        if (bookingIds.length) await supabase.from('bookings').delete().in('id', bookingIds)
-        return NextResponse.json({ error: 'Could not hold the slot — please try again.' }, { status: 500 })
-      }
-      if (row?.id) {
-        bookingIds.push(row.id)
-        if (i === 0 && (body.equipment?.length ?? 0) > 0) {
-          const addons = body.equipment.map(e => ({
-            booking_id: row.id, equipment_id: e.equipment_id,
-            quantity: e.quantity, rate: equipRates[e.equipment_id] ?? 0, paid: false,
-          }))
-          await supabase.from('booking_add_ons').insert(addons)
-            .then(({ error }) => { if (error) console.error('[delegate] add-on insert error:', error) })
-        }
-      }
-    }
-    if (bookingIds.length === 0) {
-      return NextResponse.json({ error: 'Could not hold the slot — please try again.' }, { status: 500 })
-    }
+    //    Shared with the short-notice auto-pay path via lib/booking-core so
+    //    there is one writer, not one per payment flow.
+    const ins = await insertBookingRows(supabase, v.order, {
+      status:     'pending_payment',
+      source:     'website-delegated',
+      customerId: supabaseCustomerId,
+      authUserId,
+      notes:      body.notes,
+      equipment:  body.equipment,
+    })
+    if (!ins.ok) return NextResponse.json({ error: ins.error }, { status: 500 })
+    const { bookingIds, orderGroup } = ins
 
     // 5. Create the delegation + token.
     const payToken = randomUUID()

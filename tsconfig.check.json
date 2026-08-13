@@ -29,9 +29,17 @@
     "incremental": false
   },
   "files": [
-    "app/book/BookClient.tsx",
     "lib/booking-core.ts",
-    "app/api/bookings/route.ts",
-    "app/api/bookings/delegate/route.ts"
+    "lib/booking-times.ts",
+    "lib/short-notice.ts",
+    "lib/plus-open-windows.ts",
+    "lib/plus-instant-book.ts",
+    "app/api/bookings/delegate/route.ts",
+    "app/api/account/short-notice-request/route.ts",
+    "app/api/short-notice/[token]/route.ts",
+    "app/api/pay/[token]/route.ts",
+    "app/pay/[token]/page.tsx",
+    "app/short-notice/approve/[token]/page.tsx",
+    "app/book/BookClient.tsx"
   ]
 }

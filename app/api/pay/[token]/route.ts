@@ -31,10 +31,21 @@ function centralLabel(iso: string): string {
 async function loadDelegation(token: string) {
   const { data } = await supabase
     .from('payment_delegations')
-    .select('id, order_group, booking_ids, payer_name, payer_contact, channel, amount_cents, status, square_payment_id, booker_name, booker_phone, expires_at')
+    .select('id, order_group, booking_ids, payer_name, payer_contact, channel, amount_cents, status, square_payment_id, booker_name, booker_email, booker_phone, expires_at')
     .eq('pay_token', token)
     .maybeSingle()
   return data
+}
+
+// True when the person paying IS the person who booked. The short-notice
+// auto-pay fallback creates a delegation where both sides are the same member,
+// so the page must not tell them someone asked them to cover their own booking.
+// Derived from the row rather than stored, so no column and no new state to
+// keep in sync — the two contact fields either match or they don't.
+function isSelfPay(d: any): boolean {
+  const c = String(d?.payer_contact ?? '')
+  if (!c) return false
+  return c === String(d?.booker_phone ?? '\u0000') || c === String(d?.booker_email ?? '\u0000')
 }
 
 async function summarize(bookingIds: string[]) {
@@ -67,6 +78,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       expiresAt: d.expires_at,
       payerName: d.payer_name,
       bookerName: d.booker_name,
+      selfPay: isSelfPay(d),
       lines,
     },
   })
@@ -142,9 +154,12 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     console.error('[pay] finalize error (non-fatal):', e)
   }
 
-  // Receipt to the PAYER.
+  // Receipt to the PAYER — skipped when the payer IS the booker. finalizeBooking
+  // has already sent them the real confirmation (schedule, amount, door code);
+  // a second “payment received” text on top of it is just noise.
   const dollars = (d.amount_cents / 100).toFixed(2)
   try {
+    if (isSelfPay(d)) throw { skip: true }
     if (isEmail) {
       await sendSimpleEmail({
         to: d.payer_contact,
@@ -162,8 +177,8 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         `✅ Payment received — $${dollars} for ${d.booker_name || 'the'} Made Kulture booking is confirmed. Thanks!\n— Made Kulture`
       )
     }
-  } catch (e) {
-    console.error('[pay] payer receipt error:', e)
+  } catch (e: any) {
+    if (!e?.skip) console.error('[pay] payer receipt error:', e)
   }
 
   return NextResponse.json({ success: true })
