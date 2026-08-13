@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
-import { sendShortNoticeApprovedEmail, sendSimpleEmail } from '@/lib/email'
+import { sendShortNoticeApprovedEmail, sendSimpleEmail, formatDateLabel } from '@/lib/email'
 import { sendSMS, toE164 } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { bookingHourToISO } from '@/lib/booking-times'
@@ -182,8 +182,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     if (denyErr) return NextResponse.json({ error: denyErr.message }, { status: 500 })
 
     // Tell them. Non-fatal — a failed text must not leave the row un-denied.
+    // ⚠️ formatDateLabel, not the raw column. `2026-08-14` is a database value;
+    // "Thu, Aug 14" is what you say to a person. Every other customer-facing
+    // message in this codebase formats it — this one shipped without.
     const when = reqRow.desired_date
-      ? `${reqRow.desired_date}${reqRow.desired_start != null ? ` at ${fmt12(Number(reqRow.desired_start))}` : ''}`
+      ? `${formatDateLabel(reqRow.desired_date)}${reqRow.desired_start != null ? ` at ${fmt12(Number(reqRow.desired_start))}` : ''}`
       : 'that time'
     const because = custom || canned
     const line = because
