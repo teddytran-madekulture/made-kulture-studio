@@ -1,36 +1,23 @@
-import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
-import { JUKEBOX_PLAYER_REV, PLAYER_RELOAD_KEY } from '@/lib/player-rev'
-
-// Build-identity endpoint the in-studio devices poll to decide whether to
-// reload themselves.
+// GET /api/version — what build is actually deployed right now.
 //
-//   version     — git commit SHA, changes on EVERY deploy. The check-in kiosk
-//                 watches this; it's fine for it to refresh whenever we ship.
-//   player_rev  — hand-bumped in lib/player-rev.ts, and ONLY when a deploy
-//                 changes what the jukebox player runs. The music tablets watch
-//                 this, so shipping unrelated work no longer stops the music.
-//   reload_at   — set by Admin → Jukebox "Update players now". A change here
-//                 tells the tablets to reload immediately, song or no song.
+// ⚠️ Exists because the admin PWA silently ran code from four weeks earlier.
+// An installed home-screen app keeps its page alive across backgrounding, so
+// the JavaScript in memory can be however old the last full launch was. Nothing
+// looks wrong — the app just quietly lacks every feature shipped since.
+//
+// On 2026-08-13 that meant the short-notice banner showed no price, no card and
+// no charge button, so every approval would have silently taken the no-charge
+// path. A stale UI that still works is more dangerous than one that breaks.
+
+import { NextResponse } from 'next/server'
+
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 export async function GET() {
-  const version =
-    process.env.VERCEL_GIT_COMMIT_SHA ||
-    process.env.VERCEL_DEPLOYMENT_ID ||
-    'dev'
-
-  let reload_at: string | null = null
-  try {
-    const { data } = await supabaseAdmin()
-      .from('studio_settings').select('value').eq('key', PLAYER_RELOAD_KEY).maybeSingle()
-    reload_at = (data as any)?.value ?? null
-  } catch {}
-
-  return NextResponse.json(
-    { version, player_rev: JUKEBOX_PLAYER_REV, reload_at },
-    { headers: { 'Cache-Control': 'no-store, must-revalidate' } },
-  )
+  return NextResponse.json({
+    // Vercel sets this per deployment. Locally there is no sha, so fall back to
+    // a constant — which correctly means "never stale" in dev.
+    build: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) || 'dev',
+  })
 }

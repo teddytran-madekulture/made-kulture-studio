@@ -653,12 +653,21 @@ export default function AdminDashboard() {
   // success: the row just vanished. Approval moves real money now, so it has to
   // say what happened.
   const [shortReqNote, setShortReqNote] = useState<string | null>(null)
+  // Resolved requests. The banner only ever showed PENDING, so answering one
+  // made it vanish with no record of what was decided.
+  const [shortHist, setShortHist] = useState<any[] | null>(null)
+  const [showHist, setShowHist] = useState(false)
   const fetchShortReqs = useCallback(async () => {
     const res = await fetch('/api/admin/short-notice-requests', { cache: 'no-store' })
     const d = await res.json().catch(() => ({}))
     setShortReqs(d.requests ?? [])
   }, [])
   useEffect(() => { fetchShortReqs() }, [fetchShortReqs])
+  const fetchShortHist = useCallback(async () => {
+    const res = await fetch('/api/admin/short-notice-requests?history=1', { cache: 'no-store' })
+    const d = await res.json().catch(() => ({}))
+    setShortHist(d.history ?? [])
+  }, [])
   const resolveShortReq = async (token: string, action: string, until?: string, reason?: string) => {
     setShortReqBusy(token); setShortReqNote(null)
     try {
@@ -2043,6 +2052,42 @@ export default function AdminDashboard() {
             ))}
           </div>
         )}
+
+        {/* ── SHORT-NOTICE HISTORY (collapsed; the banner only shows pending) ── */}
+        <div style={{ marginBottom: 32 }}>
+          <button
+            onClick={() => { setShowHist(v => !v); if (!shortHist) fetchShortHist() }}
+            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)', padding: '8px 14px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.14em' }}>
+            {showHist ? 'HIDE' : 'PAST SHORT-NOTICE REQUESTS'}
+          </button>
+          {showHist && (
+            <div style={{ marginTop: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
+              {shortHist === null && (
+                <div style={{ padding: '14px 18px', fontSize: 12, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em' }}>LOADING…</div>
+              )}
+              {shortHist?.length === 0 && (
+                <div style={{ padding: '14px 18px', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Nothing yet — resolved requests will collect here.</div>
+              )}
+              {shortHist?.map((h: any) => (
+                <div key={h.id} style={{ padding: '12px 18px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 13, color: '#fff' }}>{h.customer_name} <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>{h.customer_email}</span></div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                      {h.desired_set_name ? `${h.desired_set_name} · ` : ''}{h.desired_date}{h.desired_start != null ? ` · ${fmt12(Number(h.desired_start))}` : ''}{h.desired_hours ? ` · ${h.desired_hours} hr` : ''}{h.quoted_cents != null ? ` · $${(h.quoted_cents / 100).toFixed(2)}` : ''}
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: 10, letterSpacing: '0.1em', padding: '4px 10px', whiteSpace: 'nowrap',
+                    border: '1px solid ' + (h.outcome === 'booked' ? 'rgba(107,255,170,0.4)' : h.outcome === 'denied' ? 'rgba(255,100,100,0.4)' : 'rgba(212,168,67,0.4)'),
+                    color: h.outcome === 'booked' ? '#6bffaa' : h.outcome === 'denied' ? '#ff6b6b' : '#d4a843',
+                  }}>
+                    {h.outcome === 'booked' ? 'BOOKED & PAID' : h.outcome === 'denied' ? 'DECLINED' : 'OPENED, NOT CHARGED'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* ── LIST VIEW ─────────────────────────────────────────────────────── */}
         {view === 'list' && (
