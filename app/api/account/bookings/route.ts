@@ -28,8 +28,8 @@ export async function GET() {
   const { data, error } = await service
     .from('bookings')
     .select(`
-      id, set_id, start_time, end_time, status, total_amount, acuity_appointment_id,
-      sets ( name ),
+      id, set_id, start_time, end_time, status, total_amount, acuity_appointment_id, door_code,
+      sets ( name, slug ),
       customers ( name ),
       booking_add_ons ( quantity, rate, paid, equipment ( name ) )
     `)
