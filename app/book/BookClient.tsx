@@ -917,9 +917,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   PLUS · SHORT NOTICE
                 </div>
                 <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55 }}>
-                  {plusBlocks.length
-                    ? 'The white times below are already open — book them now. The gold ones aren’t open yet, but you can tap one to ask and we’ll text you back.'
-                    : 'The studio isn’t open on this date yet. Tap any gold time below to ask for it and we’ll text you back.'}
+                  {setCart.length > 0
+                    ? 'The white times below are already open — add them to this booking. Need a time that isn’t open yet? Finish this booking first, then ask — it’s confirmed separately, with its own door code.'
+                    : plusBlocks.length
+                      ? 'The white times below are already open — book them now. The gold ones aren’t open yet, but you can tap one to ask and we’ll text you back.'
+                      : 'The studio isn’t open on this date yet. Tap any gold time below to ask for it and we’ll text you back.'}
                 </div>
               </div>
             )}
@@ -979,7 +981,15 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // Closed for instant booking, but genuinely free — so it can be ASKED
                 // for. Only offered while picking a start: mid-selection the member is
                 // inside a block and a stray request would make no sense.
+                // ⚠️ NOT askable once sets are in the cart. A gold tap fires a
+                // SEPARATE short-notice request that books and charges on its own,
+                // at approval time — long after this cart has been paid for. Left
+                // tappable here it reads as "add this to my booking", directly under
+                // a box promising "same booking · one payment · one door code", and
+                // the member gets a second charge and a second door code they never
+                // agreed to. They can ask for the gold hour once this booking is done.
                 const requestable = notOpenForPlus && !booked && !isPast
+                  && setCart.length === 0
                   && booking.startHour === null && h % 1 === 0 && h <= CLOSE_HOUR - minHours
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
