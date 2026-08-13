@@ -29,10 +29,16 @@ export const PLUS_INSTANT_ERROR =
 //
 // ⚠️ sessionEmail must come from the VERIFIED auth session. Passing body.email
 // here would let anyone borrow a member's access by typing their address.
+// ⚠️ `excludeBookingId` exists for RESCHEDULE. A confirmed booking OPENS a window
+// of its own, so a booking being moved would otherwise anchor its own new slot —
+// "is 7:30pm inside an open block?" would answer yes purely because the 7pm
+// booking we are about to move is sitting there. Exclude it and the question
+// becomes the real one: is the studio open then for some OTHER reason?
 export async function sessionMayInstantBook(
   supabase: any,
   sessionEmail: string | null | undefined,
   lines: InstantLine[],
+  excludeBookingId?: string,
 ): Promise<boolean> {
   if (!sessionEmail || !lines.length) return false
 
@@ -57,7 +63,7 @@ export async function sessionMayInstantBook(
 
   const [{ data: bookings, error: bErr }, { data: sets, error: sErr }] = await Promise.all([
     supabase.from('bookings')
-      .select('start_time, end_time, set_id, status')
+      .select('id, start_time, end_time, set_id, status')
       .lt('start_time', hi).gt('end_time', lo),
     supabase.from('sets').select('id, min_hours'),
   ])
@@ -65,7 +71,8 @@ export async function sessionMayInstantBook(
   // silently becomes "no bookings exist", which would open every hour.
   if (bErr || sErr) return false
 
-  const rows = (bookings ?? []) as BookingRow[]
+  const rows = ((bookings ?? []) as any[])
+    .filter(b => !excludeBookingId || b.id !== excludeBookingId) as BookingRow[]
   const open = openWindowsFrom(rows)
   const minHoursById = new Map<string, number>(
     (sets ?? []).map((s: any) => [s.id, Math.max(1, s.min_hours ?? 1)])

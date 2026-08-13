@@ -42,6 +42,9 @@
     "app/short-notice/approve/[token]/page.tsx",
     "app/book/BookClient.tsx",
     "app/admin/dashboard/page.tsx",
-    "app/api/admin/short-notice-requests/route.ts"
+    "app/api/admin/short-notice-requests/route.ts",
+    "app/api/account/bookings/[id]/reschedule/route.ts",
+    "lib/set-availability.ts",
+    "lib/coverage.ts"
   ]
 }

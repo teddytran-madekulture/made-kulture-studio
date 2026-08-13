@@ -25,9 +25,14 @@ const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
 // Validate a batch of set/time windows BEFORE charging:
 //  1. no window collides with an existing active booking for that set
 //  2. no two windows in the same order collide with each other (same set)
+// ⚠️ `excludeBookingId` exists for RESCHEDULE. A booking being moved is itself an
+// ACTIVE row on that set, so without excluding it a move that overlaps its own
+// original window conflicts with itself — 6pm→6:30pm would be refused because
+// 6pm is "already booked", by the very booking you are moving.
 export async function checkSetWindows(
   supabase: SupabaseClient,
-  windows: SetWindow[]
+  windows: SetWindow[],
+  excludeBookingId?: string
 ): Promise<{ ok: boolean; conflicts: SetConflict[] }> {
   const conflicts: SetConflict[] = []
 
@@ -35,11 +40,13 @@ export async function checkSetWindows(
   for (const w of windows) {
     const { data: existing } = await supabase
       .from('bookings')
-      .select('start_time, end_time, status')
+      .select('id, start_time, end_time, status')
       .eq('set_id', w.setId)
       .in('status', ACTIVE_STATUSES)
 
-    const hit = (existing ?? []).some(b => overlaps(w.startISO, w.endISO, b.start_time, b.end_time))
+    const hit = (existing ?? [])
+      .filter(b => !excludeBookingId || b.id !== excludeBookingId)
+      .some(b => overlaps(w.startISO, w.endISO, b.start_time, b.end_time))
     if (hit) {
       conflicts.push({
         setName: w.setName, startISO: w.startISO, endISO: w.endISO,
