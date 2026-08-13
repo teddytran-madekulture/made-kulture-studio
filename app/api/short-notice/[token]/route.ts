@@ -124,9 +124,22 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     }
   }
 
+  // ⚠️ What the request PRODUCED, so a reload of a resolved request can say what
+  // actually happened. Without this the page assumed every resolved request was
+  // the "unlocked, nothing charged" kind — so reopening the link after a real
+  // $15 charge told the owner no money had moved. A page that misreports a
+  // charge is worse than one that says nothing.
+  let bookingStatus: string | null = null
+  if (data.booking_id) {
+    const { data: bk } = await service
+      .from('bookings').select('status').eq('id', data.booking_id).maybeSingle()
+    bookingStatus = bk?.status ?? null
+  }
+
   return NextResponse.json({
     request: { ...data, desired_set_name: desiredSetName, card_label: cardLabel },
     chargeable: isChargeable(data),
+    bookingStatus,
     grantMinutes: await grantMinutes(),
   })
 }
