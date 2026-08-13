@@ -7,7 +7,7 @@ import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import DatePicker from '@/components/DatePicker'
 import StudioConditions from '@/components/StudioConditions'
-import { shortNoticeActive, todayDateStr, chiTodayStr, chiNowDecimal } from '@/lib/short-notice'
+import { shortNoticeActive, plusActive, todayDateStr, chiTodayStr, chiNowDecimal } from '@/lib/short-notice'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 import { bookingHourToISO } from '@/lib/booking-times'
 
@@ -308,10 +308,49 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   // Customers with active short-notice access can book same-day; everyone else
   // is held to the 48-hour advance minimum.
-  const minBookDate = shortNoticeActive(pricingOverrides) ? todayDateStr() : today()
+  // An explicit short-notice grant books anywhere inside the window. PLUS opens
+  // the same dates but only the hours the studio is ALREADY open (a confirmed
+  // shoot is running) — those blocks come from /api/plus/open-blocks and are
+  // re-checked server-side on POST. Everything else on those dates is a request.
+  const hasGrant   = shortNoticeActive(pricingOverrides)
+  const isPlus     = plusActive(pricingOverrides)
+  const minBookDate = (hasGrant || isPlus) ? todayDateStr() : today()
+  // True when the chosen date is inside the advance window and the ONLY thing
+  // letting the customer see it is Plus.
+  const plusWindowDate = isPlus && !hasGrant && !!booking.date && booking.date < today()
   // For same-day bookings, gray out time slots that have already passed (Houston time).
   const bookingIsToday = booking.date === chiTodayStr()
   const nowChiDec      = bookingIsToday ? chiNowDecimal() : -1
+
+  // Houston-local decimal-hour blocks the studio is already open for, for the
+  // selected set. Empty whenever the date is outside the window or the member
+  // is not Plus — so every guard below is a no-op in the normal case.
+  const [plusBlocks, setPlusBlocks] = useState<{ start: number; end: number }[]>([])
+  // Closed-but-free hours are ASKABLE, not dead. Without this a member sees a
+  // mostly-grey grid, no idea the rest can be requested, and has to go hunting
+  // in their account — or just gives up and texts.
+  const [requestHour, setRequestHour] = useState<number | null>(null)
+  const [requestBusy, setRequestBusy] = useState(false)
+  const [requestDone, setRequestDone] = useState<null | { replaced: boolean }>(null)
+  const [requestErr,  setRequestErr]  = useState<string | null>(null)
+
+  // Plus instant-book blocks for the selected date (only inside the window).
+  useEffect(() => {
+    if (!plusWindowDate || !booking.date) { setPlusBlocks([]); return }
+    let dead = false
+    fetch(`/api/plus/open-blocks?date=${booking.date}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        if (dead) return
+        // ⚠️ booking.setId holds the SLUG here — /api/sets is mapped with
+        // `id: s.slug` (see the sets fetch above), not the UUID. The response is
+        // keyed by slug too, so this is a direct lookup.
+        const entry = (d?.sets ?? {})[String(booking.setId)]
+        setPlusBlocks(((entry as any)?.blocks ?? []).map((b: any) => ({ start: b.startHour, end: b.endHour })))
+      })
+      .catch(() => { if (!dead) setPlusBlocks([]) })
+    return () => { dead = true }
+  }, [plusWindowDate, booking.date, booking.setId])
 
   // Fetch availability when set + date change
   useEffect(() => {
@@ -459,6 +498,25 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
       if (hasConflict) return
       setBooking(b => ({ ...b, endHour: h }))
       setSelecting('start')
+    }
+  }
+
+  // Ask for an hour the studio isn't already open for. Feeds the SAME route the
+  // account-page form uses, so there is one request pipeline, not two.
+  const sendShortNoticeRequest = async (h: number) => {
+    if (requestBusy) return
+    setRequestBusy(true); setRequestErr(null)
+    try {
+      const res = await fetch('/api/account/short-notice-request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ desiredSet: booking.setId, desiredDate: booking.date, desiredStart: h }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setRequestErr(d.error || 'Could not send that request.'); setRequestBusy(false); return }
+      setRequestDone({ replaced: !!d.replaced })
+      setRequestBusy(false)
+    } catch {
+      setRequestErr('Could not send that request.'); setRequestBusy(false)
     }
   }
 
@@ -738,7 +796,9 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 </div>
               )}
               <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: 32 }}>
-                Bookings require at least 48 hours advance notice. Studio hours are Monday–Sunday, 9am–10pm.
+                {isPlus && !hasGrant
+                  ? 'Bookings normally need 48 hours\u2019 notice. As a Plus member you can also book sooner \u2014 for the hours the studio is already open. Studio hours are Monday\u2013Sunday, 9am\u201310pm.'
+                  : 'Bookings require at least 48 hours advance notice. Studio hours are Monday\u2013Sunday, 9am\u201310pm.'}
               </p>
               <DatePicker
                 value={booking.date}
@@ -804,6 +864,18 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 Wrong start? Tap it again to clear it, or hit ↺ Reset Time below.
               </p>
             )}
+            {plusWindowDate && (
+              <div style={{ border: '1px solid rgba(201,178,126,0.35)', background: 'rgba(201,178,126,0.06)', padding: '12px 14px', marginBottom: 16 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: '#c9b27e', marginBottom: 6 }}>
+                  PLUS · SHORT NOTICE
+                </div>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55 }}>
+                  {plusBlocks.length
+                    ? 'The white times below are already open — book them now. The gold ones aren’t open yet, but you can tap one to ask and we’ll text you back.'
+                    : 'The studio isn’t open on this date yet. Tap any gold time below to ask for it and we’ll text you back.'}
+                </div>
+              </div>
+            )}
             {loadingSlots && (
               <p style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginBottom: 16 }}>
                 CHECKING AVAILABILITY...
@@ -836,6 +908,27 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   return h > latest ? h - latest > VISIT_GAP_GRACE_HOURS
                                     : earliest - (h + minHours) > VISIT_GAP_GRACE_HOURS
                 })()
+                // ⚠️ PLUS INSTANT BOOKING. Inside the 48-hour window a Plus member may
+                // only take hours the studio is ALREADY open for, and the WHOLE session
+                // must fit inside one block — a session that starts inside an open
+                // window and runs past it would keep the studio open on hours nobody
+                // approved. Same containment rule the server re-checks on POST.
+                const notOpenForPlus = plusWindowDate && (() => {
+                  // ⚠️ Clicking a slot at or before the chosen start RE-PICKS the start
+                  // (see handleHourClick), so it has to satisfy the START rule, not the
+                  // end rule. Missing this let a member set a start outside the block
+                  // and only find out when the server refused it at checkout.
+                  const actsAsStart = selecting === 'start'
+                    || booking.startHour === null
+                    || h <= booking.startHour
+                  if (actsAsStart) return !plusBlocks.some(b => h >= b.start && h + minHours <= b.end)
+                  return !plusBlocks.some(b => booking.startHour! >= b.start && h <= b.end)
+                })()
+                // Closed for instant booking, but genuinely free — so it can be ASKED
+                // for. Only offered while picking a start: mid-selection the member is
+                // inside a block and a stray request would make no sense.
+                const requestable = notOpenForPlus && !booked && !isPast
+                  && booking.startHour === null && h % 1 === 0 && h <= CLOSE_HOUR - minHours
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)
@@ -843,6 +936,9 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
                 let bg = '#0d0d0d'
                 let color = (isInvalidEnd || isInvalidStart || closeAsStart || opensGap) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                if (notOpenForPlus) { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
+                if (requestable)  { bg = 'rgba(201,178,126,0.07)'; color = 'rgba(201,178,126,0.75)' }
+                if (requestHour === h) { bg = 'rgba(201,178,126,0.28)'; color = '#fff' }
                 if (isPast)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
                 if (inRange)      { bg = '#fff'; color = '#080808' }
@@ -850,10 +946,15 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
-                  <button key={h} onClick={() => handleHourClick(h)} disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap}
+                  <button key={h}
+                    onClick={() => requestable
+                      ? (setRequestHour(h), setRequestDone(null), setRequestErr(null))
+                      : handleHourClick(h)}
+                    title={requestable ? 'Not open this early/late — tap to ask' : undefined}
+                    disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || (notOpenForPlus && !requestable)}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: (booked || isPast) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart) ? 'default' : 'pointer',
+                      cursor: requestable ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart) ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
@@ -879,6 +980,50 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               </button>
             )}
               </>
+            )}
+
+            {/* Asking for an hour the studio isn't already open for. */}
+            {requestHour !== null && (
+              <div style={{ border: '1px solid rgba(201,178,126,0.4)', background: 'rgba(201,178,126,0.06)', padding: '16px 18px', marginBottom: 24 }}>
+                {requestDone ? (
+                  <>
+                    <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#c9b27e', marginBottom: 6 }}>
+                      {requestDone.replaced ? 'Request updated' : 'Request sent'}
+                    </div>
+                    <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55 }}>
+                      {requestDone.replaced
+                        ? `We\u2019ve changed your request to ${fmt12(requestHour)}. We\u2019ll text you as soon as it\u2019s confirmed.`
+                        : `We\u2019ll text you as soon as ${fmt12(requestHour)} is confirmed. Nothing is charged until you book.`}
+                    </div>
+                    <button onClick={() => { setRequestHour(null); setRequestDone(null) }}
+                      style={{ marginTop: 14, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
+                      DONE
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontFamily: 'Inter', fontSize: 14, color: '#fff', marginBottom: 6 }}>
+                      Ask for {fmt12(requestHour)}?
+                    </div>
+                    <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 14 }}>
+                      The studio isn&rsquo;t already open then, so we have to confirm it. We&rsquo;ll text you &mdash; nothing is booked or charged yet.
+                    </div>
+                    {requestErr && (
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#f87171', marginBottom: 12 }}>{requestErr}</div>
+                    )}
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button onClick={() => sendShortNoticeRequest(requestHour)} disabled={requestBusy}
+                        style={{ background: requestBusy ? 'rgba(255,255,255,0.4)' : '#fff', border: 'none', color: '#080808', padding: '12px 20px', cursor: requestBusy ? 'wait' : 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.14em', fontWeight: 600 }}>
+                        {requestBusy ? 'SENDING\u2026' : 'SEND REQUEST'}
+                      </button>
+                      <button onClick={() => { setRequestHour(null); setRequestErr(null) }} disabled={requestBusy}
+                        style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '12px 20px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.14em' }}>
+                        CANCEL
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {/* Multi-set: sets added so far + add another */}

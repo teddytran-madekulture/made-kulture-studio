@@ -1,12 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { findOrphanedByCancel } from '@/lib/plus-instant-book'
 import { sendCancellationEmail, sendCancellationOwnerAlert, sendSimpleEmail, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { plusActive } from '@/lib/short-notice'
 import { issueCredit } from '@/lib/credits'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 import { deleteCalendarEvent } from '@/lib/gcal'
-import { sendSMS } from '@/lib/sms'
+import { sendSMS, sendOwnerSMS } from '@/lib/sms'
+import { sendOwnerPush } from '@/lib/push'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 
 export async function POST(req: NextRequest) {
@@ -226,6 +228,31 @@ export async function POST(req: NextRequest) {
         ? `Made Kulture: your ${setName} session on ${dateLabel} is cancelled. $${(creditCents / 100).toFixed(2)} has been added to your account as studio credit — it never expires.`
         : `Made Kulture: your ${setName} session on ${dateLabel} at ${startLbl} is cancelled. Questions? Just reply to this text.`
     notifications.push(sendSMS(customerPhone, smsBody).catch(e => console.error('Cancellation SMS error:', e)))
+  }
+
+  // ⚠️ Did this cancellation pull the rug out from under a short-notice booking?
+  // A Plus member may have booked these hours precisely BECAUSE this session was
+  // running. Their booking stands — but the studio now has to be opened for it.
+  // Non-fatal and never blocks the cancellation.
+  try {
+    const orphans = await findOrphanedByCancel(supabase, {
+      id: booking.id, start_time: booking.start_time,
+      end_time: booking.end_time, set_id: booking.set_id ?? null,
+    })
+    if (orphans.length) {
+      const lines = orphans.map(o => {
+        const t = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric',
+          hour: 'numeric', minute: '2-digit',
+        }).format(new Date(o.startISO))
+        return `${o.name || 'A member'} — ${t}`
+      }).join('\n')
+      const msg = `⚠️ ${customerName}'s cancellation on ${dateLabel} leaves ${orphans.length === 1 ? 'a short-notice booking' : `${orphans.length} short-notice bookings`} with nothing else in the building:\n${lines}\n\nThe studio was going to be open anyway — now it isn't. Their booking still stands.`
+      notifications.push(sendOwnerPush({ title: 'Short-notice booking left stranded', body: msg, url: '/admin/dashboard?view=calendar' }).catch(() => {}))
+      notifications.push(sendOwnerSMS(msg).catch(() => {}))
+    }
+  } catch (e) {
+    console.error('[cancel] orphan check failed (non-fatal):', e)
   }
 
   // Always alert the owner (not gated by template settings).

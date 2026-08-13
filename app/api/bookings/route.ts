@@ -10,7 +10,8 @@ import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
 import { bookingHourToISO, largestVisitGap, VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'
-import { violatesAdvanceWindow, sessionMayBookShortNotice, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
+import { violatesAdvanceWindow, sessionMayBookShortNotice, ADVANCE_WINDOW_ERROR, shortNoticeScopeOf, lineMatchesScope } from '@/lib/short-notice'
+import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { createOrderForPayment } from '@/lib/square-order'
@@ -295,8 +296,45 @@ export async function POST(req: NextRequest) {
     //     lib/short-notice.ts for why the rule is a two-CALENDAR-DAY floor
     //     rather than a literal 48-hour subtraction.
     if (violatesAdvanceWindow(lines.map(l => l.date))) {
-      if (!(await sessionMayBookShortNotice(supabase, sessionUser?.email))) {
-        return NextResponse.json({ error: ADVANCE_WINDOW_ERROR }, { status: 400 })
+      // Two ways through, in order of precedence:
+      //  1. An explicit short-notice GRANT (an approved request, or a manual
+      //     admin grant) — unrestricted inside the window.
+      //  2. PLUS INSTANT BOOKING — only for hours the studio is ALREADY open
+      //     because a confirmed shoot is running, and only if the session fits
+      //     ENTIRELY inside one of those blocks. See lib/plus-open-windows.ts.
+      //     Recomputed from the DB here; the blocks the page drew are display
+      //     only and are never trusted.
+      const granted = await sessionMayBookShortNotice(supabase, sessionUser?.email)
+      // ⚠️ A grant from an approved request is scoped to the slot it was given
+      // for. Unscoped grants (manual admin, or the broader 48h/until approvals)
+      // pass straight through, so nothing existing changes behaviour.
+      if (granted) {
+        const { data: gc } = await supabase
+          .from('customers').select('pricing_overrides')
+          .eq('email', String(sessionUser?.email ?? '').toLowerCase().trim()).maybeSingle()
+        const scope = shortNoticeScopeOf(gc?.pricing_overrides ?? null)
+        if (scope && !lines.every(l => lineMatchesScope(scope, { setSlug: l.setSlug, date: l.date, startHour: l.startHour }))) {
+          return NextResponse.json({
+            error: `Your short-notice approval is for ${scope.set.replace(/-/g, ' ')} on ${scope.date} starting at ${scope.start % 1 ? Math.floor(scope.start) + ':30' : scope.start + ':00'}. Book that slot, or send a new request for a different time.`,
+          }, { status: 400 })
+        }
+      }
+      if (!granted) {
+        const instant = await sessionMayInstantBook(
+          supabase,
+          sessionUser?.email,
+          lines.map(l => ({ setId: l.setId, startISO: l.startISO, endISO: l.endISO })),
+        )
+        if (!instant) {
+          // A member who IS Plus but picked an unopen hour gets the message
+          // that tells them what to do; everyone else gets the generic one.
+          const { data: c } = await supabase
+            .from('customers').select('pricing_overrides')
+            .eq('email', String(sessionUser?.email ?? '').toLowerCase().trim()).maybeSingle()
+          const isPlus = !!c?.pricing_overrides?.plus
+          return NextResponse.json(
+            { error: isPlus ? PLUS_INSTANT_ERROR : ADVANCE_WINDOW_ERROR }, { status: 400 })
+        }
       }
     }
 

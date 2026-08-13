@@ -61,10 +61,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'You already have short-notice booking access.' }, { status: 400 })
   }
 
-  // Don't stack duplicate pending requests.
-  const dupQ = service.from('short_notice_requests').select('id').eq('status', 'pending').limit(1)
+  // ⚠️ One live request per person — but a SECOND ask REPLACES the first rather
+  // than being swallowed. It used to return ok and record nothing, so a customer
+  // who changed their mind from 3pm to 7pm was silently still asking for 3pm.
+  const dupQ = service.from('short_notice_requests').select('id, approve_token').eq('status', 'pending').limit(1)
   const { data: dup } = c.id ? await dupQ.eq('customer_id', c.id) : await dupQ.eq('customer_email', c.email)
-  if (dup && dup.length) return NextResponse.json({ ok: true, status: 'pending', already: true })
+  const existing = dup && dup.length ? dup[0] : null
 
   const body = await req.json().catch(() => ({} as any))
 
@@ -81,7 +83,9 @@ export async function POST(req: NextRequest) {
   const { data: setRow } = await service.from('sets').select('name').eq('slug', desiredSet).maybeSingle()
   const desiredSetName = setRow?.name || desiredSet
 
-  const token = randomBytes(20).toString('hex')
+  // Reuse the existing token when replacing, so an approval link already sitting
+  // in the owner's texts still resolves — to the UPDATED time, not a dead row.
+  const token = existing?.approve_token || randomBytes(20).toString('hex')
   const row = {
     customer_id:    c.id,
     customer_email: c.email,
@@ -94,15 +98,22 @@ export async function POST(req: NextRequest) {
     note:           (typeof body.note === 'string' && body.note.trim()) ? body.note.trim().slice(0, 500) : null,
     approve_token:  token,
   }
-  const { error } = await service.from('short_notice_requests').insert(row)
+  const { error } = existing
+    ? await service.from('short_notice_requests').update(row).eq('id', existing.id)
+    : await service.from('short_notice_requests').insert(row)
+  // ⚠️ supabase-js does not throw on a Postgres error — read `error` or a failed
+  // write returns "request sent" to a customer whose request does not exist.
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const approveUrl = `${APP_URL}/short-notice/approve/${token}`
   // Notify the owner — non-fatal if either channel fails.
+  const verb = existing ? 'CHANGED their request to' : 'Short-notice request from'
   await Promise.allSettled([
     sendShortNoticeRequestAlert({ customerName: c.name, customerEmail: c.email, desiredSetName, desiredDate: row.desired_date, desiredStart: row.desired_start, note: row.note, approveUrl }),
-    sendOwnerSMS(`🔔 Short-notice request from ${c.name} — ${desiredSetName} on ${row.desired_date}. Approve: ${approveUrl}`),
+    sendOwnerSMS(existing
+      ? `🔁 ${c.name} ${verb} ${desiredSetName} on ${row.desired_date}. Approve: ${approveUrl}`
+      : `🔔 ${verb} ${c.name} — ${desiredSetName} on ${row.desired_date}. Approve: ${approveUrl}`),
   ])
 
-  return NextResponse.json({ ok: true, status: 'pending' })
+  return NextResponse.json({ ok: true, status: 'pending', replaced: !!existing })
 }

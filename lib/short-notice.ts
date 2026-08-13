@@ -41,6 +41,32 @@ export function shortNoticeActive(po: any): boolean {
   return false
 }
 
+// ── Scoped grants ────────────────────────────────────────────────────────────
+// A timed approval is granted FOR A SPECIFIC ASK — "yes, Set B on Thursday at
+// 7pm". Without a scope the grant opened the whole 48-hour window, so somebody
+// approved for a 7pm evening could book 9am instead and the owner would be
+// opening the building at a time he never agreed to.
+//
+// ⚠️ Absent scope = unrestricted, deliberately. Manual admin grants and the
+// broader "48h" / "until date" approvals carry no scope and keep their old
+// behaviour, so nothing existing changes meaning.
+export interface ShortNoticeScope { set: string; date: string; start: number }
+
+export function shortNoticeScopeOf(po: any): ShortNoticeScope | null {
+  const sc = po?.short_notice_scope
+  if (!sc || typeof sc !== 'object') return null
+  if (typeof sc.set !== 'string' || typeof sc.date !== 'string' || typeof sc.start !== 'number') return null
+  return { set: sc.set, date: sc.date, start: sc.start }
+}
+
+// True when a line matches the scope. Length is deliberately NOT constrained —
+// once the owner is on site for that start time, the customer choosing 1hr or
+// 2hr does not change when he has to show up, and he sees the final end time on
+// the booking alert.
+export function lineMatchesScope(scope: ShortNoticeScope, line: { setSlug: string | null; date: string; startHour: number }): boolean {
+  return line.setSlug === scope.set && line.date === scope.date && line.startHour === scope.start
+}
+
 // The active timed-window expiry (ms epoch) if the customer is inside a timed
 // short-notice grant right now, else null. Drives the customer-facing countdown.
 export function shortNoticeExpiresAtMs(po: any): number | null {

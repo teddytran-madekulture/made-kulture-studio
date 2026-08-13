@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
   const { data: reqRow } = await service
     .from('short_notice_requests')
-    .select('id, customer_id, customer_email, customer_name, customer_phone, status')
+    .select('id, customer_id, customer_email, customer_name, customer_phone, status, desired_set, desired_date, desired_start')
     .eq('approve_token', params.token)
     .maybeSingle()
   if (!reqRow) return NextResponse.json({ error: 'Request not found' }, { status: 404 })
@@ -85,11 +85,19 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
   // Timed grant sets a precise expiry and clears any stale date; a date grant
   // sets the day and clears any stale timed expiry.
+  // ⚠️ A TIMED approval is scoped to exactly what was asked for — that set, that
+  // date, that start time. Without this the grant opened the whole window, so
+  // "yes to Thursday 7pm" also said yes to Thursday 9am. The broader 48h/until
+  // approvals are a deliberate wider grant, so they CLEAR the scope.
+  const scope = (timed && reqRow.desired_set && reqRow.desired_date && reqRow.desired_start != null)
+    ? { set: reqRow.desired_set, date: reqRow.desired_date, start: Number(reqRow.desired_start) }
+    : null
   const overrides = {
     ...(cust.pricing_overrides || {}),
     short_notice: true,
     short_notice_until: timed ? null : until,
     short_notice_expires_at: timed ? expiresIso : null,
+    short_notice_scope: scope,
   }
   const { error: upErr } = await service.from('customers').update({ pricing_overrides: overrides }).eq('id', cust.id)
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
