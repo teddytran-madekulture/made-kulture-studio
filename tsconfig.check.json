@@ -52,6 +52,7 @@
     "app/kiosk/page.tsx",
     "app/api/kiosk/context/route.ts",
     "app/api/kiosk/checkin/route.ts",
-    "lib/extensions.ts"
+    "lib/extensions.ts",
+    "app/t/[code]/route.ts"
   ]
 }
