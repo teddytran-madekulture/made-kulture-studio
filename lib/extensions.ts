@@ -221,3 +221,83 @@ export async function findActiveBookingByPhone(phone: string): Promise<string | 
 
   return match?.id ?? null
 }
+
+// ── Who is on this set RIGHT NOW ─────────────────────────────────────────────
+// The per-set kiosk primitive. The URL is the tablet's identity
+// (/kiosk?set=set-a), and this answers "whose booking is that".
+//
+// ⭐ Why this is reliable: `bookings` carries a GIST exclusion constraint
+// (`no_overlap`) on (set_id, tstzrange(start_time, end_time)) for non-cancelled
+// rows. The database PHYSICALLY CANNOT hold two overlapping bookings on one set,
+// so this returns exactly zero or one occupant. No login, no QR, no phone entry.
+//
+// ⚠️ BUYOUTS DO NOT PARTICIPATE in that constraint — a full-studio booking has
+// `set_id = null`. Without the fallback below, every set tablet cheerfully
+// reports "nobody's booked" while the entire building is rented. A tablet that
+// states something false is worse than one that stays quiet, so the buyout case
+// is handled here rather than deferred.
+//
+// ⚠️ Only `confirmed` counts. A `pending_payment` hold is not a person standing
+// in the room, and showing their name would leak an unpaid booking.
+export interface SetOccupancy {
+  kind:       'booking' | 'buyout' | 'none'
+  bookingId?: string
+  firstName?: string
+  startISO?:  string
+  endISO?:    string
+  checkedIn?: boolean
+  /** true when the occupant is a full-studio buyout rather than this set's own booking */
+  buyout?:    boolean
+}
+
+export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupancy> {
+  const db = supabaseAdmin()
+  const now = Date.now()
+
+  const { data: setRow, error: setErr } = await db
+    .from('sets').select('id').eq('slug', setSlug).maybeSingle()
+  // ⚠️ supabase-js does not throw. Reading `error` is the difference between
+  // "no such set" and "the query failed" — both would otherwise read as empty.
+  if (setErr) { console.error('[kiosk] set lookup failed:', setErr.message); return { kind: 'none' } }
+  if (!setRow) return { kind: 'none' }
+
+  // Live now, or starting within 30 minutes so the tablet greets people who
+  // arrive early. Generous lower bound catches long sessions already running.
+  const { data: rows, error } = await db
+    .from('bookings')
+    .select('id, start_time, end_time, set_id, checked_in_at, customers(name)')
+    .eq('status', 'confirmed')
+    .lte('start_time', new Date(now + 30 * 60 * 1000).toISOString())
+    .gt('end_time', new Date(now).toISOString())
+  if (error) { console.error('[kiosk] occupancy query failed:', error.message); return { kind: 'none' } }
+
+  const live = (rows ?? []) as any[]
+  const first = (r: any) => {
+    const c = Array.isArray(r.customers) ? r.customers[0] : r.customers
+    return String(c?.name ?? 'Guest').trim().split(/\s+/)[0]
+  }
+  const shape = (r: any, buyout: boolean): SetOccupancy => ({
+    kind: buyout ? 'buyout' : 'booking',
+    bookingId: r.id,
+    firstName: first(r),
+    startISO: r.start_time,
+    endISO: r.end_time,
+    checkedIn: !!r.checked_in_at,
+    buyout,
+  })
+
+  // This set's own booking wins. Earliest start, so a session already running
+  // beats one starting in twenty minutes.
+  const mine = live
+    .filter(r => r.set_id === setRow.id)
+    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0]
+  if (mine) return shape(mine, false)
+
+  // Otherwise a buyout has the whole building, this set included.
+  const buyout = live
+    .filter(r => r.set_id === null)
+    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0]
+  if (buyout) return shape(buyout, true)
+
+  return { kind: 'none' }
+}

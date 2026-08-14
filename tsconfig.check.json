@@ -48,6 +48,10 @@
     "lib/coverage.ts",
     "app/account/bookings/page.tsx",
     "components/RescheduleModal.tsx",
-    "app/api/account/bookings/route.ts"
+    "app/api/account/bookings/route.ts",
+    "app/kiosk/page.tsx",
+    "app/api/kiosk/context/route.ts",
+    "app/api/kiosk/checkin/route.ts",
+    "lib/extensions.ts"
   ]
 }

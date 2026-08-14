@@ -1,4 +1,4 @@
-// POST /api/kiosk/checkin { phone, key? }
+// POST /api/kiosk/checkin { phone, key? }  — or { set, key? } from a per-set tablet
 // Walk-up check-in from the in-studio kiosk tablet. The guest is physically
 // present, so no geofence — just match their phone to a booking that's active
 // now (or starting within 30 min) today, Houston time.
@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { toE164 } from '@/lib/sms'
+import { findActiveBookingBySet } from '@/lib/extensions'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,6 +32,52 @@ export async function POST(req: NextRequest) {
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }) }
   if (!keyOk(body?.key)) return NextResponse.json({ error: 'Unauthorized kiosk' }, { status: 401 })
+
+  // ── One-tap check-in from a per-set tablet ────────────────────────────
+  // The tablet sends only its SET. The server resolves whose booking that is
+  // and checks that booking in.
+  //
+  // ⚠️ Deliberately NOT accepting a bookingId from the client. A wall tablet in
+  // a shared warehouse is an untrusted device — anyone can open the same URL on
+  // a phone. Re-deriving the occupant server-side means the worst a forged
+  // request can do is check in whoever is genuinely on that set already.
+  const setSlug = typeof body?.set === 'string' ? body.set.trim() : ''
+  if (setSlug) {
+    const occ = await findActiveBookingBySet(setSlug)
+    if (occ.kind === 'none' || !occ.bookingId) {
+      return NextResponse.json({ error: 'No session on this set right now.' }, { status: 404 })
+    }
+    const { data: bk, error: bkErr } = await supabase
+      .from('bookings')
+      .select('id, start_time, end_time, checked_in_at, sets(name), customers(name)')
+      .eq('id', occ.bookingId).maybeSingle()
+    if (bkErr || !bk) return NextResponse.json({ error: 'Something glitched — try again.' }, { status: 500 })
+
+    const already = !!bk.checked_in_at
+    if (!already) {
+      // ⚠️ Written as a CLAIM on the null, so two taps can't both "check in"
+      // and .select() proves a row actually changed — supabase-js never throws.
+      const { data: done, error: upErr } = await supabase
+        .from('bookings')
+        .update({ checked_in_at: new Date().toISOString() })
+        .eq('id', bk.id).is('checked_in_at', null)
+        .select('id')
+      if (upErr) return NextResponse.json({ error: 'Something glitched — try again.' }, { status: 500 })
+      if (!done?.length) { /* someone tapped a beat earlier — that's a success, not an error */ }
+    }
+    const c: any = Array.isArray(bk.customers) ? bk.customers[0] : bk.customers
+    const st: any = Array.isArray(bk.sets) ? bk.sets[0] : bk.sets
+    const nowMs = Date.now()
+    return NextResponse.json({
+      success: true,
+      alreadyCheckedIn: already,
+      bookingId: bk.id,
+      firstName: String(c?.name ?? 'there').split(' ')[0],
+      setName: st?.name ?? 'Full Studio',
+      until: centralTimeLabel(bk.end_time),
+      startsAt: Date.parse(bk.start_time) > nowMs ? centralTimeLabel(bk.start_time) : null,
+    })
+  }
 
   const phone = toE164(String(body?.phone ?? ''))
   if (!phone) return NextResponse.json({ error: 'Enter the phone number you booked with.' }, { status: 400 })

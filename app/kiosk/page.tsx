@@ -1,7 +1,12 @@
 'use client'
 
 // In-studio kiosk (wall tablet / rolling touchscreen).
-// URL: /kiosk  (or /kiosk?key=XXXX when KIOSK_KEY is set in Vercel)
+// URL: /kiosk                              — the original shared tablet
+//      /kiosk?set=set-a&key=XXXX          — a tablet bolted inside one set
+//
+// THE URL IS THE TABLET'S IDENTITY. Same pattern as the jukebox players.
+// Rejected alternatives: a localStorage device UUID (a cleared cache silently
+// orphans a tablet) and hardware fingerprinting (unreliable on Fire OS/Silk).
 //
 // Design: modern luxury — deep charcoal with muted warm gradients, bold
 // typography, champagne hairlines, thin monotone stroke icons. No emoji.
@@ -53,9 +58,43 @@ const IconBell = () => (
 
 export default function KioskPage() {
   const [kioskKey, setKioskKey] = useState<string | undefined>(undefined)
+  const [setSlug, setSetSlug]   = useState<string | null>(null)
   useEffect(() => {
-    const k = new URLSearchParams(window.location.search).get('key')
+    const q = new URLSearchParams(window.location.search)
+    const k = q.get('key')
     if (k) setKioskKey(k)
+    setSetSlug(q.get('set'))
+  }, [])
+
+  // ── Who is on this set ────────────────────────────────────────────────────
+  // ⚠️ POLLING IS THE #1 COST IN THIS PROJECT. A flat 5s jukebox poll once ate
+  // 78% of all Vercel compute and hit 100% of the free CPU cap — which would
+  // have killed door codes for booked guests. Occupancy changes a handful of
+  // times a day, so this refreshes every 5 MINUTES (plus on return to home).
+  // The countdown ticks locally off endISO and costs nothing.
+  const [ctx, setCtx] = useState<any>(null)
+  const fetchCtx = useCallback(async () => {
+    if (!setSlug) return
+    try {
+      const q = new URLSearchParams({ set: setSlug })
+      const k = new URLSearchParams(window.location.search).get('key')
+      if (k) q.set('key', k)
+      const r = await fetch(`/api/kiosk/context?${q}`, { cache: 'no-store' })
+      if (r.ok) setCtx(await r.json())
+    } catch { /* offline — keep showing the last known state */ }
+  }, [setSlug])
+  useEffect(() => {
+    if (!setSlug) return
+    fetchCtx()
+    const iv = setInterval(fetchCtx, 5 * 60_000)
+    return () => clearInterval(iv)
+  }, [setSlug, fetchCtx])
+
+  // Local clock so the countdown moves without touching the network.
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const iv = setInterval(() => setNowMs(Date.now()), 30_000)
+    return () => clearInterval(iv)
   }, [])
 
   // Real visible height in px — old WebViews misreport 100vh / lack dvh.
@@ -321,6 +360,64 @@ export default function KioskPage() {
     cursor: 'pointer', boxShadow: '0 10px 26px rgba(201,178,126,0.18)',
   }
 
+  // ── Ambient room state ────────────────────────────────────────────────────
+  // Deliberately NOT wiped by the 90-second idle reset. The June chat is
+  // somebody's private conversation and must be wiped; who is booked in this
+  // room is the state of the room itself, visible to anyone standing in it.
+  const occ = ctx?.occupancy
+  const occLive = occ && occ.kind !== 'none' && occ.endISO
+  const minsLeft = occLive ? Math.round((Date.parse(occ.endISO) - nowMs) / 60000) : 0
+  const notStarted = occLive && Date.parse(occ.startISO) > nowMs
+  const clock = (iso: string) =>
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
+
+  const occupancyLine = !setSlug ? null : (
+    <div style={{ textAlign: 'center', padding: '0 20px 2px', flexShrink: 0 }}>
+      <div style={{ fontSize: 10, color: CHAMP_DIM, letterSpacing: '0.34em' }}>
+        {ctx?.set?.name?.toUpperCase() ?? setSlug.toUpperCase()}
+      </div>
+      {occLive ? (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.01em' }}>
+            {occ.firstName}{occ.buyout ? ' · full studio' : ''}
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
+            {notStarted
+              ? `starts ${clock(occ.startISO)}`
+              : minsLeft > 60
+                ? `until ${clock(occ.endISO)}`
+                : minsLeft > 0
+                  ? `${minsLeft} min left · until ${clock(occ.endISO)}`
+                  : 'wrapping up'}
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+          {ctx ? 'No session booked right now' : ' '}
+        </div>
+      )}
+    </div>
+  )
+
+  // One-tap check-in. Sends ONLY the set — the server resolves who that is, so a
+  // forged request can at worst check in whoever is genuinely booked there.
+  const doSetCheckin = async () => {
+    if (!setSlug || busy) return
+    setBusy(true); setCiError('')
+    try {
+      const res = await fetch('/api/kiosk/checkin', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ set: setSlug, key: kioskKey }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setCiError(d.error || 'Could not check you in.'); setScreen('checkin') }
+      else { setCi(d); setScreen('checkin'); fetchCtx() }
+    } catch {
+      setCiError('Could not check you in.'); setScreen('checkin')
+    }
+    setBusy(false)
+  }
+
   const header = (
     <div style={{ textAlign: 'center', padding: '26px 20px 2px', flexShrink: 0 }}>
       <div style={{ fontWeight: 900, letterSpacing: '0.3em', fontSize: 21 }}>MADE KULTURE</div>
@@ -332,11 +429,21 @@ export default function KioskPage() {
   if (screen === 'home') return (
     <main style={wrap} onPointerDown={touch}>
       {header}
+      {occupancyLine}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '8px 14px 20px', maxWidth: 680, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-        <button style={card} onClick={() => setScreen('checkin')}>
+        {/* One tap when the tablet knows whose session this is — the numpad only
+            exists because a shared tablet couldn't know. It still does, for the
+            no-set tablet and for anyone whose booking isn't the one on this set. */}
+        <button style={card} onClick={() => (occLive && !occ.checkedIn ? doSetCheckin() : setScreen('checkin'))}>
           <IconEnter />
-          <span style={{ fontSize: 23, fontWeight: 800, letterSpacing: '0.2em' }}>CHECK IN</span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.42)' }}>Here for your booking</span>
+          <span style={{ fontSize: 23, fontWeight: 800, letterSpacing: '0.2em' }}>
+            {busy ? 'CHECKING IN…' : occLive && occ.checkedIn ? 'CHECKED IN' : 'CHECK IN'}
+          </span>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.42)' }}>
+            {occLive
+              ? (occ.checkedIn ? `${occ.firstName} · you're all set` : `Tap once — ${occ.firstName}`)
+              : 'Here for your booking'}
+          </span>
         </button>
         <button style={card} onClick={() => { setScreen('june'); touch() }}>
           <IconJune />
