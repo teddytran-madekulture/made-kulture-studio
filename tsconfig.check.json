@@ -53,6 +53,12 @@
     "app/api/kiosk/context/route.ts",
     "app/api/kiosk/checkin/route.ts",
     "lib/extensions.ts",
-    "app/t/[code]/route.ts"
+    "app/t/[code]/route.ts",
+    "app/api/kiosk/summon/route.ts",
+    "app/api/admin/kiosk-ack/route.ts",
+    "components/KioskAck.tsx",
+    "app/api/cron/kiosk-escalate/route.ts",
+    "lib/site-content.ts",
+    "lib/push.ts"
   ]
 }

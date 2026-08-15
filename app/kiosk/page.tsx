@@ -38,19 +38,19 @@ const QUICK_QUESTIONS = [
 const ico = { fill: 'none', stroke: CHAMP, strokeWidth: 1.4, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 
 const IconEnter = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" {...ico}>
+  <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
     <path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4" />
     <path d="M4 12h11" /><path d="M11 8l4 4-4 4" />
   </svg>
 )
 const IconJune = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" {...ico}>
+  <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
     <circle cx="12" cy="12" r="9" strokeOpacity="0.6" />
     <path d="M14.5 7.5v6a3 3 0 0 1-3 3 2.6 2.6 0 0 1-2.4-1.6" />
   </svg>
 )
 const IconBell = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" {...ico}>
+  <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
     <path d="M4.5 17h15" /><path d="M6 17a6 6 0 0 1 12 0" />
     <path d="M12 11V9" /><path d="M10 19.5h4" />
   </svg>
@@ -120,18 +120,27 @@ export default function KioskPage() {
   const [msgs, setMsgs]       = useState<Msg[]>([])
   const [input, setInput]     = useState('')
   const [sending, setSending] = useState(false)
-  const [summoned, setSummoned] = useState(false)
+  // null = hasn't rung | 'waiting' | 'onway' | 'noanswer' | 'failed'.
+  // The old boolean could only say "I sent a fetch", which is not the same
+  // fact as "a human is coming" — and the screen printed the second one.
+  const [summonState, setSummonState] = useState<string | null>(null)
+  const [summonPhone, setSummonPhone] = useState('')
   const chatToken = useRef<string | null>(null)
   const lastTs = useRef<string | null>(null)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ringOpen  = useRef(false)   // a guest is waiting on a human right now
   const listRef = useRef<HTMLDivElement>(null)
   const buildVer = useRef<string | null>(null)   // build the tablet loaded with
   const needsReload = useRef(false)               // a newer build is live, waiting for idle
   const screenRef = useRef<Screen>('home')
 
   const resetToHome = useCallback(() => {
+    // ⚠️ Never yank the screen away from someone waiting on a human. The 90s
+    // idle reset would fire long before Teddy walked over, and the answer they
+    // were waiting for would land on a screen nobody was looking at.
+    if (ringOpen.current) return
     setScreen('home'); setPhone(''); setCi(null); setCiError('')
-    setMsgs([]); setInput(''); setSummoned(false)
+    setMsgs([]); setInput(''); setSummonState(null); setSummonPhone('')
     chatToken.current = null
     lastTs.current = null
   }, [])
@@ -294,14 +303,41 @@ export default function KioskPage() {
     if (busy) return
     setBusy(true)
     try {
-      await fetch('/api/kiosk/summon', {
+      const r = await fetch('/api/kiosk/summon', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: kioskKey }),
+        body: JSON.stringify({ key: kioskKey, set: setSlug }),
       })
-      setSummoned(true)
-    } catch {}
+      // ⚠️ READ THE RESPONSE. This used to setSummoned(true) on any resolved
+      // fetch, so a throttled call that notified NOBODY still told the guest
+      // someone was on the way.
+      const j = await r.json().catch(() => ({}))
+      if (j?.phone) setSummonPhone(j.phone)
+      setSummonState(j?.state || (r.ok ? 'waiting' : 'failed'))
+    } catch { setSummonState('failed') }
     setBusy(false)
   }
+
+  // Keep the idle reset off this screen while a ring is outstanding.
+  useEffect(() => { ringOpen.current = summonState === 'waiting' }, [summonState])
+
+  // Poll ONLY while a ring is actually outstanding and the guest is on this
+  // screen — it stops the moment Teddy commits or we give up, so there is no
+  // always-on poll here. (The jukebox's flat 5s poll once ate 78% of all
+  // Vercel compute; every poll in this project has to justify itself.)
+  useEffect(() => {
+    if (screen !== 'team' || summonState !== 'waiting') return
+    const iv = setInterval(async () => {
+      try {
+        const q = new URLSearchParams()
+        if (kioskKey) q.set('key', kioskKey)
+        const r = await fetch(`/api/kiosk/summon?${q}`, { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json()
+        if (j?.state) setSummonState(j.state)
+      } catch { /* offline — keep showing "ringing", never downgrade to a promise */ }
+    }, 5000)
+    return () => clearInterval(iv)
+  }, [screen, summonState, kioskKey])
 
   // Render June's [label](url) markdown links as tappable champagne buttons
   // (mirrors the web widget). Internal paths open in-tab; full URLs (e.g. prop
@@ -341,7 +377,11 @@ export default function KioskPage() {
     userSelect: 'none', overflow: 'hidden',
   }
   const card: React.CSSProperties = {
-    flex: 1, margin: '10px 14px', borderRadius: 22, cursor: 'pointer', minHeight: 120,
+    flex: '1 1 0', margin: '9px 14px', borderRadius: 22, cursor: 'pointer',
+    // Capped. These were `flex: 1` with no ceiling, so on a tall tablet they
+    // stretched into near-empty slabs while the type stayed at 23px — the
+    // boxes grew with the screen and the words didn't.
+    minHeight: 150, maxHeight: 240,
     background: 'linear-gradient(150deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 60%, rgba(201,178,126,0.05) 100%)',
     border: `1px solid ${HAIR}`,
     boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
@@ -371,28 +411,49 @@ export default function KioskPage() {
   const clock = (iso: string) =>
     new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
 
+  // ⚠️ RUNNING OVER IS CHARGED AN EXTRA HOUR, and this tablet is the only
+  // thing in the room that knows the clock. It used to render "15 min left" in
+  // the same 12px 45%-grey it had used for "until 7:00 PM" an hour earlier — the
+  // most urgent moment of the session drawn as the least prominent line on the
+  // screen. The session-reminder cron texts them; the screen said nothing.
+  const started  = occLive && !notStarted
+  const urgency  = !started || minsLeft > 15 ? null : minsLeft > 5 ? 'soon' : 'now'
+  const urgColor = urgency === 'now' ? '#ff6b6b' : '#e8a33d'
+
   const occupancyLine = !setSlug ? null : (
-    <div style={{ textAlign: 'center', padding: '0 20px 2px', flexShrink: 0 }}>
-      <div style={{ fontSize: 10, color: CHAMP_DIM, letterSpacing: '0.34em' }}>
+    <div style={{ textAlign: 'center', padding: '0 20px 4px', flexShrink: 0 }}>
+      <style>{'@keyframes mkPulse{0%,100%{opacity:1}50%{opacity:0.45}}'}</style>
+      <div style={{ fontSize: 17, fontWeight: 700, color: CHAMP_DIM, letterSpacing: '0.34em' }}>
         {ctx?.set?.name?.toUpperCase() ?? setSlug.toUpperCase()}
       </div>
       {occLive ? (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 19, fontWeight: 700, letterSpacing: '0.01em' }}>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.05 }}>
             {occ.firstName}{occ.buyout ? ' · full studio' : ''}
           </div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
-            {notStarted
-              ? `starts ${clock(occ.startISO)}`
-              : minsLeft > 60
-                ? `until ${clock(occ.endISO)}`
-                : minsLeft > 0
-                  ? `${minsLeft} min left · until ${clock(occ.endISO)}`
-                  : 'wrapping up'}
-          </div>
+          {urgency ? (
+            <div style={{
+              display: 'inline-block', marginTop: 12, padding: '10px 20px',
+              border: `2px solid ${urgColor}`, borderRadius: 14,
+              animation: 'mkPulse 1.6s ease-in-out infinite',
+            }}>
+              <div style={{ fontSize: 30, fontWeight: 900, color: urgColor }}>
+                {minsLeft > 0 ? `${minsLeft} MIN LEFT` : 'TIME IS UP'}
+              </div>
+              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.72)', marginTop: 3 }}>
+                {minsLeft > 0
+                  ? `Wrap up and return props · ends ${clock(occ.endISO)}`
+                  : 'Past 15 minutes over is charged an extra hour'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 20, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>
+              {notStarted ? `starts ${clock(occ.startISO)}` : `until ${clock(occ.endISO)}`}
+            </div>
+          )}
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+        <div style={{ fontSize: 19, color: 'rgba(255,255,255,0.34)', marginTop: 10 }}>
           {ctx ? 'No session booked right now' : ' '}
         </div>
       )}
@@ -420,8 +481,13 @@ export default function KioskPage() {
 
   const header = (
     <div style={{ textAlign: 'center', padding: '26px 20px 2px', flexShrink: 0 }}>
-      <div style={{ fontWeight: 900, letterSpacing: '0.3em', fontSize: 21 }}>MADE KULTURE</div>
-      <div style={{ fontSize: 10, color: CHAMP_DIM, letterSpacing: '0.42em', marginTop: 7 }}>FRONT DESK</div>
+      <div style={{ fontWeight: 900, letterSpacing: '0.3em', fontSize: 25 }}>MADE KULTURE</div>
+      {/* A tablet bolted inside a set is NOT the front desk. occupancyLine
+          prints the set's own name directly below this, so on a set tablet
+          this line was both wrong and redundant. Door tablets keep it. */}
+      {!setSlug && (
+        <div style={{ fontSize: 13, color: CHAMP_DIM, letterSpacing: '0.42em', marginTop: 8 }}>FRONT DESK</div>
+      )}
     </div>
   )
 
@@ -430,16 +496,16 @@ export default function KioskPage() {
     <main style={wrap} onPointerDown={touch}>
       {header}
       {occupancyLine}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '8px 14px 20px', maxWidth: 680, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '8px 14px 20px', maxWidth: 680, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
         {/* One tap when the tablet knows whose session this is — the numpad only
             exists because a shared tablet couldn't know. It still does, for the
             no-set tablet and for anyone whose booking isn't the one on this set. */}
         <button style={card} onClick={() => (occLive && !occ.checkedIn ? doSetCheckin() : setScreen('checkin'))}>
           <IconEnter />
-          <span style={{ fontSize: 23, fontWeight: 800, letterSpacing: '0.2em' }}>
+          <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>
             {busy ? 'CHECKING IN…' : occLive && occ.checkedIn ? 'CHECKED IN' : 'CHECK IN'}
           </span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.42)' }}>
+          <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>
             {occLive
               ? (occ.checkedIn ? `${occ.firstName} · you're all set` : `Tap once — ${occ.firstName}`)
               : 'Here for your booking'}
@@ -447,13 +513,13 @@ export default function KioskPage() {
         </button>
         <button style={card} onClick={() => { setScreen('june'); touch() }}>
           <IconJune />
-          <span style={{ fontSize: 23, fontWeight: 800, letterSpacing: '0.2em' }}>ASK JUNE</span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.42)' }}>Sets · gear · rules · directions</span>
+          <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>ASK JUNE</span>
+          <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Sets · gear · rules · directions</span>
         </button>
         <button style={card} onClick={() => setScreen('team')}>
           <IconBell />
-          <span style={{ fontSize: 23, fontWeight: 800, letterSpacing: '0.2em' }}>GET THE TEAM</span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.42)' }}>Need a human — we'll come find you</span>
+          <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>GET THE TEAM</span>
+          <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Need a human — we'll come find you</span>
         </button>
       </div>
     </main>
@@ -581,22 +647,48 @@ export default function KioskPage() {
       {header}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 24 }}>
         <IconBell />
-        {summoned ? (
+        {summonState ? (
           <>
-            <div style={{ fontSize: 11, letterSpacing: '0.34em', color: CHAMP_DIM, margin: '18px 0 12px' }}>TEAM NOTIFIED</div>
-            <div style={{ fontSize: 27, fontWeight: 800, marginBottom: 12 }}>Someone's on the way</div>
-            <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, maxWidth: 420 }}>
-              In a hurry? Text us at (832) 408-1631.
-            </div>
-            <button onClick={resetToHome} style={{ ...champBtn, marginTop: 28 }}>DONE</button>
+            {summonState === 'onway' ? (
+              <>
+                <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP, margin: '18px 0 12px' }}>ANSWERED</div>
+                <div style={{ fontSize: 38, fontWeight: 800, marginBottom: 14, color: CHAMP }}>Someone's on the way</div>
+                <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, maxWidth: 460 }}>
+                  Hang tight — they're walking over now.
+                </div>
+              </>
+            ) : summonState === 'waiting' ? (
+              <>
+                <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP_DIM, margin: '18px 0 12px' }}>SENT</div>
+                <div style={{ fontSize: 38, fontWeight: 800, marginBottom: 14 }}>Ringing the team</div>
+                <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, maxWidth: 460 }}>
+                  This screen changes the moment someone picks it up.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 13, letterSpacing: '0.34em', color: '#ff9b9b', margin: '18px 0 12px' }}>NO ANSWER YET</div>
+                <div style={{ fontSize: 38, fontWeight: 800, marginBottom: 14 }}>We haven't reached anyone</div>
+                <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.6)', lineHeight: 1.7, maxWidth: 460 }}>
+                  Sorry about that — text us and someone will see it right away.
+                </div>
+                <div style={{ fontSize: 34, fontWeight: 800, color: CHAMP, marginTop: 14 }}>
+                  {summonPhone || '(832) 408-1631'}
+                </div>
+              </>
+            )}
+            <button
+              onClick={() => { ringOpen.current = false; setSummonState(null); resetToHome() }}
+              style={{ ...champBtn, marginTop: 30 }}
+            >DONE</button>
           </>
         ) : (
           <>
-            <div style={{ fontSize: 27, fontWeight: 800, margin: '16px 0 12px' }}>Need a human?</div>
-            <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.5)', marginBottom: 28, maxWidth: 420, lineHeight: 1.7 }}>
-              Tap below and the team gets a notification that you're waiting up front.
+            <div style={{ fontSize: 38, fontWeight: 800, margin: '16px 0 14px' }}>Need a human?</div>
+            <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', marginBottom: 30, maxWidth: 460, lineHeight: 1.7 }}>
+              Tap below and the team gets a notification that you're waiting.
             </div>
-            <button disabled={busy} onClick={summon} style={{ ...champBtn, padding: '20px 52px' }}>
+            <button disabled={busy} onClick={summon} style={{ ...champBtn, padding: '24px 60px', fontSize: 16 }}>
               {busy ? '…' : 'RING THE TEAM'}
             </button>
           </>
