@@ -37,6 +37,12 @@ export interface FloorArea {
   dirtySinceISO: string | null
   clearedAt: string | null
   clearedBy: string | null
+  /** Who is in here (or due in here). ⚠️ ONLY populated for a FULL staff or admin
+   *  session — never for a locked one, because the locked board is the screen a
+   *  stranger at the front desk can read. */
+  guestName: string | null
+  /** Phone doubles as the deep link into /desk, whose search matches it. */
+  guestPhone: string | null
 }
 
 interface AreaRow {
@@ -55,7 +61,8 @@ const ARRIVE_WINDOW_MS = 30 * 60 * 1000
 // cleared. Anything dirtier than this is a housekeeping problem, not a data one.
 const LOOKBACK_FLOOR_MS = 7 * 24 * 60 * 60 * 1000
 
-export async function readFloor(): Promise<FloorArea[]> {
+export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<FloorArea[]> {
+  const withGuest = !!opts.withGuest
   const db = supabaseAdmin()
   const now = Date.now()
 
@@ -79,12 +86,23 @@ export async function readFloor(): Promise<FloorArea[]> {
   // earliest clear. One query, not one per room.
   const { data: bookingRows, error: bkErr } = await db
     .from('bookings')
-    .select('id, set_id, start_time, end_time')
+    // ⚠️ One literal select string — concatenating it kills supabase-js row
+    // inference and every field comes back as GenericStringError.
+    .select('id, set_id, start_time, end_time, customers ( name, phone )')
     .eq('status', 'confirmed')
     .gt('end_time', new Date(lookbackFrom).toISOString())
     .lte('start_time', new Date(now + ARRIVE_WINDOW_MS).toISOString())
   if (bkErr) { console.error('[floor] booking read failed:', bkErr.message); return [] }
-  const bookings = (bookingRows ?? []) as { id: string; set_id: string | null; start_time: string; end_time: string }[]
+  interface Bk {
+    id: string; set_id: string | null; start_time: string; end_time: string
+    customers: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null
+  }
+  const bookings = (bookingRows ?? []) as unknown as Bk[]
+  const guestOf = (b: Bk | null) => {
+    if (!b || !withGuest) return { guestName: null, guestPhone: null }
+    const c = Array.isArray(b.customers) ? b.customers[0] : b.customers
+    return { guestName: c?.name ?? null, guestPhone: c?.phone ?? null }
+  }
 
   // A full-studio buyout (set_id null) occupies every set at once, and dirties
   // every set when it ends — treating it as "no set" would show an empty
@@ -109,7 +127,8 @@ export async function readFloor(): Promise<FloorArea[]> {
       // moves them, and there is deliberately no timer and no clock.
       const flagged = a.flagged_at ? Date.parse(a.flagged_at) : 0
       const dirty = flagged > clearedMs(a)
-      return { ...base, state: dirty ? 'dirty' : 'ready', untilISO: null, startsISO: null, dirtySinceISO: null }
+      return { ...base, state: dirty ? 'dirty' : 'ready', untilISO: null, startsISO: null, dirtySinceISO: null,
+               guestName: null, guestPhone: null }
     }
 
     // Actually STARTED. A buyout holds every set, so it stands in for this one.
@@ -117,7 +136,8 @@ export async function readFloor(): Promise<FloorArea[]> {
       .sort((x, y) => Date.parse(y.end_time) - Date.parse(x.end_time))[0] ?? null
     const occupant = mine ?? runningBuyout
     if (occupant) {
-      return { ...base, state: 'inuse', untilISO: occupant.end_time, startsISO: null, dirtySinceISO: null }
+      return { ...base, state: 'inuse', untilISO: occupant.end_time, startsISO: null, dirtySinceISO: null,
+               ...guestOf(occupant) }
     }
 
     // Not started. Somebody may still be due in here shortly, which matters most
@@ -141,12 +161,12 @@ export async function readFloor(): Promise<FloorArea[]> {
     const cleared = clearedMs(a)
     if (lastEnd > cleared || flagged > cleared) {
       return {
-        ...base, state: 'dirty', untilISO: null, startsISO,
+        ...base, state: 'dirty', untilISO: null, startsISO, ...guestOf(mineSoon),
         // Only a session end is a KNOWN moment. A hand flag shows no clock,
         // same as a facility, because "flagged at 3pm" is not "dirty since 3pm".
         dirtySinceISO: lastEnd > cleared ? new Date(lastEnd).toISOString() : null,
       }
     }
-    return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null }
+    return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null, ...guestOf(mineSoon) }
   })
 }

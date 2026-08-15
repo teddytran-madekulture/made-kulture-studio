@@ -40,6 +40,12 @@ export default function Desk() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<Booking[]>([])
   const [q, setQ] = useState('')
+  // ?q= seeds the search, so the floor board can link straight to one booking.
+  // The desk API matches customer name or phone, so a phone lands on one person.
+  useEffect(() => {
+    const seeded = new URLSearchParams(window.location.search).get('q')
+    if (seeded) setQ(seeded)
+  }, [])
   const [scope, setScope] = useState<'today' | 'upcoming'>('today')
   const [busy, setBusy] = useState<string | null>(null)
   const [gearFor, setGearFor] = useState<Booking | null>(null)

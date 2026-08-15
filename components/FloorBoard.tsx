@@ -10,7 +10,7 @@
 // anyone can see it. The board says a room is busy and when it frees up; who is
 // in it is a question for someone who has unlocked the tablet.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const READY = '#43c97f'
 const INUSE = '#c9b27e'
@@ -53,6 +53,7 @@ export interface Area {
   state: 'ready' | 'inuse' | 'dirty'
   untilISO: string | null; startsISO: string | null; dirtySinceISO: string | null
   clearedAt: string | null; clearedBy: string | null
+  guestName: string | null; guestPhone: string | null
 }
 
 // Fit a room name inside its box. "THE WATERING HOLE" ran clean out of a 118px
@@ -87,7 +88,18 @@ const clock = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })
     .format(new Date(iso))
 
-export default function FloorBoard({ actionable = false }: { actionable?: boolean }) {
+export default function FloorBoard({
+  actionable = false,
+  onRoomTap,
+  openCode,
+}: {
+  actionable?: boolean
+  /** When set, a room tap is handed upward instead of opening the panel — the
+   *  lock screen uses this to ask for the PIN first. */
+  onRoomTap?: (a: Area) => void
+  /** Open this room's panel on arrival (how the lock screen hands off). */
+  openCode?: string | null
+}) {
   const [areas, setAreas] = useState<Area[] | null>(null)
   const [err, setErr] = useState('')
   // Manual override. Occupancy stays derived — forcing IN USE would be the board
@@ -122,6 +134,15 @@ export default function FloorBoard({ actionable = false }: { actionable?: boolea
     start()
     return () => { document.removeEventListener('visibilitychange', onVis); stop() }
   }, [load])
+
+  // Arriving from the lock screen with a room in hand: open it once the board
+  // has actually loaded, then stop, so a later refresh does not reopen it.
+  const openedRef = useRef(false)
+  useEffect(() => {
+    if (openedRef.current || !openCode || !areas) return
+    const a = areas.find(x => x.code === openCode)
+    if (a) { openedRef.current = true; setPicked(a) }
+  }, [openCode, areas])
 
   const byCode = new Map((areas ?? []).map(a => [a.code, a]))
   const counts = { inuse: 0, ready: 0, dirty: 0 }
@@ -165,7 +186,9 @@ export default function FloorBoard({ actionable = false }: { actionable?: boolea
               const cx = sh.poly ? sh.cx! : sh.x! + sh.w! / 2
               const cy = sh.poly ? sh.cy! : sh.y! + sh.h! / 2
               const label = a?.label ?? sh.code.toUpperCase()
-              const tap = a && actionable ? () => { setPicked(a); setPanelErr('') } : undefined
+              const tap = a && (onRoomTap || actionable)
+                ? () => { if (onRoomTap) onRoomTap(a); else { setPicked(a); setPanelErr('') } }
+                : undefined
               return (
                 <g key={sh.code} onClick={tap} style={{ cursor: tap ? 'pointer' : 'default' }}>
                   {sh.poly
@@ -198,10 +221,16 @@ export default function FloorBoard({ actionable = false }: { actionable?: boolea
                         ))}
                         <text x={cx} y={top + fit.lines.length * lh + 4 + 5.5} textAnchor="middle" dominantBaseline="middle"
                           style={{ fontSize: stateSize, fontWeight: 700, letterSpacing: '.16em', fill: LINE[st] }}>{WORD[st]}</text>
-                        {a?.startsISO && (
+                        {a?.guestName && (
                           <text x={cx} y={top + fit.lines.length * lh + 4 + 18} textAnchor="middle" dominantBaseline="middle"
+                            style={{ fontSize: 11, fontWeight: 700, fill: 'rgba(255,255,255,.78)' }}>
+                            {a.guestName.split(' ')[0]}
+                          </text>
+                        )}
+                        {(a?.startsISO || (a?.state === 'inuse' && a?.untilISO)) && (
+                          <text x={cx} y={top + fit.lines.length * lh + 4 + (a?.guestName ? 31 : 18)} textAnchor="middle" dominantBaseline="middle"
                             style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.12em', fill: 'rgba(255,255,255,.5)' }}>
-                            BOOKED {clock(a.startsISO)}
+                            {a.startsISO ? `BOOKED ${clock(a.startsISO)}` : `UNTIL ${clock(a.untilISO!)}`}
                           </text>
                         )}
                       </>
@@ -269,6 +298,21 @@ export default function FloorBoard({ actionable = false }: { actionable?: boolea
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,.42)', marginTop: 10, lineHeight: 1.6 }}>
                 Someone is booked in here{picked.untilISO ? ` until ${clock(picked.untilISO)}` : ''}. That comes
                 from the schedule and can’t be set by hand.
+              </div>
+            )}
+
+            {picked.guestName && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,.09)' }}>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{picked.guestName}</div>
+                {picked.guestPhone && (
+                  <a
+                    href={`/desk?q=${encodeURIComponent(picked.guestPhone)}`}
+                    style={{ display: 'inline-block', marginTop: 10, textDecoration: 'none',
+                             border: '1px solid rgba(201,178,126,.45)', background: 'rgba(201,178,126,.1)',
+                             color: '#e6d5ab', borderRadius: 11, padding: '11px 20px',
+                             fontSize: 11, fontWeight: 800, letterSpacing: '.14em' }}
+                  >OPEN BOOKING</a>
+                )}
               </div>
             )}
 

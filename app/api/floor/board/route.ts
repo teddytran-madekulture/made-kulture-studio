@@ -19,12 +19,18 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 export async function GET(req: NextRequest) {
-  const viewer = getStaffFromRequest(req) ?? getLockedStaff(req)
-  if (!viewer && !isAdminAuthed(req)) {
+  const fullSession = getStaffFromRequest(req)
+  const locked = getLockedStaff(req)
+  const admin = isAdminAuthed(req)
+  if (!fullSession && !locked && !admin) {
     return NextResponse.json({ error: 'Sign in at the front desk.' }, { status: 401 })
   }
 
-  const areas = await readFloor()
+  // ⚠️ THE BOUNDARY THAT MATTERS. A LOCKED session may see colours and room
+  // names — that is the whole point of the board on the lock screen. It may NOT
+  // see who is in the room, because that screen sits where anyone can read it.
+  // Unlock (which costs a PIN) and the names appear.
+  const areas = await readFloor({ withGuest: !!fullSession || admin })
   return NextResponse.json({
     areas,
     // Stamped so a tablet can tell a live answer from a stale cached one.

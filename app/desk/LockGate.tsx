@@ -12,6 +12,9 @@ export default function LockGate({ staffName }: { staffName: string }) {
   const [locked, setLocked] = useState(false)
   // The PIN pad is not shown until the board is tapped.
   const [showPin, setShowPin] = useState(false)
+  // Which room the tap was on, so unlocking lands on that room's controls
+  // instead of dumping you on the booking list to find it yourself.
+  const [wantRoom, setWantRoom] = useState<string | null>(null)
   const [pin, setPin] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -22,7 +25,7 @@ export default function LockGate({ staffName }: { staffName: string }) {
     // URL — /staff, /admin — can be opened around the lock. PIN restores it.
     const doLock = async () => {
       try { await fetch('/api/staff/lock', { method: 'POST' }) } catch { /* still show the overlay */ }
-      setLocked(true); setShowPin(false)
+      setLocked(true); setShowPin(false); setWantRoom(null)
     }
     const arm = () => {
       if (timer.current) clearTimeout(timer.current)
@@ -47,6 +50,7 @@ export default function LockGate({ staffName }: { staffName: string }) {
     const d = await r.json(); setBusy(false)
     if (!r.ok) { setErr(d.error ?? 'Wrong PIN.'); setPin(''); return }
     setPin(''); setLocked(false); setShowPin(false)
+    if (wantRoom) { window.location.href = `/desk/floor?room=${encodeURIComponent(wantRoom)}` }
   }
   const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 
@@ -62,12 +66,13 @@ export default function LockGate({ staffName }: { staffName: string }) {
     return (
       <div
         onClick={() => setShowPin(true)}
+        data-lock-board="1"
         style={{
           position: 'fixed', inset: 0, zIndex: 100, cursor: 'pointer',
           background: 'radial-gradient(120% 90% at 85% -10%, #191510 0%, #0d0d10 45%, #09090b 100%)',
         }}
       >
-        <FloorBoard />
+        <FloorBoard onRoomTap={a => { setWantRoom(a.code); setShowPin(true) }} />
         <div style={{
           position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)',
           fontSize: 11, letterSpacing: '.2em', color: 'rgba(255,255,255,.34)',

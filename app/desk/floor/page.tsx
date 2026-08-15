@@ -10,7 +10,7 @@
 // confirmed booking says so — a button that faked it would make the board lie
 // about where guests are, which is the one thing it must never do.
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import FloorBoard from '@/components/FloorBoard'
 
@@ -25,6 +25,10 @@ export default function DeskFloorPage() {
     document.body.style.zoom = '1'
     return () => { document.body.style.zoom = prev }
   }, [])
+
+  // Handed over from the lock screen: open that room's panel on arrival.
+  const [room, setRoom] = useState<string | null>(null)
+  useEffect(() => { setRoom(new URLSearchParams(window.location.search).get('room')) }, [])
 
   return (
     <main style={{
@@ -41,7 +45,7 @@ export default function DeskFloorPage() {
         }}>&larr; FRONT DESK</Link>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
-        <FloorBoard actionable />
+        <FloorBoard actionable openCode={room} />
       </div>
       <div style={{ textAlign: 'center', fontSize: 11, letterSpacing: '.16em', color: 'rgba(255,255,255,.3)', padding: '0 0 14px' }}>
         TAP A ROOM TO CHANGE ITS STATUS
