@@ -205,16 +205,16 @@ export default function FloorBoard({
       )}
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24, padding: '2px 28px 16px' }}>
-        <div style={{ width: 236, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div style={{ flex: '1 1 0', minWidth: 290, maxWidth: 470, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 10, letterSpacing: '.3em', color: 'rgba(201,178,126,.55)', fontWeight: 700 }}>TODAY</span>
+            <span style={{ fontSize: 12, letterSpacing: '.3em', color: 'rgba(201,178,126,.55)', fontWeight: 700 }}>TODAY</span>
             <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
               {(['agenda', 'day'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)} style={{
                   background: view === v ? 'rgba(201,178,126,.16)' : 'none',
                   border: `1px solid ${view === v ? 'rgba(201,178,126,.45)' : 'rgba(255,255,255,.12)'}`,
                   color: view === v ? '#e6d5ab' : 'rgba(255,255,255,.4)',
-                  borderRadius: 7, padding: '3px 9px', fontSize: 9, fontWeight: 800,
+                  borderRadius: 8, padding: '5px 12px', fontSize: 11, fontWeight: 800,
                   letterSpacing: '.12em', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
                 }}>{v.toUpperCase()}</button>
               ))}
@@ -504,13 +504,13 @@ function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, position: 'relative', paddingLeft: 26 }}>
+    <div style={{ flex: 1, minHeight: 0, position: 'relative', paddingLeft: 34 }}>
       {hours.map(h => (
         <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: `${pct(h)}%` }}>
-          <div style={{ position: 'absolute', left: 0, top: -6, fontSize: 9, letterSpacing: '.06em', color: 'rgba(255,255,255,.28)' }}>
+          <div style={{ position: 'absolute', left: 0, top: -7, fontSize: 11, letterSpacing: '.06em', color: 'rgba(255,255,255,.3)' }}>
             {hourLabel(h)}
           </div>
-          <div style={{ marginLeft: 26, height: 1, background: 'rgba(255,255,255,.06)' }} />
+          <div style={{ marginLeft: 30, height: 1, background: 'rgba(255,255,255,.06)' }} />
         </div>
       ))}
 
@@ -520,23 +520,23 @@ function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
         return (
           <div key={r.id} style={{
             position: 'absolute', top: `${pct(s0)}%`, height: `${((e0 - s0) / span) * 100}%`,
-            left: `calc(${lane * w}% + 26px)`, width: `calc(${w}% - 28px)`,
-            borderRadius: 7, padding: '4px 7px', overflow: 'hidden', boxSizing: 'border-box',
+            left: `calc(${lane * w}% + 30px)`, width: `calc(${w}% - 34px)`,
+            borderRadius: 8, padding: '6px 9px', overflow: 'hidden', boxSizing: 'border-box',
             border: `1px solid ${r.buyout ? 'rgba(201,178,126,.5)' : 'rgba(255,255,255,.16)'}`,
             background: r.buyout ? 'rgba(201,178,126,.13)' : 'rgba(255,255,255,.045)',
             opacity: over ? 0.35 : 1,
           }}>
-            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em',
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em',
                           color: r.buyout ? INUSE : 'rgba(255,255,255,.8)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {r.setLabel}
             </div>
             {r.guestName && (
-              <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {r.guestName}
               </div>
             )}
-            <div style={{ fontSize: 9, color: 'rgba(255,255,255,.45)', whiteSpace: 'nowrap' }}>
-              {clock(r.startISO)}
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.5)', whiteSpace: 'nowrap' }}>
+              {clock(r.startISO)}–{clock(r.endISO)}
             </div>
           </div>
         )
@@ -545,11 +545,11 @@ function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
       {/* The line every calendar has: where you are in the day. */}
       {nowH >= lo && nowH <= hi && (
         <div style={{ position: 'absolute', left: 0, right: 0, top: `${pct(nowH)}%`, pointerEvents: 'none' }}>
-          <div style={{ position: 'absolute', left: 0, top: -6, fontSize: 9, fontWeight: 800, color: '#ff6b6b' }}>
+          <div style={{ position: 'absolute', left: 0, top: -7, fontSize: 11, fontWeight: 800, color: '#ff6b6b' }}>
             {new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(nowMs))}
           </div>
-          <div style={{ marginLeft: 26, height: 2, background: '#ff4d4d', borderRadius: 2 }} />
-          <div style={{ position: 'absolute', left: 24, top: -3, width: 7, height: 7, borderRadius: '50%', background: '#ff4d4d' }} />
+          <div style={{ marginLeft: 30, height: 2, background: '#ff4d4d', borderRadius: 2 }} />
+          <div style={{ position: 'absolute', left: 27, top: -3, width: 8, height: 8, borderRadius: '50%', background: '#ff4d4d' }} />
         </div>
       )}
     </div>
@@ -563,16 +563,16 @@ function AgendaList({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
       <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ff4d4d', flexShrink: 0 }} />
       <span style={{ flex: 1, height: 2, background: '#ff4d4d', borderRadius: 2 }} />
-      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', color: '#ff6b6b', whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', color: '#ff6b6b', whiteSpace: 'nowrap' }}>
         {new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(nowMs))}
       </span>
     </div>
   )
   const allStarted = agenda.length > 0 && agenda.every(r => Date.parse(r.startISO) <= nowMs)
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 6, display: 'flex', flexDirection: 'column' }}>
       {agenda.length === 0 && (
-        <div style={{ fontSize: 14, color: 'rgba(255,255,255,.4)' }}>Nothing on the books today.</div>
+        <div style={{ fontSize: 15, color: 'rgba(255,255,255,.4)' }}>Nothing on the books today.</div>
       )}
       {agenda.map((r, i) => {
         const started = Date.parse(r.startISO) <= nowMs
@@ -580,17 +580,22 @@ function AgendaList({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
         // The boundary between what is done and what is coming.
         const lineHere = !started && (i === 0 || Date.parse(agenda[i - 1].startISO) <= nowMs)
         return (
-          <div key={r.id}>
+          // Rows share the free height so the list fills its column, but they
+          // stop growing before a two-booking day turns into three giant slabs.
+          <div key={r.id} style={{ flex: '1 1 0', minHeight: 58, maxHeight: 108, display: 'flex', flexDirection: 'column' }}>
             {lineHere && nowLine}
-            <div style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.06)', opacity: over ? 0.38 : 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em',
+            <div style={{
+              flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+              padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.06)', opacity: over ? 0.38 : 1,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.1em',
                                color: r.buyout ? INUSE : 'rgba(255,255,255,.82)' }}>{r.setLabel}</span>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.55)', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,.55)', whiteSpace: 'nowrap' }}>
                   {clock(r.startISO)}–{clock(r.endISO)}
                 </span>
               </div>
-              {r.guestName && <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{r.guestName}</div>}
+              {r.guestName && <div style={{ fontSize: 16, fontWeight: 600, marginTop: 3 }}>{r.guestName}</div>}
             </div>
           </div>
         )
