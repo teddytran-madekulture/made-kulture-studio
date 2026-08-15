@@ -62,6 +62,8 @@
     "lib/push.ts",
     "app/admin/inbox/page.tsx",
     "components/AdminPwa.tsx",
-    "app/api/admin/push/route.ts"
+    "app/api/admin/push/route.ts",
+    "app/api/kiosk/extend/route.ts",
+    "app/api/extensions/[token]/route.ts"
   ]
 }

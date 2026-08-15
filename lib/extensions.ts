@@ -11,6 +11,7 @@
 //                 precisely the case where running over cost somebody something.
 
 import { supabaseAdmin } from '@/lib/supabase'
+import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { randomUUID } from 'crypto'
 
 export type ExtensionKind = 'extend' | 'overage'
@@ -145,7 +146,9 @@ export interface CreateExtensionOpts {
   // offered an extension at all. When true (admin), the request is minted
   // anyway and the guest keys a card in on the confirm page.
   allowNoCard?: boolean
-  createdBy?: 'june' | 'cron' | 'admin'
+  // 'kiosk' = the wall tablet. The DB column is free text (migration 091 only
+  // COMMENTS the values; there is no CHECK constraint), so this needed no migration.
+  createdBy?: 'june' | 'cron' | 'admin' | 'kiosk'
 }
 
 // Price a request and mint the pay-link token for it, without sending anything —
@@ -248,6 +251,85 @@ export interface SetOccupancy {
   checkedIn?: boolean
   /** true when the occupant is a full-studio buyout rather than this set's own booking */
   buyout?:    boolean
+  /** Start of the next confirmed booking on this set, whenever it is. Null = clear. */
+  nextStartISO?:  string | null
+  /** Hours the occupant could actually BUY, floored to a half hour. 0 = none. */
+  headroomHours?: number
+  /** Which bound won. The tablet says something different for each. */
+  headroomLimit?: HeadroomLimit
+  /** False for buyouts and off-hours ends — those are a human conversation. */
+  extendable?:    boolean
+}
+
+// The studio day ends at 22:00 Central. This is not a new decision — the admin
+// calendar's inBusinessHours is `h >= 9 && h <= 22`, the booking picker stops
+// offering starts at 21:30, and the jukebox sleeps outside 9-22. Self-serve
+// extension was the ONE path that never checked it, so a guest could buy their
+// way to 3 AM at the $40 set rate. The FAQ says time past closing is billed at
+// the full warehouse rate — that is a conversation with a human, not a button.
+export const STUDIO_CLOSE_HOUR = 22
+
+export type HeadroomLimit = 'next-booking' | 'closing' | 'max'
+
+export interface SetHeadroom {
+  nextStartISO:  string | null
+  headroomHours: number
+  headroomLimit: HeadroomLimit
+}
+
+// How much time is actually buyable after this booking ends.
+//
+// ⚠️ This asks a DIFFERENT question from the wrap-up cron's nextOnSet(), and the
+// difference is deliberate. That one looks exactly one hour ahead, because it is
+// answering "is somebody about to need this room" — a warning. This one looks
+// however far ahead the next booking is, because it is answering "how much can I
+// sell you" — a price. They agree wherever they overlap: a booking 45 minutes
+// out makes the cron warn AND caps this at 30 minutes.
+export async function setHeadroom(
+  setId: string,
+  endISO: string,
+  excludeBookingId: string,
+): Promise<SetHeadroom> {
+  const db = supabaseAdmin()
+  const end = Date.parse(endISO)
+
+  // A session that ends outside business hours cannot be self-extended at all:
+  // the next half hour is warehouse-rate time and priced by a person.
+  const endHour = centralHourDecimal(endISO)
+  if (endHour < 9 || endHour >= STUDIO_CLOSE_HOUR) {
+    return { nextStartISO: null, headroomHours: 0, headroomLimit: 'closing' }
+  }
+
+  const { data: nextRows, error } = await db
+    .from('bookings')
+    .select('start_time')
+    .eq('set_id', setId)
+    .neq('status', 'cancelled')
+    .neq('id', excludeBookingId)
+    .gte('start_time', new Date(end - 60_000).toISOString())
+    .order('start_time', { ascending: true })
+    .limit(1)
+  // ⚠️ supabase-js does not throw. A FAILED query must never read as "wide
+  // open" — that is how you put an ADD TIME button on a set booked solid.
+  if (error) {
+    console.error('[kiosk] headroom query failed:', error.message)
+    return { nextStartISO: null, headroomHours: 0, headroomLimit: 'next-booking' }
+  }
+
+  const nextStartISO = (nextRows ?? [])[0]?.start_time ?? null
+
+  const closeMs = Date.parse(bookingHourToISO(centralDateStr(endISO), STUDIO_CLOSE_HOUR))
+  const bounds: { ms: number; limit: HeadroomLimit }[] = [
+    { ms: closeMs - end,      limit: 'closing' },
+    { ms: 12 * 3600_000,      limit: 'max' },
+  ]
+  if (nextStartISO) bounds.push({ ms: Date.parse(nextStartISO) - end, limit: 'next-booking' })
+  bounds.sort((a, b) => a.ms - b.ms)
+
+  // FLOOR to a half hour. Rounding up here would sell time that overruns the
+  // very bound we just computed.
+  const hours = Math.max(0, Math.floor((bounds[0].ms / 3600_000) * 2) / 2)
+  return { nextStartISO, headroomHours: Math.min(hours, 12), headroomLimit: bounds[0].limit }
 }
 
 export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupancy> {
@@ -291,13 +373,20 @@ export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupa
   const mine = live
     .filter(r => r.set_id === setRow.id)
     .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0]
-  if (mine) return shape(mine, false)
+  if (mine) {
+    const head = await setHeadroom(setRow.id, mine.end_time, mine.id)
+    return { ...shape(mine, false), ...head, extendable: head.headroomHours >= 0.5 }
+  }
 
   // Otherwise a buyout has the whole building, this set included.
   const buyout = live
     .filter(r => r.set_id === null)
     .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0]
-  if (buyout) return shape(buyout, true)
+  // ⚠️ planExtension REFUSES buyouts ("extended by the team"). The tablet must
+  // never print a price it cannot honour, so a buyout gets no headroom at all.
+  if (buyout) {
+    return { ...shape(buyout, true), nextStartISO: null, headroomHours: 0, headroomLimit: 'max', extendable: false }
+  }
 
   return { kind: 'none' }
 }

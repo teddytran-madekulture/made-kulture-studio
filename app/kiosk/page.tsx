@@ -22,7 +22,7 @@ const CHAMP_DIM = 'rgba(201,178,126,0.55)'
 const HAIR = 'rgba(201,178,126,0.22)'
 const INK = '#0b0b0d'
 
-type Screen = 'home' | 'checkin' | 'june' | 'team'
+type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime'
 interface Msg { id?: string; role: string; content: string; created_at?: string }
 
 const QUICK_QUESTIONS = [
@@ -47,6 +47,12 @@ const IconJune = () => (
   <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
     <circle cx="12" cy="12" r="9" strokeOpacity="0.6" />
     <path d="M14.5 7.5v6a3 3 0 0 1-3 3 2.6 2.6 0 0 1-2.4-1.6" />
+  </svg>
+)
+const IconClock = () => (
+  <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
+    <circle cx="12" cy="12" r="9" strokeOpacity="0.6" />
+    <path d="M12 7v5l3.5 2" />
   </svg>
 )
 const IconBell = () => (
@@ -117,6 +123,15 @@ export default function KioskPage() {
   const [ciResult, setCi]     = useState<any>(null)
   const [ciError, setCiError] = useState('')
   const [busy, setBusy]       = useState(false)
+  // ── ADD TIME ──────────────────────────────────────────────────────────────
+  // 'pick' choose a length -> 'confirm' the server's price -> 'done' or 'phone'.
+  // ⚠️ The PRICE IS NEVER COMPUTED HERE. The tablet knows how many hours are
+  // available but not what an hour costs (per-customer overrides live in
+  // lib/extensions), so it asks the server and prints what comes back.
+  const [extStep,  setExtStep]  = useState<'pick' | 'confirm' | 'done' | 'phone'>('pick')
+  const [extReq,   setExtReq]   = useState<any>(null)
+  const [extError, setExtError] = useState('')
+  const [extUntil, setExtUntil] = useState('')
   const [msgs, setMsgs]       = useState<Msg[]>([])
   const [input, setInput]     = useState('')
   const [sending, setSending] = useState(false)
@@ -141,6 +156,7 @@ export default function KioskPage() {
     if (ringOpen.current) return
     setScreen('home'); setPhone(''); setCi(null); setCiError('')
     setMsgs([]); setInput(''); setSummonState(null); setSummonPhone('')
+    setExtStep('pick'); setExtReq(null); setExtError(''); setExtUntil('')
     chatToken.current = null
     lastTs.current = null
   }, [])
@@ -420,6 +436,38 @@ export default function KioskPage() {
   const urgency  = !started || minsLeft > 15 ? null : minsLeft > 5 ? 'soon' : 'now'
   const urgColor = urgency === 'now' ? '#ff6b6b' : '#e8a33d'
 
+  // Half-hour label. lib/extensions has durationLabel() but that module pulls in
+  // supabaseAdmin and node:crypto — it cannot be imported into a client bundle.
+  const hoursLabel = (h: number) => {
+    const m = Math.round(h * 60)
+    if (m < 60) return `${m} min`
+    const hh = Math.floor(m / 60), mm = m % 60
+    return mm ? `${hh} hr ${mm} min` : `${hh} hour${hh > 1 ? 's' : ''}`
+  }
+
+  // What happens AFTER them. The 15-minute wrap-up text already says this (see
+  // app/api/cron/session-reminder); this is the same fact on the surface the
+  // guest is actually looking at, for the one whose phone is in a bag across the
+  // room. ⚠️ NEVER the next guest's NAME — the person who rented this room
+  // agreed to be greeted by name on a wall screen. The next one didn't.
+  const nextStart = occ?.nextStartISO ?? null
+  const headroom  = occ?.headroomHours ?? 0
+  // Same one-hour handover window the wrap-up text uses, so the screen and the
+  // SMS can never contradict each other about whether someone is "right after".
+  const handoverSoon = !!(nextStart && occLive && Date.parse(nextStart) - Date.parse(occ.endISO) <= 60 * 60_000)
+  const canAddTime = !!(occLive && started && occ.extendable && headroom >= 0.5)
+
+  // ⚠️ FOUR STACKED TILES DO NOT FIT A LANDSCAPE FIRE HD 10. Measured: the
+  // column needs 913px of viewport at the 150px tile floor, and the tablet has
+  // about 800 CSS px (1920 / 1.5 dpr). GET THE TEAM would sit below the fold on
+  // a kiosk with no scrollbar and nobody to scroll it. Shrinking the tiles is no
+  // fix either — icon + title + subtitle is ~138px on its own. So the fourth
+  // tile changes the SHAPE: one column becomes a 2x2 grid, which is the better
+  // use of a wide screen anyway.
+  const tile: React.CSSProperties = canAddTime
+    ? { ...card, flex: '1 1 calc(50% - 28px)', minHeight: 200 }
+    : card
+
   const occupancyLine = !setSlug ? null : (
     <div style={{ textAlign: 'center', padding: '0 20px 4px', flexShrink: 0 }}>
       <style>{'@keyframes mkPulse{0%,100%{opacity:1}50%{opacity:0.45}}'}</style>
@@ -449,6 +497,21 @@ export default function KioskPage() {
           ) : (
             <div style={{ fontSize: 20, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>
               {notStarted ? `starts ${clock(occ.startISO)}` : `until ${clock(occ.endISO)}`}
+            </div>
+          )}
+          {started && (handoverSoon || headroom >= 0.5) && (
+            <div style={{
+              // The handover warning is the line that costs somebody an hour if it
+              // is missed, so it is NOT drawn at the same size as the calm one.
+              fontSize: handoverSoon ? 26 : 21, marginTop: 12, lineHeight: 1.45,
+              fontWeight: handoverSoon ? 700 : 500,
+              color: handoverSoon ? '#e8a33d' : 'rgba(255,255,255,0.58)',
+            }}>
+              {handoverSoon
+                ? `Booked again at ${clock(nextStart!)} — please be packed up by then`
+                : nextStart
+                  ? `Up to ${hoursLabel(headroom)} available · booked again at ${clock(nextStart)}`
+                  : `Need longer? Up to ${hoursLabel(headroom)} available`}
             </div>
           )}
         </div>
@@ -496,11 +559,18 @@ export default function KioskPage() {
     <main style={wrap} onPointerDown={touch}>
       {header}
       {occupancyLine}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '8px 14px 20px', maxWidth: 680, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+      <div style={{
+        flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center',
+        flexDirection: canAddTime ? 'row' : 'column',
+        flexWrap: canAddTime ? 'wrap' : 'nowrap',
+        alignContent: 'center',
+        padding: '8px 14px 20px', maxWidth: canAddTime ? 980 : 680,
+        width: '100%', margin: '0 auto', boxSizing: 'border-box',
+      }}>
         {/* One tap when the tablet knows whose session this is — the numpad only
             exists because a shared tablet couldn't know. It still does, for the
             no-set tablet and for anyone whose booking isn't the one on this set. */}
-        <button style={card} onClick={() => (occLive && !occ.checkedIn ? doSetCheckin() : setScreen('checkin'))}>
+        <button style={tile} onClick={() => (occLive && !occ.checkedIn ? doSetCheckin() : setScreen('checkin'))}>
           <IconEnter />
           <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>
             {busy ? 'CHECKING IN…' : occLive && occ.checkedIn ? 'CHECKED IN' : 'CHECK IN'}
@@ -511,12 +581,24 @@ export default function KioskPage() {
               : 'Here for your booking'}
           </span>
         </button>
-        <button style={card} onClick={() => { setScreen('june'); touch() }}>
+        {canAddTime && (
+          <button
+            style={{ ...tile, border: `1px solid ${minsLeft <= 30 ? 'rgba(201,178,126,0.55)' : HAIR}` }}
+            onClick={() => { setExtStep('pick'); setExtReq(null); setExtError(''); setExtUntil(''); setScreen('addtime'); touch() }}
+          >
+            <IconClock />
+            <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>ADD TIME</span>
+            <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>
+              Stay longer — up to {hoursLabel(headroom)}
+            </span>
+          </button>
+        )}
+        <button style={tile} onClick={() => { setScreen('june'); touch() }}>
           <IconJune />
           <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>ASK JUNE</span>
           <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Sets · gear · rules · directions</span>
         </button>
-        <button style={card} onClick={() => setScreen('team')}>
+        <button style={tile} onClick={() => setScreen('team')}>
           <IconBell />
           <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>GET THE TEAM</span>
           <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Need a human — we'll come find you</span>
@@ -639,6 +721,143 @@ export default function KioskPage() {
       </div>
     </main>
   )
+
+  // ── ADD TIME actions ──────────────────────────────────────────────────────
+  // Ask the server what N more hours costs and mint the request. ⚠️ The tablet
+  // sends only its SET, never a booking id — the server re-derives whose session
+  // this is, same as check-in.
+  const askForTime = async (hours: number) => {
+    if (busy || !setSlug) return
+    setBusy(true); setExtError('')
+    try {
+      const r = await fetch('/api/kiosk/extend', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ set: setSlug, key: kioskKey, hours }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) setExtError(d.error || 'Could not price that right now.')
+      else { setExtReq({ ...d, hours }); setExtStep(d.hasCardOnFile ? 'confirm' : 'phone') }
+    } catch { setExtError('Could not reach the studio system.') }
+    setBusy(false)
+  }
+
+  // Charge the card on file, through the very same public endpoint the SMS link
+  // uses — so there is one payment path, not two that can drift. It re-plans and
+  // re-checks the conflict before taking a cent.
+  const confirmTime = async () => {
+    if (busy || !extReq?.token) return
+    setBusy(true); setExtError('')
+    try {
+      const r = await fetch(`/api/extensions/${extReq.token}`, { method: 'POST' })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.success) { setExtUntil(d.until || ''); setExtStep('done'); fetchCtx() }
+      // ⚠️ A Square PROFILE is not a saved CARD. hasCardOnFile is optimistic, so
+      // this miss is expected and is not the guest's fault — hand them the link.
+      else if (d.needsCard) { setExtStep('phone'); setExtError('') }
+      else setExtError(d.error || 'That did not go through.')
+    } catch { setExtError('Could not reach the studio system.') }
+    setBusy(false)
+  }
+
+  if (screen === 'addtime') {
+    // Never offer more than the room actually has. headroom is already floored
+    // to a half hour by the server against the next booking AND closing time.
+    const options = [0.5, 1, 1.5, 2, 3, 4].filter(h => h <= headroom).slice(0, 4)
+    const setLabel = ctx?.set?.name ?? 'this set'
+    return (
+      <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
+        <button style={backBtn} onClick={resetToHome}>&larr; BACK</button>
+        {header}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 24 }}>
+          <IconClock />
+
+          {extStep === 'pick' && (
+            <>
+              <div style={{ fontSize: 38, fontWeight: 800, margin: '16px 0 10px' }}>Add time</div>
+              <div style={{ fontSize: 19, color: 'rgba(255,255,255,0.55)', marginBottom: 26, maxWidth: 540, lineHeight: 1.6 }}>
+                {nextStart
+                  ? `Up to ${hoursLabel(headroom)} — ${setLabel} is booked again at ${clock(nextStart)}.`
+                  : `You can add up to ${hoursLabel(headroom)} on ${setLabel}.`}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, justifyContent: 'center' }}>
+                {options.map(h => (
+                  <button key={h} disabled={busy} onClick={() => askForTime(h)}
+                    style={{ ...champBtn, padding: '22px 34px', fontSize: 15, opacity: busy ? 0.5 : 1 }}>
+                    {`+ ${hoursLabel(h).toUpperCase()}`}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {extStep === 'confirm' && extReq && (
+            <>
+              <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP_DIM, margin: '18px 0 12px' }}>CONFIRM</div>
+              <div style={{ fontSize: 42, fontWeight: 800, marginBottom: 12, color: CHAMP }}>
+                {`+ ${hoursLabel(extReq.hours)} · $${(extReq.priceCents / 100).toFixed(2)}`}
+              </div>
+              <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, maxWidth: 500 }}>
+                Charged to the card on file for this booking.
+                {extReq.smsSent ? ' We also texted you the link if you would rather pay on your phone.' : ''}
+              </div>
+              <button disabled={busy} onClick={confirmTime} style={{ ...champBtn, marginTop: 28, padding: '24px 56px', fontSize: 16 }}>
+                {busy ? '…' : 'CONFIRM & CHARGE'}
+              </button>
+              <button onClick={() => { setExtStep('pick'); setExtReq(null) }}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter, sans-serif', fontSize: 14, letterSpacing: '0.12em', marginTop: 18, cursor: 'pointer' }}>
+                PICK A DIFFERENT LENGTH
+              </button>
+            </>
+          )}
+
+          {extStep === 'phone' && (
+            <>
+              <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP_DIM, margin: '18px 0 12px' }}>ONE MORE STEP</div>
+              <div style={{ fontSize: 38, fontWeight: 800, marginBottom: 14 }}>
+                {extReq?.smsSent ? 'Finish on your phone' : 'We need a hand with this one'}
+              </div>
+              <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.6)', lineHeight: 1.7, maxWidth: 500 }}>
+                {extReq?.smsSent
+                  ? 'We just texted you a secure link to add a card and confirm. Card details are never typed on this screen.'
+                  : 'There is no mobile number on this booking, so we cannot send you a payment link. Tap GET THE TEAM and someone will sort it out.'}
+              </div>
+              {!extReq?.smsSent && (
+                <button onClick={() => { setScreen('team'); touch() }} style={{ ...champBtn, marginTop: 26 }}>GET THE TEAM</button>
+              )}
+            </>
+          )}
+
+          {extStep === 'done' && (
+            <>
+              <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP, margin: '18px 0 12px' }}>ADDED</div>
+              <div style={{ fontSize: 40, fontWeight: 800, marginBottom: 14, color: CHAMP }}>
+                {extUntil ? `Yours until ${extUntil}` : 'Time added'}
+              </div>
+              <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, maxWidth: 480 }}>
+                Your session has been extended and your door code still works. Enjoy the extra time.
+              </div>
+            </>
+          )}
+
+          {extError && (
+            <div style={{ color: 'rgba(255,255,255,0.8)', borderLeft: `2px solid ${CHAMP_DIM}`, paddingLeft: 14, fontSize: 17, marginTop: 22, maxWidth: 500, textAlign: 'left', lineHeight: 1.6 }}>
+              {extError}
+            </div>
+          )}
+
+          {(extStep === 'done' || extStep === 'phone' || extError) && (
+            <button onClick={resetToHome} style={
+              (extStep === 'phone' && !extReq?.smsSent)
+                ? { background: 'none', border: '1px solid rgba(255,255,255,0.16)', color: 'rgba(255,255,255,0.55)',
+                    borderRadius: 14, padding: '15px 38px', fontFamily: 'Inter, sans-serif', fontSize: 13,
+                    fontWeight: 700, letterSpacing: '0.18em', cursor: 'pointer', marginTop: 16 }
+                : { ...champBtn, marginTop: 26 }
+            }>DONE</button>
+          )}
+        </div>
+      </main>
+    )
+  }
 
   // screen === 'team'
   return (
