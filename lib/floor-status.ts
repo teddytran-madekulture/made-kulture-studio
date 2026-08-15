@@ -48,6 +48,10 @@ export interface FloorArea {
    *  booking of its own. The board collapses these into one banner instead of
    *  printing the same name on nine rooms. */
   viaBuyout: boolean
+  /** IN USE, but nobody ever cleared what the last session left. Occupancy wins
+   *  the colour — you cannot clean an occupied room — but the dirt is still a
+   *  fact and the board must not swallow it. */
+  alsoDirty: boolean
 }
 
 interface AreaRow {
@@ -134,16 +138,27 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
       const flagged = a.flagged_at ? Date.parse(a.flagged_at) : 0
       const dirty = flagged > clearedMs(a)
       return { ...base, state: dirty ? 'dirty' : 'ready', untilISO: null, startsISO: null, dirtySinceISO: null,
-               guestName: null, guestPhone: null, viaBuyout: false }
+               guestName: null, guestPhone: null, viaBuyout: false, alsoDirty: false }
     }
+
+    // ⚠️ Dirtiness is computed FIRST. Deciding it only after the occupancy check
+    // is how a room that was never cleaned goes quiet the moment somebody walks
+    // into it — the board would say the floor is clear while a guest stands in
+    // last session's mess.
+    const lastOwnEndPre = Math.max(0, ...ended.filter(b => b.set_id === a.set_id).map(b => Date.parse(b.end_time)))
+    const lastEndPre = Math.max(lastOwnEndPre, buyoutEndedAt)
+    const flaggedPre = a.flagged_at ? Date.parse(a.flagged_at) : 0
+    const clearedPre = clearedMs(a)
+    const isDirty = lastEndPre > clearedPre || flaggedPre > clearedPre
 
     // Actually STARTED. A buyout holds every set, so it stands in for this one.
     const mine = running.filter(b => b.set_id === a.set_id)
       .sort((x, y) => Date.parse(y.end_time) - Date.parse(x.end_time))[0] ?? null
     const occupant = mine ?? runningBuyout
     if (occupant) {
-      return { ...base, state: 'inuse', untilISO: occupant.end_time, startsISO: null, dirtySinceISO: null,
-               ...guestOf(occupant) }
+      return { ...base, state: 'inuse', untilISO: occupant.end_time, startsISO: null,
+               dirtySinceISO: isDirty && lastEndPre > clearedPre ? new Date(lastEndPre).toISOString() : null,
+               alsoDirty: isDirty, ...guestOf(occupant) }
     }
 
     // Not started. Somebody may still be due in here shortly, which matters most
@@ -161,19 +176,17 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
     // then post-dates them. Sets get dirty without a booking ending all the
     // time — a spill, a tour walking through, a guest who left it wrecked
     // mid-session — and the board has to be able to say so.
-    const lastOwnEnd = Math.max(0, ...ended.filter(b => b.set_id === a.set_id).map(b => Date.parse(b.end_time)))
-    const lastEnd = Math.max(lastOwnEnd, buyoutEndedAt)
-    const flagged = a.flagged_at ? Date.parse(a.flagged_at) : 0
-    const cleared = clearedMs(a)
-    if (lastEnd > cleared || flagged > cleared) {
+    const lastEnd = lastEndPre
+    const cleared = clearedPre
+    if (isDirty) {
       return {
-        ...base, state: 'dirty', untilISO: null, startsISO, ...guestOf(mineSoon),
+        ...base, state: 'dirty', untilISO: null, startsISO, alsoDirty: false, ...guestOf(mineSoon),
         // Only a session end is a KNOWN moment. A hand flag shows no clock,
         // same as a facility, because "flagged at 3pm" is not "dirty since 3pm".
         dirtySinceISO: lastEnd > cleared ? new Date(lastEnd).toISOString() : null,
       }
     }
-    return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null, ...guestOf(mineSoon) }
+    return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null, alsoDirty: false, ...guestOf(mineSoon) }
   })
 }
 

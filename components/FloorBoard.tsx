@@ -53,7 +53,7 @@ export interface Area {
   state: 'ready' | 'inuse' | 'dirty'
   untilISO: string | null; startsISO: string | null; dirtySinceISO: string | null
   clearedAt: string | null; clearedBy: string | null
-  guestName: string | null; guestPhone: string | null; viaBuyout: boolean
+  guestName: string | null; guestPhone: string | null; viaBuyout: boolean; alsoDirty: boolean
 }
 
 // Fit a room name inside its box. "THE WATERING HOLE" ran clean out of a 118px
@@ -111,6 +111,8 @@ export default function FloorBoard({
   // The now-line has to move on its own, or it is a picture of when the page
   // loaded. A minute is plenty — this drives one horizontal rule.
   const [nowMs, setNowMs] = useState(() => Date.now())
+  // Agenda is the default; the day column is a click away.
+  const [view, setView] = useState<'agenda' | 'day'>('agenda')
   // Manual override. Occupancy stays derived — forcing IN USE would be the board
   // telling you someone is in a room the schedule says is empty — but "this needs
   // cleaning" and "this is clean" are human facts, so a human can set them.
@@ -161,7 +163,10 @@ export default function FloorBoard({
   const byCode = new Map((areas ?? []).map(a => [a.code, a]))
   const counts = { inuse: 0, ready: 0, dirty: 0 }
   for (const a of areas ?? []) counts[a.state]++
-  const dirtyList = (areas ?? []).filter(a => a.state === 'dirty')
+  // A room can be gold and filthy at once. It belongs in the cleaning count.
+  const needsClean = (a: Area) => a.state === 'dirty' || a.alsoDirty
+  counts.dirty = (areas ?? []).filter(needsClean).length
+  const dirtyList = (areas ?? []).filter(needsClean)
   // A full-studio buyout genuinely holds every room, so the same name was
   // printing on nine of them. One banner says it once and says it better.
   const buyout = (areas ?? []).find(a => a.viaBuyout) ?? null
@@ -201,10 +206,23 @@ export default function FloorBoard({
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24, padding: '2px 28px 16px' }}>
         <div style={{ width: 236, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ fontSize: 10, letterSpacing: '.3em', color: 'rgba(201,178,126,.55)', fontWeight: 700, marginBottom: 8 }}>
-            TODAY
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 10, letterSpacing: '.3em', color: 'rgba(201,178,126,.55)', fontWeight: 700 }}>TODAY</span>
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+              {(['agenda', 'day'] as const).map(v => (
+                <button key={v} onClick={() => setView(v)} style={{
+                  background: view === v ? 'rgba(201,178,126,.16)' : 'none',
+                  border: `1px solid ${view === v ? 'rgba(201,178,126,.45)' : 'rgba(255,255,255,.12)'}`,
+                  color: view === v ? '#e6d5ab' : 'rgba(255,255,255,.4)',
+                  borderRadius: 7, padding: '3px 9px', fontSize: 9, fontWeight: 800,
+                  letterSpacing: '.12em', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                }}>{v.toUpperCase()}</button>
+              ))}
+            </span>
           </div>
-          <DayColumn agenda={agenda} nowMs={nowMs} />
+          {view === 'day'
+            ? <DayColumn agenda={agenda} nowMs={nowMs} />
+            : <AgendaList agenda={agenda} nowMs={nowMs} />}
         </div>
 
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
@@ -231,9 +249,13 @@ export default function FloorBoard({
                 : undefined
               return (
                 <g key={sh.code} onClick={tap} style={{ cursor: tap ? 'pointer' : 'default' }}>
+                  {/* ⚠️ Occupied AND never cleaned: the fill stays gold because
+                      somebody is in there, but the outline goes red because the
+                      room was never reset. Colour alone could only say one. */}
                   {sh.poly
-                    ? <polygon points={sh.poly} fill={FILL[st]} stroke={LINE[st]} strokeWidth={2} />
-                    : <rect x={sh.x} y={sh.y} width={sh.w} height={sh.h} rx={9} fill={FILL[st]} stroke={LINE[st]} strokeWidth={2} />}
+                    ? <polygon points={sh.poly} fill={FILL[st]} stroke={a?.alsoDirty ? DIRTY : LINE[st]} strokeWidth={a?.alsoDirty ? 3 : 2} />
+                    : <rect x={sh.x} y={sh.y} width={sh.w} height={sh.h} rx={9} fill={FILL[st]}
+                        stroke={a?.alsoDirty ? DIRTY : LINE[st]} strokeWidth={a?.alsoDirty ? 3 : 2} />}
                   {/* ⚠️ A 53x36 target is hard to hit on a wall tablet, especially
                       reaching up. Give the small shapes an invisible pad so you
                       do not have to aim to mark a closet clean. */}
@@ -249,7 +271,7 @@ export default function FloorBoard({
                     const stateFit = fitLabel(WORD[st], maxW, 10, 0.16)
                     const stateSize = stateFit.lines.length > 1 ? 8 : stateFit.size
                     const lh = fit.size * 1.16
-                    const showGuest = !!(a?.guestName && !a.viaBuyout)
+                    const showGuest = !!(a?.guestName && !a.viaBuyout) || !!a?.alsoDirty
                     const showTime = !!(!a?.viaBuyout && (a?.startsISO || (a?.state === 'inuse' && a?.untilISO)))
                     // Centre the WHOLE block — name lines, status, and any guest
                     // or time line — not the name alone, or a two-line name and
@@ -267,7 +289,13 @@ export default function FloorBoard({
                         ))}
                         <text x={cx} y={top + fit.lines.length * lh + 4 + 5.5} textAnchor="middle" dominantBaseline="middle"
                           style={{ fontSize: stateSize, fontWeight: 700, letterSpacing: '.16em', fill: LINE[st] }}>{WORD[st]}</text>
-                        {a?.guestName && !a.viaBuyout && (
+                        {a?.alsoDirty && (
+                          <text x={cx} y={top + fit.lines.length * lh + 4 + 18} textAnchor="middle" dominantBaseline="middle"
+                            style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.12em', fill: DIRTY }}>
+                            NOT CLEANED
+                          </text>
+                        )}
+                        {a?.guestName && !a.viaBuyout && !a.alsoDirty && (
                           <text x={cx} y={top + fit.lines.length * lh + 4 + 18} textAnchor="middle" dominantBaseline="middle"
                             style={{ fontSize: 11, fontWeight: 700, fill: 'rgba(255,255,255,.78)' }}>
                             {a.guestName.split(' ')[0]}
@@ -296,6 +324,10 @@ export default function FloorBoard({
                 <i style={{ width: 15, height: 15, borderRadius: 5, background: c, flexShrink: 0 }} />{t}
               </div>
             ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+              <i style={{ width: 15, height: 15, borderRadius: 5, background: INUSE, border: `2px solid ${DIRTY}`, boxSizing: 'border-box', flexShrink: 0 }} />
+              In use, not cleaned
+            </div>
           </div>
 
           <div style={{ border: '1px solid rgba(255,92,92,.45)', borderRadius: 16, padding: '14px 17px', background: 'rgba(255,92,92,.06)' }}>
@@ -309,8 +341,9 @@ export default function FloorBoard({
                 <span>{a.label}</span>
                 {/* A set knows WHEN it got dirty — a session ended at a known
                     time. A facility never does, so it shows no clock. */}
-                <em style={{ fontStyle: 'normal', fontWeight: 400, fontSize: 12, color: 'rgba(255,255,255,.42)', whiteSpace: 'nowrap' }}>
-                  {a.dirtySinceISO ? `since ${clock(a.dirtySinceISO)}` : 'flagged by staff'}
+                <em style={{ fontStyle: 'normal', fontWeight: 400, fontSize: 12,
+                             color: a.alsoDirty ? '#ffb3b3' : 'rgba(255,255,255,.42)', whiteSpace: 'nowrap' }}>
+                  {a.alsoDirty ? 'occupied now' : a.dirtySinceISO ? `since ${clock(a.dirtySinceISO)}` : 'flagged by staff'}
                 </em>
               </div>
             ))}
@@ -519,6 +552,50 @@ function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
           <div style={{ position: 'absolute', left: 24, top: -3, width: 7, height: 7, borderRadius: '50%', background: '#ff4d4d' }} />
         </div>
       )}
+    </div>
+  )
+}
+
+// The plain list. Default view: it reads fastest when you just want to know
+// what is next, and it does not care how empty the morning was.
+function AgendaList({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
+  const nowLine = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ff4d4d', flexShrink: 0 }} />
+      <span style={{ flex: 1, height: 2, background: '#ff4d4d', borderRadius: 2 }} />
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', color: '#ff6b6b', whiteSpace: 'nowrap' }}>
+        {new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(nowMs))}
+      </span>
+    </div>
+  )
+  const allStarted = agenda.length > 0 && agenda.every(r => Date.parse(r.startISO) <= nowMs)
+  return (
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
+      {agenda.length === 0 && (
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,.4)' }}>Nothing on the books today.</div>
+      )}
+      {agenda.map((r, i) => {
+        const started = Date.parse(r.startISO) <= nowMs
+        const over = Date.parse(r.endISO) <= nowMs
+        // The boundary between what is done and what is coming.
+        const lineHere = !started && (i === 0 || Date.parse(agenda[i - 1].startISO) <= nowMs)
+        return (
+          <div key={r.id}>
+            {lineHere && nowLine}
+            <div style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.06)', opacity: over ? 0.38 : 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em',
+                               color: r.buyout ? INUSE : 'rgba(255,255,255,.82)' }}>{r.setLabel}</span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.55)', whiteSpace: 'nowrap' }}>
+                  {clock(r.startISO)}–{clock(r.endISO)}
+                </span>
+              </div>
+              {r.guestName && <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{r.guestName}</div>}
+            </div>
+          </div>
+        )
+      })}
+      {allStarted && nowLine}
     </div>
   )
 }
