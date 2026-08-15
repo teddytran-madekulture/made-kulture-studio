@@ -64,6 +64,15 @@
     "components/AdminPwa.tsx",
     "app/api/admin/push/route.ts",
     "app/api/kiosk/extend/route.ts",
-    "app/api/extensions/[token]/route.ts"
+    "app/api/extensions/[token]/route.ts",
+    "app/kiosk/layout.tsx",
+    "lib/floor-status.ts",
+    "app/api/floor/board/route.ts",
+    "app/api/floor/mark/route.ts",
+    "lib/staff-auth.ts",
+    "lib/admin-auth.ts",
+    "components/FloorBoard.tsx",
+    "app/desk/LockGate.tsx",
+    "app/desk/page.tsx"
   ]
 }

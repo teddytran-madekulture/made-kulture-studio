@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import FloorBoard from '@/components/FloorBoard'
 
 const C = { bg: '#0f0f10', card: '#1a1a1c', line: '#2a2a2e', text: '#f4f4f5', dim: '#a1a1aa', accent: '#ef6354', input: '#232327' }
 const IDLE_MS = 5 * 60 * 1000 // 5 minutes
@@ -9,6 +10,8 @@ const IDLE_MS = 5 * 60 * 1000 // 5 minutes
 // it with their quick-unlock PIN (no full re-login). "Sign out" switches user.
 export default function LockGate({ staffName }: { staffName: string }) {
   const [locked, setLocked] = useState(false)
+  // The PIN pad is not shown until the board is tapped.
+  const [showPin, setShowPin] = useState(false)
   const [pin, setPin] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -19,7 +22,7 @@ export default function LockGate({ staffName }: { staffName: string }) {
     // URL — /staff, /admin — can be opened around the lock. PIN restores it.
     const doLock = async () => {
       try { await fetch('/api/staff/lock', { method: 'POST' }) } catch { /* still show the overlay */ }
-      setLocked(true)
+      setLocked(true); setShowPin(false)
     }
     const arm = () => {
       if (timer.current) clearTimeout(timer.current)
@@ -43,15 +46,50 @@ export default function LockGate({ staffName }: { staffName: string }) {
     const r = await fetch('/api/staff/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) })
     const d = await r.json(); setBusy(false)
     if (!r.ok) { setErr(d.error ?? 'Wrong PIN.'); setPin(''); return }
-    setPin(''); setLocked(false)
+    setPin(''); setLocked(false); setShowPin(false)
   }
   const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 
   if (!locked) return null
 
+  // ⚠️ THE LOCK SCREEN IS THE FLOOR BOARD. The whole point of the board is
+  // seeing the building without walking it, so hiding it behind the PIN would
+  // defeat it. Colours and room names render while the session is SUSPENDED
+  // (the locked cookie is identity-only and authorises nothing) — and no guest
+  // names are ever on this screen, because a front desk is a public place.
+  // Everything actionable still costs a PIN.
+  if (!showPin) {
+    return (
+      <div
+        onClick={() => setShowPin(true)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 100, cursor: 'pointer',
+          background: 'radial-gradient(120% 90% at 85% -10%, #191510 0%, #0d0d10 45%, #09090b 100%)',
+        }}
+      >
+        <FloorBoard />
+        <div style={{
+          position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)',
+          fontSize: 11, letterSpacing: '.2em', color: 'rgba(255,255,255,.34)',
+          fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
+        }}>
+          LOCKED · {staffName.toUpperCase()} · TAP TO UNLOCK
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
-      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 28, width: '100%', maxWidth: 340, textAlign: 'center' }}>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 100, padding: 16,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'radial-gradient(120% 90% at 85% -10%, #191510 0%, #0d0d10 45%, #09090b 100%)',
+    }}>
+      <div style={{ position: 'absolute', inset: 0, opacity: 0.28, pointerEvents: 'none' }}>
+        <FloorBoard />
+      </div>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', zIndex: 1, background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 28, width: '100%', maxWidth: 340, textAlign: 'center' }}>
         <div style={{ fontFamily: 'Anton, sans-serif', fontSize: 24, marginBottom: 4 }}>LOCKED</div>
         <div style={{ color: C.dim, fontSize: 14, marginBottom: 18 }}>{staffName} · enter your PIN</div>
         <input

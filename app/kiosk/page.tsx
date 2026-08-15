@@ -391,6 +391,8 @@ export default function KioskPage() {
     height: vh ? `${vh}px` : '100vh', color: '#fff',
     fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column',
     userSelect: 'none', overflow: 'hidden',
+    // Kills double-tap-to-zoom, which the viewport meta does not cover.
+    touchAction: 'manipulation',
   }
   const card: React.CSSProperties = {
     flex: '1 1 0', margin: '9px 14px', borderRadius: 22, cursor: 'pointer',
