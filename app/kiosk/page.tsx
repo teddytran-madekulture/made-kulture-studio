@@ -580,9 +580,10 @@ export default function KioskPage() {
       {setSlug && (
         <button
           onClick={() => { setStaffPin(''); setStaffErr(''); setStaffDone(''); setStaffAction('clear'); setScreen('staff'); touch() }}
-          style={{ position: 'absolute', bottom: 10, right: 14, background: 'none', border: 'none',
-                   color: 'rgba(255,255,255,0.22)', fontFamily: 'Inter, sans-serif', fontSize: 11,
-                   letterSpacing: '0.24em', cursor: 'pointer', padding: 10 }}>
+          style={{ position: 'absolute', bottom: 18, right: 20,
+                   background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.16)',
+                   borderRadius: 999, color: 'rgba(255,255,255,0.45)', fontFamily: 'Inter, sans-serif',
+                   fontSize: 12, letterSpacing: '0.22em', cursor: 'pointer', padding: '11px 20px' }}>
           STAFF
         </button>
       )}
