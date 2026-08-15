@@ -19,6 +19,7 @@
 // exact mistake once made a no-op reschedule report success.
 
 import { supabaseAdmin } from '@/lib/supabase'
+import { bookingHourToISO, centralDateStr, nextDay } from '@/lib/booking-times'
 
 export type FloorState = 'inuse' | 'ready' | 'dirty'
 
@@ -43,6 +44,10 @@ export interface FloorArea {
   guestName: string | null
   /** Phone doubles as the deep link into /desk, whose search matches it. */
   guestPhone: string | null
+  /** True when this room's guest is here via a FULL-STUDIO BUYOUT rather than a
+   *  booking of its own. The board collapses these into one banner instead of
+   *  printing the same name on nine rooms. */
+  viaBuyout: boolean
 }
 
 interface AreaRow {
@@ -99,9 +104,10 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
   }
   const bookings = (bookingRows ?? []) as unknown as Bk[]
   const guestOf = (b: Bk | null) => {
-    if (!b || !withGuest) return { guestName: null, guestPhone: null }
+    const viaBuyout = !!b && b.set_id === null
+    if (!b || !withGuest) return { guestName: null, guestPhone: null, viaBuyout }
     const c = Array.isArray(b.customers) ? b.customers[0] : b.customers
-    return { guestName: c?.name ?? null, guestPhone: c?.phone ?? null }
+    return { guestName: c?.name ?? null, guestPhone: c?.phone ?? null, viaBuyout }
   }
 
   // A full-studio buyout (set_id null) occupies every set at once, and dirties
@@ -128,7 +134,7 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
       const flagged = a.flagged_at ? Date.parse(a.flagged_at) : 0
       const dirty = flagged > clearedMs(a)
       return { ...base, state: dirty ? 'dirty' : 'ready', untilISO: null, startsISO: null, dirtySinceISO: null,
-               guestName: null, guestPhone: null }
+               guestName: null, guestPhone: null, viaBuyout: false }
     }
 
     // Actually STARTED. A buyout holds every set, so it stands in for this one.
@@ -168,5 +174,60 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
       }
     }
     return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null, ...guestOf(mineSoon) }
+  })
+}
+
+
+// ── Today's schedule, for the agenda beside the board ────────────────────────
+//
+// ⚠️ "Today" means the CENTRAL day, not a UTC one. Slicing 24 hours off
+// `new Date()` would put an 11 PM booking on tomorrow's list — the same class of
+// mistake that once labelled a 2-6 PM session as 7-11 pm.
+
+export interface AgendaRow {
+  id: string
+  setLabel: string
+  startISO: string
+  endISO: string
+  /** ⚠️ Null for a locked viewer — same boundary as the board itself. */
+  guestName: string | null
+  guestPhone: string | null
+  buyout: boolean
+}
+
+export async function readAgenda(opts: { withGuest?: boolean } = {}): Promise<AgendaRow[]> {
+  const db = supabaseAdmin()
+  const today = centralDateStr(new Date().toISOString())
+  const dayStart = bookingHourToISO(today, 0)
+  const dayEnd = bookingHourToISO(nextDay(today), 0)
+
+  const { data, error } = await db
+    .from('bookings')
+    .select('id, start_time, end_time, set_id, sets ( name ), customers ( name, phone )')
+    .eq('status', 'confirmed')
+    .gte('start_time', dayStart)
+    .lt('start_time', dayEnd)
+    .order('start_time', { ascending: true })
+  if (error) { console.error('[floor] agenda read failed:', error.message); return [] }
+
+  interface Row {
+    id: string; start_time: string; end_time: string; set_id: string | null
+    sets: { name: string | null } | { name: string | null }[] | null
+    customers: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null
+  }
+  const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v)
+
+  return ((data ?? []) as unknown as Row[]).map(r => {
+    const c = one(r.customers)
+    const buyout = r.set_id === null
+    return {
+      id: r.id,
+      setLabel: buyout ? 'FULL STUDIO' : (one(r.sets)?.name ?? 'Studio').toUpperCase(),
+      startISO: r.start_time,
+      endISO: r.end_time,
+      guestName: opts.withGuest ? c?.name ?? null : null,
+      guestPhone: opts.withGuest ? c?.phone ?? null : null,
+      buyout,
+    }
   })
 }

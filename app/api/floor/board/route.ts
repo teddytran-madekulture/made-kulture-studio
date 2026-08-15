@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStaffFromRequest, getLockedStaff } from '@/lib/staff-auth'
 import { isAdminAuthed } from '@/lib/admin-auth'
-import { readFloor } from '@/lib/floor-status'
+import { readFloor, readAgenda } from '@/lib/floor-status'
 
 export const dynamic = 'force-dynamic'
 // Supabase reads in a polled route go stale with force-dynamic alone.
@@ -30,9 +30,11 @@ export async function GET(req: NextRequest) {
   // names — that is the whole point of the board on the lock screen. It may NOT
   // see who is in the room, because that screen sits where anyone can read it.
   // Unlock (which costs a PIN) and the names appear.
-  const areas = await readFloor({ withGuest: !!fullSession || admin })
+  const withGuest = !!fullSession || admin
+  const [areas, agenda] = await Promise.all([readFloor({ withGuest }), readAgenda({ withGuest })])
   return NextResponse.json({
     areas,
+    agenda,
     // Stamped so a tablet can tell a live answer from a stale cached one.
     at: new Date().toISOString(),
   })

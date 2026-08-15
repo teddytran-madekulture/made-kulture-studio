@@ -53,7 +53,7 @@ export interface Area {
   state: 'ready' | 'inuse' | 'dirty'
   untilISO: string | null; startsISO: string | null; dirtySinceISO: string | null
   clearedAt: string | null; clearedBy: string | null
-  guestName: string | null; guestPhone: string | null
+  guestName: string | null; guestPhone: string | null; viaBuyout: boolean
 }
 
 // Fit a room name inside its box. "THE WATERING HOLE" ran clean out of a 118px
@@ -88,6 +88,11 @@ const clock = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })
     .format(new Date(iso))
 
+export interface AgendaRow {
+  id: string; setLabel: string; startISO: string; endISO: string
+  guestName: string | null; guestPhone: string | null; buyout: boolean
+}
+
 export default function FloorBoard({
   actionable = false,
   onRoomTap,
@@ -101,7 +106,11 @@ export default function FloorBoard({
   openCode?: string | null
 }) {
   const [areas, setAreas] = useState<Area[] | null>(null)
+  const [agenda, setAgenda] = useState<AgendaRow[]>([])
   const [err, setErr] = useState('')
+  // The now-line has to move on its own, or it is a picture of when the page
+  // loaded. A minute is plenty — this drives one horizontal rule.
+  const [nowMs, setNowMs] = useState(() => Date.now())
   // Manual override. Occupancy stays derived — forcing IN USE would be the board
   // telling you someone is in a room the schedule says is empty — but "this needs
   // cleaning" and "this is clean" are human facts, so a human can set them.
@@ -114,7 +123,7 @@ export default function FloorBoard({
       const r = await fetch('/api/floor/board', { cache: 'no-store' })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { setErr(d.error || 'Could not read the floor.'); return }
-      setAreas(d.areas ?? []); setErr('')
+      setAreas(d.areas ?? []); setAgenda(d.agenda ?? []); setErr('')
     } catch {
       // Keep showing the last known state rather than blanking the wall.
       setErr('Offline — showing the last known state.')
@@ -144,10 +153,18 @@ export default function FloorBoard({
     if (a) { openedRef.current = true; setPicked(a) }
   }, [openCode, areas])
 
+  useEffect(() => {
+    const iv = setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => clearInterval(iv)
+  }, [])
+
   const byCode = new Map((areas ?? []).map(a => [a.code, a]))
   const counts = { inuse: 0, ready: 0, dirty: 0 }
   for (const a of areas ?? []) counts[a.state]++
   const dirtyList = (areas ?? []).filter(a => a.state === 'dirty')
+  // A full-studio buyout genuinely holds every room, so the same name was
+  // printing on nine of them. One banner says it once and says it better.
+  const buyout = (areas ?? []).find(a => a.viaBuyout) ?? null
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
@@ -166,7 +183,30 @@ export default function FloorBoard({
         </div>
       </div>
 
+      {buyout && (
+        <div style={{
+          margin: '4px 28px 0', padding: '9px 16px', flexShrink: 0,
+          border: '1px solid rgba(201,178,126,.42)', background: 'rgba(201,178,126,.09)',
+          borderRadius: 12, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.24em', color: INUSE }}>FULL STUDIO</span>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>{buyout.guestName ?? 'Whole building booked'}</span>
+          <span style={{ fontSize: 12, letterSpacing: '.1em', color: 'rgba(255,255,255,.55)' }}>
+            {buyout.state === 'inuse' && buyout.untilISO
+              ? `IN THE BUILDING UNTIL ${clock(buyout.untilISO)}`
+              : buyout.startsISO ? `ARRIVES ${clock(buyout.startsISO)}` : ''}
+          </span>
+        </div>
+      )}
+
       <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24, padding: '2px 28px 16px' }}>
+        <div style={{ width: 236, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ fontSize: 10, letterSpacing: '.3em', color: 'rgba(201,178,126,.55)', fontWeight: 700, marginBottom: 8 }}>
+            TODAY
+          </div>
+          <DayColumn agenda={agenda} nowMs={nowMs} />
+        </div>
+
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
           <svg viewBox="0 0 910 890" preserveAspectRatio="xMidYMid meet"
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
@@ -209,10 +249,16 @@ export default function FloorBoard({
                     const stateFit = fitLabel(WORD[st], maxW, 10, 0.16)
                     const stateSize = stateFit.lines.length > 1 ? 8 : stateFit.size
                     const lh = fit.size * 1.16
-                    // Centre the whole block — name lines plus the state word —
-                    // rather than the name alone, or a two-line name sits high.
-                    const blockH = fit.lines.length * lh + 4 + 11
-                    const top = sh.outside ? sh.y! + sh.h! + 9 : cy - blockH / 2
+                    const showGuest = !!(a?.guestName && !a.viaBuyout)
+                    const showTime = !!(!a?.viaBuyout && (a?.startsISO || (a?.state === 'inuse' && a?.untilISO)))
+                    // Centre the WHOLE block — name lines, status, and any guest
+                    // or time line — not the name alone, or a two-line name and
+                    // its extras drift out of the box.
+                    const blockH = fit.lines.length * lh + 4 + 11 + (showGuest ? 13 : 0) + (showTime ? 13 : 0)
+                    // ⚠️ An outside label goes ABOVE its box, not below. The Tank
+                    // sits directly on top of Studio One, so a label underneath
+                    // crowds the two together; there is open floor above it.
+                    const top = sh.outside ? sh.y! - blockH - 5 : cy - blockH / 2
                     return (
                       <>
                         {fit.lines.map((ln, i) => (
@@ -221,13 +267,13 @@ export default function FloorBoard({
                         ))}
                         <text x={cx} y={top + fit.lines.length * lh + 4 + 5.5} textAnchor="middle" dominantBaseline="middle"
                           style={{ fontSize: stateSize, fontWeight: 700, letterSpacing: '.16em', fill: LINE[st] }}>{WORD[st]}</text>
-                        {a?.guestName && (
+                        {a?.guestName && !a.viaBuyout && (
                           <text x={cx} y={top + fit.lines.length * lh + 4 + 18} textAnchor="middle" dominantBaseline="middle"
                             style={{ fontSize: 11, fontWeight: 700, fill: 'rgba(255,255,255,.78)' }}>
                             {a.guestName.split(' ')[0]}
                           </text>
                         )}
-                        {(a?.startsISO || (a?.state === 'inuse' && a?.untilISO)) && (
+                        {!a?.viaBuyout && (a?.startsISO || (a?.state === 'inuse' && a?.untilISO)) && (
                           <text x={cx} y={top + fit.lines.length * lh + 4 + (a?.guestName ? 31 : 18)} textAnchor="middle" dominantBaseline="middle"
                             style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.12em', fill: 'rgba(255,255,255,.5)' }}>
                             {a.startsISO ? `BOOKED ${clock(a.startsISO)}` : `UNTIL ${clock(a.untilISO!)}`}
@@ -355,6 +401,122 @@ export default function FloorBoard({
               CANCEL
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The line every calendar has: where you are in the day.
+function NowLine({ nowMs }: { nowMs: number }) {
+  const t = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })
+    .format(new Date(nowMs))
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0' }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ff4d4d', flexShrink: 0 }} />
+      <span style={{ flex: 1, height: 2, background: '#ff4d4d', borderRadius: 2 }} />
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.12em', color: '#ff6b6b', whiteSpace: 'nowrap' }}>
+        {t}
+      </span>
+    </div>
+  )
+}
+
+// Hours-since-midnight CENTRAL. ⚠️ Not local, not UTC — an 11 PM Central booking
+// is 04:00 UTC the NEXT day, and positioning it off that would put it at the top
+// of tomorrow's column.
+function centralHour(iso: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso))
+  const h = Number(parts.find(p => p.type === 'hour')?.value ?? 0)
+  const m = Number(parts.find(p => p.type === 'minute')?.value ?? 0)
+  return h + m / 60
+}
+
+// A time-scaled day, so the column fills its height by construction and the
+// now-line means something positionally rather than just sitting between rows.
+function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
+  const nowH = centralHour(new Date(nowMs).toISOString())
+
+  // Business hours by default, widened for anything booked outside them.
+  let lo = 9, hi = 22
+  for (const r of agenda) {
+    lo = Math.min(lo, Math.floor(centralHour(r.startISO)))
+    hi = Math.max(hi, Math.ceil(centralHour(r.endISO)))
+  }
+  const span = Math.max(1, hi - lo)
+  const pct = (h: number) => ((h - lo) / span) * 100
+
+  // Lane packing so two shoots at the same time sit side by side instead of on
+  // top of each other. Sorted by start, each booking takes the first lane free.
+  const laneEnds: number[] = []
+  const placed = [...agenda]
+    .sort((a, b) => Date.parse(a.startISO) - Date.parse(b.startISO))
+    .map(r => {
+      const s0 = centralHour(r.startISO), e0 = centralHour(r.endISO)
+      let lane = laneEnds.findIndex(end => end <= s0)
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(e0) } else { laneEnds[lane] = e0 }
+      return { r, s0, e0, lane }
+    })
+  const lanes = Math.max(1, laneEnds.length)
+
+  const hours: number[] = []
+  for (let h = lo; h <= hi; h++) hours.push(h)
+  const hourLabel = (h: number) => {
+    const hr = h % 24
+    const ampm = hr >= 12 ? 'p' : 'a'
+    const disp = hr % 12 === 0 ? 12 : hr % 12
+    return `${disp}${ampm}`
+  }
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, position: 'relative', paddingLeft: 26 }}>
+      {hours.map(h => (
+        <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: `${pct(h)}%` }}>
+          <div style={{ position: 'absolute', left: 0, top: -6, fontSize: 9, letterSpacing: '.06em', color: 'rgba(255,255,255,.28)' }}>
+            {hourLabel(h)}
+          </div>
+          <div style={{ marginLeft: 26, height: 1, background: 'rgba(255,255,255,.06)' }} />
+        </div>
+      ))}
+
+      {placed.map(({ r, s0, e0, lane }) => {
+        const over = Date.parse(r.endISO) <= nowMs
+        const w = 100 / lanes
+        return (
+          <div key={r.id} style={{
+            position: 'absolute', top: `${pct(s0)}%`, height: `${((e0 - s0) / span) * 100}%`,
+            left: `calc(${lane * w}% + 26px)`, width: `calc(${w}% - 28px)`,
+            borderRadius: 7, padding: '4px 7px', overflow: 'hidden', boxSizing: 'border-box',
+            border: `1px solid ${r.buyout ? 'rgba(201,178,126,.5)' : 'rgba(255,255,255,.16)'}`,
+            background: r.buyout ? 'rgba(201,178,126,.13)' : 'rgba(255,255,255,.045)',
+            opacity: over ? 0.35 : 1,
+          }}>
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em',
+                          color: r.buyout ? INUSE : 'rgba(255,255,255,.8)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {r.setLabel}
+            </div>
+            {r.guestName && (
+              <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {r.guestName}
+              </div>
+            )}
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,.45)', whiteSpace: 'nowrap' }}>
+              {clock(r.startISO)}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* The line every calendar has: where you are in the day. */}
+      {nowH >= lo && nowH <= hi && (
+        <div style={{ position: 'absolute', left: 0, right: 0, top: `${pct(nowH)}%`, pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', left: 0, top: -6, fontSize: 9, fontWeight: 800, color: '#ff6b6b' }}>
+            {new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(nowMs))}
+          </div>
+          <div style={{ marginLeft: 26, height: 2, background: '#ff4d4d', borderRadius: 2 }} />
+          <div style={{ position: 'absolute', left: 24, top: -3, width: 7, height: 7, borderRadius: '50%', background: '#ff4d4d' }} />
         </div>
       )}
     </div>
