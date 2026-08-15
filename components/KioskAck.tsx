@@ -24,17 +24,20 @@ const CHAMP = '#c9b27e'
 interface Ring { ringing: boolean; place: string; waitedSec: number; goneQuiet: boolean }
 
 // ── Audible alert ────────────────────────────────────────────────────────────
-// The chime is SYNTHESISED from an oscillator, not loaded from a file: nothing
-// to ship, nothing to 404, and it can't go missing in a deploy. The words come
-// from the browser's own speech engine, so a set or door that didn't exist
-// yesterday announces itself correctly today with nothing to re-record.
+// Chime first (synthesised, see below), then a recorded voice line naming the
+// place. Three tiers, so this can degrade but never go silent:
+//   1. /sounds/<slug>.wav   — the real voice, e.g. set-a.wav, front-door.wav
+//   2. /sounds/kiosk.wav    — generic "The kiosk needs help" for a set with no
+//                             file yet (add Set E and it says this, not nothing)
+//   3. speechSynthesis      — if the files are missing entirely
 //
 // ⚠️ Browsers refuse to play audio until the user has interacted with the page,
-// so the context is unlocked on Teddy's first click anywhere in the admin. If
-// he loads the admin and never touches it, the first ring is silent — the
-// banner still appears, and the phone push is unaffected.
+// so this is armed on Teddy's first click anywhere in the admin. If he loads the
+// admin and never touches it, the first ring is silent — the banner still
+// appears, and the phone push is unaffected.
 
 let audioCtx: AudioContext | null = null
+let voiceEl: HTMLAudioElement | null = null
 
 function unlockAudio() {
   try {
@@ -45,11 +48,13 @@ function unlockAudio() {
   } catch { /* no audio on this device — banner and push still work */ }
 }
 
+// The chime is SYNTHESISED from an oscillator, not a file: nothing to ship for
+// it, nothing to 404, and it cannot go missing in a deploy. Two notes, A5 then
+// D6 — reads as a doorbell rather than an error tone.
 function chime() {
   const ctx = audioCtx
   if (!ctx || ctx.state !== 'running') return
   const now = ctx.currentTime
-  // Two-note bell, A5 then D6 — reads as a doorbell rather than an error tone.
   ;[880, 1174.7].forEach((freq, i) => {
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
@@ -66,8 +71,8 @@ function chime() {
   })
 }
 
-// "SET A" → "Set A". ⚠️ Deliberate: several speech engines spell all-caps words
-// out letter by letter, so an unconverted "SET A" can come out as "S-E-T-A".
+// "SET A" → "Set A". ⚠️ Only for the speech fallback: several engines spell
+// all-caps words out letter by letter, so "SET A" comes out as "S-E-T-A".
 function pretty(place: string): string {
   return place.trim().split(/\s+/)
     .map(w => (w.length > 1 ? w[0] + w.slice(1).toLowerCase() : w))
@@ -85,8 +90,34 @@ function speak(text: string) {
   } catch {}
 }
 
+// The server sends the place as "SET A" / "FRONT DOOR"; the files are named off
+// the original slug. Lowercase + hyphenate is the exact inverse of placeLabel()
+// in /api/kiosk/summon.
+function slugOf(place: string): string {
+  return place.trim().toLowerCase().replace(/\s+/g, '-')
+}
+
+function playClip(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const a = new Audio(src)
+    voiceEl = a
+    a.addEventListener('error', () => reject(new Error('load failed')), { once: true })
+    // play() resolves when playback STARTS (not when it ends) and rejects on a
+    // 404 or a blocked autoplay — either way we fall to the next tier.
+    a.play().then(resolve, reject)
+  })
+}
+
+async function announce(place: string) {
+  const slug = slugOf(place) || 'kiosk'
+  try { await playClip(`/sounds/${slug}.wav`); return } catch {}
+  try { await playClip('/sounds/kiosk.wav'); return } catch {}
+  speak(`${pretty(place) || 'The kiosk'} needs help`)
+}
+
 function hush() {
   try { window.speechSynthesis?.cancel() } catch {}
+  try { voiceEl?.pause() } catch {}
 }
 
 export default function KioskAck() {
@@ -95,7 +126,7 @@ export default function KioskAck() {
   const [justSent, setJustSent] = useState(false)
   const lastSound = useRef(0)
 
-  // Unlock audio on the first real interaction, then stop listening.
+  // Arm audio on the first real interaction, then stop listening.
   useEffect(() => {
     const go = () => { unlockAudio() }
     window.addEventListener('pointerdown', go, { once: true })
@@ -120,8 +151,8 @@ export default function KioskAck() {
       if (now - lastSound.current >= SOUND_GAP_MS) {
         lastSound.current = now
         chime()
-        // Let the bell finish before the words start.
-        setTimeout(() => speak(`${pretty(j.place || 'The kiosk')} needs help`), 750)
+        // Let the bell finish before the voice starts.
+        setTimeout(() => void announce(j.place || 'kiosk'), 750)
       }
     } catch { /* offline: keep the last known state rather than hiding the banner */ }
   }, [])
