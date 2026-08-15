@@ -22,7 +22,7 @@ const CHAMP_DIM = 'rgba(201,178,126,0.55)'
 const HAIR = 'rgba(201,178,126,0.22)'
 const INK = '#0b0b0d'
 
-type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime'
+type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff'
 interface Msg { id?: string; role: string; content: string; created_at?: string }
 
 const QUICK_QUESTIONS = [
@@ -128,6 +128,14 @@ export default function KioskPage() {
   // ⚠️ The PRICE IS NEVER COMPUTED HERE. The tablet knows how many hours are
   // available but not what an hour costs (per-customer overrides live in
   // lib/extensions), so it asks the server and prints what comes back.
+  // ── STAFF: mark this room clean from inside it ────────────────────────────
+  // Whoever cleaned Set C is standing in Set C. Walking to the front desk to
+  // say so is how a status board rots.
+  const [staffPin,    setStaffPin]    = useState('')
+  const [staffAction, setStaffAction] = useState<'clear' | 'flag'>('clear')
+  const [staffErr,    setStaffErr]    = useState('')
+  const [staffDone,   setStaffDone]   = useState('')
+
   const [extStep,  setExtStep]  = useState<'pick' | 'confirm' | 'done' | 'phone'>('pick')
   const [extReq,   setExtReq]   = useState<any>(null)
   const [extError, setExtError] = useState('')
@@ -157,6 +165,7 @@ export default function KioskPage() {
     setScreen('home'); setPhone(''); setCi(null); setCiError('')
     setMsgs([]); setInput(''); setSummonState(null); setSummonPhone('')
     setExtStep('pick'); setExtReq(null); setExtError(''); setExtUntil('')
+    setStaffPin(''); setStaffErr(''); setStaffDone(''); setStaffAction('clear')
     chatToken.current = null
     lastTs.current = null
   }, [])
@@ -565,7 +574,18 @@ export default function KioskPage() {
 
   // ── Screens ──────────────────────────────────────────────────────────────
   if (screen === 'home') return (
-    <main style={wrap} onPointerDown={touch}>
+    <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
+      {/* Deliberately quiet — staff know it is here, guests have no reason to
+          care, and anyone who taps it meets a PIN. */}
+      {setSlug && (
+        <button
+          onClick={() => { setStaffPin(''); setStaffErr(''); setStaffDone(''); setStaffAction('clear'); setScreen('staff'); touch() }}
+          style={{ position: 'absolute', bottom: 10, right: 14, background: 'none', border: 'none',
+                   color: 'rgba(255,255,255,0.22)', fontFamily: 'Inter, sans-serif', fontSize: 11,
+                   letterSpacing: '0.24em', cursor: 'pointer', padding: 10 }}>
+          STAFF
+        </button>
+      )}
       {header}
       {occupancyLine}
       <div style={{
@@ -869,6 +889,86 @@ export default function KioskPage() {
       </main>
     )
   }
+
+  const submitStaffMark = async () => {
+    if (busy || !setSlug || staffPin.length < 4) return
+    setBusy(true); setStaffErr('')
+    try {
+      const r = await fetch('/api/floor/mark', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: setSlug, action: staffAction, pin: staffPin, key: kioskKey }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setStaffErr(d.error || 'That did not go through.'); setStaffPin('') }
+      else {
+        setStaffDone(staffAction === 'clear'
+          ? `${d.label ?? 'This set'} is marked ready — thanks, ${d.by || 'team'}.`
+          : `${d.label ?? 'This set'} is flagged for cleaning.`)
+        setStaffPin('')
+      }
+    } catch { setStaffErr('Could not reach the studio system.'); }
+    setBusy(false)
+  }
+
+  if (screen === 'staff') return (
+    <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
+      <button style={backBtn} onClick={resetToHome}>&larr; BACK</button>
+      {header}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 20 }}>
+        {staffDone ? (
+          <>
+            <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP, marginBottom: 12 }}>DONE</div>
+            <div style={{ fontSize: 34, fontWeight: 800, maxWidth: 560, lineHeight: 1.3 }}>{staffDone}</div>
+            <button onClick={resetToHome} style={{ ...champBtn, marginTop: 28 }}>DONE</button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 12, letterSpacing: '0.3em', color: CHAMP_DIM }}>STAFF</div>
+            <div style={{ fontSize: 30, fontWeight: 800, margin: '8px 0 4px' }}>
+              {staffAction === 'clear' ? 'Mark this set ready' : 'Flag this set for cleaning'}
+            </div>
+            <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', marginBottom: 10 }}>
+              {ctx?.set?.name ?? setSlug} &middot; enter your staff PIN
+            </div>
+            <div style={{ fontSize: 28, letterSpacing: 8, fontWeight: 700, minHeight: 38, color: staffPin ? CHAMP : 'rgba(255,255,255,0.18)' }}>
+              {staffPin ? '\u2022'.repeat(staffPin.length) : '\u2022\u2022\u2022\u2022'}
+            </div>
+            {staffErr && (
+              <div style={{ color: 'rgba(255,255,255,0.78)', borderLeft: `2px solid ${CHAMP_DIM}`, paddingLeft: 12, fontSize: 15, margin: '8px 0', maxWidth: 420, textAlign: 'left', lineHeight: 1.5 }}>{staffErr}</div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 84px)', gap: 9, marginTop: 8 }}>
+              {['1','2','3','4','5','6','7','8','9','\u232B','0','GO'].map(k => (
+                <button key={k}
+                  onClick={() => {
+                    if (k === 'GO') submitStaffMark()
+                    else if (k === '\u232B') setStaffPin(v => v.slice(0, -1))
+                    else setStaffPin(v => (v.length >= 6 ? v : v + k))
+                  }}
+                  disabled={k === 'GO' && (staffPin.length < 4 || busy)}
+                  style={{
+                    height: 64, borderRadius: 15, fontSize: k === 'GO' ? 13 : 21, fontWeight: k === 'GO' ? 800 : 500,
+                    fontFamily: 'Inter, sans-serif', cursor: 'pointer', letterSpacing: k === 'GO' ? '0.16em' : undefined,
+                    background: k === 'GO'
+                      ? (staffPin.length >= 4 ? 'linear-gradient(135deg, #d7c08b, #9c8250)' : 'rgba(255,255,255,0.03)')
+                      : 'linear-gradient(150deg, rgba(255,255,255,0.05), rgba(255,255,255,0.012))',
+                    color: k === 'GO' ? (staffPin.length >= 4 ? INK : 'rgba(255,255,255,0.25)') : '#fff',
+                    border: k === 'GO' && staffPin.length >= 4 ? 'none' : '1px solid rgba(255,255,255,0.13)',
+                  }}>
+                  {k === 'GO' && busy ? '\u2026' : k}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setStaffAction(a => (a === 'clear' ? 'flag' : 'clear')); setStaffErr('') }}
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', marginTop: 18,
+                       fontFamily: 'Inter, sans-serif', fontSize: 13, letterSpacing: '0.12em', cursor: 'pointer' }}>
+              {staffAction === 'clear' ? 'FLAG IT FOR CLEANING INSTEAD' : 'MARK IT READY INSTEAD'}
+            </button>
+          </>
+        )}
+      </div>
+    </main>
+  )
 
   // screen === 'team'
   return (
