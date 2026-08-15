@@ -17,24 +17,29 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const POLL_MS      = 20_000
-const SOUND_GAP_MS = 20_000
+// ⚠️ THE POLL IS THE BACKSTOP, NOT THE ALERT. A push wakes the service worker,
+// which posts a message straight to this component — instantly, because a
+// service worker is not a timer. Chrome throttles timers in a tab hidden >5min
+// down to ONCE PER MINUTE, which is precisely the case the sound exists for, so
+// no interval could ever be the primary path. The poll only covers the case
+// where push isn't granted in this browser, and keeps the "waited N min" line
+// honest — hence the two speeds below.
+const POLL_PUSH_MS   = 60_000   // push handles urgency; this just refreshes the banner
+const POLL_NOPUSH_MS = 20_000   // no subscription here — the poll IS the alert
+const SOUND_GAP_MS   = 20_000
 const CHAMP = '#c9b27e'
 
 interface Ring { ringing: boolean; place: string; waitedSec: number; goneQuiet: boolean }
 
 // ── Audible alert ────────────────────────────────────────────────────────────
-// Chime first (synthesised, see below), then a recorded voice line naming the
-// place. Three tiers, so this can degrade but never go silent:
+// Chime (synthesised), then a recorded voice line naming the place. Three tiers,
+// so this can degrade but never go silent:
 //   1. /sounds/<slug>.wav   — the real voice, e.g. set-a.wav, front-door.wav
-//   2. /sounds/kiosk.wav    — generic "The kiosk needs help" for a set with no
-//                             file yet (add Set E and it says this, not nothing)
+//   2. /sounds/kiosk.wav    — generic, for a set with no file yet
 //   3. speechSynthesis      — if the files are missing entirely
 //
 // ⚠️ Browsers refuse to play audio until the user has interacted with the page,
-// so this is armed on Teddy's first click anywhere in the admin. If he loads the
-// admin and never touches it, the first ring is silent — the banner still
-// appears, and the phone push is unaffected.
+// so this is armed on Teddy's first click anywhere in the admin.
 
 let audioCtx: AudioContext | null = null
 let voiceEl: HTMLAudioElement | null = null
@@ -45,12 +50,11 @@ function unlockAudio() {
     if (!Ctx) return
     if (!audioCtx) audioCtx = new Ctx()
     if (audioCtx.state === 'suspended') void audioCtx.resume()
-  } catch { /* no audio on this device — banner and push still work */ }
+  } catch { /* no audio here — banner and push still work */ }
 }
 
-// The chime is SYNTHESISED from an oscillator, not a file: nothing to ship for
-// it, nothing to 404, and it cannot go missing in a deploy. Two notes, A5 then
-// D6 — reads as a doorbell rather than an error tone.
+// Synthesised from an oscillator, not a file: nothing to ship, nothing to 404,
+// and it cannot go missing in a deploy. A5 then D6 — a doorbell, not an error.
 function chime() {
   const ctx = audioCtx
   if (!ctx || ctx.state !== 'running') return
@@ -72,7 +76,7 @@ function chime() {
 }
 
 // "SET A" → "Set A". ⚠️ Only for the speech fallback: several engines spell
-// all-caps words out letter by letter, so "SET A" comes out as "S-E-T-A".
+// all-caps words out letter by letter, so "SET A" comes out "S-E-T-A".
 function pretty(place: string): string {
   return place.trim().split(/\s+/)
     .map(w => (w.length > 1 ? w[0] + w.slice(1).toLowerCase() : w))
@@ -90,9 +94,8 @@ function speak(text: string) {
   } catch {}
 }
 
-// The server sends the place as "SET A" / "FRONT DOOR"; the files are named off
-// the original slug. Lowercase + hyphenate is the exact inverse of placeLabel()
-// in /api/kiosk/summon.
+// The server sends "SET A" / "FRONT DOOR"; files are named off the slug.
+// Exact inverse of placeLabel() in /api/kiosk/summon.
 function slugOf(place: string): string {
   return place.trim().toLowerCase().replace(/\s+/g, '-')
 }
@@ -102,8 +105,8 @@ function playClip(src: string): Promise<void> {
     const a = new Audio(src)
     voiceEl = a
     a.addEventListener('error', () => reject(new Error('load failed')), { once: true })
-    // play() resolves when playback STARTS (not when it ends) and rejects on a
-    // 404 or a blocked autoplay — either way we fall to the next tier.
+    // play() resolves when playback STARTS and rejects on a 404 or blocked
+    // autoplay — either way we fall to the next tier.
     a.play().then(resolve, reject)
   })
 }
@@ -124,6 +127,7 @@ export default function KioskAck() {
   const [ring, setRing] = useState<Ring | null>(null)
   const [sending, setSending] = useState(false)
   const [justSent, setJustSent] = useState(false)
+  const [hasPush, setHasPush] = useState<boolean | null>(null)
   const lastSound = useRef(0)
 
   // Arm audio on the first real interaction, then stop listening.
@@ -137,6 +141,31 @@ export default function KioskAck() {
     }
   }, [])
 
+  // Does THIS browser have a push subscription? Decides whether the poll is the
+  // alert or merely a backstop. Checked against the actual subscription, not
+  // Notification.permission — permission granted with no subscription is a real
+  // state (it's what a deleted-and-reinstalled PWA leaves behind).
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration('/admin')
+        const sub = await reg?.pushManager?.getSubscription()
+        if (live) setHasPush(!!sub)
+      } catch { if (live) setHasPush(false) }
+    })()
+    return () => { live = false }
+  }, [])
+
+  // One gate for both paths (push message and poll) so a ring can't double-sound.
+  const maybeAlert = useCallback((place: string) => {
+    const now = Date.now()
+    if (now - lastSound.current < SOUND_GAP_MS) return
+    lastSound.current = now
+    chime()
+    setTimeout(() => void announce(place || 'kiosk'), 750)   // let the bell finish
+  }, [])
+
   const check = useCallback(async () => {
     try {
       const r = await fetch('/api/admin/kiosk-ack', { cache: 'no-store' })
@@ -144,27 +173,27 @@ export default function KioskAck() {
       const j: Ring = await r.json()
       setRing(j)
       if (!j.ringing) { setJustSent(false); return }   // cleared — arm for the next one
-
-      // Re-alerts every ~20s until ON MY WAY. The route stops reporting `ringing`
-      // after 6 minutes, so this goes quiet on its own rather than forever.
-      const now = Date.now()
-      if (now - lastSound.current >= SOUND_GAP_MS) {
-        lastSound.current = now
-        chime()
-        // Let the bell finish before the voice starts.
-        setTimeout(() => void announce(j.place || 'kiosk'), 750)
-      }
+      maybeAlert(j.place)
     } catch { /* offline: keep the last known state rather than hiding the banner */ }
-  }, [])
+  }, [maybeAlert])
+
+  // The fast path: sw.js forwards every kiosk push straight here.
+  useEffect(() => {
+    const sw = navigator.serviceWorker
+    if (!sw) return
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type !== 'kiosk-ring') return
+      maybeAlert(e.data.place || '')
+      void check()          // pull the real waited/goneQuiet state for the banner
+    }
+    sw.addEventListener('message', onMsg)
+    return () => sw.removeEventListener('message', onMsg)
+  }, [maybeAlert, check])
 
   useEffect(() => {
-    // ⚠️ This polls even while the tab is HIDDEN, which is deliberate and is the
-    // whole point of the sound — the scenario is Teddy in another app with the
-    // admin behind it. One desktop at 20s is a fraction of what two jukebox
-    // tablets at 5s cost (see the Vercel CPU note), but it is not free: do not
-    // shorten this interval without a reason.
+    if (hasPush === null) return          // wait until we know which speed to run
     check()
-    const iv = setInterval(check, POLL_MS)
+    const iv = setInterval(check, hasPush ? POLL_PUSH_MS : POLL_NOPUSH_MS)
     const onVis = () => { if (document.visibilityState === 'visible') check() }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onVis)
@@ -173,7 +202,7 @@ export default function KioskAck() {
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', onVis)
     }
-  }, [check])
+  }, [check, hasPush])
 
   const onMyWay = async () => {
     if (sending) return

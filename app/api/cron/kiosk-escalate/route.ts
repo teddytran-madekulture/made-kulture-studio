@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
     tag: 'kiosk-summon',
     renotify: true,
     requireInteraction: true,
+    meta: { place },
   }).catch(e => console.error('[kiosk escalate] push error:', e))
 
   return NextResponse.json({ escalated: true, ageMs: age, place, quiet })

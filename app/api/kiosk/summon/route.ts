@@ -127,6 +127,7 @@ export async function POST(req: NextRequest) {
     tag: 'kiosk-summon',
     renotify: true,
     requireInteraction: true,
+    meta: { place },
   }).catch(e => console.error('[kiosk summon] push error:', e))
 
   return NextResponse.json({ ok: true, state: 'waiting', waitedSec: 0, phone })

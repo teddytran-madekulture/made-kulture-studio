@@ -25,6 +25,7 @@ export async function sendOwnerPush(opts: {
   tag?: string     // same tag replaces older notification
   renotify?: boolean          // re-alert even when replacing a same-tag notification
   requireInteraction?: boolean // keep on screen until acted on (desktop/Android)
+  meta?: Record<string, unknown> // structured payload for sw.js to forward to open tabs
 }): Promise<void> {
   if (!pushConfigured()) return
   try {
@@ -59,6 +60,7 @@ export async function sendOwnerPush(opts: {
       tag: opts.tag,
       renotify: opts.renotify ?? false,
       requireInteraction: opts.requireInteraction ?? false,
+      meta: opts.meta ?? null,
       badge,
     })
 

@@ -25,6 +25,33 @@ self.addEventListener('push', (event) => {
     actions: isKiosk ? [{ action: 'omw', title: "I'm on my way" }] : undefined,
   }
   const work = [self.registration.showNotification(title, options)]
+
+  // ⚠️ THIS IS WHY THE DESKTOP ALERT IS INSTANT.
+  //
+  // Chrome applies "intensive throttling" to a tab hidden for more than 5
+  // minutes: its timers drop from our 20s interval to ONCE PER MINUTE. That is
+  // exactly the situation the audible alert exists for — Teddy in another app
+  // with the admin behind it — so a setInterval can never be the primary path.
+  // A service worker is not a timer; it is woken by the push itself, so this
+  // fires immediately no matter how long the tab has been buried.
+  //
+  // (Chrome exempts pages that have made noise in the last 30s, but the docs
+  // explicitly say a SILENT audio track does not count — so the usual
+  // keep-the-tab-awake hack is closed off. This is the supported route.)
+  if (isKiosk) {
+    work.push((async () => {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const client of clients) {
+        if (client.url.includes('/admin')) {
+          client.postMessage({
+            type: 'kiosk-ring',
+            place: (data.meta && data.meta.place) || '',
+          })
+        }
+      }
+    })())
+  }
+
   // App-icon badge count (iOS 16.4+ installed PWAs, Android, desktop).
   if (typeof data.badge === 'number' && 'setAppBadge' in self.navigator) {
     work.push(data.badge > 0 ? self.navigator.setAppBadge(data.badge) : self.navigator.clearAppBadge())
