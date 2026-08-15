@@ -59,6 +59,9 @@
     "components/KioskAck.tsx",
     "app/api/cron/kiosk-escalate/route.ts",
     "lib/site-content.ts",
-    "lib/push.ts"
+    "lib/push.ts",
+    "app/admin/inbox/page.tsx",
+    "components/AdminPwa.tsx",
+    "app/api/admin/push/route.ts"
   ]
 }

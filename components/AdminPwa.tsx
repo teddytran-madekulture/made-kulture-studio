@@ -100,6 +100,33 @@ export async function enablePush(): Promise<'ok' | 'denied' | 'unsupported' | 'e
   }
 }
 
+// The REAL state of push in THIS browser, in three questions:
+//   1. can this browser do push at all, and is it blocked?
+//   2. does a subscription actually exist here?  (NOT Notification.permission —
+//      that is the assumption that produced a green, disabled, lying button)
+//   3. has the server ever heard of that specific endpoint?
+// 'stale' is the state that had no name before: subscribed locally, unknown to
+// the server, delivering nothing.
+export async function pushStatus(): Promise<'ok' | 'stale' | 'idle' | 'denied' | 'unsupported'> {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      return 'unsupported'
+    }
+    if (Notification.permission === 'denied') return 'denied'
+    const reg = await navigator.serviceWorker.getRegistration('/admin')
+    const sub = await reg?.pushManager?.getSubscription()
+    if (!sub) return 'idle'
+    const r = await fetch(`/api/admin/push?endpoint=${encodeURIComponent(sub.endpoint)}`, { cache: 'no-store' })
+    if (!r.ok) return 'stale'
+    const j = await r.json()
+    return j?.known ? 'ok' : 'stale'
+  } catch {
+    // Fail toward ACTIONABLE. An unknown state that renders as "enable me" costs
+    // one wasted tap; one that renders as "all good" costs a missed guest.
+    return 'idle'
+  }
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')

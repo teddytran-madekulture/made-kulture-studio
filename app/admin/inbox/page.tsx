@@ -4,7 +4,7 @@
 // give back, close, and the June on/off kill switch (studio_settings.cs_agent_enabled).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { enablePush } from '@/components/AdminPwa'
+import { enablePush, pushStatus } from '@/components/AdminPwa'
 import JuneCoach, { runLearn } from '@/components/JuneCoach'
 
 const GOLD = '#d4a843'
@@ -72,7 +72,7 @@ export default function AdminInboxPage() {
   const [kbBusy, setKbBusy]         = useState<string | null>(null)
   const [newTopic, setNewTopic]     = useState('')
   const [newContent, setNewContent] = useState('')
-  const [pushState, setPushState]   = useState<'idle' | 'busy' | 'ok' | 'denied' | 'unsupported' | 'error'>('idle')
+  const [pushState, setPushState]   = useState<'idle' | 'busy' | 'ok' | 'stale' | 'denied' | 'unsupported' | 'error'>('idle')
   const [tabCounts, setTabCounts]   = useState<{ inbox: number; tours: number }>({ inbox: 0, tours: 0 })
   const [isMobile, setIsMobile]     = useState(false)
   useEffect(() => {
@@ -113,12 +113,23 @@ export default function AdminInboxPage() {
   }, [loadCounts])
 
   useEffect(() => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') setPushState('ok')
+    let live = true
+    // ⚠️ Never infer this from Notification.permission — see pushStatus().
+    const probe = () => { pushStatus().then(s => { if (live) setPushState(s) }) }
+    probe()
+    // Re-probe on return: a subscription can be revoked while he's away.
+    const onVis = () => { if (document.visibilityState === 'visible') probe() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { live = false; document.removeEventListener('visibilitychange', onVis) }
   }, [])
 
   const onEnablePush = async () => {
     setPushState('busy')
-    setPushState(await enablePush())
+    const r = await enablePush()
+    // Re-derive from the source of truth rather than trusting the write's word
+    // for it — enablePush returning 'ok' means the POST returned 200, not that
+    // the row is queryable.
+    setPushState(r === 'ok' ? await pushStatus() : r)
   }
   const [juneOn, setJuneOn]   = useState<boolean | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -559,15 +570,24 @@ export default function AdminInboxPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={onEnablePush} disabled={pushState === 'busy' || pushState === 'ok'} style={{
+          {/* ⚠️ Disabled ONLY while busy. It used to disable itself whenever it
+              believed push was on, which meant a wrong belief had no escape
+              hatch. Re-subscribing when it is genuinely on is harmless — the
+              server upserts on endpoint — so leave the door open. */}
+          <button onClick={onEnablePush} disabled={pushState === 'busy'} title={
+            pushState === 'ok' ? 'Notifications are on. Click to re-register this browser.' :
+            pushState === 'stale' ? 'This browser is subscribed but the server has no record of it — nothing is being delivered. Click to fix.' :
+            'Turn on push notifications for this browser'
+          } style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent',
-            border: `1px solid ${pushState === 'ok' ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.15)'}`,
-            padding: '8px 12px', cursor: pushState === 'ok' ? 'default' : 'pointer', borderRadius: 4,
+            border: `1px solid ${pushState === 'ok' ? 'rgba(74,222,128,0.4)' : pushState === 'stale' ? 'rgba(232,163,61,0.55)' : 'rgba(255,255,255,0.15)'}`,
+            padding: '8px 12px', cursor: pushState === 'busy' ? 'default' : 'pointer', borderRadius: 4,
           }}>
             <span style={{ fontSize: 11 }}>🔔</span>
-            <span style={{ ...label, color: pushState === 'ok' ? '#4ade80' : '#fff' }}>
+            <span style={{ ...label, color: pushState === 'ok' ? '#4ade80' : pushState === 'stale' ? '#e8a33d' : '#fff' }}>
               {pushState === 'ok' ? 'NOTIFICATIONS ON' :
                pushState === 'busy' ? '…' :
+               pushState === 'stale' ? 'RECONNECT NOTIFICATIONS' :
                pushState === 'denied' ? 'BLOCKED IN BROWSER' :
                pushState === 'unsupported' ? 'NOT SUPPORTED HERE' :
                pushState === 'error' ? 'RETRY NOTIFICATIONS' : 'ENABLE NOTIFICATIONS'}
