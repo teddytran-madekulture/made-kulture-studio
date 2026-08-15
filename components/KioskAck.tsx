@@ -1,6 +1,7 @@
 'use client'
 
-// The kiosk ring banner — "someone is standing at a tablet waiting for you".
+// The kiosk ring banner — "someone is standing at a tablet waiting for you" —
+// plus the desktop audible alert.
 //
 // ⚠️ THIS FILE USED TO DO THE OPPOSITE OF ITS JOB. It POSTed /api/admin/kiosk-ack
 // on mount and on every focus/visibility change, so merely opening the admin
@@ -13,45 +14,131 @@
 // (here, or the matching action on the notification in sw.js) — and the guest's
 // tablet is polling for exactly that, so the words on their screen change only
 // when a human actually commits.
-//
-// Polling cost: /api/admin/kiosk-ack GET is a 3-row studio_settings read, runs
-// ONLY while the tab is visible, and only for Teddy. That is nothing like the
-// jukebox poll (two always-on tablets at 5s = 78% of all Vercel compute), but
-// keep the visibility guard — an admin tab left open for a week is the same
-// shape of mistake.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const POLL_MS = 15_000
+const POLL_MS      = 20_000
+const SOUND_GAP_MS = 20_000
 const CHAMP = '#c9b27e'
 
 interface Ring { ringing: boolean; place: string; waitedSec: number; goneQuiet: boolean }
+
+// ── Audible alert ────────────────────────────────────────────────────────────
+// The chime is SYNTHESISED from an oscillator, not loaded from a file: nothing
+// to ship, nothing to 404, and it can't go missing in a deploy. The words come
+// from the browser's own speech engine, so a set or door that didn't exist
+// yesterday announces itself correctly today with nothing to re-record.
+//
+// ⚠️ Browsers refuse to play audio until the user has interacted with the page,
+// so the context is unlocked on Teddy's first click anywhere in the admin. If
+// he loads the admin and never touches it, the first ring is silent — the
+// banner still appears, and the phone push is unaffected.
+
+let audioCtx: AudioContext | null = null
+
+function unlockAudio() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext
+    if (!Ctx) return
+    if (!audioCtx) audioCtx = new Ctx()
+    if (audioCtx.state === 'suspended') void audioCtx.resume()
+  } catch { /* no audio on this device — banner and push still work */ }
+}
+
+function chime() {
+  const ctx = audioCtx
+  if (!ctx || ctx.state !== 'running') return
+  const now = ctx.currentTime
+  // Two-note bell, A5 then D6 — reads as a doorbell rather than an error tone.
+  ;[880, 1174.7].forEach((freq, i) => {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.value = freq
+    const t = now + i * 0.18
+    gain.gain.setValueAtTime(0.0001, t)
+    gain.gain.exponentialRampToValueAtTime(0.28, t + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + 0.6)
+  })
+}
+
+// "SET A" → "Set A". ⚠️ Deliberate: several speech engines spell all-caps words
+// out letter by letter, so an unconverted "SET A" can come out as "S-E-T-A".
+function pretty(place: string): string {
+  return place.trim().split(/\s+/)
+    .map(w => (w.length > 1 ? w[0] + w.slice(1).toLowerCase() : w))
+    .join(' ')
+}
+
+function speak(text: string) {
+  try {
+    const s = window.speechSynthesis
+    if (!s) return
+    s.cancel()
+    const u = new SpeechSynthesisUtterance(text)
+    u.rate = 0.95
+    s.speak(u)
+  } catch {}
+}
+
+function hush() {
+  try { window.speechSynthesis?.cancel() } catch {}
+}
 
 export default function KioskAck() {
   const [ring, setRing] = useState<Ring | null>(null)
   const [sending, setSending] = useState(false)
   const [justSent, setJustSent] = useState(false)
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastSound = useRef(0)
+
+  // Unlock audio on the first real interaction, then stop listening.
+  useEffect(() => {
+    const go = () => { unlockAudio() }
+    window.addEventListener('pointerdown', go, { once: true })
+    window.addEventListener('keydown', go, { once: true })
+    return () => {
+      window.removeEventListener('pointerdown', go)
+      window.removeEventListener('keydown', go)
+    }
+  }, [])
 
   const check = useCallback(async () => {
-    if (document.visibilityState !== 'visible') return
     try {
       const r = await fetch('/api/admin/kiosk-ack', { cache: 'no-store' })
       if (!r.ok) return                      // 401 on the login page is expected
-      const j = await r.json()
+      const j: Ring = await r.json()
       setRing(j)
-      if (!j.ringing) setJustSent(false)     // ring cleared — arm for the next one
+      if (!j.ringing) { setJustSent(false); return }   // cleared — arm for the next one
+
+      // Re-alerts every ~20s until ON MY WAY. The route stops reporting `ringing`
+      // after 6 minutes, so this goes quiet on its own rather than forever.
+      const now = Date.now()
+      if (now - lastSound.current >= SOUND_GAP_MS) {
+        lastSound.current = now
+        chime()
+        // Let the bell finish before the words start.
+        setTimeout(() => speak(`${pretty(j.place || 'The kiosk')} needs help`), 750)
+      }
     } catch { /* offline: keep the last known state rather than hiding the banner */ }
   }, [])
 
   useEffect(() => {
+    // ⚠️ This polls even while the tab is HIDDEN, which is deliberate and is the
+    // whole point of the sound — the scenario is Teddy in another app with the
+    // admin behind it. One desktop at 20s is a fraction of what two jukebox
+    // tablets at 5s cost (see the Vercel CPU note), but it is not free: do not
+    // shorten this interval without a reason.
     check()
-    timer.current = setInterval(check, POLL_MS)
+    const iv = setInterval(check, POLL_MS)
     const onVis = () => { if (document.visibilityState === 'visible') check() }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onVis)
     return () => {
-      if (timer.current) clearInterval(timer.current)
+      clearInterval(iv)
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('focus', onVis)
     }
@@ -60,13 +147,19 @@ export default function KioskAck() {
   const onMyWay = async () => {
     if (sending) return
     setSending(true)
+    hush()
     try {
       const r = await fetch('/api/admin/kiosk-ack', { method: 'POST', cache: 'no-store' })
       const j = await r.json().catch(() => ({}))
       // Read the response. A route that returns { ok: false } and a UI that
       // celebrates anyway is how the dashboard banner hid its own failures.
-      if (r.ok && j?.ok) { setJustSent(true); setRing(null) }
-      else alert("Couldn't tell the tablet — try again, or just go.")
+      if (r.ok && j?.ok) {
+        setJustSent(true)
+        setRing(null)
+        lastSound.current = Date.now()   // don't let a stale poll re-chime
+      } else {
+        alert("Couldn't tell the tablet — try again, or just go.")
+      }
     } catch {
       alert("Couldn't tell the tablet — try again, or just go.")
     }
