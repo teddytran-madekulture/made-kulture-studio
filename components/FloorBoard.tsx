@@ -51,17 +51,51 @@ const SHAPES: Shape[] = [
 export interface Area {
   code: string; label: string; kind: 'set' | 'facility'
   state: 'ready' | 'inuse' | 'dirty'
-  untilISO: string | null; dirtySinceISO: string | null
+  untilISO: string | null; startsISO: string | null; dirtySinceISO: string | null
   clearedAt: string | null; clearedBy: string | null
+}
+
+// Fit a room name inside its box. "THE WATERING HOLE" ran clean out of a 118px
+// room at 12px — so wrap on spaces first (two lines max), and only shrink the
+// type if wrapping still is not enough. Shrinking first would make the longest
+// names the least readable, which is backwards on a board read across a room.
+//
+// 0.62 is an em-width estimate for bold Inter with the letter-spacing used here.
+// SVG has no text metrics without measuring, and measuring every label on every
+// poll costs more than it is worth.
+// `track` is the letter-spacing in em — it is NOT decoration, it is width. At
+// .16em a 14-character word is a quarter wider than the glyphs alone, which is
+// exactly why "NEEDS CLEANING" burst out of the narrow rooms when the estimate
+// ignored it.
+function fitLabel(label: string, maxW: number, startSize: number, track = 0.06): { lines: string[]; size: number } {
+  const widthOf = (t: string, f: number) => t.length * f * (0.62 + track)
+  for (let size = startSize; size >= 8; size -= 1) {
+    const lines: string[] = []
+    let cur = ''
+    for (const word of label.split(' ')) {
+      const test = cur ? cur + ' ' + word : word
+      if (!cur || widthOf(test, size) <= maxW) cur = test
+      else { lines.push(cur); cur = word }
+    }
+    if (cur) lines.push(cur)
+    if (lines.length <= 2 && lines.every(l => widthOf(l, size) <= maxW)) return { lines, size }
+  }
+  return { lines: [label], size: 8 }
 }
 
 const clock = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' })
     .format(new Date(iso))
 
-export default function FloorBoard({ onPickRoom }: { onPickRoom?: (a: Area) => void }) {
+export default function FloorBoard({ actionable = false }: { actionable?: boolean }) {
   const [areas, setAreas] = useState<Area[] | null>(null)
   const [err, setErr] = useState('')
+  // Manual override. Occupancy stays derived — forcing IN USE would be the board
+  // telling you someone is in a room the schedule says is empty — but "this needs
+  // cleaning" and "this is clean" are human facts, so a human can set them.
+  const [picked, setPicked] = useState<Area | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [panelErr, setPanelErr] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -112,8 +146,9 @@ export default function FloorBoard({ onPickRoom }: { onPickRoom?: (a: Area) => v
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24, padding: '2px 28px 16px' }}>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <svg viewBox="0 0 910 890" preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%' }}>
+        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+          <svg viewBox="0 0 910 890" preserveAspectRatio="xMidYMid meet"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             <rect x="14" y="10" width="881" height="865" rx="10" fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="3" />
             {/* Back-of-house: drawn for orientation, deliberately NOT tracked.
                 Only the vanity corner of it is on the cleaning board. */}
@@ -130,7 +165,7 @@ export default function FloorBoard({ onPickRoom }: { onPickRoom?: (a: Area) => v
               const cx = sh.poly ? sh.cx! : sh.x! + sh.w! / 2
               const cy = sh.poly ? sh.cy! : sh.y! + sh.h! / 2
               const label = a?.label ?? sh.code.toUpperCase()
-              const tap = a && onPickRoom ? () => onPickRoom(a) : undefined
+              const tap = a && actionable ? () => { setPicked(a); setPanelErr('') } : undefined
               return (
                 <g key={sh.code} onClick={tap} style={{ cursor: tap ? 'pointer' : 'default' }}>
                   {sh.poly
@@ -142,21 +177,36 @@ export default function FloorBoard({ onPickRoom }: { onPickRoom?: (a: Area) => v
                   {sh.outside && tap && (
                     <rect x={sh.x! - 26} y={sh.y! - 26} width={sh.w! + 52} height={sh.h! + 78} fill="transparent" />
                   )}
-                  {sh.outside ? (
-                    <>
-                      <text x={cx} y={sh.y! + sh.h! + 15} textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', fill: '#fff' }}>{label}</text>
-                      <text x={cx} y={sh.y! + sh.h! + 30} textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.16em', fill: LINE[st] }}>{WORD[st]}</text>
-                    </>
-                  ) : (
-                    <>
-                      <text x={cx} y={cy - 9} textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: sh.small ? 12 : 15, fontWeight: 800, letterSpacing: '.06em', fill: '#fff' }}>{label}</text>
-                      <text x={cx} y={cy + 12} textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.16em', fill: LINE[st] }}>{WORD[st]}</text>
-                    </>
-                  )}
+                  {(() => {
+                    // A label drawn OUTSIDE its box is not boxed in, so it gets
+                    // room to breathe; one inside must live within the walls.
+                    const maxW = sh.outside ? 130 : sh.w! - 12
+                    const fit = fitLabel(label, maxW, sh.outside ? 12 : sh.small ? 12 : 15)
+                    // The status word carries .16em tracking and never wraps.
+                    const stateFit = fitLabel(WORD[st], maxW, 10, 0.16)
+                    const stateSize = stateFit.lines.length > 1 ? 8 : stateFit.size
+                    const lh = fit.size * 1.16
+                    // Centre the whole block — name lines plus the state word —
+                    // rather than the name alone, or a two-line name sits high.
+                    const blockH = fit.lines.length * lh + 4 + 11
+                    const top = sh.outside ? sh.y! + sh.h! + 9 : cy - blockH / 2
+                    return (
+                      <>
+                        {fit.lines.map((ln, i) => (
+                          <text key={i} x={cx} y={top + lh * (i + 0.5)} textAnchor="middle" dominantBaseline="middle"
+                            style={{ fontSize: fit.size, fontWeight: 800, letterSpacing: '.06em', fill: '#fff' }}>{ln}</text>
+                        ))}
+                        <text x={cx} y={top + fit.lines.length * lh + 4 + 5.5} textAnchor="middle" dominantBaseline="middle"
+                          style={{ fontSize: stateSize, fontWeight: 700, letterSpacing: '.16em', fill: LINE[st] }}>{WORD[st]}</text>
+                        {a?.startsISO && (
+                          <text x={cx} y={top + fit.lines.length * lh + 4 + 18} textAnchor="middle" dominantBaseline="middle"
+                            style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.12em', fill: 'rgba(255,255,255,.5)' }}>
+                            BOOKED {clock(a.startsISO)}
+                          </text>
+                        )}
+                      </>
+                    )
+                  })()}
                 </g>
               )
             })}
@@ -192,6 +242,77 @@ export default function FloorBoard({ onPickRoom }: { onPickRoom?: (a: Area) => v
           </div>
         </div>
       </div>
+
+      {picked && (
+        <div
+          onClick={() => setPicked(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', display: 'flex',
+                   alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+        >
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#141416', border: '1px solid rgba(201,178,126,.25)', borderRadius: 18,
+                     padding: 26, width: '100%', maxWidth: 380, textAlign: 'center' }}>
+            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '.04em' }}>{picked.label}</div>
+            <div style={{ fontSize: 13, letterSpacing: '.16em', color: LINE[picked.state], fontWeight: 700, marginTop: 6 }}>
+              {WORD[picked.state]}
+            </div>
+            {picked.clearedBy && (
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.38)', marginTop: 8 }}>
+                last cleared by {picked.clearedBy}
+                {picked.clearedAt ? ` at ${clock(picked.clearedAt)}` : ''}
+              </div>
+            )}
+            {/* ⚠️ Occupancy is NOT overridable. A room is in use because a
+                confirmed booking says so; a button that faked it would make the
+                board lie about where guests are. */}
+            {picked.state === 'inuse' && (
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.42)', marginTop: 10, lineHeight: 1.6 }}>
+                Someone is booked in here{picked.untilISO ? ` until ${clock(picked.untilISO)}` : ''}. That comes
+                from the schedule and can’t be set by hand.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              {(['flag', 'clear'] as const).map(act => (
+                <button key={act} disabled={busy}
+                  onClick={async () => {
+                    setBusy(true); setPanelErr('')
+                    try {
+                      const r = await fetch('/api/floor/mark', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: picked.code, action: act }),
+                      })
+                      const d = await r.json().catch(() => ({}))
+                      if (!r.ok) { setPanelErr(d.error || 'That did not go through.') }
+                      else { setPicked(null); load() }
+                    } catch { setPanelErr('Could not reach the studio system.') }
+                    setBusy(false)
+                  }}
+                  style={{
+                    flex: 1, padding: '15px 10px', borderRadius: 12, cursor: 'pointer',
+                    fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '.12em',
+                    border: `1px solid ${act === 'flag' ? 'rgba(255,92,92,.5)' : 'rgba(67,201,127,.5)'}`,
+                    background: act === 'flag' ? 'rgba(255,92,92,.12)' : 'rgba(67,201,127,.12)',
+                    color: act === 'flag' ? '#ff9b9b' : '#8ce9b6', opacity: busy ? 0.5 : 1,
+                  }}>
+                  {act === 'flag' ? 'NEEDS CLEANING' : 'MARK READY'}
+                </button>
+              ))}
+            </div>
+            {panelErr && (
+              <div style={{ color: 'rgba(255,255,255,.8)', borderLeft: '2px solid rgba(201,178,126,.55)',
+                            paddingLeft: 12, fontSize: 14, marginTop: 16, textAlign: 'left', lineHeight: 1.5 }}>
+                {panelErr}
+              </div>
+            )}
+            <button onClick={() => setPicked(null)}
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.4)', marginTop: 16,
+                       fontFamily: 'Inter, sans-serif', fontSize: 12, letterSpacing: '.16em', cursor: 'pointer' }}>
+              CANCEL
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

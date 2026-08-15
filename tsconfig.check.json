@@ -73,6 +73,7 @@
     "lib/admin-auth.ts",
     "components/FloorBoard.tsx",
     "app/desk/LockGate.tsx",
-    "app/desk/page.tsx"
+    "app/desk/page.tsx",
+    "app/desk/floor/page.tsx"
   ]
 }

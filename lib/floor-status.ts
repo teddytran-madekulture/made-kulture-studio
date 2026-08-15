@@ -29,6 +29,9 @@ export interface FloorArea {
   state: FloorState
   /** IN USE only — when the room frees up. */
   untilISO: string | null
+  /** Booked but NOT started yet — when it starts. A room can be ready-and-booked
+   *  or dirty-and-booked; both matter, and neither is "in use". */
+  startsISO: string | null
   /** DIRTY sets only — when the session that dirtied it ended. Facilities have
    *  no such moment, so this stays null and the board shows no clock for them. */
   dirtySinceISO: string | null
@@ -42,6 +45,11 @@ interface AreaRow {
   flagged_at: string | null
 }
 
+// ⚠️ This is a LOOK-AHEAD FOR THE QUERY, NOT A DEFINITION OF "IN USE". The kiosk's
+// occupancy helper counts a booking starting within 30 min as occupying the set,
+// because a tablet should greet someone who arrives early. A FLOOR BOARD must not:
+// painting a room gold at 5:30 for a 6:00 booking says guests are in a room that
+// is empty. Here the window only decides what to FETCH; `running` decides colour.
 const ARRIVE_WINDOW_MS = 30 * 60 * 1000
 // Bounds the "what ended recently" query for an area that has never been
 // cleared. Anything dirtier than this is a housekeeping problem, not a data one.
@@ -81,10 +89,13 @@ export async function readFloor(): Promise<FloorArea[]> {
   // A full-studio buyout (set_id null) occupies every set at once, and dirties
   // every set when it ends — treating it as "no set" would show an empty
   // building while the whole warehouse is rented.
-  const live = bookings.filter(b => Date.parse(b.end_time) > now)
-  const ended = bookings.filter(b => Date.parse(b.end_time) <= now)
-  const liveBuyout = live.filter(b => b.set_id === null)
+  const running = bookings.filter(b => Date.parse(b.end_time) > now && Date.parse(b.start_time) <= now)
+  const soon    = bookings.filter(b => Date.parse(b.start_time) > now)
+  const ended   = bookings.filter(b => Date.parse(b.end_time) <= now)
+  const runningBuyout = running.filter(b => b.set_id === null)
     .sort((a, b) => Date.parse(b.end_time) - Date.parse(a.end_time))[0] ?? null
+  const soonBuyout = soon.filter(b => b.set_id === null)
+    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0] ?? null
   const buyoutEndedAt = Math.max(0, ...ended.filter(b => b.set_id === null).map(b => Date.parse(b.end_time)))
 
   return areas.map<FloorArea>(a => {
@@ -98,22 +109,44 @@ export async function readFloor(): Promise<FloorArea[]> {
       // moves them, and there is deliberately no timer and no clock.
       const flagged = a.flagged_at ? Date.parse(a.flagged_at) : 0
       const dirty = flagged > clearedMs(a)
-      return { ...base, state: dirty ? 'dirty' : 'ready', untilISO: null, dirtySinceISO: null }
+      return { ...base, state: dirty ? 'dirty' : 'ready', untilISO: null, startsISO: null, dirtySinceISO: null }
     }
 
-    const mine = live.filter(b => b.set_id === a.set_id)
+    // Actually STARTED. A buyout holds every set, so it stands in for this one.
+    const mine = running.filter(b => b.set_id === a.set_id)
       .sort((x, y) => Date.parse(y.end_time) - Date.parse(x.end_time))[0] ?? null
-    const occupant = mine ?? liveBuyout
+    const occupant = mine ?? runningBuyout
     if (occupant) {
-      return { ...base, state: 'inuse', untilISO: occupant.end_time, dirtySinceISO: null }
+      return { ...base, state: 'inuse', untilISO: occupant.end_time, startsISO: null, dirtySinceISO: null }
     }
 
-    // Nobody in it. Did anything finish in here since it was last cleared?
+    // Not started. Somebody may still be due in here shortly, which matters most
+    // when the room is also dirty.
+    const mineSoon = soon.filter(b => b.set_id === a.set_id)
+      .sort((x, y) => Date.parse(x.start_time) - Date.parse(y.start_time))[0] ?? soonBuyout
+    const startsISO = mineSoon?.start_time ?? null
+
+    // Nobody in it. Did anything finish in here since it was last cleared —
+    // or did somebody flag it by hand?
+    //
+    // ⚠️ A SET CAN BE FLAGGED MANUALLY TOO. This was refused at first on the
+    // theory that a hand flag would fight the derived state; it does not. The
+    // two conditions simply OR, and a clear beats both because `cleared_at`
+    // then post-dates them. Sets get dirty without a booking ending all the
+    // time — a spill, a tour walking through, a guest who left it wrecked
+    // mid-session — and the board has to be able to say so.
     const lastOwnEnd = Math.max(0, ...ended.filter(b => b.set_id === a.set_id).map(b => Date.parse(b.end_time)))
     const lastEnd = Math.max(lastOwnEnd, buyoutEndedAt)
-    if (lastEnd > clearedMs(a)) {
-      return { ...base, state: 'dirty', untilISO: null, dirtySinceISO: new Date(lastEnd).toISOString() }
+    const flagged = a.flagged_at ? Date.parse(a.flagged_at) : 0
+    const cleared = clearedMs(a)
+    if (lastEnd > cleared || flagged > cleared) {
+      return {
+        ...base, state: 'dirty', untilISO: null, startsISO,
+        // Only a session end is a KNOWN moment. A hand flag shows no clock,
+        // same as a facility, because "flagged at 3pm" is not "dirty since 3pm".
+        dirtySinceISO: lastEnd > cleared ? new Date(lastEnd).toISOString() : null,
+      }
     }
-    return { ...base, state: 'ready', untilISO: null, dirtySinceISO: null }
+    return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null }
   })
 }

@@ -435,6 +435,13 @@ export default function KioskPage() {
   // most urgent moment of the session drawn as the least prominent line on the
   // screen. The session-reminder cron texts them; the screen said nothing.
   const started  = occLive && !notStarted
+  // ⚠️ DO NOT PUT A GUEST'S NAME ON THE WALL BEFORE THEIR SESSION STARTS.
+  // Occupancy reaches 30 minutes ahead so an early arrival can still one-tap
+  // check in — that part is right. Printing their first name that early is not:
+  // the room may still hold the previous shoot, and during shared hours anyone
+  // walking past reads it. Once they have started or checked in they are here,
+  // and greeting them by name is the whole point.
+  const nameOk = !!(started || occ?.checkedIn)
   const urgency  = !started || minsLeft > 15 ? null : minsLeft > 5 ? 'soon' : 'now'
   const urgColor = urgency === 'now' ? '#ff6b6b' : '#e8a33d'
 
@@ -479,7 +486,7 @@ export default function KioskPage() {
       {occLive ? (
         <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.05 }}>
-            {occ.firstName}{occ.buyout ? ' · full studio' : ''}
+            {nameOk ? `${occ.firstName}${occ.buyout ? ' · full studio' : ''}` : 'Next session'}
           </div>
           {urgency ? (
             <div style={{
@@ -579,7 +586,9 @@ export default function KioskPage() {
           </span>
           <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>
             {occLive
-              ? (occ.checkedIn ? `${occ.firstName} · you're all set` : `Tap once — ${occ.firstName}`)
+              ? (occ.checkedIn
+                  ? `${occ.firstName} · you're all set`
+                  : nameOk ? `Tap once — ${occ.firstName}` : 'Tap once to check in')
               : 'Here for your booking'}
           </span>
         </button>

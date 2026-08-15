@@ -44,16 +44,9 @@ export async function POST(req: NextRequest) {
   if (areaErr) return NextResponse.json({ error: areaErr.message }, { status: 500 })
   if (!area)   return NextResponse.json({ error: 'No such room.' }, { status: 404 })
 
-  // ⚠️ Only a FACILITY can be flagged dirty by hand. A set's dirty state is
-  // derived from its bookings, so a manual flag there would be written and then
-  // ignored on the very next read — a control that looks like it worked and did
-  // nothing.
-  if (action === 'flag' && area.kind !== 'facility') {
-    return NextResponse.json(
-      { error: 'A set is marked for cleaning automatically when its session ends.' },
-      { status: 400 },
-    )
-  }
+  // Any area can be flagged by hand. readFloor() ORs a manual flag with "a
+  // session ended here", and a clear beats both — so the manual control and the
+  // automatic rule cannot contradict each other.
 
   // ── Who is asking ──────────────────────────────────────────────────────────
   let staffId: string | null = null
