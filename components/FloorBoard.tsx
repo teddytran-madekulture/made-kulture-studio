@@ -328,6 +328,15 @@ export default function FloorBoard({
                 Only the vanity corner of it is on the cleaning board. */}
             <rect x="40" y="452" width="362" height="406" rx="9"
               fill="rgba(255,255,255,.022)" stroke="rgba(255,255,255,.11)" strokeWidth="2" strokeDasharray="7 7" />
+            {/* The chain link fence: the lounge sits in front of it, staff behind. Placed at the
+                same proportion of this block as the measured fence (y 738 of the real 453-879),
+                so it lands right even though this box stays the original approximate one. */}
+            <line x1="40" y1="724" x2="402" y2="724"
+              stroke="rgba(255,255,255,.16)" strokeWidth="2" strokeDasharray="2 6" />
+            <text x="221" y="590" textAnchor="middle"
+              style={{ fontSize: 11, letterSpacing: '.2em', fill: 'rgba(255,255,255,.32)', fontWeight: 800 }}>
+              STUDIO LOUNGE
+            </text>
             <text x="221" y="836" textAnchor="middle"
               style={{ fontSize: 11, letterSpacing: '.2em', fill: 'rgba(255,255,255,.32)', fontWeight: 800 }}>
               STAFF · REGISTER
