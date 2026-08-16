@@ -1,6 +1,7 @@
 "use client"
 
-// /desk/floor — the floor board with manual control.
+// /desk/atlas — ATLAS: Availability, Turnover, Layout & Alert System.
+// The live board of what the building is doing, with manual control.
 //
 // The SAME board that renders on the lock screen, but tappable: pick a room and
 // mark it needs-cleaning or ready. A live staff session is the only credential
@@ -14,7 +15,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import FloorBoard from '@/components/FloorBoard'
 
-export default function DeskFloorPage() {
+export default function AtlasPage() {
   // ⚠️ THE SITE'S GLOBAL CSS ZOOMS body BY 1.25, which is fatal to any
   // fixed-height layout: `height: 100vh` computed to 1215px and RENDERED at
   // 1519px, dropping Studio One and the restrooms off the bottom of a 1271px

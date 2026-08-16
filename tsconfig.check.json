@@ -74,6 +74,6 @@
     "components/FloorBoard.tsx",
     "app/desk/LockGate.tsx",
     "app/desk/page.tsx",
-    "app/desk/floor/page.tsx"
+    "app/desk/atlas/page.tsx"
   ]
 }

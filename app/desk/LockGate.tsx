@@ -50,7 +50,7 @@ export default function LockGate({ staffName }: { staffName: string }) {
     const d = await r.json(); setBusy(false)
     if (!r.ok) { setErr(d.error ?? 'Wrong PIN.'); setPin(''); return }
     setPin(''); setLocked(false); setShowPin(false)
-    if (wantRoom) { window.location.href = `/desk/floor?room=${encodeURIComponent(wantRoom)}` }
+    if (wantRoom) { window.location.href = `/desk/atlas?room=${encodeURIComponent(wantRoom)}` }
   }
   const signOut = async () => { await fetch('/api/staff/logout', { method: 'POST' }); window.location.href = '/staff' }
 

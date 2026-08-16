@@ -1,6 +1,8 @@
 "use client"
 
-// The floor status board — every tracked room in the building, by colour.
+// ATLAS — Availability, Turnover, Layout & Alert System.
+// The live board of every tracked room in the building, by colour.
+// (File is still FloorBoard.tsx; ATLAS is the name the studio uses for it.)
 //
 // Drawn from the real building plan (Building Plans/Set Layou.jpg), stripped to
 // rooms only: no streets, parking, ramp, stairs or door swings. Geometry is in a
@@ -212,7 +214,7 @@ export default function FloorBoard({
       <div style={{ padding: '18px 28px 6px', display: 'flex', alignItems: 'center', gap: 24, flexShrink: 0 }}>
         <div style={{ fontWeight: 900, letterSpacing: '.3em', fontSize: 18, whiteSpace: 'nowrap' }}>MADE KULTURE</div>
         <div style={{ fontSize: 12, letterSpacing: '.16em', color: 'rgba(201,178,126,.55)', whiteSpace: 'nowrap' }}>
-          {err ? err.toUpperCase() : 'FLOOR STATUS'}
+          {err ? err.toUpperCase() : 'ATLAS · LIVE'}
         </div>
         <div style={{ display: 'flex', gap: 24, marginLeft: 'auto', alignItems: 'baseline' }}>
           {([['inuse', 'IN USE'], ['ready', 'READY'], ['dirty', 'NEED CLEANING']] as const).map(([k, w]) => (

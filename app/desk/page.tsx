@@ -180,7 +180,7 @@ export default function Desk() {
           {/* Staff/Admin links intentionally removed: the desk is a shared terminal, so
               it must not offer a one-tap path into admin. Reach /admin or /staff by URL
               (each has its own auth). */}
-          <a href="/desk/floor" style={{ ...btn('ghost'), textDecoration: 'none', display: 'inline-block' }}>Floor</a>
+          <a href="/desk/atlas" style={{ ...btn('ghost'), textDecoration: 'none', display: 'inline-block' }}>ATLAS</a>
           <button style={btn('ghost')} onClick={() => window.dispatchEvent(new Event('mk-lock'))}>Lock</button>
         </div>
       </div>
