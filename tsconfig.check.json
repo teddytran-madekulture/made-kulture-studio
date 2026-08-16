@@ -77,6 +77,7 @@
     "app/desk/atlas/page.tsx",
     "lib/email.ts",
     "app/api/agent/chat/route.ts",
-    "lib/agent/june.ts"
+    "lib/agent/june.ts",
+    "components/ShortNoticeRequest.tsx"
   ]
 }

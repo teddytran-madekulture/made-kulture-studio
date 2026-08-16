@@ -27,7 +27,8 @@ const label: React.CSSProperties = { display: 'block', fontFamily: 'Inter', font
 interface SetOpt { slug: string; name: string }
 
 export default function ShortNoticeRequest() {
-  const [status, setStatus]   = useState<'loading' | 'idle' | 'pending' | 'approved'>('loading')
+  const [status, setStatus]   = useState<'loading' | 'idle' | 'pending' | 'approved' | 'denied'>('loading')
+  const [deniedAt, setDeniedAt] = useState<string | null>(null)
   const [open, setOpen]       = useState(false)
   const [sets, setSets]       = useState<SetOpt[]>([])
   const [setSlug, setSetSlug] = useState('')
@@ -47,6 +48,10 @@ export default function ShortNoticeRequest() {
         setExpiresAt(typeof d.expiresAt === 'number' ? d.expiresAt : null)
         if (d.canBook) setStatus('approved')
         else if (d.latest?.status === 'pending') setStatus('pending')
+        // ⚠️ 'denied' used to fall through to 'idle', so a declined request rendered the
+        // blank REQUEST ACCESS form — the customer got a decline TEXT and then found no
+        // trace of it in their account. Teddy hit this 2026-08-16.
+        else if (d.latest?.status === 'denied') { setStatus('denied'); setDeniedAt(d.latest?.resolved_at ?? null) }
         else setStatus('idle')
       })
       .catch(() => setStatus('idle'))
@@ -100,6 +105,27 @@ export default function ShortNoticeRequest() {
             ? <>You can book inside the 48-hour window right now — but only for the next <strong style={{ color: '#fff' }}>{fmtRemaining(remaining)}</strong>. Head to availability and grab your time before it expires.</>
             : <>You can book inside the 48-hour window right now. Head to availability to grab your time.</>}
         </div>
+      </div>
+    )
+  }
+
+  if (status === 'denied' && !open) {
+    const when = deniedAt
+      ? new Date(deniedAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      : null
+    return (
+      <div style={{ ...card, borderColor: 'rgba(255,255,255,0.14)' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 4 }}>
+          Your last request wasn&apos;t approved{when ? ` \u00b7 ${when}` : ''}
+        </div>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 14 }}>
+          We sent you the reason by text and email. You&apos;re welcome to ask for a different set
+          or time &mdash; a lot of requests come down to who else is in the building that day.
+        </div>
+        <button onClick={() => setOpen(true)}
+          style={{ background: '#fff', color: '#080808', border: 'none', padding: '11px 18px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em' }}>
+          ASK FOR ANOTHER TIME
+        </button>
       </div>
     )
   }

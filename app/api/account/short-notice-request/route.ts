@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
   const expiresAt = shortNoticeExpiresAtMs(c.overrides) // ms epoch of the active timed window, or null
   let latest = null
   if (c.id || c.email) {
-    const q = service.from('short_notice_requests').select('status, requested_at, granted_until').order('requested_at', { ascending: false }).limit(1)
+    const q = service.from('short_notice_requests').select('status, requested_at, granted_until, resolved_at').order('requested_at', { ascending: false }).limit(1)
     const { data } = c.id ? await q.eq('customer_id', c.id) : await q.eq('customer_email', c.email)
     latest = data?.[0] ?? null
   }
