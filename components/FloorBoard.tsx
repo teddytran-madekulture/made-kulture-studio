@@ -236,7 +236,7 @@ export default function FloorBoard({
 
       {ring?.ringing && (
         <div style={{
-          margin: '4px 28px 0', padding: '11px 16px', flexShrink: 0,
+          margin: '8px 28px 0', padding: '11px 16px', flexShrink: 0,
           border: '2px solid #ff4d4d', background: 'rgba(255,77,77,.12)', borderRadius: 12,
           display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
           animation: 'mkRing 1.5s ease-in-out infinite',
@@ -268,7 +268,7 @@ export default function FloorBoard({
 
       {buyout && (
         <div style={{
-          margin: '4px 28px 0', padding: '9px 16px', flexShrink: 0,
+          margin: '8px 28px 0', padding: '9px 16px', flexShrink: 0,
           border: '1px solid rgba(201,178,126,.42)', background: 'rgba(201,178,126,.09)',
           borderRadius: 12, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap',
         }}>
@@ -282,7 +282,7 @@ export default function FloorBoard({
         </div>
       )}
 
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24, padding: '2px 28px 16px' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24, padding: '18px 28px 16px' }}>
         <div style={{ flex: '1 1 0', minWidth: 290, maxWidth: 470, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
             <button onClick={() => setDayOffset(o => o - 1)} style={dayNavBtn}>‹</button>
