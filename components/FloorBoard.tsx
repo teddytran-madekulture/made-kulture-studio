@@ -56,6 +56,7 @@ export interface Area {
   untilISO: string | null; startsISO: string | null; dirtySinceISO: string | null
   clearedAt: string | null; clearedBy: string | null
   guestName: string | null; guestPhone: string | null; viaBuyout: boolean; alsoDirty: boolean
+  dirtyFromBuyout: boolean
 }
 
 // Fit a room name inside its box. "THE WATERING HOLE" ran clean out of a 118px
@@ -118,6 +119,7 @@ export default function FloorBoard({
   // endpoint so the extra requests stay cheap.
   const [ring, setRing] = useState<{ ringing: boolean; place: string; waitedSec: number; goneQuiet: boolean } | null>(null)
   const [ringBusy, setRingBusy] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
   // Agenda is the default; the day column is a click away.
   const [view, setView] = useState<'agenda' | 'day'>('agenda')
   // Days from today. ⚠️ Only the CALENDAR travels — the map stays on now.
@@ -211,6 +213,9 @@ export default function FloorBoard({
   // A full-studio buyout genuinely holds every room, so the same name was
   // printing on nine of them. One banner says it once and says it better.
   const buyout = (areas ?? []).find(a => a.viaBuyout) ?? null
+  // One buyout ends and ten rooms go red. Clearing them one at a time is ten
+  // taps for a single event, which is how a board stops getting used.
+  const buyoutDirty = (areas ?? []).filter(a => a.dirtyFromBuyout)
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
@@ -434,7 +439,35 @@ export default function FloorBoard({
               <div style={{ fontSize: 14, color: 'rgba(255,255,255,.45)' }}>
                 {areas ? 'Nothing waiting — whole floor is clear.' : 'Reading the floor…'}
               </div>
-            ) : dirtyList.map(a => (
+            ) : <>
+              {actionable && buyoutDirty.length > 1 && (
+                <button
+                  disabled={bulkBusy}
+                  onClick={async () => {
+                    setBulkBusy(true)
+                    try {
+                      const r = await fetch('/api/floor/mark', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ codes: buyoutDirty.map(a => a.code), action: 'clear' }),
+                      })
+                      if (r.ok) load()
+                    } catch { /* the rooms stay red, which is the honest outcome */ }
+                    setBulkBusy(false)
+                  }}
+                  style={{
+                    width: '100%', marginBottom: 12, padding: '12px 10px', borderRadius: 11,
+                    border: '1px solid rgba(67,201,127,.5)', background: 'rgba(67,201,127,.12)',
+                    color: '#8ce9b6', fontFamily: 'Inter, sans-serif', fontSize: 11,
+                    fontWeight: 800, letterSpacing: '.1em', cursor: 'pointer', lineHeight: 1.5,
+                    opacity: bulkBusy ? 0.5 : 1,
+                  }}>
+                  {bulkBusy ? '…' : `MARK ALL ${buyoutDirty.length} READY`}
+                  <span style={{ display: 'block', fontSize: 10, fontWeight: 400, letterSpacing: '.04em', color: 'rgba(255,255,255,.45)' }}>
+                    from the full-studio booking
+                  </span>
+                </button>
+              )}
+              {dirtyList.map(a => (
               <div key={a.code} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline', fontSize: 15, fontWeight: 600, marginBottom: 7 }}>
                 <span>{a.label}</span>
                 {/* A set knows WHEN it got dirty — a session ended at a known
@@ -445,6 +478,7 @@ export default function FloorBoard({
                 </em>
               </div>
             ))}
+            </>}
           </div>
         </div>
       </div>

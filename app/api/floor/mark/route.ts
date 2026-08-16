@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getStaffFromRequest, verifySecret } from '@/lib/staff-auth'
+import { isAdminAuthed } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,15 +35,24 @@ export async function POST(req: NextRequest) {
   let body: any = {}
   try { body = await req.json() } catch { /* handled below */ }
 
-  const code   = typeof body?.code === 'string' ? body.code : ''
   const action = body?.action === 'flag' ? 'flag' : 'clear'
-  if (!code) return NextResponse.json({ error: 'Which room?' }, { status: 400 })
+  // One room, or a batch. A full-studio buyout dirties every set at once, so
+  // clearing them one at a time is ten taps for a single event.
+  const codes: string[] = Array.isArray(body?.codes)
+    ? body.codes.filter((c: unknown) => typeof c === 'string').slice(0, 40)
+    : typeof body?.code === 'string' && body.code ? [body.code] : []
+  if (!codes.length) return NextResponse.json({ error: 'Which room?' }, { status: 400 })
+  const code = codes[0]
 
   const db = supabaseAdmin()
-  const { data: area, error: areaErr } = await db
-    .from('floor_areas').select('code, label, kind').eq('code', code).maybeSingle()
+  const { data: areaRows, error: areaErr } = await db
+    .from('floor_areas').select('code, label, kind').in('code', codes)
   if (areaErr) return NextResponse.json({ error: areaErr.message }, { status: 500 })
-  if (!area)   return NextResponse.json({ error: 'No such room.' }, { status: 404 })
+  const areas = areaRows ?? []
+  if (areas.length !== codes.length) {
+    return NextResponse.json({ error: 'One of those rooms does not exist.' }, { status: 404 })
+  }
+  const area = areas[0]
 
   // Any area can be flagged by hand. readFloor() ORs a manual flag with "a
   // session ended here", and a clear beats both — so the manual control and the
@@ -53,9 +63,14 @@ export async function POST(req: NextRequest) {
   let staffName = ''
 
   const session = getStaffFromRequest(req)
-  if (session) {
-    staffId = session.staffId
-    staffName = session.name
+  // ⚠️ ADMIN COUNTS TOO. /api/floor/board accepts an admin session, so signing in
+  // with the admin password showed a full board whose buttons ALWAYS failed —
+  // read and write disagreed about who counts. An admin-password login carries no
+  // staff identity (see the three-credential model), so the log records 'Admin'.
+  const admin = !session && isAdminAuthed(req)
+  if (session || admin) {
+    staffId = session?.staffId ?? null
+    staffName = session?.name ?? 'Admin'
   } else {
     // Kiosk path: the tablet key gets you to the door, the PIN opens it.
     if (!kioskKeyOk(body?.key ?? null)) {
@@ -99,14 +114,25 @@ export async function POST(req: NextRequest) {
   // ⚠️ .select() so a row that did not change cannot report success — an
   // RLS-blocked update returns error null and matches nothing.
   const { data: updated, error: upErr } = await db
-    .from('floor_areas').update(patch).eq('code', code).select('code')
-  if (upErr)              return NextResponse.json({ error: upErr.message }, { status: 500 })
-  if (!updated?.length)   return NextResponse.json({ error: 'Nothing was updated — tell Teddy.' }, { status: 500 })
+    .from('floor_areas').update(patch).in('code', codes).select('code')
+  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+  // ⚠️ Assert the whole batch landed. A partial update reporting success is how
+  // rooms silently stay dirty while the board says the floor is clear.
+  if ((updated?.length ?? 0) !== codes.length) {
+    return NextResponse.json(
+      { error: `Only ${updated?.length ?? 0} of ${codes.length} rooms updated — tell Teddy.` },
+      { status: 500 },
+    )
+  }
 
-  await db.from('floor_area_events').insert({
-    code, action, staff_id: staffId, staff_name: staffName,
-    source: session ? 'desk' : 'kiosk',
+  // One row per room, so the log still answers "who cleared Set C".
+  await db.from('floor_area_events').insert(codes.map(c => ({
+    code: c, action, staff_id: staffId, staff_name: staffName,
+    source: session || admin ? 'desk' : 'kiosk',
+  })))
+
+  return NextResponse.json({
+    ok: true, code, codes, count: codes.length, action,
+    by: staffName, at: nowISO, label: area.label,
   })
-
-  return NextResponse.json({ ok: true, code, action, by: staffName, at: nowISO, label: area.label })
 }

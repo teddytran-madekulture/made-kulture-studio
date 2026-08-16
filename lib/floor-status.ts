@@ -52,6 +52,9 @@ export interface FloorArea {
    *  the colour — you cannot clean an occupied room — but the dirt is still a
    *  fact and the board must not swallow it. */
   alsoDirty: boolean
+  /** Dirty because a FULL-STUDIO BUYOUT ended, not this set's own booking. One
+   *  event dirtied ten rooms, so the board offers to clear them as one event. */
+  dirtyFromBuyout: boolean
 }
 
 interface AreaRow {
@@ -138,7 +141,7 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
       const flagged = a.flagged_at ? Date.parse(a.flagged_at) : 0
       const dirty = flagged > clearedMs(a)
       return { ...base, state: dirty ? 'dirty' : 'ready', untilISO: null, startsISO: null, dirtySinceISO: null,
-               guestName: null, guestPhone: null, viaBuyout: false, alsoDirty: false }
+               guestName: null, guestPhone: null, viaBuyout: false, alsoDirty: false, dirtyFromBuyout: false }
     }
 
     // ⚠️ Dirtiness is computed FIRST. Deciding it only after the occupancy check
@@ -158,7 +161,7 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
     if (occupant) {
       return { ...base, state: 'inuse', untilISO: occupant.end_time, startsISO: null,
                dirtySinceISO: isDirty && lastEndPre > clearedPre ? new Date(lastEndPre).toISOString() : null,
-               alsoDirty: isDirty, ...guestOf(occupant) }
+               alsoDirty: isDirty, dirtyFromBuyout: false, ...guestOf(occupant) }
     }
 
     // Not started. Somebody may still be due in here shortly, which matters most
@@ -181,12 +184,15 @@ export async function readFloor(opts: { withGuest?: boolean } = {}): Promise<Flo
     if (isDirty) {
       return {
         ...base, state: 'dirty', untilISO: null, startsISO, alsoDirty: false, ...guestOf(mineSoon),
+        // The buyout is what dirtied this room if its end is the later one.
+        dirtyFromBuyout: buyoutEndedAt > cleared && buyoutEndedAt >= lastOwnEndPre,
         // Only a session end is a KNOWN moment. A hand flag shows no clock,
         // same as a facility, because "flagged at 3pm" is not "dirty since 3pm".
         dirtySinceISO: lastEnd > cleared ? new Date(lastEnd).toISOString() : null,
       }
     }
-    return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null, alsoDirty: false, ...guestOf(mineSoon) }
+    return { ...base, state: 'ready', untilISO: null, startsISO, dirtySinceISO: null, alsoDirty: false,
+             dirtyFromBuyout: false, ...guestOf(mineSoon) }
   })
 }
 
