@@ -75,6 +75,8 @@
     "app/desk/LockGate.tsx",
     "app/desk/page.tsx",
     "app/desk/atlas/page.tsx",
-    "lib/email.ts"
+    "lib/email.ts",
+    "app/api/agent/chat/route.ts",
+    "lib/agent/june.ts"
   ]
 }

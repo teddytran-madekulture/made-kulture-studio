@@ -250,6 +250,10 @@ export default function KioskPage() {
           token: chatToken.current ?? undefined,
           message: text,
           kiosk: true,
+          // The tablet knows its own set from /api/kiosk/context — send it every
+          // turn, INDEPENDENT of check-in, so June knows the room even when the
+          // guest never tapped CHECK IN.
+          kioskSet: ctx?.set?.slug ?? undefined,
           kioskGuest: ciResult
             ? `${ciResult.firstName} — checked in, ${ciResult.setName} until ${ciResult.until}`
             : undefined,

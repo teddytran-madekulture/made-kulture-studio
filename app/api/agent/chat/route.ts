@@ -14,6 +14,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createClient as createUserClient } from '@/lib/supabase/server'
 import { randomUUID } from 'crypto'
 import { runJune, juneConfigured, JuneTurn } from '@/lib/agent/june'
+import { SLUG_TO_NAME } from '@/lib/booking-core'
 
 const supabase = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,8 +63,17 @@ export async function POST(req: NextRequest) {
     : null
   const kioskBookingId = isKiosk && typeof body?.kioskBookingId === 'string' &&
     /^[0-9a-f-]{36}$/i.test(body.kioskBookingId) ? body.kioskBookingId : null
+  // ⚠️ The tablet sends a SLUG, never a label — the server derives the display
+  // name from SLUG_TO_NAME. Same posture as the rest of the kiosk: the tablet
+  // says which set it is, the server decides what that means.
+  const kioskSet = isKiosk && typeof body?.kioskSet === 'string' &&
+    Object.prototype.hasOwnProperty.call(SLUG_TO_NAME, body.kioskSet) ? body.kioskSet : null
+  const kioskSetName = kioskSet ? SLUG_TO_NAME[kioskSet] : null
+  // ⚠️ MUST START WITH 'kiosk'. lib/agent/june.ts gates the whole KIOSK MODE
+  // prompt block on that prefix — a page string that merely CONTAINS "kiosk"
+  // silently drops the no-links rule and the extension instructions.
   const page = isKiosk
-    ? (kioskGuest ? `kiosk (guest at the tablet: ${kioskGuest})` : 'kiosk')
+    ? `kiosk${kioskSetName ? ` · ${kioskSetName}` : ''}${kioskGuest ? ` (guest at the tablet: ${kioskGuest})` : ''}`
     : typeof body?.page === 'string' ? body.page.slice(0, 200) : null
 
   // Who's talking? (logged-in members get booking lookup)
