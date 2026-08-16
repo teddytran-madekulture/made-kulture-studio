@@ -1057,9 +1057,19 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                         ? `We\u2019ve changed your request to ${fmt12(requestHour)}\u2013${fmt12(requestHour + requestHours)}. We\u2019ll text you the moment it\u2019s confirmed.`
                         : `We\u2019ll text you the moment ${fmt12(requestHour)}\u2013${fmt12(requestHour + requestHours)} is confirmed \u2014 with your door code, ready to shoot. Nothing is charged unless we approve it.`}
                     </div>
+                    {/* ⚠️ DONE used to just clear the panel, dropping the customer back onto a
+                        time grid with CONTINUE greyed out and nothing on screen saying a request
+                        existed — a dead end at the end of a successful action. Send them to
+                        /account, which already renders a live "Request sent · pending" card
+                        (ShortNoticeRequest). Anyone who can tap a gold hour has Plus, and
+                        shortNoticeViewActive() is true for Plus, so that card WILL render. */}
+                    <a href="/account"
+                      style={{ display: 'inline-block', marginTop: 14, background: '#c9b27e', border: '1px solid #c9b27e', color: '#0a0a0a', padding: '11px 18px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textDecoration: 'none' }}>
+                      VIEW MY REQUEST →
+                    </a>
                     <button onClick={() => { setRequestHour(null); setRequestDone(null) }}
-                      style={{ marginTop: 14, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
-                      DONE
+                      style={{ marginTop: 14, marginLeft: 10, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
+                      KEEP BROWSING
                     </button>
                   </>
                 ) : (
