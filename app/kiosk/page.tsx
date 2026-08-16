@@ -601,9 +601,12 @@ export default function KioskPage() {
         padding: '8px 14px 20px', maxWidth: canAddTime ? 980 : 680,
         width: '100%', margin: '0 auto', boxSizing: 'border-box',
       }}>
-        {/* One tap when the tablet knows whose session this is — the numpad only
-            exists because a shared tablet couldn't know. It still does, for the
-            no-set tablet and for anyone whose booking isn't the one on this set. */}
+        {/* ⚠️ CHECK IN is for the DOOR kiosks only (no ?set=). A tablet mounted ON a set
+            is asking a question it can already see the answer to, and check-in happens at
+            the front/back door or on the guest's own phone link. Teddy's call 2026-08-16.
+            ⚠️ Removing it means June can no longer learn the booking from a check-in, so
+            app/api/agent/chat now derives it from the SET instead — keep those together. */}
+        {!ctx?.set && (
         <button style={tile} onClick={() => (occLive && !occ.checkedIn ? doSetCheckin() : setScreen('checkin'))}>
           <IconEnter />
           <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>
@@ -617,6 +620,7 @@ export default function KioskPage() {
               : 'Here for your booking'}
           </span>
         </button>
+        )}
         {canAddTime && (
           <button
             style={{ ...tile, border: `1px solid ${minsLeft <= 30 ? 'rgba(201,178,126,0.55)' : HAIR}` }}

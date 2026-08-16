@@ -69,11 +69,29 @@ export async function POST(req: NextRequest) {
   const kioskSet = isKiosk && typeof body?.kioskSet === 'string' &&
     Object.prototype.hasOwnProperty.call(SLUG_TO_NAME, body.kioskSet) ? body.kioskSet : null
   const kioskSetName = kioskSet ? SLUG_TO_NAME[kioskSet] : null
+
+  // ⚠️ Set tablets no longer carry CHECK IN, so `kioskBookingId` is usually absent.
+  // Resolve the occupant from the SET instead — same lookup the ADD TIME tile uses —
+  // or June's request_extension falls through to "ask the guest for their phone number"
+  // on a tablet that already knows exactly whose session it is.
+  let resolvedBookingId = kioskBookingId
+  let derivedGuest: string | null = null
+  if (isKiosk && kioskSet && !resolvedBookingId) {
+    try {
+      const { findActiveBookingBySet } = await import('@/lib/extensions')
+      const occ: any = await findActiveBookingBySet(kioskSet)
+      if (occ?.bookingId) {
+        resolvedBookingId = occ.bookingId
+        const first = String(occ.firstName ?? '').trim()
+        if (first) derivedGuest = `${first} — on ${kioskSetName ?? kioskSet} right now`
+      }
+    } catch (e) { console.error('[agent/chat] set lookup failed:', e) }
+  }
   // ⚠️ MUST START WITH 'kiosk'. lib/agent/june.ts gates the whole KIOSK MODE
   // prompt block on that prefix — a page string that merely CONTAINS "kiosk"
   // silently drops the no-links rule and the extension instructions.
   const page = isKiosk
-    ? `kiosk${kioskSetName ? ` · ${kioskSetName}` : ''}${kioskGuest ? ` (guest at the tablet: ${kioskGuest})` : ''}`
+    ? `kiosk${kioskSetName ? ` · ${kioskSetName}` : ''}${(kioskGuest ?? derivedGuest) ? ` (guest at the tablet: ${kioskGuest ?? derivedGuest})` : ''}`
     : typeof body?.page === 'string' ? body.page.slice(0, 200) : null
 
   // Who's talking? (logged-in members get booking lookup)
@@ -151,7 +169,7 @@ export async function POST(req: NextRequest) {
       authUserId: convo.auth_user_id ?? authUserId,
       visitorName: convo.visitor_name ?? visitorName,
       page,
-      kioskBookingId,
+      kioskBookingId: resolvedBookingId,
     })
     await supabase.from('agent_messages').insert({ conversation_id: convo.id, role: 'agent', content: result.reply })
     await supabase.from('agent_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', convo.id)
