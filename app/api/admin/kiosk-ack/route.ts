@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
+import { getStaffFromRequest, getLockedStaff } from '@/lib/staff-auth'
 import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
@@ -26,8 +27,16 @@ const supabase = createClient(
 const NO_ANSWER_MS = 3 * 60 * 1000
 const RING_TTL_MS  = 6 * 60 * 1000
 
+// ⚠️ THE RING USED TO BE ADMIN-ONLY. KioskAck is mounted in app/admin/layout
+// and nowhere else, so an attendant working the FRONT DESK could not see that a
+// guest was asking for help — only the owner could. Reading the ring is now open
+// to any staff session including a LOCKED one, because the desk tablet sits
+// locked most of the day and that is exactly when someone needs to notice.
 export async function GET(req: NextRequest) {
-  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const viewer = getStaffFromRequest(req) ?? getLockedStaff(req)
+  if (!viewer && !isAdminAuthed(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const { data, error } = await supabase
     .from('studio_settings')
@@ -58,7 +67,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // ⚠️ A LOCKED session is deliberately NOT enough here. Seeing the ring is free;
+  // saying "someone is coming" is a promise, and only a person who has proved
+  // they are staff gets to make it. This is the whole August 14 lesson.
+  if (!getStaffFromRequest(req) && !isAdminAuthed(req)) {
+    return NextResponse.json({ error: 'Unlock with your PIN to answer.' }, { status: 401 })
+  }
   const nowIso = new Date().toISOString()
   const { error } = await supabase
     .from('studio_settings')

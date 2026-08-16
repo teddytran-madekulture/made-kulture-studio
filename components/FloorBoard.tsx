@@ -111,6 +111,11 @@ export default function FloorBoard({
   // The now-line has to move on its own, or it is a picture of when the page
   // loaded. A minute is plenty — this drives one horizontal rule.
   const [nowMs, setNowMs] = useState(() => Date.now())
+  // ⚠️ A RING IS NOT ROOM STATUS — it is somebody standing at a tablet waiting.
+  // It gets its own poll because 60s is far too slow for that, and its own tiny
+  // endpoint so the extra requests stay cheap.
+  const [ring, setRing] = useState<{ ringing: boolean; place: string; waitedSec: number; goneQuiet: boolean } | null>(null)
+  const [ringBusy, setRingBusy] = useState(false)
   // Agenda is the default; the day column is a click away.
   const [view, setView] = useState<'agenda' | 'day'>('agenda')
   // Manual override. Occupancy stays derived — forcing IN USE would be the board
@@ -160,6 +165,37 @@ export default function FloorBoard({
     return () => clearInterval(iv)
   }, [])
 
+  // 20s: a guest waiting notices a minute, so 60 would be useless — but this is
+  // one tablet reading three rows, not the 5s jukebox poll that once ate 78% of
+  // all Vercel compute. Stops entirely while the tab is hidden.
+  useEffect(() => {
+    const pull = async () => {
+      try {
+        const r = await fetch('/api/admin/kiosk-ack', { cache: 'no-store' })
+        if (r.ok) setRing(await r.json())
+      } catch { /* leave the last known state up */ }
+    }
+    pull()
+    let iv: ReturnType<typeof setInterval> | null = null
+    const start = () => { if (!iv) iv = setInterval(pull, 20_000) }
+    const stop = () => { if (iv) { clearInterval(iv); iv = null } }
+    const onVis = () => (document.hidden ? stop() : (pull(), start()))
+    document.addEventListener('visibilitychange', onVis)
+    start()
+    return () => { document.removeEventListener('visibilitychange', onVis); stop() }
+  }, [])
+
+  const onMyWay = async () => {
+    if (ringBusy) return
+    setRingBusy(true)
+    try {
+      const r = await fetch('/api/admin/kiosk-ack', { method: 'POST' })
+      if (r.ok) setRing(rg => (rg ? { ...rg, ringing: false } : rg))
+    } catch { /* the banner stays up, which is the honest outcome */ }
+    setRingBusy(false)
+  }
+  const ringingPlace = ring?.ringing ? ring.place : ''
+
   const byCode = new Map((areas ?? []).map(a => [a.code, a]))
   const counts = { inuse: 0, ready: 0, dirty: 0 }
   for (const a of areas ?? []) counts[a.state]++
@@ -187,6 +223,38 @@ export default function FloorBoard({
           ))}
         </div>
       </div>
+
+      {ring?.ringing && (
+        <div style={{
+          margin: '4px 28px 0', padding: '11px 16px', flexShrink: 0,
+          border: '2px solid #ff4d4d', background: 'rgba(255,77,77,.12)', borderRadius: 12,
+          display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+          animation: 'mkRing 1.5s ease-in-out infinite',
+        }}>
+          <style>{'@keyframes mkRing{0%,100%{opacity:1}50%{opacity:.62}}'}</style>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.24em', color: '#ff6b6b' }}>
+            {ring.goneQuiet ? 'STILL WAITING' : 'ASKING FOR HELP'}
+          </span>
+          <span style={{ fontSize: 19, fontWeight: 800 }}>{ring.place || 'A tablet'}</span>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,.6)' }}>
+            waiting {ring.waitedSec < 60 ? `${ring.waitedSec}s` : `${Math.round(ring.waitedSec / 60)} min`}
+          </span>
+          {/* ⚠️ Only on the UNLOCKED board. Seeing the ring is free; saying
+              someone is coming is a promise, and it costs the PIN. */}
+          {actionable ? (
+            <button disabled={ringBusy} onClick={onMyWay} style={{
+              marginLeft: 'auto', border: 'none', borderRadius: 11, cursor: 'pointer',
+              background: 'linear-gradient(135deg,#ff6b6b,#d63d3d)', color: '#fff',
+              padding: '12px 26px', fontSize: 12, fontWeight: 800, letterSpacing: '.16em',
+              fontFamily: 'Inter, sans-serif', opacity: ringBusy ? 0.5 : 1,
+            }}>{ringBusy ? '…' : 'ON MY WAY'}</button>
+          ) : (
+            <span style={{ marginLeft: 'auto', fontSize: 11, letterSpacing: '.16em', color: 'rgba(255,255,255,.45)' }}>
+              UNLOCK TO ANSWER
+            </span>
+          )}
+        </div>
+      )}
 
       {buyout && (
         <div style={{
@@ -252,10 +320,18 @@ export default function FloorBoard({
                   {/* ⚠️ Occupied AND never cleaned: the fill stays gold because
                       somebody is in there, but the outline goes red because the
                       room was never reset. Colour alone could only say one. */}
-                  {sh.poly
-                    ? <polygon points={sh.poly} fill={FILL[st]} stroke={a?.alsoDirty ? DIRTY : LINE[st]} strokeWidth={a?.alsoDirty ? 3 : 2} />
-                    : <rect x={sh.x} y={sh.y} width={sh.w} height={sh.h} rx={9} fill={FILL[st]}
-                        stroke={a?.alsoDirty ? DIRTY : LINE[st]} strokeWidth={a?.alsoDirty ? 3 : 2} />}
+                  {(() => {
+                    // A ring outranks every other treatment on the room: somebody
+                    // is standing there waiting for a person.
+                    const isRinging = !!ringingPlace && a?.label === ringingPlace
+                    const stroke = isRinging ? '#ff4d4d' : a?.alsoDirty ? DIRTY : LINE[st]
+                    const sw = isRinging ? 4 : a?.alsoDirty ? 3 : 2
+                    const common = { fill: isRinging ? 'rgba(255,77,77,.22)' : FILL[st], stroke, strokeWidth: sw,
+                                     style: isRinging ? { animation: 'mkRing 1.5s ease-in-out infinite' } : undefined }
+                    return sh.poly
+                      ? <polygon points={sh.poly} {...common} />
+                      : <rect x={sh.x} y={sh.y} width={sh.w} height={sh.h} rx={9} {...common} />
+                  })()}
                   {/* ⚠️ A 53x36 target is hard to hit on a wall tablet, especially
                       reaching up. Give the small shapes an invisible pad so you
                       do not have to aim to mark a closet clean. */}
