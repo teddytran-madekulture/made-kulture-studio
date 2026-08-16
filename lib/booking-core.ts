@@ -475,7 +475,8 @@ export async function finalizeBooking(
       doorCode ? `🔑 Front-door code: ${doorDisplay}` : null,
       doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
     ].filter(Boolean) as string[]
-    if (codeLines.length) codeLines.push('(each works during your booked time only)')
+    if (codeLines.length) codeLines.push('(your codes are for this session only)')
+    const arrivalLine = '⏰ No early arrivals. No studio access before your booked time.'
     const guestLine = guestCount ? `👥 ${formatGuestLine(guestCount, guestCapacity)}` : null
     const message = [
       `✅ Made Kulture — Booking Confirmed!`, ``,
@@ -483,6 +484,7 @@ export async function finalizeBooking(
       ...(guestLine ? [guestLine] : []),
       `💳 $${dollars} paid`,
       ...(codeLines.length ? ['', ...codeLines] : []),
+      ``, arrivalLine,
       ...(checkInLine ? [``, checkInLine] : []),
       ``, `4825 Gulf Freeway, Houston TX 77023`,
       `Questions? Text or call (832) 408-1631.`, `Reply STOP to opt out.`,

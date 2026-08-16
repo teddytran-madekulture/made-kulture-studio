@@ -251,6 +251,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
         <td>
           <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">When You Arrive</p>
           <ul style="margin:0;padding:0 0 0 16px;color:#bbb;font-size:13px;line-height:1.8;">
+            <li style="margin-bottom:6px;"><strong style="color:#ddd;">Please do not arrive early.</strong> There is no studio access before your booked time — including the common area and vanity — so you will not be able to wait or get ready inside. Parking is limited, and early arrivals take spaces from sessions already in progress. A few minutes ahead is perfect; setup and breakdown happen within your booked time.</li>
             <li style="margin-bottom:6px;">Drive to the <strong style="color:#ddd;">back of the building</strong> for entrance and street parking. If no spots are available, continue around the block to the front. Do not block neighbors' driveways.</li>
             <li style="margin-bottom:6px;">The building looks old and dilapidated — that's intentional. Use the <strong style="color:#ddd;">small doorway entrances</strong> to enter. If you have large items and the garage is closed, DM us on Instagram <a href="https://instagram.com/madekulture" style="color:${ACCENT_COLOR};text-decoration:none;">@madekulture</a>.</li>
             <li>If you know your set, go straight to it and get started. If you need help, check in and someone will show you to your spot.</li>
