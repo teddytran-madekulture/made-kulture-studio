@@ -283,7 +283,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           <div className="label" style={{ color: pathHover === 'a' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }}>PATH B</div>
           <h2 style={{ fontSize:'clamp(40px, 5vw, 72px)', color: pathHover === 'a' ? '#fff' : '#000' }}>FULL STUDIO TAKEOVER</h2>
           <p style={{ fontSize:15, color: pathHover === 'a' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', lineHeight:1.7, maxWidth:400 }}>
-            Take over every set, vanity room, and the open floor. Perfect for full-day productions, music videos, and lookbooks.
+            Take over every set, the Studio Lounge, and the open floor. Perfect for full-day productions, music videos, and lookbooks.
           </p>
           <div style={{ marginTop:'auto', paddingTop:40, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <span className="label" style={{ color: pathHover === 'a' ? '#fff' : '#000' }}>FULL TAKEOVER</span>
