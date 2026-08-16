@@ -208,11 +208,16 @@ export interface AgendaRow {
   buyout: boolean
 }
 
-export async function readAgenda(opts: { withGuest?: boolean } = {}): Promise<AgendaRow[]> {
+export async function readAgenda(opts: { withGuest?: boolean; date?: string } = {}): Promise<AgendaRow[]> {
   const db = supabaseAdmin()
-  const today = centralDateStr(new Date().toISOString())
-  const dayStart = bookingHourToISO(today, 0)
-  const dayEnd = bookingHourToISO(nextDay(today), 0)
+  // ⚠️ A CENTRAL day, not a UTC one, and the boundaries go through
+  // bookingHourToISO so they survive the DST change. Slicing 24 hours off
+  // `new Date()` would put an 11 PM booking on the next day's list.
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(opts.date ?? '')
+    ? opts.date!
+    : centralDateStr(new Date().toISOString())
+  const dayStart = bookingHourToISO(day, 0)
+  const dayEnd = bookingHourToISO(nextDay(day), 0)
 
   const { data, error } = await db
     .from('bookings')

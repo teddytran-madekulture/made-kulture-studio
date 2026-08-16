@@ -120,6 +120,9 @@ export default function FloorBoard({
   const [ringBusy, setRingBusy] = useState(false)
   // Agenda is the default; the day column is a click away.
   const [view, setView] = useState<'agenda' | 'day'>('agenda')
+  // Days from today. ⚠️ Only the CALENDAR travels — the map stays on now.
+  const [dayOffset, setDayOffset] = useState(0)
+  const [viewer, setViewer] = useState<{ name: string } | null>(null)
   // Manual override. Occupancy stays derived — forcing IN USE would be the board
   // telling you someone is in a room the schedule says is empty — but "this needs
   // cleaning" and "this is clean" are human facts, so a human can set them.
@@ -129,15 +132,15 @@ export default function FloorBoard({
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch('/api/floor/board', { cache: 'no-store' })
+      const r = await fetch(`/api/floor/board?date=${shiftDate(centralToday(), dayOffset)}`, { cache: 'no-store' })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { setErr(d.error || 'Could not read the floor.'); return }
-      setAreas(d.areas ?? []); setAgenda(d.agenda ?? []); setErr('')
+      setAreas(d.areas ?? []); setAgenda(d.agenda ?? []); setViewer(d.viewer ?? null); setErr('')
     } catch {
       // Keep showing the last known state rather than blanking the wall.
       setErr('Offline — showing the last known state.')
     }
-  }, [])
+  }, [dayOffset])
 
   // ⚠️ POLLING IS THE #1 COST IN THIS PROJECT — a 5s jukebox poll once ate 78%
   // of all Vercel compute. Room status changes a handful of times a day, so this
@@ -216,6 +219,11 @@ export default function FloorBoard({
         <div style={{ fontSize: 12, letterSpacing: '.16em', color: 'rgba(201,178,126,.55)', whiteSpace: 'nowrap' }}>
           {err ? err.toUpperCase() : 'ATLAS · LIVE'}
         </div>
+        {viewer && (
+          <div style={{ fontSize: 12, letterSpacing: '.12em', color: 'rgba(255,255,255,.42)', whiteSpace: 'nowrap' }}>
+            {viewer.name.toUpperCase()}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 24, marginLeft: 'auto', alignItems: 'baseline' }}>
           {([['inuse', 'IN USE'], ['ready', 'READY'], ['dirty', 'NEED CLEANING']] as const).map(([k, w]) => (
             <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
@@ -277,7 +285,17 @@ export default function FloorBoard({
       <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24, padding: '2px 28px 16px' }}>
         <div style={{ flex: '1 1 0', minWidth: 290, maxWidth: 470, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 12, letterSpacing: '.3em', color: 'rgba(201,178,126,.55)', fontWeight: 700 }}>TODAY</span>
+            <button onClick={() => setDayOffset(o => o - 1)} style={dayNavBtn}>‹</button>
+            <span style={{
+              fontSize: 12, letterSpacing: '.24em', fontWeight: 700, whiteSpace: 'nowrap',
+              color: dayOffset === 0 ? 'rgba(201,178,126,.55)' : '#e6d5ab',
+            }}>{dayLabel(dayOffset)}</span>
+            <button onClick={() => setDayOffset(o => o + 1)} style={dayNavBtn}>›</button>
+            {dayOffset !== 0 && (
+              <button onClick={() => setDayOffset(0)} style={{ ...dayNavBtn, width: 'auto', padding: '3px 9px', fontSize: 9, letterSpacing: '.12em' }}>
+                TODAY
+              </button>
+            )}
             <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
               {(['agenda', 'day'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)} style={{
@@ -290,9 +308,11 @@ export default function FloorBoard({
               ))}
             </span>
           </div>
+          {/* ⚠️ The now-line is suppressed on any other day — a red "you are
+              here" drawn across next Tuesday would be nonsense. */}
           {view === 'day'
-            ? <DayColumn agenda={agenda} nowMs={nowMs} />
-            : <AgendaList agenda={agenda} nowMs={nowMs} />}
+            ? <DayColumn agenda={agenda} nowMs={nowMs} showNow={dayOffset === 0} />
+            : <AgendaList agenda={agenda} nowMs={nowMs} showNow={dayOffset === 0} />}
         </div>
 
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
@@ -547,7 +567,7 @@ function centralHour(iso: string): number {
 
 // A time-scaled day, so the column fills its height by construction and the
 // now-line means something positionally rather than just sitting between rows.
-function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
+function DayColumn({ agenda, nowMs, showNow }: { agenda: AgendaRow[]; nowMs: number; showNow: boolean }) {
   const nowH = centralHour(new Date(nowMs).toISOString())
 
   // Business hours by default, widened for anything booked outside them.
@@ -621,7 +641,7 @@ function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
       })}
 
       {/* The line every calendar has: where you are in the day. */}
-      {nowH >= lo && nowH <= hi && (
+      {showNow && nowH >= lo && nowH <= hi && (
         <div style={{ position: 'absolute', left: 0, right: 0, top: `${pct(nowH)}%`, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', left: 0, top: -7, fontSize: 11, fontWeight: 800, color: '#ff6b6b' }}>
             {new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(nowMs))}
@@ -636,7 +656,7 @@ function DayColumn({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
 
 // The plain list. Default view: it reads fastest when you just want to know
 // what is next, and it does not care how empty the morning was.
-function AgendaList({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
+function AgendaList({ agenda, nowMs, showNow }: { agenda: AgendaRow[]; nowMs: number; showNow: boolean }) {
   const nowLine = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
       <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ff4d4d', flexShrink: 0 }} />
@@ -646,17 +666,17 @@ function AgendaList({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
       </span>
     </div>
   )
-  const allStarted = agenda.length > 0 && agenda.every(r => Date.parse(r.startISO) <= nowMs)
+  const allStarted = showNow && agenda.length > 0 && agenda.every(r => Date.parse(r.startISO) <= nowMs)
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 6, display: 'flex', flexDirection: 'column' }}>
       {agenda.length === 0 && (
-        <div style={{ fontSize: 15, color: 'rgba(255,255,255,.4)' }}>Nothing on the books today.</div>
+        <div style={{ fontSize: 15, color: 'rgba(255,255,255,.4)' }}>Nothing on the books.</div>
       )}
       {agenda.map((r, i) => {
         const started = Date.parse(r.startISO) <= nowMs
         const over = Date.parse(r.endISO) <= nowMs
         // The boundary between what is done and what is coming.
-        const lineHere = !started && (i === 0 || Date.parse(agenda[i - 1].startISO) <= nowMs)
+        const lineHere = showNow && !started && (i === 0 || Date.parse(agenda[i - 1].startISO) <= nowMs)
         return (
           // Rows share the free height so the list fills its column, but they
           // stop growing before a two-booking day turns into three giant slabs.
@@ -681,4 +701,37 @@ function AgendaList({ agenda, nowMs }: { agenda: AgendaRow[]; nowMs: number }) {
       {allStarted && nowLine}
     </div>
   )
+}
+
+const dayNavBtn: React.CSSProperties = {
+  background: 'none', border: '1px solid rgba(255,255,255,.14)', borderRadius: 7,
+  color: 'rgba(255,255,255,.55)', width: 24, height: 22, lineHeight: 1, cursor: 'pointer',
+  fontFamily: 'Inter, sans-serif', fontSize: 13, padding: 0,
+}
+
+// Today's date in CENTRAL as YYYY-MM-DD. en-CA formats that way natively, which
+// avoids hand-assembling a string and getting the month off by one.
+function centralToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+}
+
+// ⚠️ Shift by whole days at UTC NOON. Anchoring at midnight and adding 24h lands
+// on the wrong date across a DST boundary; noon has 12 hours of slack either way.
+function shiftDate(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d, 12))
+  t.setUTCDate(t.getUTCDate() + days)
+  return t.toISOString().slice(0, 10)
+}
+
+function dayLabel(offset: number): string {
+  if (offset === 0) return 'TODAY'
+  if (offset === 1) return 'TOMORROW'
+  if (offset === -1) return 'YESTERDAY'
+  const ymd = shiftDate(centralToday(), offset)
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })
+    .format(new Date(Date.UTC(y, m - 1, d, 12))).toUpperCase()
 }

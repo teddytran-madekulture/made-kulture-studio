@@ -31,10 +31,18 @@ export async function GET(req: NextRequest) {
   // see who is in the room, because that screen sits where anyone can read it.
   // Unlock (which costs a PIN) and the names appear.
   const withGuest = !!fullSession || admin
-  const [areas, agenda] = await Promise.all([readFloor({ withGuest }), readAgenda({ withGuest })])
+  // ⚠️ ONLY THE AGENDA TRAVELS. `areas` is always NOW — a past date must never
+  // make rooms look occupied, or the map starts lying about the building.
+  const date = req.nextUrl.searchParams.get('date') ?? undefined
+  const [areas, agenda] = await Promise.all([
+    readFloor({ withGuest }),
+    readAgenda({ withGuest, date }),
+  ])
   return NextResponse.json({
     areas,
     agenda,
+    // Who is holding this session, so ATLAS can say whose PIN is in.
+    viewer: fullSession ? { name: fullSession.name } : admin ? { name: 'Admin' } : null,
     // Stamped so a tablet can tell a live answer from a stale cached one.
     at: new Date().toISOString(),
   })
