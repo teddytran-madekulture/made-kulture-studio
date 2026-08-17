@@ -196,7 +196,7 @@ async function sendConfirmationSMS(
     ...(checkInLine ? [``, checkInLine] : []),
     ``,
     `4825 Gulf Freeway, Houston TX 77023`,
-    `Questions? Text or call (832) 408-1631.`,
+    `Questions? Text (832) 408-1631.`,
     `Reply STOP to opt out.`,
   ].join('\n')
 

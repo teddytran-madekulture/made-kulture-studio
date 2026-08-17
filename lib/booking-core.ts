@@ -487,7 +487,7 @@ export async function finalizeBooking(
       ``, arrivalLine,
       ...(checkInLine ? [``, checkInLine] : []),
       ``, `4825 Gulf Freeway, Houston TX 77023`,
-      `Questions? Text or call (832) 408-1631.`, `Reply STOP to opt out.`,
+      `Questions? Text (832) 408-1631.`, `Reply STOP to opt out.`,
     ].join('\n')
     // Pass the raw phone: sendSMS normalises via toE164, which REJECTS an
     // unusable number. Pre-wrapping in normalizePhone turns garbage into

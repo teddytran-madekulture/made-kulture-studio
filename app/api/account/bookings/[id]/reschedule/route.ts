@@ -232,7 +232,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       `📍 ${setName}`,
       `🗓 ${whenNew}`,
       ...(codeLines.length ? ['', ...codeLines] : []),
-      ``, `Questions? Text or call (832) 408-1631.`,
+      ``, `Questions? Text (832) 408-1631.`,
     ].join('\n')) : Promise.resolve(),
     cust?.email ? sendSimpleEmail({
       to: cust.email,

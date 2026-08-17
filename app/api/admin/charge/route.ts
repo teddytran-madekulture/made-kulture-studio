@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
         ...(doorCodeBack ? [`🔑 Back-door code: ${doorCodeBack}`] : []),
         ``,
         `4825 Gulf Freeway, Houston TX 77023`,
-        `Questions? Text or call (832) 408-1631.`,
+        `Questions? Text (832) 408-1631.`,
       ].join('\n')
 
       await sendSMS(phone, msg)
