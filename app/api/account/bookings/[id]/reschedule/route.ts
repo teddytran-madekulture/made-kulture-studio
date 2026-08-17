@@ -16,7 +16,7 @@ import { plusActive } from '@/lib/short-notice'
 import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
 import { checkSetWindows } from '@/lib/set-availability'
 import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
-import { issueDoorCodes } from '@/lib/igloohome'
+import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { patchCalendarEvent } from '@/lib/gcal'
 import { notifyCoverageGap } from '@/lib/coverage'
 import { sendSimpleEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
@@ -224,7 +224,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     doorCode ? `🔑 Front-door code: ${doorCode.replace(/(\d{3})(?=\d)/g, '$1 ')}` : null,
     doorCodeBack ? `🔑 Back-door code: ${doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ')}` : null,
   ].filter(Boolean) as string[]
-  if (codeLines.length) codeLines.push('(your previous codes no longer apply)')
+  if (codeLines.length) codeLines.push(DOOR_CODE_HOWTO, '(your previous codes no longer apply)')
 
   await Promise.allSettled([
     cust?.phone ? sendSMS(cust.phone, [

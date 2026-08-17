@@ -5,7 +5,7 @@ import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
-import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { bookingHourToISO } from '@/lib/booking-times'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
@@ -215,6 +215,7 @@ export async function POST(req: NextRequest) {
             `💳 $${amount.toFixed(2)} charged`,
             ...(doorCode ? [`🔑 Front-door code: ${doorCode}`] : []),
             ...(doorCodeBack ? [`🔑 Back-door code: ${doorCodeBack}`] : []),
+            ...(doorCode || doorCodeBack ? [DOOR_CODE_HOWTO] : []),
             ``,
             `4825 Gulf Freeway, Houston TX 77023`,
             `Questions? Text (832) 408-1631.`,

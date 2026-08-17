@@ -20,7 +20,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { planExtension, durationLabel, type ExtensionKind } from '@/lib/extensions'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { patchCalendarEvent } from '@/lib/gcal'
-import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { notifyCoverageGap } from '@/lib/coverage'
@@ -341,6 +341,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         `✅ Done! ${p.setName} is yours until ${untilLabel}. $${amountDollars.toFixed(2)} charged${keyedSourceId ? '' : ' to your card on file'}.` +
         (newDoorCode ? `\n🔑 Updated front-door code (valid to ${untilLabel}): ${newDoorCode}` : '') +
         (newDoorCodeBack ? `\n🔑 Updated back-door code (valid to ${untilLabel}): ${newDoorCodeBack}` : '') +
+        (newDoorCode || newDoorCodeBack ? `\n${DOOR_CODE_HOWTO}` : '') +
         `\n— Made Kulture`
       ).catch(e => console.error('[extension] receipt SMS error:', e))
     }

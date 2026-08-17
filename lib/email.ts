@@ -216,7 +216,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
         <td align="center">
           <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Front-Door Code</p>
           <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCode.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
-          <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">front-door</strong> keypad, then press the unlock key. It only works during your booked time. Don't share it.</p>
+          <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">front-door</strong> keypad, then press the unlock button. It only works during your booked time. Don't share it.</p>
         </td>
       </tr>
     </table>` : ''}
@@ -228,7 +228,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
         <td align="center">
           <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Back-Door Code</p>
           <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
-          <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">back-door</strong> keypad, then press the unlock key. It only works during your booked time. Don't share it.</p>
+          <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">back-door</strong> keypad, then press the unlock button. It only works during your booked time. Don't share it.</p>
         </td>
       </tr>
     </table>` : ''}

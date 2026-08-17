@@ -8,7 +8,7 @@ import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
-import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { bookingHourToISO, largestVisitGap, VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'
 import { violatesAdvanceWindow, sessionMayBookShortNotice, ADVANCE_WINDOW_ERROR, shortNoticeScopeOf, lineMatchesScope } from '@/lib/short-notice'
 import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
@@ -183,7 +183,7 @@ async function sendConfirmationSMS(
     doorCode ? `🔑 Front-door code: ${doorDisplay}` : null,
     doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
   ].filter(Boolean) as string[]
-  if (codeLines.length) codeLines.push('(each works during your booked time only)')
+  if (codeLines.length) codeLines.push(DOOR_CODE_HOWTO, '(each works during your booked time only)')
 
   const message = [
     `✅ Made Kulture — Booking Confirmed!`,

@@ -15,7 +15,7 @@ import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows } from '@/lib/set-availability'
 import { violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
-import { createBookingPin, createBackDoorPin } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { largestVisitGap, VISIT_GAP_GRACE_HOURS, bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
@@ -475,7 +475,7 @@ export async function finalizeBooking(
       doorCode ? `🔑 Front-door code: ${doorDisplay}` : null,
       doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
     ].filter(Boolean) as string[]
-    if (codeLines.length) codeLines.push('(your codes are for this session only)')
+    if (codeLines.length) codeLines.push(DOOR_CODE_HOWTO, '(your codes are for this session only)')
     const arrivalLine = '⏰ No early arrivals. No studio access before your booked time.'
     const guestLine = guestCount ? `👥 ${formatGuestLine(guestCount, guestCapacity)}` : null
     const message = [

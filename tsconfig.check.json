@@ -78,6 +78,10 @@
     "lib/email.ts",
     "app/api/agent/chat/route.ts",
     "lib/agent/june.ts",
-    "components/ShortNoticeRequest.tsx"
+    "components/ShortNoticeRequest.tsx",
+    "app/api/bookings/[id]/ics/route.ts",
+    "app/api/admin/add-set/route.ts",
+    "app/api/admin/charge/route.ts",
+    "lib/igloohome.ts"
   ]
 }

@@ -166,6 +166,12 @@ export async function createBackDoorPin(opts: {
 }
 
 // True when the front-door code feature is configured (used to gate DB writes/UI).
+// ⚠️ Entering the PIN does NOT open the door on its own — the guest must press the
+// unlock button afterwards. Teddy 2026-08-16. Guests were getting the code with no
+// instruction and standing at a door that appeared not to work. ONE constant so the
+// ten places that print a code cannot drift apart.
+export const DOOR_CODE_HOWTO = 'Enter the code, then press the unlock button to open.'
+
 export function doorCodesEnabled(): boolean {
   return apiCreds() !== null && frontDeviceId() !== null
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
-import { issueDoorCodes } from '@/lib/igloohome'
+import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS } from '@/lib/sms'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel } from '@/lib/email'
@@ -185,6 +185,7 @@ export async function POST(req: NextRequest) {
       `🕐 ${startLabel} – ${endLabel}`,
       ...(doorCode ? [``, `🔑 Front-door code: ${doorCode}`] : []),
       ...(doorCodeBack ? [`🔑 Back-door code: ${doorCodeBack}`] : []),
+      ...(doorCode || doorCodeBack ? [DOOR_CODE_HOWTO] : []),
       ``,
       `Questions? Text (832) 408-1631`,
     ].join('\n')
