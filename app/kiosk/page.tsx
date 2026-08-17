@@ -137,6 +137,7 @@ export default function KioskPage() {
   const [staffDone,   setStaffDone]   = useState('')
 
   const [extStep,  setExtStep]  = useState<'pick' | 'confirm' | 'done' | 'phone'>('pick')
+  const [ext4, setExt4] = useState('')   // last 4 of the booking phone — proves who is tapping
   const [extReq,   setExtReq]   = useState<any>(null)
   const [extError, setExtError] = useState('')
   const [extUntil, setExtUntil] = useState('')
@@ -776,7 +777,7 @@ export default function KioskPage() {
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) setExtError(d.error || 'Could not price that right now.')
-      else { setExtReq({ ...d, hours }); setExtStep(d.hasCardOnFile ? 'confirm' : 'phone') }
+      else { setExtReq({ ...d, hours }); setExt4(''); setExtStep(d.hasCardOnFile ? 'confirm' : 'phone') }
     } catch { setExtError('Could not reach the studio system.') }
     setBusy(false)
   }
@@ -788,7 +789,10 @@ export default function KioskPage() {
     if (busy || !extReq?.token) return
     setBusy(true); setExtError('')
     try {
-      const r = await fetch(`/api/extensions/${extReq.token}`, { method: 'POST' })
+      const r = await fetch(`/api/extensions/${extReq.token}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ last4: ext4 }),
+      })
       const d = await r.json().catch(() => ({}))
       if (r.ok && d.success) { setExtUntil(d.until || ''); setExtStep('done'); fetchCtx() }
       // ⚠️ A Square PROFILE is not a saved CARD. hasCardOnFile is optimistic, so
@@ -840,7 +844,31 @@ export default function KioskPage() {
                 Charged to the card on file for this booking.
                 {extReq.smsSent ? ' We also texted you the link if you would rather pay on your phone.' : ''}
               </div>
-              <button disabled={busy} onClick={confirmTime} style={{ ...champBtn, marginTop: 28, padding: '24px 56px', fontSize: 16 }}>
+              {/* ⚠️ The tablet is public. Anyone can stand at it mid-session, so the
+                  card on file is not chargeable on a bare tap — the guest proves it is
+                  them with the last 4 of the number on the booking. Server checks it
+                  and counts wrong tries; 5 kills the request. */}
+              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.5)', marginTop: 26, marginBottom: 10 }}>
+                Last 4 digits of the phone number on this booking
+              </div>
+              <div style={{ fontSize: 34, letterSpacing: 14, fontWeight: 700, minHeight: 44, color: ext4.length ? CHAMP : 'rgba(255,255,255,0.18)' }}>
+                {ext4.padEnd(4, '·')}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 84px)', gap: 9, marginTop: 12 }}>
+                {['1','2','3','4','5','6','7','8','9','⌫','0',''].map((k, i) => (
+                  <button key={i} disabled={!k}
+                    onClick={() => k === '⌫' ? setExt4(v => v.slice(0, -1)) : setExt4(v => (v.length < 4 ? v + k : v))}
+                    style={{
+                      height: 64, borderRadius: 15, fontSize: 21, fontWeight: 500, fontFamily: 'Inter, sans-serif',
+                      cursor: k ? 'pointer' : 'default', color: '#fff',
+                      background: k ? 'linear-gradient(150deg, rgba(255,255,255,0.05), rgba(255,255,255,0.012))' : 'transparent',
+                      border: k ? '1px solid rgba(255,255,255,0.13)' : 'none',
+                    }}>{k}</button>
+                ))}
+              </div>
+              <button disabled={busy || ext4.length < 4} onClick={confirmTime}
+                style={{ ...champBtn, marginTop: 22, padding: '24px 56px', fontSize: 16,
+                         opacity: ext4.length < 4 ? 0.35 : 1 }}>
                 {busy ? '…' : 'CONFIRM & CHARGE'}
               </button>
               <button onClick={() => { setExtStep('pick'); setExtReq(null) }}

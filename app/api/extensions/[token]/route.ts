@@ -40,7 +40,7 @@ async function findRequest(token: string) {
   const db = supabaseAdmin()
   const { data } = await db
     .from('extension_requests')
-    .select('id, booking_id, hours, kind, amount_cents, status, expires_at, payment_id')
+    .select('id, booking_id, hours, kind, amount_cents, status, expires_at, payment_id, created_by, confirm_attempts')
     .eq('confirm_token', token)
     .maybeSingle()
   return data
@@ -104,6 +104,36 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
   const b = p.booking as any
   const customer = b.customers as any
+
+  // ── ⚠️ Prove it's the guest, not whoever is standing at the tablet ──────────
+  // A kiosk confirm charges a stored card with no human in the loop. The server
+  // re-derives WHICH booking is in the room, but never knew WHO tapped — so any
+  // passer-by could add time to a stranger's card. A phone confirm is different:
+  // the link went to the number on the booking, so possession is the proof. And a
+  // KEYED card proves itself. Only the kiosk + stored-card path needs this.
+  if (r.created_by === 'kiosk' && !keyedSourceId) {
+    const wanted = String(customer?.phone ?? '').replace(/\D/g, '').slice(-4)
+    const given  = String(body?.last4 ?? '').replace(/\D/g, '').slice(-4)
+    const tries  = Number(r.confirm_attempts ?? 0)
+
+    if (tries >= 5) {
+      await db.from('extension_requests').update({ status: 'cancelled' }).eq('id', r.id)
+      return NextResponse.json({ error: 'Too many wrong tries. Tap GET THE TEAM and we\'ll sort it out.' }, { status: 429 })
+    }
+    if (!wanted) {
+      // No number on file, so nothing to check against — refuse rather than
+      // fall open, and send them to a human.
+      return NextResponse.json({ error: 'We need a hand with this one - tap GET THE TEAM.' }, { status: 409 })
+    }
+    if (given !== wanted) {
+      // ⚠️ Count in the DB. Module counters are per-serverless-instance.
+      await db.from('extension_requests')
+        .update({ confirm_attempts: tries + 1 }).eq('id', r.id)
+      return NextResponse.json({
+        error: `That doesn't match the phone number on this booking. ${4 - tries} tries left.`,
+      }, { status: 403 })
+    }
+  }
 
   // ── Resolve how we're taking the money ──────────────────────────────────────
   let sourceCardId: string | null = null
