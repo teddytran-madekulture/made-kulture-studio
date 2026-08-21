@@ -82,6 +82,9 @@
     "app/api/bookings/[id]/ics/route.ts",
     "app/api/admin/add-set/route.ts",
     "app/api/admin/charge/route.ts",
-    "lib/igloohome.ts"
+    "lib/igloohome.ts",
+    "lib/kiosk-links.ts",
+    "app/api/admin/kiosk-links/route.ts",
+    "lib/sms.ts"
   ]
 }

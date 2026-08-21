@@ -21,14 +21,16 @@
 // out set identities to anyone. Better to 404 than to pretend.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac, timingSafeEqual } from 'crypto'
+import { timingSafeEqual } from 'crypto'
 import { SLUG_TO_NAME } from '@/lib/booking-core'
+import { shortCodeFor } from '@/lib/kiosk-links'
 
 export const dynamic = 'force-dynamic'
 
-export function shortCodeFor(slug: string, key: string): string {
-  return createHmac('sha256', key).update(slug).digest('hex').slice(0, 8)
-}
+// shortCodeFor now lives in lib/kiosk-links.ts so the admin listing and
+// this resolver can never derive a code differently. Re-exported because
+// this used to be its home.
+export { shortCodeFor }
 
 function sameCode(a: string, b: string): boolean {
   // Length-safe compare; both are fixed-length hex so this is well-defined.

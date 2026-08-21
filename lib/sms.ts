@@ -20,6 +20,69 @@ export type SmsResult = { ok: boolean; error?: string }
 // others scattered across 14 files, each with its own copy of a phone
 // normaliser; the copies had already drifted from toE164 and that drift is what
 // let a bad number through. One door in, one normaliser, one place to fix.
+// --- GSM-7 sanitiser ---------------------------------------------------------
+// Twilio bills per SEGMENT. A segment is 153 characters -- UNLESS the body
+// holds ONE character outside the GSM-7 alphabet, at which point the entire
+// message switches to UCS-2 and a segment becomes 67. So a single emoji costs
+// 2.3x on the WHOLE text, not on the emoji. It is all-or-nothing per message:
+// keeping "just the checkmark" saves nothing.
+//
+// 2026-08-21: every outbound text opened with an emoji. August averaged 6.48
+// segments per message on ~6 messages a day -- normal volume, doubled bill.
+// The 15-minute wrap-up was billed as TEN texts at $0.083; the same words in
+// GSM-7 are four. Measured across 50 real messages: 47-57% fewer segments.
+//
+// This runs INSIDE sendSMSResult, not at the call sites, because there are ~35
+// of them and a rule a template has to remember is a rule that drifts.
+const GSM_MAP: Record<string, string> = {
+  '—': '-', '–': '-', '−': '-', '‐': '-', '‑': '-',
+  '’': "'", '‘': "'", '‚': "'", '′': "'",
+  '“': '"', '”': '"', '„': '"', '″': '"',
+  '…': '...', '•': '-', '·': '-', '‣': '-', '▪': '-',
+  '→': '->', '←': '<-', '⇒': '=>', '×': 'x', '÷': '/',
+  '°': ' deg', '½': '1/2', '¼': '1/4', '¾': '3/4',
+  '\u00a0': ' ', '\u2009': ' ', '\u202f': ' ', '\u200b': '', '\ufe0f': '',
+}
+const GSM_CHARS = new Set(
+  '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ' +
+  ' !"#¤%&\'()*+,-./0123456789:;<=>?' +
+  '¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§' +
+  '¿abcdefghijklmnopqrstuvwxyzäöñüà' +
+  '\f^{}\\[~]|€'
+)
+
+// Exported for tests only. Call sites must never need to reach for it.
+export function gsmSafe(input: string): string {
+  let s = input
+  for (const [from, to] of Object.entries(GSM_MAP)) s = s.split(from).join(to)
+
+  const lines = s.split('\n').map((line) => {
+    const out: string[] = []
+    for (const ch of line) {
+      if (GSM_CHARS.has(ch)) { out.push(ch); continue }
+      // "Zoe" with a diaeresis loses the accent, not the letter -- a customer
+      // should never get a mangled version of their own name. The accented
+      // letters GSM-7 does carry are in GSM_CHARS and never reach this branch.
+      const folded = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      if (folded && [...folded].every((c) => GSM_CHARS.has(c))) out.push(folded)
+      // anything still here (emoji, CJK, box drawing) is dropped
+    }
+    // Dropping a leading emoji leaves behind the space that followed it.
+    return { had: line.trim().length > 0, text: out.join('').replace(/[ \t]+/g, ' ').trim() }
+  })
+
+  // A line that HAD content and lost all of it was an emoji-only line: drop it
+  // rather than leave a blank. A line that was already blank is a paragraph
+  // break and survives -- after stripping, the two are indistinguishable, so
+  // the decision has to be made here while we still know which was which.
+  return lines
+    .filter((l) => !(l.had && l.text === ''))
+    .map((l) => l.text)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export async function sendSMSResult(to: string, body: string): Promise<SmsResult> {
   if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
     console.error('[sms] NOT sent — Twilio env not configured')
@@ -37,7 +100,8 @@ export async function sendSMSResult(to: string, body: string): Promise<SmsResult
     return { ok: false, error: 'That phone number is not usable.' }
   }
   try {
-    await client().messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: num })
+    // gsmSafe, not body: see the note above. This is the only send in the app.
+    await client().messages.create({ body: gsmSafe(body), from: process.env.TWILIO_PHONE_NUMBER, to: num })
     return { ok: true }
   } catch (e: any) {
     console.error('[sms] send failed:', e)
