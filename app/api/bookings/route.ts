@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel, formatGuestLine } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
-import { checkSetWindows } from '@/lib/set-availability'
+import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { bookingHourToISO, largestVisitGap, VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'
@@ -446,6 +446,15 @@ export async function POST(req: NextRequest) {
     if (body.type !== 'studio') {
       const windows = lines.map(l => ({ setId: l.setId!, setName: l.setName, startISO: l.startISO, endISO: l.endISO }))
       const { ok, conflicts } = await checkSetWindows(supabase, windows)
+      if (!ok) {
+        return NextResponse.json({ error: conflicts.map(c => c.reason).join(' ') }, { status: 409 })
+      }
+    } else {
+      // Buyout: check the whole floor, not a set. See the twin in booking-core
+      // and the note at the top of lib/set-availability.ts — before 2026-08-21
+      // this guard simply skipped buyouts.
+      const l = lines[0]
+      const { ok, conflicts } = await checkBuyoutWindow(supabase, l.startISO, l.endISO)
       if (!ok) {
         return NextResponse.json({ error: conflicts.map(c => c.reason).join(' ') }, { status: 409 })
       }

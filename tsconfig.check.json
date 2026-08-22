@@ -85,6 +85,8 @@
     "lib/igloohome.ts",
     "lib/kiosk-links.ts",
     "app/api/admin/kiosk-links/route.ts",
-    "lib/sms.ts"
+    "lib/sms.ts",
+    "app/api/bookings/route.ts",
+    "app/api/availability/route.ts"
   ]
 }

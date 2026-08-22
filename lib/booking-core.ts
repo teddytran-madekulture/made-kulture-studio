@@ -13,7 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel, formatGuestLine } from '@/lib/email'
 import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
-import { checkSetWindows } from '@/lib/set-availability'
+import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
 import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { largestVisitGap, VISIT_GAP_GRACE_HOURS, bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
@@ -309,6 +309,16 @@ export async function validateAndPriceOrder(
   if (body.type !== 'studio') {
     const windows = lines.map(l => ({ setId: l.setId!, setName: l.setName, startISO: l.startISO, endISO: l.endISO }))
     const { ok, conflicts } = await checkSetWindows(supabase, windows)
+    if (!ok) return { ok: false, error: conflicts.map(c => c.reason).join(' '), status: 409 }
+  } else {
+    // A buyout takes the whole floor, so it is checked against EVERY booking
+    // rather than per set. ⚠️ This branch did not exist until 2026-08-21: the
+    // guard was a bare `if (type !== 'studio')`, so a buyout skipped the
+    // availability check altogether and could be sold over a floor full of
+    // confirmed sessions. The set-booking direction was blind too — see the
+    // note at the top of lib/set-availability.ts.
+    const l = lines[0]
+    const { ok, conflicts } = await checkBuyoutWindow(supabase, l.startISO, l.endISO)
     if (!ok) return { ok: false, error: conflicts.map(c => c.reason).join(' '), status: 409 }
   }
 

@@ -88,10 +88,33 @@ export async function GET(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    const booked = (data || []).map(b => ({
-      start: cdhTime(b.start_time),
-      end:   cdhTime(b.end_time),
-    }))
+    // ⚠️ A full-warehouse buyout occupies THIS set too, but its row has
+    // set_id NULL, so the query above cannot see it -- `.eq('set_id', ...)`
+    // never matches a NULL. Without this second query the grid renders a
+    // buyout's hours as free on every set, which is exactly how two website
+    // bookings were sold inside a confirmed 2-6pm buyout on 2026-08-22.
+    // The all-sets branch below has always done this; only this branch, the
+    // one CHECKOUT actually calls, was missing it.
+    const { data: buyouts, error: buyoutErr } = await supabase
+      .from('bookings')
+      .select('start_time, end_time')
+      .is('set_id', null)
+      .neq('status', 'cancelled')
+      .lt('start_time', dayEnd)     // overlap, not "starts today": an overnight
+      .gt('end_time', dayStart)     // buyout still occupies this morning
+    if (buyoutErr) return NextResponse.json({ error: buyoutErr.message }, { status: 500 })
+
+    const dayStartMs = Date.parse(dayStart)
+    const dayEndMs   = Date.parse(dayEnd)
+    const booked = [
+      ...(data || []).map(b => ({ start: cdhTime(b.start_time), end: cdhTime(b.end_time) })),
+      // Clamp to the day so a buyout spilling over midnight cannot emit an end
+      // that sorts before its start and paint the grid nonsense.
+      ...(buyouts || []).map(b => ({
+        start: Date.parse(b.start_time) <= dayStartMs ? 0  : cdhTime(b.start_time),
+        end:   Date.parse(b.end_time)   >= dayEndMs   ? 24 : cdhTime(b.end_time),
+      })),
+    ]
     return NextResponse.json({ booked })
   }
 
