@@ -50,12 +50,19 @@ function plusDays(n: number): string {
 }
 
 export default function RescheduleModal({
-  booking, isPlus, onClose, onDone,
+  booking, isPlus, onClose, onDone, submitUrl,
 }: {
   booking: ReschedulableBooking
   isPlus: boolean
   onClose: () => void
   onDone: (msg: string) => void
+  /**
+   * Where to POST { date, startHour }. Defaults to the signed-in account route.
+   * The guest manage-link page (/manage/[token]) passes its own token endpoint —
+   * the picker itself is identical either way, and both endpoints funnel into
+   * the same lib/reschedule.ts, so there is nothing to keep in sync here.
+   */
+  submitUrl?: string
 }) {
   const cur = centralParts(booking.start_time)
   const durationHours =
@@ -120,7 +127,7 @@ export default function RescheduleModal({
     if (picked == null) return
     setBusy(true); setErr('')
     try {
-      const res = await fetch(`/api/account/bookings/${booking.id}/reschedule`, {
+      const res = await fetch(submitUrl ?? `/api/account/bookings/${booking.id}/reschedule`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date, startHour: picked }),
       })

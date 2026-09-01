@@ -120,6 +120,10 @@ interface BookingConfirmationData {
   startISO?: string        // primary window start/end (raw ISO) for calendar links
   endISO?: string
   checkInToken?: string    // gates the downloadable .ics link
+  manageToken?: string     // opens /manage/<token> — the ONLY way a guest (no
+                           // account) can see or move their own booking.
+                           // Separate secret from checkInToken on purpose;
+                           // see migration 101.
   receiptUrl?: string      // Square's itemised card receipt. Square does NOT
                            // email one on its own, so without this link the
                            // customer never gets an itemised record at all.
@@ -129,10 +133,13 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, guestCapacity, doorCode, doorCodeBack, startISO, endISO, checkInToken, receiptUrl } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, guestCapacity, doorCode, doorCodeBack, startISO, endISO, checkInToken, manageToken, receiptUrl } = data
   const isBuyout = /full studio takeover/i.test(setName) // buyouts are private — skip the shared-studio note
 
-  const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', doorCodeBack ? `Back-door code: ${doorCodeBack}.` : '', `Manage: ${APP_URL}/account`].filter(Boolean).join(' ')
+  const manageLink = manageToken ? `${APP_URL}/manage/${manageToken}` : null
+  // ⚠️ This used to point unconditionally at /account, which a GUEST cannot open
+  // — no account, no session, nothing to see. The manage link works for both.
+  const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', doorCodeBack ? `Back-door code: ${doorCodeBack}.` : '', `Manage: ${manageLink ?? `${APP_URL}/account`}`].filter(Boolean).join(' ')
   const gCalLink = (startISO && endISO)
     ? googleCalUrl({ title: `Made Kulture — ${setName}`, startISO, endISO, location: STUDIO_ADDRESS, details: calDetails })
     : null
@@ -229,6 +236,20 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
           <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Back-Door Code</p>
           <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
           <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">back-door</strong> keypad, then press the unlock button. It only works during your booked time. Don't share it.</p>
+        </td>
+      </tr>
+    </table>` : ''}
+
+    ${manageLink ? `
+    <!-- Manage booking — the guest's only door back in. Placed ABOVE the
+         calendar buttons because "I need to change my time" is the reason
+         somebody reopens this email weeks later, and it used to have no
+         answer except texting the studio. -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      <tr>
+        <td align="center">
+          <a href="${manageLink}" style="display:inline-block;background:${ACCENT_COLOR};color:#0b0b0d;font-size:13px;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:4px;letter-spacing:0.06em;text-transform:uppercase;">View or change my booking</a>
+          <p style="margin:10px 0 0;font-size:12px;color:#888;">Need a different time? You can move your session yourself, up to 48 hours before it starts.</p>
         </td>
       </tr>
     </table>` : ''}

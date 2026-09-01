@@ -149,6 +149,9 @@ export async function POST(req: NextRequest) {
         status:                 'confirmed',
         base_amount:            amount,
         total_amount:           amount,
+        // Priced by an admin — no guest surcharge. Explicit 0 rather than NULL
+        // ("unknown"); see migration 100.
+        guest_surcharge_amount: 0,
         square_payment_id:      squarePaymentId,
         square_card_on_file_id: savedCardId,
         source:                 'manual',

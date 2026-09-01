@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
     .from('bookings')
     .select(`
       id, start_time, end_time, status, total_amount, notes, source, created_at,
-      square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount, customer_id,
+      square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount,
+      guest_surcharge_amount, customer_id,
       checked_in_at, checked_out_at, arrived_guest_count, cleaning_status,
       sets ( name ),
       customers ( name, email, phone, status, banned, square_customer_id ),
@@ -96,6 +97,10 @@ export async function POST(req: NextRequest) {
       status:       'confirmed',
       total_amount: totalAmount,
       base_amount:  totalAmount,
+      // Explicitly 0, not left NULL: an admin priced this by hand, so there is
+      // no guest surcharge in it. NULL would mean "unknown" and would make the
+      // extension pricing hedge on a booking we know the answer for. (100)
+      guest_surcharge_amount: 0,
       source:       'manual',
       notes,
     })

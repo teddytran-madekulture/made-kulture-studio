@@ -16,28 +16,18 @@ import { randomUUID } from 'crypto'
 
 export type ExtensionKind = 'extend' | 'overage'
 
-const RATE_BY_NAME: Record<string, number> = {
-  'Set A': 40, 'Set B': 40, 'Set C': 40, 'Set D': 40,
-  'Concrete': 40, 'Vintage': 40, 'Cottage': 40,
-  'The Watering Hole': 75, 'The Tank': 75, 'Studio One': 65,
-}
-const SLUG_BY_NAME: Record<string, string> = {
-  'Set A': 'set-a', 'Set B': 'set-b', 'Set C': 'set-c', 'Set D': 'set-d',
-  'Concrete': 'concrete', 'Vintage': 'vintage', 'Cottage': 'cottage',
-  'The Watering Hole': 'watering-hole', 'The Tank': 'the-tank', 'Studio One': 'studio-one',
-}
-
-function rateFor(setName: string | undefined, overrides: any): number {
-  if (!setName) return 0
-  let rate = RATE_BY_NAME[setName] ?? 0
-  if (overrides) {
-    const slug = SLUG_BY_NAME[setName]
-    const perSet = slug ? overrides.sets?.[slug] : undefined
-    if (perSet != null) rate = Number(perSet)
-    else if (overrides.hourly_rate != null) rate = Number(overrides.hourly_rate)
-  }
-  return rate
-}
+// ⚠️ The set-rate table and rateFor() used to live here, and three other files
+// kept their own copies. When the non-member surcharge was added to checkout,
+// none of the copies learned about it and every extension path undercharged
+// guests. Both now come from lib/guest-rate.ts — see the note at the top of it.
+// Re-exported so existing importers of this module keep working.
+export {
+  guestSurchargePerHourOf,
+  effectiveHourlyRate,
+  rateFor,
+  RATE_BY_NAME,
+} from '@/lib/guest-rate'
+import { effectiveHourlyRate } from '@/lib/guest-rate'
 
 // "30 minutes" / "1 hour" / "1 hr 30 min" / "2 hours" — used in every SMS and on
 // the confirm page, so a half-hour never reads as "+0.5 hours".
@@ -61,7 +51,8 @@ export function normalizeHours(raw: unknown): number | null {
 }
 
 const SELECT = `
-  id, start_time, end_time, status, set_id, total_amount, customer_id, auth_user_id, gcal_event_id,
+  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount,
+  customer_id, auth_user_id, gcal_event_id,
   square_card_on_file_id, door_code, door_code_back, checked_out_at,
   sets ( name ),
   customers ( name, email, phone, square_customer_id, pricing_overrides )
@@ -98,7 +89,9 @@ export async function planExtension(
   const customer = b.customers as any
   if (!b.set_id || !setName) return { error: 'Full-studio buyouts are extended by the team — tap GET THE TEAM or text (832) 408-1631.' }
 
-  const rate = rateFor(setName, customer?.pricing_overrides)
+  // ⚠️ effectiveHourlyRate, NOT rateFor — a guest booking carries a per-hour
+  // surcharge and extending it at the bare set rate undercharged every time.
+  const rate = effectiveHourlyRate(setName, customer?.pricing_overrides, b as any)
   if (!rate) return { error: `No hourly rate found for ${setName}.` }
 
   const priceCents = Math.round(rate * hours * 100)

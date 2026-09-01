@@ -9,6 +9,10 @@ import AddSetModal from '@/components/AddSetModal'
 import AddChargeModal from '@/components/AddChargeModal'
 import OvertimeModal from '@/components/OvertimeModal'
 import { bookingHourToISO } from '@/lib/booking-times'
+// ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
+// share the API routes' pricing instead of keeping a fourth copy of the rate
+// table. Do not import from lib/extensions here — that one pulls in Supabase.
+import { RATE_BY_NAME, guestSurchargePerHourOf } from '@/lib/guest-rate'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -64,6 +68,9 @@ interface Booking {
   square_card_on_file_id: string | null
   guest_count: number | null
   guest_fee_amount: number | null
+  // Non-member surcharge as sold, for the ORIGINAL window (migration 100).
+  // null = a pre-migration row whose rate could not be inferred.
+  guest_surcharge_amount: number | null
   customer_id: string | null
   checked_in_at: string | null
   checked_out_at: string | null
@@ -246,11 +253,27 @@ const clampToBusiness = (h: number) => Math.min(22, Math.max(9, Math.round(h * 2
 // same-evening option under a full day of next-day ones, because 0:30 < 20.5.
 const rotateFrom = (slots: number[], start: number) =>
   slots.filter(h => h !== start).sort((a, b) => ((a - start + 24) % 24) - ((b - start + 24) % 24))
-const SET_RATES: Record<string, number> = {
-  'Set A': 40, 'Set B': 40, 'Set C': 40, 'Set D': 40,
-  'Concrete': 40, 'Vintage': 40, 'Cottage': 40,
-  'The Watering Hole': 75, 'Studio One': 65,
-}
+// ⚠️ Was a local table that had already drifted — it was missing 'The Tank',
+// which every other copy priced at 75. Now the shared one. See lib/guest-rate.ts.
+const SET_RATES = RATE_BY_NAME
+
+// The LIST rate for a set plus the per-hour guest surcharge THIS booking was
+// sold at, so the modal quotes a guest booking at the price its customer
+// actually pays. Without it the modal read "@ $40/hr" on a $50/hr booking and,
+// worse, priced added time $10/hr light.
+//
+// ⚠️ Must be used on BOTH sides of editDiff — here and in the editOrigTotal
+// snapshot in openEdit(). If only one side learns about the surcharge, an
+// untouched booking stops subtracting to zero and the modal invents a
+// difference on a booking nobody changed. That exact bug cost a real booking
+// $25 in August; see the editDiff comment.
+//
+// ⚠️ Per-customer rate overrides are not applied here — the dashboard does not
+// load pricing_overrides. That is unchanged from before (SET_RATES ignored them
+// too), and it cancels out of editDiff as long as both sides agree. The server
+// is the authority on what any button actually charges.
+const effectiveRateFor = (setName: string, b: Booking | null) =>
+  (SET_RATES[setName] ?? 40) + (b ? guestSurchargePerHourOf(b) : 0)
 const SLOT_H     = 44    // px per 30-min slot → 88px/hr
 const CAL_START  = 9
 const CAL_END    = 22
@@ -471,6 +494,11 @@ export default function AdminDashboard() {
   const [tab,       setTab]       = useState<'upcoming' | 'past' | 'all'>('upcoming')
   const [expanded,  setExpanded]  = useState<string | null>(null)
   const [cancelling,setCancelling]= useState<string | null>(null)
+  const [resending, setResending] = useState<string | null>(null)
+  // ⚠️ Carries the booking id it belongs to. Without it, opening a DIFFERENT
+  // booking still shows the last "Sent to …" line, which reads as confirmation
+  // that an email went to a customer nobody emailed.
+  const [resendMsg, setResendMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null)
   const [cancellingLink, setCancellingLink] = useState<string | null>(null)
   const [noShowBusy, setNoShowBusy] = useState<string | null>(null)
   const [showManual,setShowManual]= useState(false)
@@ -544,6 +572,8 @@ export default function AdminDashboard() {
   // editDiff subtracts. Snapshotted on open so add-ons/fees can never leak in.
   const [editOrigTotal, setEditOrigTotal] = useState(0)
   const [editDoorCode, setEditDoorCode] = useState<{ front: string | null; back: string | null } | null>(null)
+  const [doorSending, setDoorSending]   = useState(false)
+  const [doorSendMsg, setDoorSendMsg]   = useState<{ ok: boolean; text: string } | null>(null)
   const [editCards,   setEditCards]   = useState<SquareCard[]>([])
   const [editCard,    setEditCard]    = useState<SquareCard | null>(null)
   const [editSquareCustId, setEditSquareCustId] = useState<string | null>(null)
@@ -1157,6 +1187,36 @@ export default function AdminDashboard() {
     router.push('/admin')
   }
 
+  // Resend the booking confirmation. One email, no side effects — the route
+  // deliberately avoids finalizeBooking so it can't mint a second door code.
+  //
+  // ⚠️ Reports the SERVER's answer, never "sent" on any resolved fetch. The
+  // route distinguishes a disabled template from a missing API key from a
+  // provider rejection, and all three are non-sends; a cheerful green tick on
+  // one of them is how somebody waits all afternoon for an email that never
+  // left. See kiosk-summon-ack.
+  const handleResendConfirmation = async (id: string) => {
+    setResending(id); setResendMsg(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}/resend-confirmation`, { method: 'POST' })
+      const d = await res.json().catch(() => ({} as any))
+      if (!res.ok) {
+        setResendMsg({ id, ok: false, text: d.error || 'Could not resend that confirmation.' })
+      } else {
+        setResendMsg({
+          id, ok: true,
+          text: `Sent to ${d.to}.${d.hasManageLink
+            ? ' It includes their "view or change my booking" link.'
+            : ' ⚠️ This booking has no manage token, so the email has NO self-service link — run migration 101.'}`,
+        })
+      }
+    } catch {
+      setResendMsg({ id, ok: false, text: 'Something went wrong — nothing was sent.' })
+    } finally {
+      setResending(null)
+    }
+  }
+
   const handleCancel = async (id: string) => {
     if (!confirm('Cancel this booking?')) return
     // Money resolution: credit first (refund-avoidance), else refund, else neither.
@@ -1248,8 +1308,12 @@ export default function AdminDashboard() {
     // computed with the same helpers the form uses so an untouched booking
     // subtracts to exactly zero. See the editDiff comment for why this is not
     // total_amount.
+    // ⚠️ effectiveRateFor, matching editRate below — both sides of editDiff must
+    // use the same arithmetic or an untouched booking stops cancelling to zero.
+    // Uses the booking's ORIGINAL set; changing the set in the form is supposed
+    // to move the difference, changing nothing is not.
     setEditOrigTotal(Math.max(
-      spanHours(localHour(b.start_time), localHour(b.end_time)) * (SET_RATES[b.sets?.name || ''] ?? 40),
+      spanHours(localHour(b.start_time), localHour(b.end_time)) * effectiveRateFor(b.sets?.name || '', b),
       0,
     ))
     // A booking already outside business hours has to open with the full clock
@@ -1273,6 +1337,35 @@ export default function AdminDashboard() {
       setEditCard(list[0] ?? null)
       setEditSquareCustId(list[0]?.squareCustomerId ?? null)
     } catch { /* leave cards empty → keyed-entry fallback still works */ }
+  }
+
+  // Send the booking's CURRENT door code to the customer. Sends what is already
+  // on the row — it never mints one, because igloohome PINs cannot be revoked.
+  //
+  // ⚠️ Reports each channel separately. The route knows whether the text and the
+  // email actually left, and "sent" over a half-delivery is how somebody ends up
+  // certain a guest was told when they weren't.
+  const handleSendDoorCode = async (id: string) => {
+    setDoorSending(true); setDoorSendMsg(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}/send-door-code`, { method: 'POST' })
+      const d = await res.json().catch(() => ({} as any))
+      if (!res.ok) {
+        setDoorSendMsg({ ok: false, text: d.error || 'Could not send that code.' })
+      } else {
+        const went = [d.smsOk ? 'texted' : null, d.emailOk ? 'emailed' : null].filter(Boolean).join(' and ')
+        setDoorSendMsg({
+          ok: true,
+          text: d.partial
+            ? `Partly sent — ${went}. The other channel failed; check the logs before assuming they have it.`
+            : `Code ${went} to the customer.`,
+        })
+      }
+    } catch {
+      setDoorSendMsg({ ok: false, text: 'Something went wrong — assume they were not sent it.' })
+    } finally {
+      setDoorSending(false)
+    }
   }
 
   const handleEditSave = async () => {
@@ -1510,7 +1603,8 @@ export default function AdminDashboard() {
     ? rotateFrom(manualSlots, manual.startHour)
     : manualSlots.filter(h => h > manual.startHour)
   const editDuration = spanHours(editState.startHour, editState.endHour)
-  const editRate     = SET_RATES[editState.setName] ?? 40
+  // The rate THIS customer pays, guest surcharge included — see effectiveRateFor.
+  const editRate     = effectiveRateFor(editState.setName, editBooking)
   const editNewTotal = Math.max(editDuration * editRate, 0)
 
   // ⚠️ The baseline is the booking's ORIGINAL SET TIME, not total_amount.
@@ -4293,6 +4387,23 @@ export default function AdminDashboard() {
                   : 'CHARGE OVERTIME'}
               </button>
             )}
+            {/* RESEND CONFIRMATION — sends one email and nothing else. It does
+                NOT re-mint a door code or re-alert the owner (see the route).
+                The reason it exists: the confirmation now carries the
+                /manage/<token> link, which is how a guest with no account
+                changes their own booking, and every booking made before that
+                shipped has a token its customer never received. */}
+            {detailBooking.status !== 'cancelled' && detailBooking.customers?.email && (
+              <button onClick={() => handleResendConfirmation(detailBooking.id)} disabled={resending === detailBooking.id}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
+                {resending === detailBooking.id ? 'SENDING...' : 'RESEND CONFIRMATION EMAIL'}
+              </button>
+            )}
+            {resendMsg?.id === detailBooking.id && (
+              <div style={{ fontSize: 11, lineHeight: 1.6, padding: '2px 2px 0', color: resendMsg.ok ? '#4ade80' : '#fbbf24' }}>
+                {resendMsg.text}
+              </div>
+            )}
             {detailBooking.customers?.phone && (
               <button onClick={() => window.open(`sms:${detailBooking.customers?.phone}`, '_blank')}
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
@@ -4494,8 +4605,23 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 8, lineHeight: 1.5 }}>
-                  Texted to you as well, so you can forward it. Their old code stops working at the original end time. The customer has not been notified.
+                  Texted to you as well, so you can forward it. Their old code stops working at the original end time.
+                  {!doorSendMsg && ' The customer has not been notified.'}
                 </div>
+                {/* One tap instead of forwarding by hand. The code still goes to
+                    Teddy first BY DESIGN — a code changing silently under someone
+                    is worse than one arriving late — but "forward it yourself" is
+                    the step that gets dropped at 9pm, and the cost of dropping it
+                    is a guest at a locked door. */}
+                <button onClick={() => editBooking && handleSendDoorCode(editBooking.id)} disabled={doorSending}
+                  style={{ marginTop: 12, width: '100%', background: doorSending ? 'rgba(212,168,67,0.25)' : 'rgba(212,168,67,0.9)', border: 'none', color: '#0b0b0d', padding: '11px', cursor: doorSending ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', fontWeight: 700 }}>
+                  {doorSending ? 'SENDING...' : 'SEND THIS CODE TO THE CUSTOMER'}
+                </button>
+                {doorSendMsg && (
+                  <div style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5, color: doorSendMsg.ok ? '#4ade80' : '#fbbf24' }}>
+                    {doorSendMsg.text}
+                  </div>
+                )}
               </div>
             )}
 
@@ -4563,11 +4689,14 @@ export default function AdminDashboard() {
         />
       )}
 
-      {/* CHARGE OVERTIME — a session that ran past its booked end time */}
+      {/* CHARGE OVERTIME — a session that ran past its booked end time.
+          ⚠️ rate is the EFFECTIVE rate: a guest who runs over is billed at the
+          rate they booked at, not the member rate. Same reasoning as the
+          extension paths — see lib/guest-rate.ts. */}
       {overtimeFor && (
         <OvertimeModal
           booking={overtimeFor as any}
-          rate={SET_RATES[overtimeFor.sets?.name ?? ''] ?? 40}
+          rate={effectiveRateFor(overtimeFor.sets?.name ?? '', overtimeFor)}
           onClose={() => setOvertimeFor(null)}
           onSuccess={() => { setOvertimeFor(null); setDetailBooking(null); fetchBookings() }}
         />

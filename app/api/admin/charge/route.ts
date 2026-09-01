@@ -105,6 +105,13 @@ export async function POST(req: NextRequest) {
         end_time:           endISO,
         status:             'confirmed',
         total_amount:       totalAmount,
+        // base_amount was never written here, unlike every other insert site.
+        // That left the row's breakdown unreconstructable: total - base - fees
+        // is how the rest of the app works out what a booking is made of, and on
+        // these rows it silently read as "the whole total is unaccounted for".
+        base_amount:            totalAmount,
+        // Priced by an admin — no guest surcharge. Explicit 0, see migration 100.
+        guest_surcharge_amount: 0,
         square_payment_id:  squarePaymentId,
         square_customer_id: squareCustomerId,
         square_card_id:     squareCardId,

@@ -659,6 +659,8 @@ export async function POST(req: NextRequest) {
     const bookingIds: string[] = []
     const gcalRows: { id: string; line: (typeof lines)[number] }[] = []
     let checkInToken: string | null = null
+    // Opens /manage/<token> — how a guest with no account reaches this booking.
+    let manageToken: string | null = null
 
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
@@ -679,6 +681,14 @@ export async function POST(req: NextRequest) {
           total_amount:       rowTotal,
           guest_count:        guestCount || null,
           guest_fee_amount:   i === 0 ? guestFeeDollars : 0,
+          // See the matching note in lib/booking-core.ts insertBookingRows.
+          // Recorded so extensions and the admin edit modal can tell a guest
+          // booking from a member one; without it they priced everything at the
+          // member rate. Migration 100.
+          // ⚠️ This is the surcharge as CHARGED, before the promo discount that
+          // rowTotal applies — it describes the rate this customer books at, not
+          // what the line finally settled for.
+          guest_surcharge_amount: i === 0 ? guestSurchargeDollars : 0,
           square_payment_id:      squarePaymentId,
           square_card_on_file_id: savedCardId,
           order_group:            orderGroup,
@@ -686,7 +696,7 @@ export async function POST(req: NextRequest) {
           notes:                  body.notes,
           ...(chargeCents === 0 ? { payment_status: 'paid' } : {}),
         })
-        .select('id, check_in_token').single()
+        .select('id, check_in_token, manage_token').single()
 
       if (bookingError) {
         console.error('Supabase booking error:', bookingError)
@@ -696,6 +706,7 @@ export async function POST(req: NextRequest) {
         bookingIds.push(bookingData.id)
         gcalRows.push({ id: bookingData.id, line: l })
         if (i === 0) checkInToken = (bookingData as any).check_in_token ?? null
+        if (i === 0) manageToken  = (bookingData as any).manage_token ?? null
 
         // Equipment add-ons attach to the first row (charged once).
         if (i === 0 && (body.equipment?.length ?? 0) > 0) {
@@ -855,6 +866,7 @@ export async function POST(req: NextRequest) {
           doorCodeBack: doorCodeBack || undefined,
           startISO: primary.startISO, endISO: primary.endISO,
           checkInToken: checkInToken || undefined,
+          manageToken: manageToken || undefined,
         }).catch(err => console.error('Email confirmation error (non-fatal):', err)),
 
         sendNewBookingAlert({

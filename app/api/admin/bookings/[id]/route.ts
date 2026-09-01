@@ -9,6 +9,7 @@ import { notifyDelegatedRefund } from '@/lib/refund-notify'
 import { issueCredit } from '@/lib/credits'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { notifyCoverageGap } from '@/lib/coverage'
+import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { issueDoorCodes } from '@/lib/igloohome'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 
@@ -72,6 +73,67 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const { data: setData } = await supabase
         .from('sets').select('id').eq('name', body.setName).single()
       updates.set_id = setData?.id ?? null
+    }
+  }
+
+  // ── Is the new window actually free? ──────────────────────────────────────
+  //
+  // ⚠️ The database's no_overlap GIST constraint was the ONLY thing guarding
+  // this path, and it keys on set_id — so a FULL-WAREHOUSE BUYOUT, which is one
+  // row with set_id NULL, is invisible to it. An admin could move a session
+  // straight into a confirmed buyout and the write would succeed. That is the
+  // same blindness that sold two bookings inside a buyout on 2026-08-22; the
+  // public paths were fixed then, this one was not.
+  //
+  // Runs BEFORE the write so the refusal names what it collided with, instead of
+  // the constraint's "conflicts with another booking" after the fact. The
+  // constraint stays as the backstop below — this is not a replacement for it.
+  //
+  // ⚠️ Excludes THIS booking, or a nudge from 6:00 to 6:30 conflicts with the
+  // very row being moved. Cancelling is exempt: a cancellation frees the slot.
+  // ⚠️ `force: true` is the escape hatch. The set-vs-set case is refused by the
+  // database regardless, so this only ever waives the BUYOUT check — a thing an
+  // admin could do silently until now. There is no button for it: it exists so
+  // that a real "the buyout client agreed to share" situation at 11pm is a
+  // deliberate API call rather than a wall, and so adding a button later is a
+  // UI decision instead of a rewrite.
+  if (!body.force && body.status !== 'cancelled' && (body.start_time !== undefined || body.end_time !== undefined)) {
+    const { data: cur } = await supabase
+      .from('bookings').select('start_time, end_time, set_id, sets(name)').eq('id', params.id).single()
+    const startISO = updates.start_time ?? cur?.start_time
+    const endISO   = updates.end_time   ?? cur?.end_time
+    // set_id may be changing in this same PATCH (the modal can move sets).
+    const setId    = updates.set_id !== undefined ? updates.set_id : cur?.set_id
+    const setName  = body.setName ?? (cur as any)?.sets?.name ?? 'this set'
+
+    if (startISO && endISO) {
+      try {
+        if (setId) {
+          const { ok, conflicts } = await checkSetWindows(
+            supabase, [{ setId, setName, startISO, endISO }], params.id,
+          )
+          if (!ok) return NextResponse.json({ error: conflicts.map(c => c.reason).join(' ') }, { status: 409 })
+        } else {
+          // set_id null = a full-warehouse buyout. The reverse question: is the
+          // whole floor clear? Without this branch a buyout skipped the check
+          // entirely, exactly as both booking paths used to.
+          const { ok, conflicts } = await checkBuyoutWindow(supabase, startISO, endISO, params.id)
+          if (!ok) {
+            return NextResponse.json({
+              error: `${conflicts.map(c => c.reason).join(' ')} Nothing was changed.`,
+              overridable: true,
+            }, { status: 409 })
+          }
+        }
+      } catch (e: any) {
+        // ⚠️ These throw rather than returning [] on a lookup failure, on
+        // purpose — "no conflicts found" from a broken query is how the buyout
+        // bug shipped. Refuse instead of guessing the floor is empty.
+        console.error('[admin PATCH] availability check failed:', e)
+        return NextResponse.json({
+          error: 'Could not confirm that slot is free, so nothing was changed. Try again.',
+        }, { status: 503 })
+      }
     }
   }
 

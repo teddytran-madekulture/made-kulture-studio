@@ -13,33 +13,16 @@ const square = new Client({
   environment: process.env.SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox,
 })
 
-// Hourly rate + slug by set display name (mirrors app/api/bookings pricing).
-const RATE_BY_NAME: Record<string, number> = {
-  'Set A': 40, 'Set B': 40, 'Set C': 40, 'Set D': 40,
-  'Concrete': 40, 'Vintage': 40, 'Cottage': 40,
-  'The Watering Hole': 75, 'The Tank': 75, 'Studio One': 65,
-}
-const SLUG_BY_NAME: Record<string, string> = {
-  'Set A': 'set-a', 'Set B': 'set-b', 'Set C': 'set-c', 'Set D': 'set-d',
-  'Concrete': 'concrete', 'Vintage': 'vintage', 'Cottage': 'cottage',
-  'The Watering Hole': 'watering-hole', 'The Tank': 'the-tank', 'Studio One': 'studio-one',
-}
-
-function rateFor(setName: string | undefined, overrides: any): number {
-  if (!setName) return 0
-  let rate = RATE_BY_NAME[setName] ?? 0
-  if (overrides) {
-    const slug = SLUG_BY_NAME[setName]
-    const perSet = slug ? overrides.sets?.[slug] : undefined
-    if (perSet != null) rate = Number(perSet)
-    else if (overrides.hourly_rate != null) rate = Number(overrides.hourly_rate)
-  }
-  return rate
-}
+// ⚠️ The rate table and rateFor() that used to live here were a THIRD copy of
+// lib/extensions.ts's, and when the guest surcharge was added to checkout none
+// of the copies learned about it — so staff add-time charged a guest the member
+// rate. Importing the shared helper is the point: the next pricing rule only has
+// to be taught once. See migration 100.
+import { effectiveHourlyRate } from '@/lib/extensions'
 
 const SELECT = `
-  id, start_time, end_time, status, set_id, total_amount, customer_id,
-  square_card_on_file_id,
+  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount,
+  customer_id, square_card_on_file_id,
   sets ( name ),
   customers ( name, email, phone, square_customer_id, pricing_overrides )
 `
@@ -56,7 +39,10 @@ async function plan(id: string, hours: number) {
   const customer = b.customers as any
   if (!b.set_id || !setName) return { error: 'Can’t auto-price a full-buyout extension — charge and extend manually.' }
 
-  const rate = rateFor(setName, customer?.pricing_overrides)
+  // ⚠️ Includes the guest surcharge this booking was sold at — see the note on
+  // effectiveHourlyRate. Pricing this at the bare set rate undercharged every
+  // non-member who added time at the desk.
+  const rate = effectiveHourlyRate(setName, customer?.pricing_overrides, b as any)
   if (!rate) return { error: `No hourly rate found for ${setName}.` }
 
   const priceCents = Math.round(rate * hours * 100)

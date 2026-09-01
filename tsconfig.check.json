@@ -87,6 +87,16 @@
     "app/api/admin/kiosk-links/route.ts",
     "lib/sms.ts",
     "app/api/bookings/route.ts",
-    "app/api/availability/route.ts"
+    "app/api/availability/route.ts",
+    "lib/guest-rate.ts",
+    "lib/reschedule.ts",
+    "app/api/manage/[token]/route.ts",
+    "app/manage/[token]/page.tsx",
+    "app/api/desk/bookings/[id]/add-time/route.ts",
+    "app/api/admin/bookings/route.ts",
+    "app/api/admin/bookings/[id]/extension/route.ts",
+    "app/api/admin/bookings/[id]/route.ts",
+    "app/api/admin/bookings/[id]/resend-confirmation/route.ts",
+    "app/api/admin/bookings/[id]/send-door-code/route.ts"
   ]
 }

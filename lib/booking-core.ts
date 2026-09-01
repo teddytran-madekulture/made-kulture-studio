@@ -376,7 +376,7 @@ export async function finalizeBooking(
 ): Promise<{ doorCode: string | null }> {
   const { data: rows } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, notes, guest_count, total_amount, check_in_token, gcal_event_id, set_id, sets(name), customers(name, email, phone)')
+    .select('id, start_time, end_time, notes, guest_count, total_amount, check_in_token, manage_token, gcal_event_id, set_id, sets(name), customers(name, email, phone)')
     .in('id', bookingIds)
 
   if (!rows || rows.length === 0) return { doorCode: null }
@@ -524,6 +524,10 @@ export async function finalizeBooking(
         doorCodeBack: doorCodeBack || undefined,
         startISO: primary.startISO, endISO: primary.endISO,
         checkInToken: first.check_in_token || undefined,
+        // The guest's way back to this booking — see migration 101. Delegated
+        // and short-notice bookings come through here, not through the inline
+        // copy in app/api/bookings, so both paths have to pass it.
+        manageToken: first.manage_token || undefined,
       } as any).catch((err: any) => console.error('[finalize] email confirm error:', err)),
       sendNewBookingAlert({
         customerName: custName, customerEmail: custEmail, customerPhone: custPhone,
@@ -621,6 +625,14 @@ export async function insertBookingRows(
         total_amount:     rowTotal,
         guest_count:      guestCount || null,
         guest_fee_amount: i === 0 ? guestFeeDollars : 0,
+        // The non-member surcharge, recorded instead of vanishing into
+        // total_amount. Everything that later re-derives a price for this
+        // booking (extensions, the admin edit modal) reads it to work out what
+        // the customer's real hourly rate was — without it they all fell back
+        // to the member rate and undercharged. Migration 100.
+        // ⚠️ Like the fees above it, this lands on the FIRST row of a multi-set
+        // order only; siblings record 0 so the order still sums correctly.
+        guest_surcharge_amount: i === 0 ? guestSurchargeDollars : 0,
         order_group:      orderGroup,
         source:           opts.source,
         notes:            opts.notes ?? null,
