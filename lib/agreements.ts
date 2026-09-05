@@ -59,13 +59,13 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Bookings outside these hours may be avail
 - Audio recording: The studio is not soundproofed and sits near the I-45 freeway. A full-warehouse buyout is recommended for audio work.
 - Special effects (fog, haze, smoke bombs, etc.): Not permitted during shared bookings; available for full-warehouse buyouts or solo bookings only, and must be pre-approved.
 - Drones and other unmanned aircraft: Not permitted. Flying indoors around people, sets, and lighting carries a real risk of injury and damage.
-- Messy concepts (paint, fake blood, glitter, excessive oils, etc.) must be approved in advance. Floors and surfaces must be protected with plastic or other suitable material so they are not damaged.
+- Messy concepts (paint, fake blood, glitter, excessive oils, waxes, smoke bombs, and similar materials) are not allowed in the studio. If your production requires something messy, or anything outside how the studio normally operates, you must request a concept review in writing before booking. Reviews are decided case by case, approval is never guaranteed, and an approved concept requires a refundable cleaning deposit and protection of floors and surfaces as directed.
 - Children are welcome but count toward the guest limit; shared-studio conditions may not be suitable for young children.
 - No illegal activity of any kind is permitted on the premises at any time.
 
 ## Cleaning & Damage
 
-- Leave the set clean and as you found it — furniture returned to place, and all lights, sound systems, and equipment turned off. Modeling lights and receivers must be turned off when not in use. A cleaning fee may apply based on the condition of the set — typically starting around $100, with a higher fee for messy concepts (paint, glitter, fake blood, oils, etc.).
+- Leave the set clean and as you found it — furniture returned to place, and all lights, sound systems, and equipment turned off. Modeling lights and receivers must be turned off when not in use. A cleaning fee may apply based on the condition of the set — typically starting around $100, with a higher fee where a set is left in a condition requiring deep cleaning.
 - You are responsible for any equipment, furniture, fixtures, props, or other property that is mishandled, broken, damaged, ruined, or stolen during your rental. You agree to replace such items (with equivalent or better) or pay all repair/replacement costs within 48 hours, charged to the card on file if not otherwise paid.
 
 ## Smoke-Free Facility
@@ -137,14 +137,14 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Outside-hours bookings are available by r
 
 - During your buyout you have private, exclusive use of the entire warehouse and all sets.
 - Nudity is permitted, as your party is the only booking on site.
-- Special effects (fog, haze, smoke bombs, etc.), studio blackout, and projector use are available during a buyout. Messy concepts (paint, fake blood, glitter, excessive oils, etc.) must be approved in advance, and floors and surfaces must be protected with plastic or other suitable material so they are not damaged.
+- Special effects (fog, haze, smoke bombs, etc.), studio blackout, and projector use are available during a buyout. Messy concepts (paint, fake blood, glitter, excessive oils, waxes, and similar materials) are not allowed. If your production requires something messy, or anything outside how the studio normally operates, you must request a concept review in writing before booking. Reviews are decided case by case, approval is never guaranteed, and an approved concept requires a refundable cleaning deposit and protection of floors and surfaces as directed.
 - Drones and other unmanned aircraft: Not permitted without advance written approval. Where approved, the operator must provide proof of drone liability coverage naming Made Kulture as an additional insured before any flight, and remains responsible for any injury or damage caused.
 - Audio recording: The building is not soundproofed and sits near the I-45 freeway, so ambient noise may be present even during a private buyout.
 - No illegal activity of any kind is permitted on the premises at any time.
 
 ## Cleaning & Damage
 
-- Leave the space clean and as you found it — furniture returned to place, props returned to their original locations, and all lights, sound systems, and equipment turned off. Modeling lights and receivers must be turned off when not in use. A cleaning fee may apply based on the condition of the space — typically starting around $150, with a higher fee for messy concepts (paint, glitter, fake blood, oils, etc.).
+- Leave the space clean and as you found it — furniture returned to place, props returned to their original locations, and all lights, sound systems, and equipment turned off. Modeling lights and receivers must be turned off when not in use. A cleaning fee may apply based on the condition of the space — typically starting around $150, with a higher fee where the space is left in a condition requiring deep cleaning.
 - You are responsible for any equipment, furniture, fixtures, props, or other property that is mishandled, broken, damaged, ruined, or stolen during your rental. You agree to replace such items (with equivalent or better) or pay all repair/replacement costs within 48 hours, charged to the card on file if not otherwise paid.
 
 ## Smoke-Free Facility
