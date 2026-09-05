@@ -64,7 +64,7 @@ export default function AdminInboxPage() {
   const [sendError, setSendError]           = useState<string | null>(null)
   const [loadError, setLoadError]           = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [tab, setTab]               = useState<'convos' | 'kb' | 'tours'>('convos')
+  const [tab, setTab]               = useState<'convos' | 'kb' | 'tours' | 'concepts'>('convos')
   const [tours, setTours]           = useState<any[]>([])
   const [tourBusy, setTourBusy]     = useState<string | null>(null)
   const [kb, setKb]                 = useState<KbEntry[]>([])
@@ -74,6 +74,8 @@ export default function AdminInboxPage() {
   const [newContent, setNewContent] = useState('')
   const [pushState, setPushState]   = useState<'idle' | 'busy' | 'ok' | 'stale' | 'denied' | 'unsupported' | 'error'>('idle')
   const [tabCounts, setTabCounts]   = useState<{ inbox: number; tours: number }>({ inbox: 0, tours: 0 })
+  const [concepts, setConcepts]     = useState<any[]>([])
+  const [conceptBusy, setConceptBusy] = useState<string | null>(null)
   const [isMobile, setIsMobile]     = useState(false)
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 720)
@@ -388,6 +390,51 @@ export default function AdminInboxPage() {
     return () => clearInterval(iv)
   }, [tab, loadTours])
 
+  // The concept-review push deep-links here with ?tab=concepts. Without this the
+  // notification would open the inbox on the wrong tab and look like it failed.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'concepts' || t === 'tours' || t === 'kb') setTab(t)
+  }, [])
+
+  const loadConcepts = useCallback(async () => {
+    const r = await fetch('/api/admin/concept-reviews')
+    if (!r.ok) return
+    const d = await r.json()
+    setConcepts(d.entries ?? [])
+  }, [])
+
+  useEffect(() => {
+    if (tab !== 'concepts') return
+    loadConcepts()
+    const iv = setInterval(loadConcepts, 20000)
+    return () => clearInterval(iv)
+  }, [tab, loadConcepts])
+
+  // Approving records a refundable cleaning deposit; it does NOT charge a card.
+  // A submitter often has no booking yet, so there may be no card on file, and a
+  // review screen is the wrong place to move money silently.
+  const decideConcept = async (c: any, decision: 'approved' | 'declined') => {
+    const deposit = decision === 'approved'
+      ? window.prompt(`Refundable cleaning deposit for ${c.name}? Amount in dollars — leave blank for none.`, '250')
+      : null
+    if (decision === 'approved' && deposit === null) return
+    const note = window.prompt(decision === 'approved'
+      ? 'Anything to add to the approval text? (optional)'
+      : `Reason to send ${c.name}? (optional, goes in the decline text)`, '') ?? ''
+    setConceptBusy(c.id)
+    try {
+      const r = await fetch('/api/admin/concept-reviews', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, decision, deposit, note }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { window.alert(d.error || 'Could not save that decision.'); return }
+      if (d.notified === false) window.alert('Decision saved, but their phone number was not valid — they have NOT been told.')
+      await loadConcepts()
+    } finally { setConceptBusy(null) }
+  }
+
   const decideTour = async (t: any, action: 'approve' | 'decline') => {
     if (action === 'decline' && !window.confirm(`Decline ${t.name}'s tour? They'll get a polite text.`)) return
     setTourBusy(t.id)
@@ -548,7 +595,7 @@ export default function AdminInboxPage() {
             <a href="/admin/dashboard" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>← Dashboard</a>
             <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>JUNE</h1>
             <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-              {([['convos', 'INBOX'], ['kb', 'KNOWLEDGE'], ['tours', 'TOURS']] as const).map(([t, lbl]) => {
+              {([['convos', 'INBOX'], ['kb', 'KNOWLEDGE'], ['tours', 'TOURS'], ['concepts', 'CONCEPTS']] as const).map(([t, lbl]) => {
                 const n = t === 'convos' ? tabCounts.inbox : t === 'tours' ? tabCounts.tours : 0
                 return (
                   <button key={t} onClick={() => setTab(t)} style={{
@@ -644,6 +691,74 @@ export default function AdminInboxPage() {
                         style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}>
                         CANCEL TOUR
                       </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {tab === 'concepts' && (
+          <div style={{ maxWidth: 780 }}>
+            {concepts.length === 0 && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No concept reviews yet. /concept-review is unlisted \u2014 it only arrives here when you or June hand out the link.</div>}
+            {concepts.map(c => {
+              const when = new Date(c.created_at).toLocaleString('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+              const [bg, color, txt] =
+                c.status === 'pending'  ? ['rgba(212,168,67,0.15)', GOLD, 'PENDING'] :
+                c.status === 'approved' ? ['rgba(74,222,128,0.15)', '#4ade80', 'APPROVED'] :
+                ['rgba(239,68,68,0.15)', '#f87171', 'DECLINED']
+              const Row = ({ k, v }: { k: string; v: any }) => !v ? null : (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ ...label, color: 'rgba(255,255,255,0.4)', marginBottom: 2 }}>{k}</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{v}</div>
+                </div>
+              )
+              return (
+                <div key={c.id} style={{ border: `1px solid ${c.status === 'pending' ? 'rgba(212,168,67,0.5)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 6, padding: 14, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</span>
+                    <span style={{ ...label, background: bg, color, padding: '3px 7px', borderRadius: 3 }}>{txt}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{when} \u00b7 {c.phone} \u00b7 {c.email}</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                    {c.has_booking ? `Booked${c.booking_date ? ` ${c.booking_date}` : ''}${c.set_names ? ` \u00b7 ${c.set_names}` : ''}` : 'Not booked yet'}
+                    {c.headcount ? ` \u00b7 ${c.headcount} people` : ''}
+                    {c.cleanup_minutes ? ` \u00b7 ${c.cleanup_minutes} min cleanup` : ''}
+                  </div>
+
+                  <Row k="Concept" v={c.concept} />
+                  <Row k="Exact products" v={c.materials} />
+                  <Row k="Where it happens" v={c.location_plan} />
+                  <Row k="Prep plan" v={c.prep_plan} />
+                  <Row k="Cleaning plan" v={c.cleanup_plan} />
+
+                  {Array.isArray(c.photos) && c.photos.length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                      {c.photos.map((u: string, i: number) => (
+                        <a key={i} href={u} target="_blank" rel="noreferrer">
+                          <img src={u} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)' }} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {c.status === 'pending' && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                      <button disabled={conceptBusy === c.id} onClick={() => decideConcept(c, 'approved')}
+                        style={{ ...label, background: '#4ade80', border: 'none', color: '#052e16', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}>
+                        APPROVE
+                      </button>
+                      <button disabled={conceptBusy === c.id} onClick={() => decideConcept(c, 'declined')}
+                        style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171', padding: '8px 16px', cursor: 'pointer', borderRadius: 4 }}>
+                        DECLINE
+                      </button>
+                    </div>
+                  )}
+                  {c.status !== 'pending' && (
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 10 }}>
+                      {c.deposit_amount ? `Deposit set: $${Number(c.deposit_amount).toFixed(0)}. ` : ''}
+                      {c.decision_note ? `Note sent: ${c.decision_note}` : 'No note sent.'}
                     </div>
                   )}
                 </div>
