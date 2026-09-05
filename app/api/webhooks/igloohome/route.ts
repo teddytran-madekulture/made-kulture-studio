@@ -129,6 +129,48 @@ function verifySignature(req: NextRequest, rawBody: string): 'ok' | 'no_key' | '
   }
 }
 
+// -- Bridge up/down state ----------------------------------------------------
+//
+// Records ONLY transitions. `changed_at` must mean "when this state began", so a
+// Bridge that re-sends OFFLINE every minute must NOT keep pushing the clock
+// forward — do that and it never looks 10 minutes old and the alert never fires.
+// That is the whole bug this function exists to avoid.
+async function recordBridgeState(deviceId: string, online: boolean): Promise<void> {
+  try {
+    const nowIso = new Date().toISOString()
+
+    const { data: prev, error: readErr } = await supabase
+      .from('bridge_status')
+      .select('device_id, is_online')
+      .eq('device_id', deviceId)
+      .maybeSingle()
+    // supabase-js never throws on a Postgres error; check it or this silently no-ops.
+    if (readErr) {
+      console.error('[igloohome webhook] bridge_status read failed:', readErr)
+      return
+    }
+
+    const changed = !prev || prev.is_online !== online
+
+    const { error: upErr } = await supabase.from('bridge_status').upsert({
+      device_id: deviceId,
+      is_online: online,
+      last_event_at: nowIso,
+      // Only move the clock on a real transition.
+      ...(changed ? { changed_at: nowIso } : {}),
+      // Recovery clears the latch so the NEXT outage can alert again.
+      ...(online ? { alerted_at: null } : {}),
+    }, { onConflict: 'device_id' })
+    if (upErr) console.error('[igloohome webhook] bridge_status write failed:', upErr)
+    else if (changed) {
+      console.log(`[igloohome webhook] bridge ${deviceId} state change recorded: ${online ? 'online' : 'OFFLINE'}`)
+    }
+  } catch (e) {
+    // Never let bookkeeping break the acknowledgement — igloohome retries on non-2xx.
+    console.error('[igloohome webhook] recordBridgeState threw:', e)
+  }
+}
+
 // -- Booking lookup ----------------------------------------------------------
 //
 // Find the confirmed booking that owns this PIN and whose window contains the
@@ -203,10 +245,29 @@ export async function POST(req: NextRequest) {
   // getting bitten by — so it is loud in the log even though nothing acts on it
   // yet. An owner alert here is the obvious next step once we trust the feed.
   if (type === 10) {
-    const online = body?.payload?.event?.data?.isOnline
-    console[online ? 'log' : 'error'](
-      `[igloohome webhook] bridge ${deviceId} ${online ? 'ONLINE' : 'OFFLINE — door check-in is blind until it returns'}`
+    const raw = body?.payload?.event?.data?.isOnline
+    // WARNING: read this STRICTLY. An absent/renamed field is undefined, which is
+    // falsy — treating that as "offline" would record a down Bridge that is fine
+    // and page Teddy over a payload change. Unknown means unknown: log, write
+    // nothing.
+    const online = raw === true ? true : raw === false ? false : null
+
+    console[online === false ? 'error' : 'log'](
+      `[igloohome webhook] bridge ${deviceId} ${
+        online === null
+          ? `isOnline missing from payload (got ${JSON.stringify(raw)}) — state NOT recorded`
+          : online
+            ? 'ONLINE'
+            : 'OFFLINE — door check-in is blind until it returns'
+      }`
     )
+
+    // Only a VERIFIED delivery may write state. Anyone can POST this shape at the
+    // public endpoint, and a forged ONLINE would clear a real outage before the
+    // cron ever saw it.
+    if (online !== null && deviceId && sig === 'ok') {
+      await recordBridgeState(deviceId, online)
+    }
     return NextResponse.json({ ok: true })
   }
 
