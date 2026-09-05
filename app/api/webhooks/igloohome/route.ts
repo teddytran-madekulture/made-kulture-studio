@@ -35,6 +35,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, createPublicKey, verify as cryptoVerify } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
+import { sendOwnerPush } from '@/lib/push'
 
 // Service role: this writes bookings and door_events, and door_events has RLS
 // on with no policies by design. See user-scoped-write-sweep for why a
@@ -50,6 +51,7 @@ export const dynamic = 'force-dynamic'
 const LOG_PIN_FIRST_USE = 22
 const LOG_PIN_REUSE     = 19
 const PIN_UNLOCK_TYPES  = new Set([LOG_PIN_FIRST_USE, LOG_PIN_REUSE])
+const LOG_WRONG_PIN     = 16
 
 // WARNING: an hourly algoPIN's window is FLOORED to the top of the start hour
 // and CEILED to the top of the hour after the end (mintHourlyPin). A 12:30
@@ -57,6 +59,38 @@ const PIN_UNLOCK_TYPES  = new Set([LOG_PIN_FIRST_USE, LOG_PIN_REUSE])
 // entry has to be matched with an hour of slack on each side, or a guest
 // arriving at 12:50 for a 1:00 session matches nothing and is never checked in.
 const PIN_WINDOW_SLACK_MS = 60 * 60 * 1000
+
+// The event carries the LOCK id (DBX...), NOT the Bridge id (EB1X...) that
+// bridge_status is keyed on. Verified in the igloohome portal 2026-09-04:
+//   EB1X11e1f23c "MK front door" -> DBX211001490
+//   EB1X11d71784 "MK backdoor"   -> DBX216004654
+// Unknown ids fall back to the raw id rather than guessing a door.
+const DOOR_LABELS: Record<string, string> = {
+  DBX211001490: 'Front door',
+  DBX216004654: 'Back door',
+}
+function doorLabel(deviceId: string | null): string {
+  if (!deviceId) return 'A door'
+  return DOOR_LABELS[deviceId] ?? deviceId
+}
+
+// A Supabase embedded relation comes back as an object OR a single-element
+// array depending on how the FK is inferred. Reading `.name` off the array
+// yields undefined silently, which is how a push ends up saying "undefined".
+function relName(rel: any): string | null {
+  if (!rel) return null
+  return Array.isArray(rel) ? (rel[0]?.name ?? null) : (rel.name ?? null)
+}
+
+// ALWAYS render studio time through Intl with an explicit timeZone. Never do
+// offset arithmetic -- see the DST write bug in project memory. The server runs
+// UTC, so a raw toLocaleTimeString here lands 5 hours off and, late in the
+// evening, on the wrong DAY.
+function centralTime(ms: number): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit',
+  }).format(new Date(ms))
+}
 
 // -- Signature verification --------------------------------------------------
 //
@@ -198,7 +232,7 @@ async function findBookingForPin(pin: string, entryAtMs: number) {
 
   const { data, error } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, checked_in_at, door_code, door_code_back')
+    .select('id, start_time, end_time, checked_in_at, door_code, door_code_back, sets ( name ), customers ( name )')
     .or(`door_code.eq.${pin},door_code_back.eq.${pin}`)
     .eq('status', 'confirmed')
     .lte('start_time', hi)   // started before the entry (+slack)
@@ -301,6 +335,14 @@ export async function POST(req: NextRequest) {
 
   let checkedIn = 0
 
+  // Collected during the loop and sent AFTER it. One delivery can carry several
+  // activity logs -- a guest fumbling their code produces a burst of type 16 --
+  // and pushing per-log would fire four notifications for one arrival.
+  const arrivals: { who: string; where: string; when: string; door: string; id: string }[] = []
+  const unmatched: string[] = []
+  let wrongPin = 0
+  let breakIn = 0
+
   for (const log of logs) {
     const logType = Number(log?.logType)
     const entrySec = Number(log?.entryDate)
@@ -329,16 +371,30 @@ export async function POST(req: NextRequest) {
           .select('id')
 
         if (upErr) console.error('[igloohome webhook] check-in write failed:', upErr)
-        else if (claimed?.length) { didCheckIn = true; checkedIn++ }
+        else if (claimed?.length) {
+          didCheckIn = true; checkedIn++
+          // `sets: null` is a full-warehouse buyout, not missing data.
+          const who = relName((booking as any).customers) ?? 'Someone'
+          const where = relName((booking as any).sets) ?? 'Full studio'
+          arrivals.push({
+            who, where, when: centralTime(entryAtMs), door: doorLabel(deviceId), id: booking.id,
+          })
+          console.log(`[igloohome webhook] checked in ${booking.id} (${who}, ${where})`)
+        }
       } else {
         // Not an error. A staff master PIN, or a code whose booking has moved.
         console.log(`[igloohome webhook] logType ${logType} at ${new Date(entryAtMs).toISOString()} matched no booking`)
+        // A staff master PIN, or a code whose booking moved. Someone IS inside.
+        unmatched.push(`${doorLabel(deviceId)} - ${centralTime(entryAtMs)}`)
       }
     }
 
     if (logType === 53) {
       console.error(`[igloohome webhook] ATTEMPTED BREAK-IN reported by ${deviceId} at ${new Date(entryAtMs).toISOString()}`)
+      breakIn++
     }
+
+    if (logType === LOG_WRONG_PIN) wrongPin++
 
     // Everything lands in door_events, matched or not — an unmatched entry is
     // the interesting one when something goes wrong. Dedupe is the partial
@@ -358,6 +414,54 @@ export async function POST(req: NextRequest) {
       console.error('[igloohome webhook] door_events insert failed:', insErr)
     }
   }
+
+  // ---- Notify Teddy -------------------------------------------------------
+  // Fire-and-forget, and AFTER door_events is written: a push that throws must
+  // never cost us the forensic row or the check-in. Never put PIN DIGITS in a
+  // notification -- it renders on a lock screen, and these are live door codes.
+  const pushes: Promise<void>[] = []
+
+  for (const a of arrivals) {
+    pushes.push(sendOwnerPush({
+      title: `${a.who} checked in`,
+      body: `${a.where} \u00b7 ${a.when} \u00b7 ${a.door}`,
+      url: '/admin/dashboard',
+      // Keyed on the BOOKING, so a redelivered webhook replaces the same
+      // notification instead of stacking a second one.
+      tag: `door-checkin-${a.id}`,
+    }))
+  }
+
+  if (unmatched.length) {
+    pushes.push(sendOwnerPush({
+      title: 'Door opened - no booking matched',
+      body: `${unmatched.join(', ')}. A master code, or a code whose booking moved.`,
+      url: '/admin/dashboard',
+      tag: 'door-unmatched',
+    }))
+  }
+
+  if (breakIn) {
+    pushes.push(sendOwnerPush({
+      title: 'Attempted break-in reported',
+      body: `${doorLabel(deviceId)} reported ${breakIn} tamper attempt(s). Check the cameras.`,
+      url: '/admin/dashboard',
+      tag: 'door-breakin',
+      renotify: true,
+      requireInteraction: true,
+    }))
+  }
+
+  if (wrongPin) {
+    pushes.push(sendOwnerPush({
+      title: `${wrongPin} failed code attempt${wrongPin === 1 ? '' : 's'}`,
+      body: `${doorLabel(deviceId)} - ${centralTime(Date.now())}. Someone may be locked out.`,
+      url: '/admin/dashboard',
+      tag: 'door-wrongpin',
+    }))
+  }
+
+  await Promise.allSettled(pushes)
 
   return NextResponse.json({ ok: true, logs: logs.length, checkedIn })
 }
