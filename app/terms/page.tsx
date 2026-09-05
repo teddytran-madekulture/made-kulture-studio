@@ -107,7 +107,7 @@ export default function TermsPage() {
               <><strong style={{ color: '#fff' }}>Nudity:</strong> Not permitted during shared bookings unless your party is the only booking in the studio</>,
               <><strong style={{ color: '#fff' }}>Audio recording:</strong> The studio is not soundproofed and sits near I-45. A full studio takeover is recommended for audio work</>,
               <><strong style={{ color: '#fff' }}>Special effects</strong> (fog, haze, smoke bombs): Not permitted during shared bookings. Available for full studio takeovers or solo bookings only, and must be pre-approved</>,
-              <><strong style={{ color: '#fff' }}>Messy concepts</strong> (paint, fake blood, glitter, excessive oils, etc.) must be approved in advance. A minimum $150 cleaning fee will be charged for non-compliance</>,
+              <><strong style={{ color: '#fff' }}>Messy concepts</strong> (paint, fake blood, glitter, smoke bombs, excessive oils) are not allowed. If your shoot genuinely needs something messy, or anything outside how the studio normally runs, ask us before you book and we will tell you whether a concept review is possible. Approval is case by case and is never guaranteed, and an approved concept carries a refundable cleaning deposit. A minimum $150 cleaning fee is charged if the space is not left clean</>,
               <><strong style={{ color: '#fff' }}>Props:</strong> Included with all rentals on a first-come, first-served basis during shared hours. All props must be returned to their original locations before your session ends</>,
             ]} />
           </Section>
