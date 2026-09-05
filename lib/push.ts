@@ -18,7 +18,31 @@ export function pushConfigured(): boolean {
   return !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY
 }
 
-export async function sendOwnerPush(opts: {
+// Per-device outcome. `sendOwnerPush` throws this away (every caller is
+// fire-and-forget); /api/admin/push/test is the one caller that needs it, so it
+// can say WHICH device accepted and which was pruned. Endpoints are truncated
+// deliberately -- a push endpoint is a bearer credential, and this is rendered
+// in a browser.
+export type PushSendResult = {
+  configured: boolean
+  subscriptions: number
+  accepted: number
+  results: {
+    host: string
+    tail: string
+    userAgent: string | null
+    ok: boolean
+    statusCode?: number
+    pruned?: boolean
+    error?: string
+  }[]
+}
+
+export async function sendOwnerPush(opts: Parameters<typeof sendOwnerPushDetailed>[0]): Promise<void> {
+  await sendOwnerPushDetailed(opts)
+}
+
+export async function sendOwnerPushDetailed(opts: {
   title: string
   body: string
   url?: string     // deep link, defaults to June's inbox
@@ -26,8 +50,9 @@ export async function sendOwnerPush(opts: {
   renotify?: boolean          // re-alert even when replacing a same-tag notification
   requireInteraction?: boolean // keep on screen until acted on (desktop/Android)
   meta?: Record<string, unknown> // structured payload for sw.js to forward to open tabs
-}): Promise<void> {
-  if (!pushConfigured()) return
+}): Promise<PushSendResult> {
+  const out: PushSendResult = { configured: pushConfigured(), subscriptions: 0, accepted: 0, results: [] }
+  if (!out.configured) return out
   try {
     // Dynamic import keeps web-push out of edge/client bundles.
     const webpush = (await import('web-push')).default
@@ -38,8 +63,9 @@ export async function sendOwnerPush(opts: {
     )
 
     const { data: subs } = await supabase
-      .from('push_subscriptions').select('id, endpoint, keys')
-    if (!subs?.length) return
+      .from('push_subscriptions').select('id, endpoint, keys, user_agent')
+    out.subscriptions = subs?.length ?? 0
+    if (!subs?.length) return out
 
     // App-icon badge = everything currently waiting on Teddy.
     let badge = 0
@@ -65,17 +91,35 @@ export async function sendOwnerPush(opts: {
     })
 
     await Promise.allSettled(subs.map(async (s: any) => {
+      let host = 'unparseable'
+      try { host = new URL(s.endpoint).host } catch {}
+      const tail = String(s.endpoint ?? '').slice(-8)
+      const userAgent = s.user_agent ?? null
       try {
         await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload)
+        out.accepted++
+        out.results.push({ host, tail, userAgent, ok: true })
       } catch (err: any) {
+        // 410/404 = the browser threw the subscription away. Pruning is correct,
+        // but it must be VISIBLE -- a silently pruned row is how "push is dead"
+        // became a two-week mystery.
         if (err?.statusCode === 410 || err?.statusCode === 404) {
           await supabase.from('push_subscriptions').delete().eq('id', s.id)
+          console.warn('[push] pruned dead subscription:', host, tail)
+          out.results.push({ host, tail, userAgent, ok: false, statusCode: err.statusCode, pruned: true })
         } else {
           console.error('[push] send error (non-fatal):', err?.statusCode ?? err)
+          out.results.push({
+            host, tail, userAgent, ok: false,
+            statusCode: err?.statusCode,
+            error: String(err?.message ?? err).slice(0, 200),
+          })
         }
       }
     }))
   } catch (e) {
     console.error('[push] error (non-fatal):', e)
+    out.results.push({ host: '-', tail: '-', userAgent: null, ok: false, error: String(e).slice(0, 200) })
   }
+  return out
 }
