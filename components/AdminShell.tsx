@@ -51,6 +51,7 @@ function SidebarInner() {
         <Item href={`${D}list`} icon="≡" label="List View" />
         <Item href={`${D}calendar`} icon="⊡" label="Calendar" />
         <Item href="/admin/inbox" icon="J" label="June Inbox" active={on('/admin/inbox')} color="#d4a843" />
+        <Item href="/admin/notifications" icon="!" label="Notifications" active={on('/admin/notifications')} />
 
         <div style={sectionHdr}>WEBSITE</div>
         <Item href="/admin/website" icon="🌐" label="Website Editor →" color="#d4a843" />

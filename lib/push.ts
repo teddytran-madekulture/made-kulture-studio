@@ -38,6 +38,38 @@ export type PushSendResult = {
   }[]
 }
 
+// Write the notification to history. Called at EVERY exit of
+// sendOwnerPushDetailed -- including "push is dormant" and "zero subscriptions",
+// which are precisely the cases where the notification would otherwise vanish
+// without trace. See migration 105.
+//
+// Non-fatal on purpose: history is a safety net, and a safety net that can break
+// the thing it protects is worse than none. A failed insert is logged, never
+// thrown -- the push itself has already gone out by this point.
+async function record(
+  opts: { title: string; body: string; url?: string; tag?: string; meta?: Record<string, unknown> },
+  out: PushSendResult,
+): Promise<PushSendResult> {
+  try {
+    const { error } = await supabase.from('notifications').insert({
+      title: opts.title,
+      body:  opts.body,
+      url:   opts.url ?? null,
+      tag:   opts.tag ?? null,
+      meta:  opts.meta ?? null,
+      subscriptions: out.subscriptions,
+      accepted:      out.accepted,
+      send_results:  out.results,
+    })
+    // supabase-js NEVER throws on a Postgres error. Unread, this silently
+    // becomes "history is empty" and nobody finds out for a month.
+    if (error) console.error('[push] history insert failed:', error)
+  } catch (e) {
+    console.error('[push] history insert threw:', e)
+  }
+  return out
+}
+
 export async function sendOwnerPush(opts: Parameters<typeof sendOwnerPushDetailed>[0]): Promise<void> {
   await sendOwnerPushDetailed(opts)
 }
@@ -52,7 +84,7 @@ export async function sendOwnerPushDetailed(opts: {
   meta?: Record<string, unknown> // structured payload for sw.js to forward to open tabs
 }): Promise<PushSendResult> {
   const out: PushSendResult = { configured: pushConfigured(), subscriptions: 0, accepted: 0, results: [] }
-  if (!out.configured) return out
+  if (!out.configured) return record(opts, out)
   try {
     // Dynamic import keeps web-push out of edge/client bundles.
     const webpush = (await import('web-push')).default
@@ -65,7 +97,7 @@ export async function sendOwnerPushDetailed(opts: {
     const { data: subs } = await supabase
       .from('push_subscriptions').select('id, endpoint, keys, user_agent')
     out.subscriptions = subs?.length ?? 0
-    if (!subs?.length) return out
+    if (!subs?.length) return record(opts, out)
 
     // App-icon badge = everything currently waiting on Teddy.
     let badge = 0
@@ -121,5 +153,5 @@ export async function sendOwnerPushDetailed(opts: {
     console.error('[push] error (non-fatal):', e)
     out.results.push({ host: '-', tail: '-', userAgent: null, ok: false, error: String(e).slice(0, 200) })
   }
-  return out
+  return record(opts, out)
 }
