@@ -635,19 +635,32 @@ export default function KioskPage() {
       <div style={{
         flex: '1 1 0', minHeight: 0, display: 'flex',
         alignItems: 'center', justifyContent: 'center',
-        gap: 10, padding: '4px 20px 0', overflow: 'hidden',
+        padding: '4px 20px 0', overflow: 'hidden',
       }}>
-        <span style={{
-          fontSize: clockPx, lineHeight: 1, fontWeight: 300,
-          letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.92)',
-          // Tabular figures so the whole number does not jitter sideways every
-          // time a 1 ticks over to a 2.
-          fontVariantNumeric: 'tabular-nums',
-        }}>{wallTime}</span>
-        <span style={{
-          fontSize: Math.max(14, Math.round(clockPx * 0.22)), fontWeight: 700, letterSpacing: '0.16em',
-          color: CHAMP_DIM, alignSelf: 'flex-start', marginTop: Math.round(clockPx * 0.14),
-        }}>{wallMeridiem}</span>
+        {/* ⚠️ AM/PM is ABSOLUTELY POSITIONED, and that is the whole point of this
+            wrapper. As a normal flex sibling its width counts toward centring, so
+            the time itself sat visibly LEFT of the tiles' centre line — two things
+            that should share an axis, not quite sharing it. Out of flow, the
+            number centres on its own and the meridiem hangs off the right.
+            ⚠️ It also must NOT be a child of the tall outer band: `alignSelf`
+            there aligns to the BAND, not to the number, which stranded the PM up
+            by the header on the first build. */}
+        <div style={{ position: 'relative', display: 'inline-flex', lineHeight: 1 }}>
+          <span style={{
+            fontSize: clockPx, lineHeight: 1, fontWeight: 400,
+            letterSpacing: '0.01em', color: 'rgba(255,255,255,0.92)',
+            // Tabular figures so the whole number does not jitter sideways every
+            // time a 1 ticks over to a 2.
+            fontVariantNumeric: 'tabular-nums',
+          }}>{wallTime}</span>
+          <span style={{
+            position: 'absolute', left: '100%', bottom: 0,
+            marginLeft: Math.round(clockPx * 0.10),
+            fontSize: Math.max(14, Math.round(clockPx * 0.20)),
+            fontWeight: 700, letterSpacing: '0.16em', color: CHAMP_DIM,
+            whiteSpace: 'nowrap',
+          }}>{wallMeridiem}</span>
+        </div>
       </div>
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center',
