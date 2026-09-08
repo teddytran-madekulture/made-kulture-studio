@@ -97,9 +97,14 @@ export default function KioskPage() {
   }, [setSlug, fetchCtx])
 
   // Local clock so the countdown moves without touching the network.
+  // ⚠️ 5s, not 30s, because this now also drives the WALL CLOCK on the home
+  // screen. At 30s the displayed minute could sit half a minute behind real
+  // time, which on a clock people are timing a shoot by reads as broken. This
+  // is a local setInterval and makes ZERO network calls — it is not the
+  // polling cost the jukebox note warns about.
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
-    const iv = setInterval(() => setNowMs(Date.now()), 30_000)
+    const iv = setInterval(() => setNowMs(Date.now()), 5_000)
     return () => clearInterval(iv)
   }, [])
 
@@ -443,6 +448,24 @@ export default function KioskPage() {
   const clock = (iso: string) =>
     new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
 
+  // ── The wall clock ────────────────────────────────────────────────────────
+  // Teddy 2026-09-08: the idle home screen is mostly empty (two tiles capped at
+  // 240px floating in the middle) and people mid-shoot have nothing in the room
+  // telling them the time. Deliberately TIME ONLY — no date, he did not want one.
+  // ⚠️ Timezone is pinned to America/Chicago rather than trusting the tablet's
+  // own zone: a Fire tablet that came back from a factory reset in UTC would
+  // otherwise show a confidently wrong time on the wall, and running over costs
+  // the guest an extra hour.
+  // ⚠️ Rendered from `nowMs`, the SAME tick the countdown uses. Do not give it
+  // its own interval.
+  const wallParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).formatToParts(new Date(nowMs))
+  const wallTime = wallParts
+    .filter(p => p.type === 'hour' || p.type === 'minute' || (p.type === 'literal' && p.value === ':'))
+    .map(p => p.value).join('')
+  const wallMeridiem = (wallParts.find(p => p.type === 'dayPeriod')?.value ?? '').toUpperCase()
+
   // ⚠️ RUNNING OVER IS CHARGED AN EXTRA HOUR, and this tablet is the only
   // thing in the room that knows the clock. It used to render "15 min left" in
   // the same 12px 45%-grey it had used for "until 7:00 PM" an hour earlier — the
@@ -479,6 +502,15 @@ export default function KioskPage() {
   // SMS can never contradict each other about whether someone is "right after".
   const handoverSoon = !!(nextStart && occLive && Date.parse(nextStart) - Date.parse(occ.endISO) <= 60 * 60_000)
   const canAddTime = !!(occLive && started && occ.extendable && headroom >= 0.5)
+  // ⚠️ Sized from the MEASURED viewport height, not a fixed px and not a CSS
+  // `vh` unit. Fixed px clips on a landscape door tablet (~800px of height, three
+  // tiles) — the same squeeze the four-tile note below documents — and raw `vh`
+  // is unsafe app-wide because globals.css zooms the body 1.25x above 769px.
+  // `vh` here is the real visible height this component already measures.
+  const clockPx = Math.round(Math.min(
+    canAddTime ? 66 : 118,
+    Math.max(34, (vh ?? 900) * (canAddTime ? 0.075 : 0.13)),
+  ))
 
   // ⚠️ FOUR STACKED TILES DO NOT FIT A LANDSCAPE FIRE HD 10. Measured: the
   // column needs 913px of viewport at the 150px tile floor, and the tablet has
@@ -594,6 +626,29 @@ export default function KioskPage() {
       )}
       {header}
       {occupancyLine}
+      {/* ⚠️ `flex: 1 1 0` alongside the tile container, NOT a fixed block. The
+          slack on this screen varies enormously — two tiles when the room is
+          empty, a 2x2 grid when a session is running and ADD TIME appears — so
+          the clock takes a SHARE of whatever is left rather than a set height.
+          With four tiles it shrinks instead of pushing GET THE TEAM below the
+          fold on a tablet nobody can scroll. */}
+      <div style={{
+        flex: '1 1 0', minHeight: 0, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 10, padding: '4px 20px 0', overflow: 'hidden',
+      }}>
+        <span style={{
+          fontSize: clockPx, lineHeight: 1, fontWeight: 300,
+          letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.92)',
+          // Tabular figures so the whole number does not jitter sideways every
+          // time a 1 ticks over to a 2.
+          fontVariantNumeric: 'tabular-nums',
+        }}>{wallTime}</span>
+        <span style={{
+          fontSize: Math.max(14, Math.round(clockPx * 0.22)), fontWeight: 700, letterSpacing: '0.16em',
+          color: CHAMP_DIM, alignSelf: 'flex-start', marginTop: Math.round(clockPx * 0.14),
+        }}>{wallMeridiem}</span>
+      </div>
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center',
         flexDirection: canAddTime ? 'row' : 'column',
