@@ -65,11 +65,18 @@ const IconBell = () => (
 export default function KioskPage() {
   const [kioskKey, setKioskKey] = useState<string | undefined>(undefined)
   const [setSlug, setSetSlug]   = useState<string | null>(null)
+  // The URL is this tablet's IDENTITY and it is NOT known on the first paint --
+  // setSlug reads window.location in an effect, so it is null for one render on
+  // EVERY tablet, set or door. Anything deciding what kind of kiosk this is must
+  // wait for `booted`, or it decides using the door default and then corrects
+  // itself in front of the guest.
+  const [booted, setBooted] = useState(false)
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     const k = q.get('key')
     if (k) setKioskKey(k)
     setSetSlug(q.get('set'))
+    setBooted(true)
   }, [])
 
   // ── Who is on this set ────────────────────────────────────────────────────
@@ -632,10 +639,16 @@ export default function KioskPage() {
           the clock takes a SHARE of whatever is left rather than a set height.
           With four tiles it shrinks instead of pushing GET THE TEAM below the
           fold on a tablet nobody can scroll. */}
+      {/* `flex: 0 0 auto` -- it must NOT grow. As `flex: 1 1 0` it claimed the
+          same share of leftover space as the entire tile stack: measured on a set
+          tablet, a 538px band holding one line of text, dumping ~200px of void
+          above the time and another ~200px below it before the tiles started.
+          Teddy: "the layout spacing is still strange". The clock is a status line
+          under the header; the tiles own the space below it. */}
       <div style={{
-        flex: '1 1 0', minHeight: 0, display: 'flex',
+        flex: '0 0 auto', display: 'flex',
         alignItems: 'center', justifyContent: 'center',
-        padding: '4px 20px 0', overflow: 'hidden',
+        padding: '18px 20px 6px', overflow: 'hidden',
       }}>
         {/* ⚠️ AM/PM is ABSOLUTELY POSITIONED, and that is the whole point of this
             wrapper. As a normal flex sibling its width counts toward centring, so
@@ -675,7 +688,16 @@ export default function KioskPage() {
             the front/back door or on the guest's own phone link. Teddy's call 2026-08-16.
             ⚠️ Removing it means June can no longer learn the booking from a check-in, so
             app/api/agent/chat now derives it from the SET instead — keep those together. */}
-        {!ctx?.set && (
+        {/* GATED ON `booted && !setSlug`, NOT on `!ctx?.set`. Teddy 2026-09-08:
+            "it flashes 3 tiles before reverting back to 2 at startup". `ctx` is
+            null until the context fetch lands, so `!ctx?.set` was TRUE on the
+            first paint and every SET tablet rendered the door kiosk's CHECK IN
+            tile for a beat -- tappable, and it shifted the layout as it vanished.
+            Do NOT simplify this back to a ctx check: a door tablet has no ?set=,
+            so fetchCtx returns early and `ctx` stays null there FOREVER. Gating
+            on ctx would hide CHECK IN on the only kiosks that need it. The URL is
+            the identity; ctx is only what is happening on the set. */}
+        {booted && !setSlug && (
         <button style={tile} onClick={() => (occLive && !occ.checkedIn ? doSetCheckin() : setScreen('checkin'))}>
           <IconEnter />
           <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>
