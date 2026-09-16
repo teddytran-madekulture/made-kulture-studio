@@ -20,6 +20,16 @@ const ACUITY_TYPE_TO_SET: Record<string, string | null> = {
   'cottage':           'Cottage',
   'watering hole':     'The Watering Hole',
   'the watering hole': 'The Watering Hole',
+  // ⚠️ 2026-09-15: 'the tank' / 'tank' were MISSING here while
+  // app/api/admin/sync-acuity/route.ts had them — two copies of one map, and
+  // only one got updated when The Tank opened. A Tank booking therefore landed
+  // with set_id NULL, and lib/extensions.ts reads a NULL set as a FULL-STUDIO
+  // BUYOUT, so every kiosk tablet in the building announced a buyout that did
+  // not exist. Nothing errored anywhere. app/admin/dashboard/page.tsx:256
+  // carries a comment about the same drift biting the same set once before.
+  // ⇒ ADD A NEW SET TO BOTH MAPS, or better, consolidate them.
+  'the tank':          'The Tank',
+  'tank':              'The Tank',
   'studio one':        'Studio One',
   // Full buyout — no specific set, set null
   'full studio':          null,
