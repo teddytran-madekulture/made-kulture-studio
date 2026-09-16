@@ -23,6 +23,7 @@ Made Kulture provides rentable studio sets, full warehouse buyouts, and in-studi
 | Vintage | $40/hr | 12x16' vintage aesthetic |
 | Cottage | $40/hr | 12x16' slate walls, light brown faux wood flooring |
 | The Watering Hole | $75/hr (2hr min) | 12x16x13 shallow black pool |
+| The Tank | $75/hr (2hr min) | 12x16' dedicated pool set — submersion, reflections, waterline shots; a DIFFERENT room from The Watering Hole, not another name for it |
 | Studio One | $65/hr | Large open dilapidated warehouse aesthetic |
 
 ### Equipment Rental
