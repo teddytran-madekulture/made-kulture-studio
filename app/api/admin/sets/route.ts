@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const SET_COLUMNS = 'id, name, slug, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, sort_order, category, accent_gradient, gallery, is_active, created_at'
+const SET_COLUMNS = 'id, name, slug, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, sort_order, category, accent_gradient, gallery, video_url, video_hero, is_active, created_at'
 
 // Normalize the editable fields from a request body into a clean row object.
 // Only known columns are passed through, so callers can't write arbitrary keys.
@@ -26,6 +26,13 @@ function sanitizeSet(body: any) {
   if (typeof body.category === 'string')    row.category    = body.category.trim().toLowerCase()
   if (typeof body.accent_gradient === 'string') row.accent_gradient = body.accent_gradient.trim()
   if (body.is_active !== undefined)         row.is_active   = Boolean(body.is_active)
+
+  // Per-set video. An empty string CLEARS it (that is what REMOVE sends) rather
+  // than writing '' — a '' video_url is falsy in the page but truthy to anyone
+  // checking `!== null`, so normalise it here, once.
+  if (typeof body.video_url === 'string')   row.video_url   = body.video_url.trim() || null
+  // video_hero is a per-set editorial call: hero slot vs its own block.
+  if (body.video_hero !== undefined)        row.video_hero  = Boolean(body.video_hero)
 
   // features may arrive as an array or a comma/newline-separated string
   if (body.features !== undefined) {

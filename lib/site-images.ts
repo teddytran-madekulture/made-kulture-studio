@@ -25,6 +25,7 @@ export const SITE_IMAGE_SLOTS: SiteImageSlot[] = [
   { slug: 'vintage',      label: 'Vintage',          group: 'Sets',   aspect: 4 / 3 },
   { slug: 'cottage',      label: 'Cottage',          group: 'Sets',   aspect: 4 / 3 },
   { slug: 'watering-hole',label: 'The Watering Hole',group: 'Sets',   aspect: 4 / 3 },
+  { slug: 'the-tank',     label: 'The Tank',         group: 'Sets',   aspect: 4 / 3 },
   { slug: 'studio-one',   label: 'Studio One',       group: 'Sets',   aspect: 4 / 3 },
   { slug: 'studio-photo', label: 'Studio photo',     group: 'Studio', aspect: 4 / 5, outWidth: 1600, hint: 'Tall photo in the “Built for the Obsessed” section.' },
 ]

@@ -21,6 +21,10 @@ const SETS = [
   { num: '07', slug: 'cottage',       name: 'Cottage',           price: '$50', desc: '12×16ft slate walls, faux wood flooring',             photo: '/images/sets/cottage.webp',         gradient: 'linear-gradient(135deg, #0e1412 0%, #161e18 100%)' },
   { num: '08', slug: 'watering-hole', name: 'The Watering Hole', price: '$85', desc: '12×16×13 shallow black pool — 2hr min',               photo: '/images/sets/watering-hole.webp',   gradient: 'linear-gradient(135deg, #040e12 0%, #081820 100%)' },
   { num: '09', slug: 'studio-one',    name: 'Studio One',        price: '$75', desc: 'Large open dilapidated warehouse aesthetic, up to 5 people', photo: '/images/sets/studio-one.webp',      gradient: 'linear-gradient(135deg, #161210 0%, #1e1a16 100%)' },
+  // ⚠️ The Tank has NO repo fallback image on purpose — its photo lives only in
+  // the site_images slot (upload at /admin/website/home). `photo: ''` so no
+  // phantom request fires for a file that was never committed.
+  { num: '10', slug: 'the-tank',      name: 'The Tank',          price: '$85', desc: '12×16ft pool set — submersion, reflections, waterline shots, 2hr min', photo: '',                                 gradient: 'linear-gradient(135deg, #06121a 0%, #0a1f2a 100%)' },
 ]
 
 const FAQS = [
@@ -238,12 +242,15 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
                 onMouseLeave={e => { const im = e.currentTarget.querySelector('img'); if (im) (im as HTMLImageElement).style.transform = 'scale(1)'; const ar = e.currentTarget.querySelector('[data-arrow]'); if (ar) { (ar as HTMLElement).style.background = 'transparent'; (ar as HTMLElement).style.color = '#fff' } }}
                 style={{ position:'relative', display:'block', aspectRatio:'4/5', background: set.gradient, overflow:'hidden', textDecoration:'none' }}
               >
-                {/* Set image — editable at /admin/website/home (slot: set slug) */}
-                <img
+                {/* Set image — editable at /admin/website/home (slot: set slug).
+                    Guarded: a set with no override AND no repo fallback would
+                    otherwise render <img src="">, which browsers resolve to the
+                    PAGE url and log as a failed image load. */}
+                {src && <img
                   src={src} alt={set.name}
                   style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition: focals[set.slug] || 'center', transition:'transform 0.5s ease' }}
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                />
+                />}
                 <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.25) 42%, transparent 68%)' }} />
                 <div style={{ position:'absolute', top:16, left:18, fontFamily:'Inter', fontSize:11, fontWeight:500, letterSpacing:'0.15em', color:'rgba(255,255,255,0.55)' }}>{set.num}</div>
                 <div style={{ position:'absolute', left:18, right:18, bottom:18, display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:12 }}>

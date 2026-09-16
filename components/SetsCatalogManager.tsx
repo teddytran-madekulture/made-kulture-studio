@@ -24,6 +24,8 @@ type SetRow = {
   sort_order: number | null
   category: string | null
   gallery: string[] | null
+  video_url: string | null
+  video_hero: boolean
   is_active: boolean
 }
 
@@ -34,6 +36,8 @@ type Draft = {
   sort_order: string
   category: string
   gallery: string[]
+  video_url: string
+  video_hero: boolean
 }
 
 const card: React.CSSProperties = { background: '#141416', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }
@@ -73,6 +77,8 @@ export default function SetsCatalogManager() {
       sort_order: String(s.sort_order ?? 0),
       category: s.category ?? 'standard',
       gallery,
+      video_url: s.video_url ?? '',
+      video_hero: !!s.video_hero,
     })
   }
   function cancel() { setEditId(null); setDraft(null) }
@@ -99,6 +105,24 @@ export default function SetsCatalogManager() {
     } catch (err: any) { setError(err.message) } finally { setUploading(false); e.target.value = '' }
   }
 
+  // ⚠️ Deliberately NOT onUpload. The endpoint takes both, but a video must
+  // never land in `gallery`: the gallery renders with <img>, so the clip would
+  // show as a broken tile AND — sitting at gallery[0] — silently become the
+  // set's hero photo everywhere, home page included.
+  async function onUploadVideo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true); setError('')
+    try {
+      const fd = new FormData()
+      fd.append('files', file)
+      const res = await fetch('/api/admin/sets/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok || !Array.isArray(data.urls) || !data.urls[0]) throw new Error(data.error || 'Upload failed')
+      setDraft(d => (d ? { ...d, video_url: data.urls[0] } : d))
+    } catch (err: any) { setError(err.message) } finally { setUploading(false); e.target.value = '' }
+  }
+
   async function save() {
     if (!editId || !draft) return
     setSaving(true); setError('')
@@ -111,6 +135,8 @@ export default function SetsCatalogManager() {
         category: draft.category,
         gallery: draft.gallery,
         photo_url: draft.gallery[0] ?? '',
+        video_url: draft.video_url,
+        video_hero: draft.video_hero,
       }
       const res = await fetch(`/api/admin/sets/${editId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -194,6 +220,36 @@ export default function SetsCatalogManager() {
               {uploading ? 'Uploading…' : '＋ Add photos'}
               <input type="file" accept="image/*" multiple onChange={onUpload} style={{ display: 'none' }} />
             </label>
+          </div>
+
+          {/* ── Set video ──────────────────────────────────────────────────── */}
+          <div style={{ ...card, padding: 14, marginTop: 8 }}>
+            <label style={labelStyle}>Set video</label>
+            {draft.video_url ? (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+                <video src={draft.video_url} muted playsInline preload="metadata" style={{ width: 96, height: 128, objectFit: 'cover', borderRadius: 6, background: '#000', flex: '0 0 auto' }} />
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.75)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={draft.video_hero} onChange={e => setDraft(d => d && { ...d, video_hero: e.target.checked })} />
+                    Use as the hero
+                  </label>
+                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: 420 }}>
+                    {draft.video_hero
+                      ? 'Replaces the hero photo on the set page — muted loop, hero photo as the poster frame. The photo still runs the home page tile.'
+                      : 'Sits in its own block under the set details; the hero stays a photo.'}
+                  </div>
+                  <button onClick={() => setDraft(d => d && { ...d, video_url: '', video_hero: false })} style={{ ...btn(), color: '#ffb4b4', justifySelf: 'start' }}>REMOVE VIDEO</button>
+                </div>
+              </div>
+            ) : (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px dashed rgba(255,255,255,0.25)', borderRadius: 6, padding: '10px 14px', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontFamily: 'Inter, sans-serif', fontSize: 12 }}>
+                {uploading ? 'Uploading…' : '＋ Add video'}
+                <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={onUploadVideo} style={{ display: 'none' }} />
+              </label>
+            )}
+            <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 10, lineHeight: 1.6, maxWidth: 560 }}>
+              <strong style={{ color: 'rgba(255,255,255,0.55)' }}>H.264 MP4 only.</strong> A VP9 MP4 plays fine on desktop Chrome and shows <em>nothing at all</em> on iPhone — no error, no placeholder. If a clip looks right here and blank on your phone, that is why. Vertical 9:16 suits the hero slot.
+            </div>
           </div>
 
           <div style={{ display: 'grid', gap: 16, marginTop: 8 }}>

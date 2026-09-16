@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import SiteNav from '@/components/SiteNav'
 import SetGallery from '@/components/SetGallery'
+import SetVideo from '@/components/SetVideo'
 
 // Individual landing page per set — one indexable page per space so searches
 // like "studio with pool Houston" have somewhere specific to land. Linked from
@@ -21,7 +22,7 @@ export const fetchCache = 'force-no-store'
 async function getSet(slug: string) {
   const { data } = await supabase
     .from('sets')
-    .select('id, slug, name, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, category, accent_gradient, gallery')
+    .select('id, slug, name, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, category, accent_gradient, gallery, video_url, video_hero')
     .eq('slug', slug)
     .eq('is_active', true)
     .maybeSingle()
@@ -56,6 +57,13 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
   // gallery[0] is the same shot as the hero (photo_url), so skip it here to avoid a duplicate
   const galleryExtra = ((set.gallery as string[] | null) ?? []).slice(1)
 
+  // A clip only takes the hero slot when video_hero is set for THIS set —
+  // Teddy's call per set, flipped in the Website Editor with no deploy.
+  // Otherwise the hero stays a photo and the clip gets its own block below.
+  const videoUrl   = ((set.video_url as string | null) || '').trim() || null
+  const heroVideo  = videoUrl && set.video_hero ? videoUrl : null
+  const blockVideo = videoUrl && !set.video_hero ? videoUrl : null
+
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
       <SiteNav active="sets" />
@@ -66,11 +74,13 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 2, background: 'rgba(255,255,255,0.04)', marginTop: 24 }}>
             <div style={{ position: 'relative', background: gradient, overflow: 'hidden', minHeight: 420 }}>
-              {set.photo_url && (
+              {heroVideo ? (
+                <SetVideo src={heroVideo} poster={set.photo_url} name={set.name} variant="hero" />
+              ) : set.photo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={set.photo_url} alt={`${set.name} — photography set at Made Kulture, Houston`}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} />
-              )}
+              ) : null}
             </div>
 
             <div style={{ background: '#0a0a0a', padding: '48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
@@ -121,6 +131,8 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
               </div>
             </div>
           </div>
+
+          {blockVideo && <SetVideo src={blockVideo} poster={set.photo_url} name={set.name} variant="block" />}
 
           <SetGallery images={galleryExtra} name={set.name} />
 

@@ -18,7 +18,7 @@ Made Kulture provides rentable studio sets, full warehouse buyouts, and in-studi
 | Set A | $40/hr | 12x15' white cinderblock and smooth walls, large windows |
 | Set B | $40/hr | 12x14' faux brush walls and duo color smooth walls |
 | Set C | $40/hr | 12x14' white walls with 8'6"x20' seamless red vinyl backdrop |
-| Set D | $40/hr | 12x15' bare cinderblock, single smooth colored wall, concrete floor |
+| Set D | $40/hr | 12x15' rose velvet curtain wall, blush curtains, mauve smooth wall, plush pink carpet |
 | Concrete | $40/hr | 12x16' faux concrete walls, mirror wall, rubber black floors |
 | Vintage | $40/hr | 12x16' vintage aesthetic |
 | Cottage | $40/hr | 12x16' slate walls, light brown faux wood flooring |
