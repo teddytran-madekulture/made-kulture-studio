@@ -29,11 +29,6 @@
     "incremental": false
   },
   "files": [
-    "lib/directory-listing.ts",
-    "app/api/directory/route.ts",
-    "app/api/admin/directory/route.ts",
-    "app/api/admin/directory/[id]/route.ts",
-    "app/admin/directory/page.tsx",
-    "components/AdminShell.tsx"
+    "app/sets/SetsClient.tsx"
   ]
 }

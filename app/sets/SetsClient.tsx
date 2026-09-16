@@ -119,7 +119,19 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 2, background: 'rgba(255,255,255,0.04)', minHeight: isMobile ? 0 : 480 }}>
-          <div style={{ position: 'relative', background: gradient, overflow: 'hidden', minHeight: 400 }}>
+          {/* ⚠️ This photo is the ONLY route from /sets to a premium set's
+              detail page. The eight SetCards above are wholly clickable through
+              to /sets/<slug>, but a PremiumBlock's only link used to be BOOK,
+              which jumps straight to checkout and skips the page where the
+              video, the gallery and the full description live. Adding The
+              Tank's video made that a real loss: nothing on /sets reached it.
+              Keep this a Link, and keep the BOOK button alongside it — browsing
+              and buying are two different intents. */}
+          <Link
+            href={`/sets/${set.slug}`}
+            aria-label={`View ${set.name} details`}
+            style={{ position: 'relative', display: 'block', background: gradient, overflow: 'hidden', minHeight: 400, textDecoration: 'none' }}
+          >
             {set.photo_url && (
               <img src={set.photo_url} alt={set.name}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.75 }}
@@ -128,7 +140,12 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
             )}
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, transparent 60%, rgba(10,10,10,0.6) 100%)' }} />
             <div style={{ position: 'absolute', top: 24, left: 28, fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 13, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>{num}</div>
-          </div>
+            {/* A clickable photo with no label is an invisible affordance — the
+                whole point is that people know the page is there. */}
+            <div style={{ position: 'absolute', bottom: 24, left: 28, display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.78)', border: '1px solid rgba(255,255,255,0.28)', background: 'rgba(8,8,8,0.38)', padding: '9px 14px' }}>
+              VIEW SET ↗
+            </div>
+          </Link>
           <div style={{ background: '#0a0a0a', padding: isMobile ? '40px 28px' : '48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
             <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 48, color: '#fff', letterSpacing: '0.02em', lineHeight: 0.95 }}>
               {set.name.toUpperCase()}
