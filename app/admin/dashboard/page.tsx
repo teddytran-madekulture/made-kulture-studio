@@ -1795,7 +1795,7 @@ export default function AdminDashboard() {
           }}>
             <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: 12 }}>👤</span>Client List
           </button>
-          {([['/admin/portfolio', '🖼', 'Portfolio']] as const).map(([href, icon, label]) => (
+          {([['/admin/directory', '✦', 'Creative Directory'], ['/admin/portfolio', '🖼', 'Portfolio'], ['/admin/signups', '✉', 'Recent Signups']] as const).map(([href, icon, label]) => (
             <a key={href} href={href} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
               background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',

@@ -29,8 +29,11 @@
     "incremental": false
   },
   "files": [
-    "lib/acuity-set-map.ts",
-    "app/api/webhooks/acuity/route.ts",
-    "app/api/admin/sync-acuity/route.ts"
+    "lib/directory-listing.ts",
+    "app/api/directory/route.ts",
+    "app/api/admin/directory/route.ts",
+    "app/api/admin/directory/[id]/route.ts",
+    "app/admin/directory/page.tsx",
+    "components/AdminShell.tsx"
   ]
 }

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { isProfileComplete } from '@/lib/directory-listing'
 
 // Service client to read across profiles; we only ever expose opted-in members
 // and never return email/phone.
@@ -43,17 +44,11 @@ export async function GET(req: NextRequest) {
 
   // Minimum profile to be listed: name + bio + (photo | link | IG), and — for
   // creatives — at least one role. Brands don't have creative roles.
-  const isComplete = (m: {
-    id: string; full_name: string | null; roles: string[] | null;
-    bio: string | null; instagram: string | null; links: unknown; account_type?: string | null
-  }) =>
-    !!(m.full_name ?? '').trim() &&
-    (m.account_type === 'brand' || (m.roles?.length ?? 0) > 0) &&
-    !!(m.bio ?? '').trim() &&
-    (withPhotos.has(m.id) || (Array.isArray(m.links) && m.links.length > 0) || !!(m.instagram ?? '').trim())
-
+  // ⚠️ The rule itself lives in lib/directory-listing.ts so /admin/directory can
+  // show WHY an opted-in member is not showing up, using this exact test rather
+  // than a second copy of it.
   const members = (data ?? [])
-    .filter(isComplete)
+    .filter(m => isProfileComplete(m, withPhotos.has(m.id)))
     .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative' }))
 
   return NextResponse.json({ members })
