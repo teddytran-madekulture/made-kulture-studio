@@ -1,64 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { resolveAcuitySet } from '@/lib/acuity-set-map'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Same mapping as the webhook handler
-const ACUITY_TYPE_TO_SET: Record<string, string | null> = {
-  'set a':             'Set A',
-  'set b':             'Set B',
-  'set c':             'Set C',
-  'set d':             'Set D',
-  'concrete':          'Concrete',
-  'vintage':           'Vintage',
-  'cottage':           'Cottage',
-  'watering hole':     'The Watering Hole',
-  'the watering hole': 'The Watering Hole',
-  'the tank':          'The Tank',
-  'tank':              'The Tank',
-  'studio one':        'Studio One',
-  // Full warehouse buyout aliases → no specific set
-  'full studio':         null,
-  'full buyout':         null,
-  'studio buyout':       null,
-  'all warehouse access': null,
-}
-
-async function resolveSet(appointmentType: string): Promise<{ setId: string | null; setName: string }> {
-  const key = appointmentType.toLowerCase().trim()
-
-  // Exact map match
-  if (key in ACUITY_TYPE_TO_SET) {
-    const name = ACUITY_TYPE_TO_SET[key]
-    if (!name) return { setId: null, setName: 'Full Studio Buyout' }
-    const { data } = await supabase.from('sets').select('id').eq('name', name).single()
-    return { setId: data?.id ?? null, setName: name }
-  }
-
-  // Partial match against map keys
-  for (const [mapKey, mapName] of Object.entries(ACUITY_TYPE_TO_SET)) {
-    if (key.includes(mapKey) || mapKey.includes(key)) {
-      if (!mapName) return { setId: null, setName: 'Full Studio Buyout' }
-      const { data } = await supabase.from('sets').select('id').eq('name', mapName).single()
-      return { setId: data?.id ?? null, setName: mapName }
-    }
-  }
-
-  // Fuzzy fallback in Supabase
-  const { data } = await supabase
-    .from('sets')
-    .select('id, name')
-    .ilike('name', `%${appointmentType.trim()}%`)
-    .limit(1)
-    .single()
-
-  if (data) return { setId: data.id, setName: data.name }
-
-  return { setId: null, setName: appointmentType }
-}
 
 // GET /api/admin/sync-acuity?password=XXX&minDate=YYYY-MM-DD&maxDate=YYYY-MM-DD
 export async function GET(req: NextRequest) {
@@ -133,7 +81,7 @@ export async function GET(req: NextRequest) {
         continue
       }
 
-      const { setId, setName } = await resolveSet(apt.type ?? '')
+      const { setId, setName } = await resolveAcuitySet(supabase, apt.type ?? '', 'Acuity sync')
 
       // Parse times
       const start = new Date(apt.datetime)

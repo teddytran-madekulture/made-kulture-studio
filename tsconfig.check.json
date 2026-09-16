@@ -29,6 +29,8 @@
     "incremental": false
   },
   "files": [
-    "app/api/webhooks/acuity/route.ts"
+    "lib/acuity-set-map.ts",
+    "app/api/webhooks/acuity/route.ts",
+    "app/api/admin/sync-acuity/route.ts"
   ]
 }

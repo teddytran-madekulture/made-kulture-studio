@@ -1,81 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
+import { resolveAcuitySet } from '@/lib/acuity-set-map'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ─── Set name mapping ─────────────────────────────────────────────────────────
-// Maps Acuity appointment type names (lowercased) → Supabase set names.
-// Update these keys to match whatever your Acuity appointment types are called.
-const ACUITY_TYPE_TO_SET: Record<string, string | null> = {
-  'set a':             'Set A',
-  'set b':             'Set B',
-  'set c':             'Set C',
-  'set d':             'Set D',
-  'concrete':          'Concrete',
-  'vintage':           'Vintage',
-  'cottage':           'Cottage',
-  'watering hole':     'The Watering Hole',
-  'the watering hole': 'The Watering Hole',
-  // ⚠️ 2026-09-15: 'the tank' / 'tank' were MISSING here while
-  // app/api/admin/sync-acuity/route.ts had them — two copies of one map, and
-  // only one got updated when The Tank opened. A Tank booking therefore landed
-  // with set_id NULL, and lib/extensions.ts reads a NULL set as a FULL-STUDIO
-  // BUYOUT, so every kiosk tablet in the building announced a buyout that did
-  // not exist. Nothing errored anywhere. app/admin/dashboard/page.tsx:256
-  // carries a comment about the same drift biting the same set once before.
-  // ⇒ ADD A NEW SET TO BOTH MAPS, or better, consolidate them.
-  'the tank':          'The Tank',
-  'tank':              'The Tank',
-  'studio one':        'Studio One',
-  // Full buyout — no specific set, set null
-  'full studio':          null,
-  'full buyout':          null,
-  'studio buyout':        null,
-  'all warehouse access': null,
-}
-
-async function resolveSet(
-  appointmentType: string
-): Promise<{ setId: string | null; setName: string }> {
-  const key = appointmentType.toLowerCase().trim()
-
-  // 1. Exact map match
-  if (key in ACUITY_TYPE_TO_SET) {
-    const name = ACUITY_TYPE_TO_SET[key]
-    if (!name) return { setId: null, setName: 'Full Studio Buyout' }
-    const { data } = await supabase.from('sets').select('id').eq('name', name).single()
-    return { setId: data?.id ?? null, setName: name }
-  }
-
-  // 2. Partial match against map keys — handles combo types like
-  //    "Studio One + PMI Smoke Ninja Pro..." → Studio One
-  for (const [mapKey, mapName] of Object.entries(ACUITY_TYPE_TO_SET)) {
-    if (key.includes(mapKey) || mapKey.includes(key)) {
-      if (!mapName) return { setId: null, setName: 'Full Studio Buyout' }
-      const { data } = await supabase.from('sets').select('id').eq('name', mapName).single()
-      return { setId: data?.id ?? null, setName: mapName }
-    }
-  }
-
-  // 3. Fuzzy fallback — search Supabase by partial name
-  //    (resolves promo/seasonal sets that exist as rows, e.g. "The Yard")
-  const { data } = await supabase
-    .from('sets')
-    .select('id, name')
-    .ilike('name', `%${appointmentType.trim()}%`)
-    .limit(1)
-    .single()
-
-  if (data) return { setId: data.id, setName: data.name }
-
-  // 4. Unrecognized type — store without a set
-  console.warn(`[Acuity webhook] Unrecognized appointment type: "${appointmentType}"`)
-  return { setId: null, setName: appointmentType }
-}
 
 // ─── Optional: verify Acuity webhook signature ────────────────────────────────
 // Uncomment once you've added ACUITY_USER_ID and ACUITY_API_KEY to your env vars.
@@ -213,7 +145,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Resolve set ───────────────────────────────────────────────────────────
-    const { setId, setName } = await resolveSet(apt.type ?? '')
+    const { setId, setName } = await resolveAcuitySet(supabase, apt.type ?? '', 'Acuity webhook')
 
     // ── Parse times ───────────────────────────────────────────────────────────
     const durationMins = apt.duration ? parseInt(apt.duration) : undefined
