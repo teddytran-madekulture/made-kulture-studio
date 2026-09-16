@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const SET_COLUMNS = 'id, name, slug, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, sort_order, category, accent_gradient, gallery, video_url, video_hero, is_active, created_at'
+const SET_COLUMNS = 'id, name, slug, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, sort_order, category, accent_gradient, gallery, video_url, video_hero, booking_prompt, is_active, created_at'
 
 function sanitizeSet(body: any) {
   const row: Record<string, unknown> = {}
@@ -31,6 +31,10 @@ function sanitizeSet(body: any) {
   if (typeof body.video_url === 'string')   row.video_url   = body.video_url.trim() || null
   // video_hero is a per-set editorial call: hero slot vs its own block.
   if (body.video_hero !== undefined)        row.video_hero  = Boolean(body.video_hero)
+
+  // The per-set prep question shown at the notes box during checkout. Empty
+  // string CLEARS it back to the generic notes label.
+  if (typeof body.booking_prompt === 'string') row.booking_prompt = body.booking_prompt.trim() || null
 
   if (body.features !== undefined) {
     if (Array.isArray(body.features)) {

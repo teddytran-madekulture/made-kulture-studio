@@ -29,6 +29,10 @@
     "incremental": false
   },
   "files": [
-    "app/sets/SetsClient.tsx"
+    "app/api/sets/route.ts",
+    "app/api/admin/sets/route.ts",
+    "app/api/admin/sets/[id]/route.ts",
+    "components/SetsCatalogManager.tsx",
+    "app/book/BookClient.tsx"
   ]
 }

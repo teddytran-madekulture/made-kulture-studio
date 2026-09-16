@@ -26,6 +26,7 @@ type SetRow = {
   gallery: string[] | null
   video_url: string | null
   video_hero: boolean
+  booking_prompt: string | null
   is_active: boolean
 }
 
@@ -38,6 +39,7 @@ type Draft = {
   gallery: string[]
   video_url: string
   video_hero: boolean
+  booking_prompt: string
 }
 
 const card: React.CSSProperties = { background: '#141416', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }
@@ -79,6 +81,7 @@ export default function SetsCatalogManager() {
       gallery,
       video_url: s.video_url ?? '',
       video_hero: !!s.video_hero,
+      booking_prompt: s.booking_prompt ?? '',
     })
   }
   function cancel() { setEditId(null); setDraft(null) }
@@ -137,6 +140,7 @@ export default function SetsCatalogManager() {
         photo_url: draft.gallery[0] ?? '',
         video_url: draft.video_url,
         video_hero: draft.video_hero,
+        booking_prompt: draft.booking_prompt,
       }
       const res = await fetch(`/api/admin/sets/${editId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -253,6 +257,23 @@ export default function SetsCatalogManager() {
           </div>
 
           <div style={{ display: 'grid', gap: 16, marginTop: 8 }}>
+            <div>
+              {/* The prep question. Lives per set so Teddy can reword it as the
+                  sets change — the red backdrop needs repainting sometimes, and
+                  that is exactly why he needs the answer at BOOKING time rather
+                  than from the 24h reminder or the 15-minute wrap-up text. */}
+              <label style={labelStyle}>Prep question at checkout</label>
+              <input
+                value={draft.booking_prompt}
+                onChange={e => setDraft(d => d && { ...d, booking_prompt: e.target.value })}
+                placeholder="e.g. White wall or red backdrop?"
+                style={inputStyle}
+              />
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 6, lineHeight: 1.6 }}>
+                Shown above the notes box when someone books this set. Leave blank for the plain notes label. It is optional for the customer, so treat answers as a bonus, not a guarantee.
+              </div>
+            </div>
+
             <div>
               <label style={labelStyle}>Description</label>
               <textarea value={draft.description} onChange={e => setDraft(d => d && { ...d, description: e.target.value })} rows={4} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }} />

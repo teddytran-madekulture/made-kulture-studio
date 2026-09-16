@@ -12,7 +12,7 @@ const supabase = createClient(
 )
 
 const PUBLIC_COLUMNS =
-  'id, slug, name, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, category, accent_gradient, sort_order'
+  'id, slug, name, description, rate_per_hour, min_hours, capacity, features, photo_url, dimensions, category, accent_gradient, sort_order, booking_prompt'
 
 export const dynamic = 'force-dynamic'
 

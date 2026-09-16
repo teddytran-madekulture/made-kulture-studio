@@ -37,7 +37,7 @@ function loadSquareScript(): Promise<void> {
 
 // Sets are loaded from /api/sets at runtime (admin Sets Manager is the source
 // of truth). Shape used by this page:
-interface BookSet { id: string; name: string; price: number; desc: string; minHours: number; photo: string | null }
+interface BookSet { id: string; name: string; price: number; desc: string; minHours: number; photo: string | null; bookingPrompt: string | null }
 
 // One set added to a multi-set order (per-set scheduling). price = effective
 // hourly rate (with any customer overrides) captured when it was added.
@@ -227,6 +227,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
           desc: s.description ?? '',
           minHours: s.min_hours ?? 1,
           photo: s.photo_url ?? null,
+          bookingPrompt: s.booking_prompt ?? null,
         }))
       )
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
@@ -415,6 +416,26 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   // Minimum booking length: full warehouse buyout = 4hr, otherwise the set's own min
   const STUDIO_MIN_HOURS = 4
   const minHours     = booking.type === 'studio' ? STUDIO_MIN_HOURS : (selectedSet?.minHours ?? 1)
+
+  // Per-set prep questions for this booking (migration 107, sets.booking_prompt).
+  // ⚠️ Reads the CART, not just the selected set — a booking can hold several
+  // sets and Teddy needs an answer for each, e.g. Set C's backdrop AND the
+  // Watering Hole's water level. Deduped by set id, since the same set can sit
+  // in a cart twice on two different days.
+  const prepPrompts: { name: string; prompt: string }[] = (() => {
+    const chosen: BookSet[] = setCart.length
+      ? (setCart.map(ci => sets.find(x => x.id === ci.setId)).filter(Boolean) as BookSet[])
+      : (selectedSet ? [selectedSet] : [])
+    const seen = new Set<string>()
+    const out: { name: string; prompt: string }[] = []
+    for (const st of chosen) {
+      const q = (st.bookingPrompt ?? '').trim()
+      if (!q || seen.has(st.id)) continue
+      seen.add(st.id)
+      out.push({ name: st.name, prompt: q })
+    }
+    return out
+  })()
   const minLabel     = booking.type === 'studio' ? 'Full Studio Takeover' : selectedSet?.name
 
   // Apply custom pricing overrides if present
@@ -1328,10 +1349,26 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               ))}
               <div>
                 <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
-                  NOTES (OPTIONAL)
+                  {prepPrompts.length ? 'SET PREP + NOTES (OPTIONAL)' : 'NOTES (OPTIONAL)'}
                 </label>
+                {/* ⚠️ Reuses the notes field on purpose — no extra step, no extra
+                    click, and it cannot block checkout. Answers land as free
+                    text in bookings.notes, which already shows and is editable
+                    on the admin booking row. */}
+                {prepPrompts.length > 0 && (
+                  <div style={{ border: '1px solid rgba(212,168,67,0.35)', background: 'rgba(212,168,67,0.07)', padding: '12px 14px', marginBottom: 10 }}>
+                    <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: '#d4a843', marginBottom: 8 }}>
+                      SO WE CAN HAVE IT READY
+                    </div>
+                    {prepPrompts.map(q => (
+                      <div key={q.name} style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 1.6 }}>
+                        <strong style={{ color: '#fff' }}>{q.name}</strong> — {q.prompt}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <textarea
-                  placeholder="Anything we should know — concept, special requests, etc."
+                  placeholder={prepPrompts.length ? 'Answer above, plus anything else we should know' : 'Anything we should know — concept, special requests, etc.'}
                   value={booking.notes}
                   onChange={e => setBooking(b => ({ ...b, notes: e.target.value }))}
                   rows={3}
