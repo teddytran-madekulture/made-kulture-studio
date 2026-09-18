@@ -8,6 +8,7 @@ import AdminCardCharge from '@/components/AdminCardCharge'
 import AddSetModal from '@/components/AddSetModal'
 import AddChargeModal from '@/components/AddChargeModal'
 import OvertimeModal from '@/components/OvertimeModal'
+import GuestCountModal from '@/components/GuestCountModal'
 import { bookingHourToISO } from '@/lib/booking-times'
 // ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
 // share the API routes' pricing instead of keeping a fourth copy of the rate
@@ -549,6 +550,7 @@ export default function AdminDashboard() {
   const [addSetFor,     setAddSetFor]     = useState<Booking | null>(null)  // "add another set" modal
   const [addChargeFor,  setAddChargeFor]  = useState<Booking | null>(null)  // "add charge" (equipment/fees) modal
   const [overtimeFor,   setOvertimeFor]   = useState<Booking | null>(null)  // "charge overtime" modal
+  const [guestsFor,     setGuestsFor]     = useState<Booking | null>(null)  // "party size" modal — changes guest_count and moves the fee difference
   const [textConfirmMsg, setTextConfirmMsg] = useState<string | null>(null) // extension text result
   const [nowHour,       setNowHour]       = useState(getNowHour)
 
@@ -4386,6 +4388,19 @@ export default function AdminDashboard() {
                 + ADD CHARGE (EQUIPMENT / FEES)
               </button>
             )}
+            {/* PARTY SIZE — deliberately NOT folded into EDIT BOOKING. Keeping
+                it separate is the same call as ADD CHARGE and CHARGE OVERTIME:
+                "change the time" must never gain the power to move money on its
+                own (see the 2026-08-09 $32.50 bug). This one owns guest_count,
+                guest_fee_amount and the refund/credit/charge that follows. */}
+            {detailBooking.status !== 'cancelled' && (
+              <button onClick={() => setGuestsFor(detailBooking)}
+                style={{ background: 'rgba(129,178,255,0.12)', border: '1px solid rgba(129,178,255,0.35)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#9cc0ff' }}>
+                {detailBooking.guest_count != null
+                  ? `CHANGE PARTY SIZE \u00b7 ${detailBooking.guest_count} ${detailBooking.guest_count === 1 ? 'PERSON' : 'PEOPLE'}`
+                  : 'SET PARTY SIZE'}
+              </button>
+            )}
             {detailBooking.status !== 'cancelled' && detailBooking.sets?.name && (
               <button onClick={() => setOvertimeFor(detailBooking)}
                 style={{ background: 'rgba(255,176,102,0.12)', border: '1px solid rgba(255,176,102,0.45)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ffb066' }}>
@@ -4706,6 +4721,15 @@ export default function AdminDashboard() {
           rate={effectiveRateFor(overtimeFor.sets?.name ?? '', overtimeFor)}
           onClose={() => setOvertimeFor(null)}
           onSuccess={() => { setOvertimeFor(null); setDetailBooking(null); fetchBookings() }}
+        />
+      )}
+
+      {/* PARTY SIZE — guest_count + the fee difference (refund / credit / charge) */}
+      {guestsFor && (
+        <GuestCountModal
+          booking={guestsFor as any}
+          onClose={() => setGuestsFor(null)}
+          onSuccess={() => { setDetailBooking(null); fetchBookings() }}
         />
       )}
 

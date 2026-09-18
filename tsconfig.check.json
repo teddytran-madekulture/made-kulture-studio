@@ -29,10 +29,9 @@
     "incremental": false
   },
   "files": [
-    "app/api/sets/route.ts",
-    "app/api/admin/sets/route.ts",
-    "app/api/admin/sets/[id]/route.ts",
-    "components/SetsCatalogManager.tsx",
-    "app/book/BookClient.tsx"
+    "app/api/admin/bookings/[id]/guests/route.ts",
+    "components/GuestCountModal.tsx",
+    "components/AdminCardCharge.tsx",
+    "app/admin/dashboard/page.tsx"
   ]
 }
