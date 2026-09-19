@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
   })
 }
 
-// PATCH /api/admin/inbox { id, action: 'takeover' | 'release' | 'close' | 'reopen' | 'spam' | 'unspam' }
+// PATCH /api/admin/inbox { id, action: 'takeover' | 'release' | 'close' | 'reopen' | 'spam' | 'unspam' | 'noreply' | 'needsreply' }
 export async function PATCH(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -56,6 +56,7 @@ export async function PATCH(req: NextRequest) {
   if (!id || !action) return NextResponse.json({ error: 'id and action required' }, { status: 400 })
 
   if (action === 'spam' || action === 'unspam') return spamAction(id, action === 'spam')
+  if (action === 'noreply' || action === 'needsreply') return noReplyAction(id, action === 'noreply')
 
   const updates: Record<string, any> =
     action === 'takeover' ? { human_takeover: true } :
@@ -112,6 +113,40 @@ async function spamAction(id: string, spam: boolean) {
     }
   }
   return NextResponse.json({ success: true, gmail, gmailError })
+}
+
+// NO REPLY — for mail that is real but needs no answer (a vendor's invoice, a
+// receipt). One tap discards June's draft and files the thread as 'fyi': it stays
+// in the inbox list and in Gmail, it just stops asking for attention. The SENDER
+// is remembered too — the email poller files their next message straight to 'fyi'
+// with no draft and no push (see app/api/cron/agent-email). Nothing moves in Gmail.
+//
+// NEEDS REPLY undoes it for the whole sender, not just this thread: every 'fyi'
+// conversation from that address goes to 'closed', otherwise an older one would
+// keep silencing them.
+async function noReplyAction(id: string, quiet: boolean) {
+  const { data: convo, error: readErr } = await supabase
+    .from('agent_conversations').select('id, contact_email').eq('id', id).maybeSingle()
+  if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 })
+  if (!convo) return NextResponse.json({ error: 'not found' }, { status: 404 })
+
+  if (quiet) {
+    const { error: delErr } = await supabase
+      .from('agent_messages').delete().eq('conversation_id', id).eq('role', 'draft')
+    if (delErr) return NextResponse.json({ error: `Couldn't discard the draft: ${delErr.message}` }, { status: 500 })
+  } else if (convo.contact_email) {
+    const { error: liftErr } = await supabase.from('agent_conversations')
+      .update({ status: 'closed' })
+      .eq('contact_email', convo.contact_email).eq('status', 'fyi').neq('id', id)
+    if (liftErr) return NextResponse.json({ error: liftErr.message }, { status: 500 })
+  }
+
+  const { data: updated, error } = await supabase.from('agent_conversations')
+    .update(quiet ? { status: 'fyi', human_takeover: false } : { status: 'open' })
+    .eq('id', id).select('id')
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!updated?.length) return NextResponse.json({ error: 'Nothing was updated' }, { status: 404 })
+  return NextResponse.json({ success: true, sender: convo.contact_email ?? null })
 }
 
 // DELETE /api/admin/inbox?view=spam → EMPTY SPAM. Permanently deletes every

@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
   let processed = 0
   let drafted = 0
   let spammed = 0
+  let filed = 0
 
   try {
     const emails = await fetchNewEmails(5)
@@ -78,10 +79,23 @@ export async function GET(req: NextRequest) {
         continue
       }
 
+      // NO REPLY senders (vendor invoices, receipts): the mail is still recorded
+      // — it has to be, an invoice is worth keeping — but it is filed as 'fyi'
+      // with no June draft and no push. A thread already marked 'fyi' stays so;
+      // a new thread counts if this sender has ANY 'fyi' conversation. NEEDS
+      // REPLY in the inbox lifts every one of them, so that check stays honest.
+      let quiet = existing?.status === 'fyi'
+      if (!existing) {
+        const { data: known } = await supabase
+          .from('agent_conversations').select('id')
+          .eq('contact_email', em.fromEmail).eq('status', 'fyi').limit(1)
+        quiet = !!known?.length
+      }
+
       if (existing) {
         convoId = existing.id
         await supabase.from('agent_conversations')
-          .update({ status: 'open', last_message_at: new Date().toISOString() })
+          .update({ status: quiet ? 'fyi' : 'open', last_message_at: new Date().toISOString() })
           .eq('id', existing.id)
       } else {
         const { data: created } = await supabase
@@ -94,6 +108,7 @@ export async function GET(req: NextRequest) {
             visitor_name: em.fromName,
             visitor_email: em.fromEmail,
             subject: em.subject,
+            ...(quiet ? { status: 'fyi' } : {}),
           })
           .select('id').single()
         convoId = created?.id ?? null
@@ -132,6 +147,7 @@ export async function GET(req: NextRequest) {
 
       await markProcessed(em.gmailMsgId)
       processed++
+      if (quiet) { filed++; continue }
 
       // June drafts a reply from the full thread history.
       const { data: historyRows } = await supabase
@@ -244,8 +260,8 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) {
     console.error('[agent-email] poll error:', e)
-    return NextResponse.json({ ok: false, error: String(e?.message || e), processed, drafted, spammed }, { status: 500 })
+    return NextResponse.json({ ok: false, error: String(e?.message || e), processed, drafted, spammed, filed }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, processed, drafted, spammed })
+  return NextResponse.json({ ok: true, processed, drafted, spammed, filed })
 }

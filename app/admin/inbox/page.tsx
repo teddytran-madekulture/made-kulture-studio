@@ -283,6 +283,32 @@ export default function AdminInboxPage() {
     setBusy(false)
   }
 
+  // NO REPLY — real mail that needs no answer (a vendor invoice). Discards June's
+  // draft and files the thread as FYI; it stays in the list and in Gmail. The
+  // sender's future mail files itself the same way. NEEDS REPLY undoes it.
+  const markNoReply = async (c: Convo, quiet: boolean) => {
+    setBusy(true); setSpamNote(null)
+    try {
+      const r = await fetch('/api/admin/inbox', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, action: quiet ? 'noreply' : 'needsreply' }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.success) {
+        setSpamNote({ ok: false, text: d.error || `Couldn't update it (${r.status}). Nothing changed.` })
+      } else {
+        const who = d.sender || 'this sender'
+        setSpamNote({ ok: true, text: quiet
+          ? `Filed as FYI. Future emails from ${who} will be filed the same way, with no draft and no notification.`
+          : `June will handle ${who} normally again.` })
+      }
+    } catch (e: any) {
+      setSpamNote({ ok: false, text: `Couldn't reach the server: ${e?.message || e}` })
+    }
+    await Promise.all([loadList(), loadConvo(c.id), loadCounts()])
+    setBusy(false)
+  }
+
   const emptySpam = async () => {
     if (!window.confirm(`Permanently delete all ${spamCount} spam conversation${spamCount === 1 ? '' : 's'}? This can't be undone.`)) return
     setBusy(true); setSpamNote(null)
@@ -621,6 +647,7 @@ export default function AdminInboxPage() {
       c.status === 'needs_teddy' ? ['rgba(239,68,68,0.2)', '#f87171', 'NEEDS YOU'] :
       c.status === 'closed' ? ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.4)', 'CLOSED'] :
       c.status === 'spam' ? ['rgba(239,68,68,0.1)', 'rgba(248,113,113,0.7)', 'SPAM'] :
+      c.status === 'fyi' ? ['rgba(125,211,252,0.1)', 'rgba(125,211,252,0.75)', 'FYI'] :
       ['rgba(74,222,128,0.15)', '#4ade80', 'JUNE']
     return <span style={{ ...label, background: bg, color: txt, padding: '3px 7px', borderRadius: 3 }}>{t}</span>
   }
@@ -989,13 +1016,20 @@ export default function AdminInboxPage() {
                     ) : (
                       <button disabled={busy} onClick={() => act(sel.id, 'takeover')} style={{ ...label, background: GOLD, border: 'none', color: '#080808', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>TAKE OVER</button>
                     )}
+                    {sel.status === 'fyi' ? (
+                      <button disabled={busy} onClick={() => markNoReply(sel, false)} title="June drafts replies for this sender again"
+                        style={{ ...label, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>NEEDS REPLY</button>
+                    ) : sel.status !== 'spam' && (
+                      <button disabled={busy} onClick={() => markNoReply(sel, true)} title="No answer needed (an invoice, a receipt). Discards June's draft, keeps the email, and files this sender's future mail the same way"
+                        style={{ ...label, background: 'transparent', border: '1px solid rgba(125,211,252,0.5)', color: '#7dd3fc', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>NO REPLY</button>
+                    )}
                     {sel.status === 'spam' ? (
                       <button disabled={busy} onClick={() => markSpam(sel, false)} style={{ ...label, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>NOT SPAM</button>
                     ) : (
                       <button disabled={busy} onClick={() => markSpam(sel, true)} title="Discard June's draft, hide this thread, and send the sender to Spam"
                         style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>SPAM</button>
                     )}
-                    {sel.status === 'spam' ? null : sel.status !== 'closed' ? (
+                    {sel.status === 'spam' || sel.status === 'fyi' ? null : sel.status !== 'closed' ? (
                       <button disabled={busy} onClick={() => act(sel.id, 'close')} style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>CLOSE</button>
                     ) : (
                       <button disabled={busy} onClick={() => act(sel.id, 'reopen')} style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>REOPEN</button>
