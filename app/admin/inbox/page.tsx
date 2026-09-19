@@ -46,6 +46,11 @@ export default function AdminInboxPage() {
   const [unauth, setUnauth]   = useState(false)
   const [loading, setLoading] = useState(true)
   const [convos, setConvos]   = useState<Convo[]>([])
+  // INBOX vs the hidden SPAM folder. Spam is filtered server-side, so the inbox
+  // list never carries it and the badge never counts it.
+  const [view, setView]           = useState<'inbox' | 'spam'>('inbox')
+  const [spamCount, setSpamCount] = useState(0)
+  const [spamNote, setSpamNote]   = useState<{ ok: boolean; text: string } | null>(null)
   const [sel, setSel]         = useState<Convo | null>(null)
   const [msgs, setMsgs]       = useState<Msg[]>([])
   const [reply, setReply]     = useState('')
@@ -169,12 +174,13 @@ export default function AdminInboxPage() {
   }, [])
 
   const loadList = useCallback(async () => {
-    const r = await fetch('/api/admin/inbox')
+    const r = await fetch(view === 'spam' ? '/api/admin/inbox?view=spam' : '/api/admin/inbox')
     if (r.status === 401) { setUnauth(true); setLoading(false); return }
     const d = await r.json().catch(() => ({}))
     setConvos(d.conversations ?? [])
+    setSpamCount(d.spamCount ?? 0)
     setLoading(false)
-  }, [])
+  }, [view])
 
   const loadConvo = useCallback(async (id: string) => {
     const r = await fetch(`/api/admin/inbox/${id}`)
@@ -241,6 +247,56 @@ export default function AdminInboxPage() {
       body: JSON.stringify({ id, action }),
     })
     await Promise.all([loadList(), sel ? loadConvo(id) : Promise.resolve()])
+    setBusy(false)
+  }
+
+  // ── Spam ────────────────────────────────────────────────────────────────────
+  // One tap: June's draft is thrown away, the thread leaves the inbox (and the
+  // badge), and an email thread moves to Spam in june@'s Gmail so the sender's
+  // next message never reaches June. Reversible with NOT SPAM.
+  const markSpam = async (c: Convo, spam: boolean) => {
+    if (spam && !window.confirm(
+      `Move "${c.visitor_name || c.visitor_email || 'this conversation'}" to spam?\n\n` +
+      `June's draft is thrown away and future emails from this sender skip June. ` +
+      `You can undo it from the SPAM folder.`)) return
+    setBusy(true); setSpamNote(null)
+    try {
+      const r = await fetch('/api/admin/inbox', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, action: spam ? 'spam' : 'unspam' }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.success) {
+        setSpamNote({ ok: false, text: d.error || `Couldn't update it (${r.status}). Nothing changed.` })
+      } else {
+        // Say what actually happened in Gmail — a quiet failure there would look
+        // like the sender was blocked when they weren't.
+        const g = d.gmail === 'moved' ? (spam ? ' Moved to Spam in Gmail too.' : ' Moved back to the Gmail inbox.')
+          : d.gmail === 'failed' ? ` Gmail didn't move it: ${d.gmailError || 'unknown error'}.` : ''
+        setSpamNote({ ok: d.gmail !== 'failed', text: (spam ? 'Marked as spam.' : 'Restored to the inbox.') + g })
+        setSel(null)
+      }
+    } catch (e: any) {
+      setSpamNote({ ok: false, text: `Couldn't reach the server: ${e?.message || e}` })
+    }
+    await Promise.all([loadList(), loadCounts()])
+    setBusy(false)
+  }
+
+  const emptySpam = async () => {
+    if (!window.confirm(`Permanently delete all ${spamCount} spam conversation${spamCount === 1 ? '' : 's'}? This can't be undone.`)) return
+    setBusy(true); setSpamNote(null)
+    try {
+      const r = await fetch('/api/admin/inbox?view=spam', { method: 'DELETE' })
+      const d = await r.json().catch(() => ({}))
+      setSpamNote(r.ok && d.success
+        ? { ok: true, text: `Deleted ${d.deleted} spam conversation${d.deleted === 1 ? '' : 's'}.` }
+        : { ok: false, text: d.error || `Couldn't empty spam (${r.status}). Nothing was deleted.` })
+    } catch (e: any) {
+      setSpamNote({ ok: false, text: `Couldn't reach the server: ${e?.message || e}` })
+    }
+    setSel(null)
+    await loadList()
     setBusy(false)
   }
 
@@ -564,6 +620,7 @@ export default function AdminInboxPage() {
       c.human_takeover ? ['rgba(212,168,67,0.2)', GOLD, 'YOU'] :
       c.status === 'needs_teddy' ? ['rgba(239,68,68,0.2)', '#f87171', 'NEEDS YOU'] :
       c.status === 'closed' ? ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.4)', 'CLOSED'] :
+      c.status === 'spam' ? ['rgba(239,68,68,0.1)', 'rgba(248,113,113,0.7)', 'SPAM'] :
       ['rgba(74,222,128,0.15)', '#4ade80', 'JUNE']
     return <span style={{ ...label, background: bg, color: txt, padding: '3px 7px', borderRadius: 3 }}>{t}</span>
   }
@@ -850,9 +907,29 @@ export default function AdminInboxPage() {
             overflowX: 'hidden',
             overflowY: isMobile ? 'hidden' : 'auto',
           }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap' }}>
+              {(['inbox', 'spam'] as const).map(v => (
+                <button key={v} onClick={() => { setView(v); setSel(null); setLoading(true); setSpamNote(null) }} style={{
+                  ...label, padding: '5px 10px', borderRadius: 4, cursor: 'pointer',
+                  background: view === v ? 'rgba(212,168,67,0.15)' : 'transparent',
+                  border: view === v ? `1px solid ${GOLD}` : '1px solid rgba(255,255,255,0.15)',
+                  color: view === v ? GOLD : 'rgba(255,255,255,0.5)',
+                }}>{v === 'inbox' ? 'INBOX' : `SPAM${spamCount ? ` (${spamCount})` : ''}`}</button>
+              ))}
+              {view === 'spam' && spamCount > 0 && (
+                <button disabled={busy} onClick={emptySpam} style={{ ...label, marginLeft: 'auto', padding: '5px 10px', borderRadius: 4, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171' }}>EMPTY SPAM</button>
+              )}
+            </div>
+            {spamNote && (
+              <div style={{ padding: '8px 14px', fontSize: 12, borderBottom: '1px solid rgba(255,255,255,0.07)', color: spamNote.ok ? '#4ade80' : '#f87171', background: spamNote.ok ? 'rgba(74,222,128,0.06)' : 'rgba(239,68,68,0.08)' }}>
+                {spamNote.text}
+              </div>
+            )}
             {loading && <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Loading…</div>}
             {!loading && convos.length === 0 && (
-              <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No conversations yet. June's widget is live on the site.</div>
+              <div style={{ padding: 16, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                {view === 'spam' ? 'No spam. Nice.' : "No conversations yet. June's widget is live on the site."}
+              </div>
             )}
             {convos.map(c => (
               <div key={c.id} onClick={() => { setSel(c); setMsgs([]) }} style={{
@@ -912,7 +989,13 @@ export default function AdminInboxPage() {
                     ) : (
                       <button disabled={busy} onClick={() => act(sel.id, 'takeover')} style={{ ...label, background: GOLD, border: 'none', color: '#080808', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>TAKE OVER</button>
                     )}
-                    {sel.status !== 'closed' ? (
+                    {sel.status === 'spam' ? (
+                      <button disabled={busy} onClick={() => markSpam(sel, false)} style={{ ...label, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>NOT SPAM</button>
+                    ) : (
+                      <button disabled={busy} onClick={() => markSpam(sel, true)} title="Discard June's draft, hide this thread, and send the sender to Spam"
+                        style={{ ...label, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', color: '#f87171', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>SPAM</button>
+                    )}
+                    {sel.status === 'spam' ? null : sel.status !== 'closed' ? (
                       <button disabled={busy} onClick={() => act(sel.id, 'close')} style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>CLOSE</button>
                     ) : (
                       <button disabled={busy} onClick={() => act(sel.id, 'reopen')} style={{ ...label, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '7px 12px', cursor: 'pointer', borderRadius: 4 }}>REOPEN</button>

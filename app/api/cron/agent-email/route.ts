@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { fetchNewEmails, markProcessed, juneEmailConfigured, fetchAttachment } from '@/lib/agent/gmail'
+import { fetchNewEmails, markProcessed, juneEmailConfigured, fetchAttachment, setThreadSpam } from '@/lib/agent/gmail'
 import {
   runJune, juneConfigured, JuneTurn, JuneImage,
   VISION_MIME_TYPES, VISION_MAX_BYTES, VISION_BASE64_MAX_BYTES, VISION_MAX_IMAGES,
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
 
   let processed = 0
   let drafted = 0
+  let spammed = 0
 
   try {
     const emails = await fetchNewEmails(5)
@@ -56,6 +57,27 @@ export async function GET(req: NextRequest) {
       let convoId: string | null = null
       const { data: existing } = await supabase
         .from('agent_conversations').select('id, status').eq('gmail_thread_id', em.threadId).maybeSingle()
+
+      // SPAM stays spam. Without this, a reply on a thread Teddy marked spam
+      // would flip it back to 'open', June would draft, and the badge would ring
+      // again. The same goes for a NEW thread from a sender he already marked:
+      // one tap on SPAM should be the last he hears from them. NOT SPAM in the
+      // inbox lifts both, since it moves that conversation out of 'spam'.
+      let isSpam = existing?.status === 'spam'
+      if (!existing) {
+        const { data: known } = await supabase
+          .from('agent_conversations').select('id')
+          .eq('contact_email', em.fromEmail).eq('status', 'spam').limit(1)
+        isSpam = !!known?.length
+      }
+      if (isSpam) {
+        try { await setThreadSpam(em.threadId, true) }
+        catch (e) { console.error('[agent-email] spam move failed:', e) }
+        await markProcessed(em.gmailMsgId)
+        spammed++
+        continue
+      }
+
       if (existing) {
         convoId = existing.id
         await supabase.from('agent_conversations')
@@ -222,8 +244,8 @@ export async function GET(req: NextRequest) {
     }
   } catch (e: any) {
     console.error('[agent-email] poll error:', e)
-    return NextResponse.json({ ok: false, error: String(e?.message || e), processed, drafted }, { status: 500 })
+    return NextResponse.json({ ok: false, error: String(e?.message || e), processed, drafted, spammed }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, processed, drafted })
+  return NextResponse.json({ ok: true, processed, drafted, spammed })
 }

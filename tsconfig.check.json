@@ -29,9 +29,9 @@
     "incremental": false
   },
   "files": [
-    "app/api/admin/bookings/[id]/guests/route.ts",
-    "components/GuestCountModal.tsx",
-    "components/AdminCardCharge.tsx",
-    "app/admin/dashboard/page.tsx"
+    "app/api/admin/inbox/route.ts",
+    "app/api/cron/agent-email/route.ts",
+    "lib/agent/gmail.ts",
+    "app/admin/inbox/page.tsx"
   ]
 }

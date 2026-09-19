@@ -378,3 +378,17 @@ export async function sendReply(opts: {
   })
   return sent.id ?? null
 }
+
+// ── Spam ───────────────────────────────────────────────────────────────────────
+// Moves a whole thread to (or out of) the june@ Spam folder. Two jobs: it gets the
+// thread out of Gmail's inbox, and it trains Gmail's filter on that sender so the
+// next one lands in Spam and the poller — which only reads in:inbox — never sees
+// it. Throws on failure; callers decide whether that is fatal.
+export async function setThreadSpam(threadId: string, spam: boolean): Promise<void> {
+  await gmail(`/threads/${encodeURIComponent(threadId)}/modify`, {
+    method: 'POST',
+    body: JSON.stringify(spam
+      ? { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX', 'UNREAD'] }
+      : { addLabelIds: ['INBOX'], removeLabelIds: ['SPAM'] }),
+  })
+}
