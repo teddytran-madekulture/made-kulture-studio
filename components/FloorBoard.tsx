@@ -94,6 +94,8 @@ const clock = (iso: string) =>
 export interface AgendaRow {
   id: string; setLabel: string; startISO: string; endISO: string
   guestName: string | null; guestPhone: string | null; buyout: boolean
+  /** Checkout note; null when locked or none. */
+  note?: string | null
 }
 
 export default function FloorBoard({
@@ -679,6 +681,11 @@ function DayColumn({ agenda, nowMs, showNow }: { agenda: AgendaRow[]; nowMs: num
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,.5)', whiteSpace: 'nowrap' }}>
               {clock(r.startISO)}–{clock(r.endISO)}
             </div>
+            {r.note && (
+              <div title={r.note} style={{ fontSize: 11, color: '#8ec5ff', marginTop: 2, lineHeight: 1.25 }}>
+                NOTE · {r.note}
+              </div>
+            )}
           </div>
         )
       })}
@@ -737,6 +744,12 @@ function AgendaList({ agenda, nowMs, showNow }: { agenda: AgendaRow[]; nowMs: nu
                 </span>
               </div>
               {r.guestName && <div style={{ fontSize: 16, fontWeight: 600, marginTop: 3 }}>{r.guestName}</div>}
+              {r.note && (
+                <div style={{ fontSize: 13, color: '#8ec5ff', marginTop: 3, lineHeight: 1.3,
+                              overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                  NOTE · {r.note}
+                </div>
+              )}
             </div>
           </div>
         )

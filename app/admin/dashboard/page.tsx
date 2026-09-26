@@ -119,6 +119,19 @@ function gearSummary(b: Booking): string {
     .join(', ')
 }
 
+// The customer's checkout note, flattened to one line for the calendar surfaces.
+//
+// ⚠️ Same gap as gearSummary above, found 2026-09-26: a note typed at checkout
+// ("we want the white wall on Set C") was stored on every row of the order but shown
+// ONLY in the expanded list row and the detail panel. Nothing on Day / Week / Agenda
+// (what the phone PWA opens on) said a note existed, so it was missed on a live
+// booking. Reads b.notes directly — the same field the detail panel shows — so the
+// two can never disagree. The full text is one tap away in the detail panel.
+function noteSummary(b: Booking, max = 90): string {
+  const t = (b.notes ?? '').replace(/\s+/g, ' ').trim()
+  return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t
+}
+
 interface EmailSetting {
   key: string
   label: string
@@ -2590,6 +2603,11 @@ export default function AdminDashboard() {
                                   GEAR · {gearSummary(b)}
                                 </div>
                               )}
+                              {noteSummary(b) && (
+                                <div title={b.notes ?? ''} style={{ fontSize: 9, color: '#8ec5ff', marginTop: 2, lineHeight: 1.25 }}>
+                                  NOTE · {noteSummary(b)}
+                                </div>
+                              )}
                             </div>
                           )
                         })}
@@ -2608,6 +2626,9 @@ export default function AdminDashboard() {
                         style={{ position: 'absolute', top, left: TIME_COL + TOUR_COL + 4, width: CAL_SETS.length * SET_COL - 8, height: Math.max(height - 4, 20), background: 'rgba(212,168,67,0.18)', border: '1px solid rgba(212,168,67,0.6)', borderRadius: 2, padding: '4px 8px', cursor: 'pointer', overflow: 'hidden', zIndex: 6 }}>
                         <span style={{ fontSize: 10, color: '#fff', fontWeight: 600 }}>FULL STUDIO — {b.customers?.name || '—'}</span>
                         <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginLeft: 8 }}>{fmtTime(b.start_time)} – {fmtTime(b.end_time)}</span>
+                        {noteSummary(b) && (
+                          <div title={b.notes ?? ''} style={{ fontSize: 9, color: '#8ec5ff', marginTop: 2 }}>NOTE · {noteSummary(b, 160)}</div>
+                        )}
                       </div>
                     )
                   })}
@@ -2660,6 +2681,9 @@ export default function AdminDashboard() {
                             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div>
                             {gearSummary(b) && (
                               <div style={{ fontSize: 10, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b)}</div>
+                            )}
+                            {noteSummary(b) && (
+                              <div style={{ fontSize: 10, color: '#8ec5ff', marginTop: 3 }}>NOTE · {noteSummary(b, 160)}</div>
                             )}
                           </div>
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{fmtTime(b.start_time)}–{fmtTime(b.end_time)}</div>
@@ -2746,6 +2770,9 @@ export default function AdminDashboard() {
                               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b!.sets?.name || 'Full Studio'}</div>
                               {gearSummary(b!) && (
                                 <div style={{ fontSize: 11, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b!)}</div>
+                              )}
+                              {noteSummary(b!) && (
+                                <div style={{ fontSize: 11, color: '#8ec5ff', marginTop: 3, whiteSpace: 'normal' }}>NOTE · {noteSummary(b!, 160)}</div>
                               )}
                             </div>
                             <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b!.start_time)}–{fmtTime(b!.end_time)}</div>{b!.total_amount != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b!.total_amount}</div>}</div>

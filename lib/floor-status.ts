@@ -211,6 +211,9 @@ export interface AgendaRow {
   /** ⚠️ Null for a locked viewer — same boundary as the board itself. */
   guestName: string | null
   guestPhone: string | null
+  /** The customer's checkout note ("white wall on Set C"). ⚠️ Null for a locked
+   *  viewer, same as the name — a note can carry names and details. 2026-09-26. */
+  note: string | null
   buyout: boolean
 }
 
@@ -227,7 +230,7 @@ export async function readAgenda(opts: { withGuest?: boolean; date?: string } = 
 
   const { data, error } = await db
     .from('bookings')
-    .select('id, start_time, end_time, set_id, sets ( name ), customers ( name, phone )')
+    .select('id, start_time, end_time, set_id, notes, sets ( name ), customers ( name, phone )')
     .eq('status', 'confirmed')
     .gte('start_time', dayStart)
     .lt('start_time', dayEnd)
@@ -236,6 +239,7 @@ export async function readAgenda(opts: { withGuest?: boolean; date?: string } = 
 
   interface Row {
     id: string; start_time: string; end_time: string; set_id: string | null
+    notes: string | null
     sets: { name: string | null } | { name: string | null }[] | null
     customers: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null
   }
@@ -251,6 +255,7 @@ export async function readAgenda(opts: { withGuest?: boolean; date?: string } = 
       endISO: r.end_time,
       guestName: opts.withGuest ? c?.name ?? null : null,
       guestPhone: opts.withGuest ? c?.phone ?? null : null,
+      note: opts.withGuest ? (r.notes ?? '').replace(/\s+/g, ' ').trim() || null : null,
       buyout,
     }
   })

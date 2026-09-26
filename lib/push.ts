@@ -155,3 +155,13 @@ export async function sendOwnerPushDetailed(opts: {
   }
   return record(opts, out)
 }
+
+
+// A customer's checkout note, formatted as a suffix for a push body:
+// "\nNote: we want the white wall". Empty when there is no note. Truncated because
+// lock screens clip long bodies anyway and the full text is in the admin.
+export function pushNote(notes: string | null | undefined, max = 120): string {
+  const t = (notes ?? '').replace(/\s+/g, ' ').trim()
+  if (!t) return ''
+  return `\nNote: ${t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t}`
+}

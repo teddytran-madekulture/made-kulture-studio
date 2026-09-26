@@ -20,7 +20,7 @@ import { largestVisitGap, VISIT_GAP_GRACE_HOURS, bookingHourToISO, centralDateSt
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
-import { sendOwnerPush } from '@/lib/push'
+import { sendOwnerPush, pushNote } from '@/lib/push'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -544,7 +544,9 @@ export async function finalizeBooking(
   notifications.push(
     sendOwnerPush({
       title: '🎉 Booking confirmed',
-      body: `${custName} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}`,
+      // The checkout note rides along (2026-09-26) — it used to reach only the email
+      // and the expanded admin row, and a "white wall on Set C" request was missed.
+      body: `${custName} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}${pushNote(notes)}`,
       url: '/admin/dashboard',
     }).catch(() => {})
   )

@@ -16,7 +16,7 @@ import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { createOrderForPayment } from '@/lib/square-order'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
-import { sendOwnerPush } from '@/lib/push'
+import { sendOwnerPush, pushNote } from '@/lib/push'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
 import { validatePromo, recordPromoRedemption } from '@/lib/promo'
@@ -884,7 +884,9 @@ export async function POST(req: NextRequest) {
     notifications.push(
       sendOwnerPush({
         title: '🎉 New booking',
-        body: `${body.name} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}`,
+        // The checkout note rides along (2026-09-26) — it used to reach only the email
+        // and the expanded admin row, and a "white wall on Set C" request was missed.
+        body: `${body.name} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}${pushNote(body.notes)}`,
         url: '/admin/dashboard',
       }).catch(err => console.error('Owner push error (non-fatal):', err))
     )
