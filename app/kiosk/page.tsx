@@ -13,6 +13,7 @@
 // Shared-device privacy: returns HOME + wipes the June chat after 90s idle.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import KioskJukeboxQR from '@/components/KioskJukeboxQR'
 
 const IDLE_MS = 90_000
 
@@ -117,10 +118,11 @@ export default function KioskPage() {
 
   // Real visible height in px — old WebViews misreport 100vh / lack dvh.
   const [vh, setVh] = useState<number | null>(null)
+  const [vw, setVw] = useState<number | null>(null)
   useEffect(() => {
     // Site global CSS zooms body 1.25x — fatal for fixed-height layouts.
     document.body.style.zoom = '1'
-    const measure = () => setVh(window.innerHeight)
+    const measure = () => { setVh(window.innerHeight); setVw(window.innerWidth) }
     measure()
     window.addEventListener('resize', measure)
     window.visualViewport?.addEventListener('resize', measure)
@@ -631,6 +633,24 @@ export default function KioskPage() {
           STAFF
         </button>
       )}
+      {/* Jukebox QR, bottom-left (STAFF owns bottom-right). ⚠️ ABSOLUTELY
+          positioned in the SIDE MARGIN beside the tiles, never in the flow —
+          the four-tile note below measured this screen with no height to spare,
+          and an in-flow strip would push GET THE TEAM off a tablet nobody can
+          scroll. Sized from whatever margin the tiles leave (they cap at 680px,
+          or 980px with ADD TIME); on a screen too narrow for it — a tablet
+          mounted portrait — it is left off rather than drawn over a tile. */}
+      {(() => {
+        if (!booted || vw == null) return null
+        const side = (vw - Math.min(vw, canAddTime ? 980 : 680)) / 2
+        const size = Math.min(150, Math.floor(side - 28))
+        if (size < 96) return null
+        return (
+          <div style={{ position: 'absolute', left: 20, bottom: 18, zIndex: 2 }}>
+            <KioskJukeboxQR setSlug={setSlug} size={size} />
+          </div>
+        )
+      })()}
       {header}
       {occupancyLine}
       {/* ⚠️ `flex: 1 1 0` alongside the tile container, NOT a fixed block. The

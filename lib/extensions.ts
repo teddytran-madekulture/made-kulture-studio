@@ -103,7 +103,12 @@ export async function planExtension(
   const { data: clash } = await db
     .from('bookings')
     .select('id')
-    .eq('set_id', b.set_id)
+    // ⚠️ A FULL-STUDIO BUYOUT (set_id NULL) occupies this set too, and
+    // `.eq('set_id', …)` never matches a NULL — so an extension could be sold
+    // straight into a buyout that starts right after. Same blind spot
+    // lib/set-availability.ts had on 2026-08-21. Fixed 2026-09-27. set_id is a
+    // uuid read from our own row, so it is safe inside the filter string.
+    .or(`set_id.eq.${b.set_id},set_id.is.null`)
     .neq('status', 'cancelled')
     .neq('id', bookingId)
     .lt('start_time', newEnd.toISOString())
@@ -296,7 +301,10 @@ export async function setHeadroom(
   const { data: nextRows, error } = await db
     .from('bookings')
     .select('start_time')
-    .eq('set_id', setId)
+    // Buyouts count as "the next booking on this set" — see the note in
+    // planExtension. Without this the tablet told a guest the room was free
+    // after them, and offered ADD TIME, with the whole building booked next.
+    .or(`set_id.eq.${setId},set_id.is.null`)
     .neq('status', 'cancelled')
     .neq('id', excludeBookingId)
     .gte('start_time', new Date(end - 60_000).toISOString())
@@ -309,9 +317,14 @@ export async function setHeadroom(
     return { nextStartISO: null, headroomHours: 0, headroomLimit: 'next-booking' }
   }
 
-  const nextStartISO = (nextRows ?? [])[0]?.start_time ?? null
-
   const closeMs = Date.parse(bookingHourToISO(centralDateStr(endISO), STUDIO_CLOSE_HOUR))
+
+  // ⚠️ SAME DAY ONLY. The query above has no upper bound, so on a quiet set the
+  // "next booking" could be next Tuesday — and the tablet prints only a TIME,
+  // so a guest read "booked again at 10:00 AM" about a booking days away.
+  // Anything at or after closing can't affect today's session anyway.
+  const rawNext = (nextRows ?? [])[0]?.start_time ?? null
+  const nextStartISO = rawNext && Date.parse(rawNext) < closeMs ? rawNext : null
   const bounds: { ms: number; limit: HeadroomLimit }[] = [
     { ms: closeMs - end,      limit: 'closing' },
     { ms: 12 * 3600_000,      limit: 'max' },
