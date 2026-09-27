@@ -13,7 +13,7 @@
 // Shared-device privacy: returns HOME + wipes the June chat after 90s idle.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import KioskJukeboxQR from '@/components/KioskJukeboxQR'
+import KioskJukeboxBar from '@/components/KioskJukeboxBar'
 
 const IDLE_MS = 90_000
 
@@ -118,11 +118,14 @@ export default function KioskPage() {
 
   // Real visible height in px — old WebViews misreport 100vh / lack dvh.
   const [vh, setVh] = useState<number | null>(null)
-  const [vw, setVw] = useState<number | null>(null)
+  // Whether the NOW PLAYING bar is on screen. The bar decides (music on, studio
+  // hours or a live session, not the last 15 min); the page only needs to know
+  // so it can make room — see the tile and clock sizing below.
+  const [barOn, setBarOn] = useState(false)
   useEffect(() => {
     // Site global CSS zooms body 1.25x — fatal for fixed-height layouts.
     document.body.style.zoom = '1'
-    const measure = () => { setVh(window.innerHeight); setVw(window.innerWidth) }
+    const measure = () => setVh(window.innerHeight)
     measure()
     window.addEventListener('resize', measure)
     window.visualViewport?.addEventListener('resize', measure)
@@ -427,7 +430,11 @@ export default function KioskPage() {
     // Capped. These were `flex: 1` with no ceiling, so on a tall tablet they
     // stretched into near-empty slabs while the type stayed at 23px — the
     // boxes grew with the screen and the words didn't.
-    minHeight: 150, maxHeight: 240,
+    // 136 while the NOW PLAYING bar is up: the DOOR tablet stacks three tiles,
+    // and three at 150 plus the bar is ~840px on an ~800px landscape screen —
+    // GET THE TEAM would fall off a tablet nobody can scroll. Tile content is
+    // ~135px, so 136 still holds it.
+    minHeight: barOn ? 136 : 150, maxHeight: 240,
     background: 'linear-gradient(150deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 60%, rgba(201,178,126,0.05) 100%)',
     border: `1px solid ${HAIR}`,
     boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
@@ -517,7 +524,7 @@ export default function KioskPage() {
   // is unsafe app-wide because globals.css zooms the body 1.25x above 769px.
   // `vh` here is the real visible height this component already measures.
   const clockPx = Math.round(Math.min(
-    canAddTime ? 66 : 118,
+    canAddTime ? 66 : barOn ? 80 : 118,
     Math.max(34, (vh ?? 900) * (canAddTime ? 0.075 : 0.13)),
   ))
 
@@ -529,7 +536,7 @@ export default function KioskPage() {
   // tile changes the SHAPE: one column becomes a 2x2 grid, which is the better
   // use of a wide screen anyway.
   const tile: React.CSSProperties = canAddTime
-    ? { ...card, flex: '1 1 calc(50% - 28px)', minHeight: 200 }
+    ? { ...card, flex: '1 1 calc(50% - 28px)', minHeight: barOn ? 150 : 200 }
     : card
 
   const occupancyLine = !setSlug ? null : (
@@ -618,39 +625,25 @@ export default function KioskPage() {
     </div>
   )
 
+  // Deliberately quiet — staff know it is here, guests have no reason to care,
+  // and anyone who taps it meets a PIN. Set tablets only.
+  const staffBtn = (mode: 'absolute' | 'inline') => (
+    <button
+      onClick={() => { setStaffPin(''); setStaffErr(''); setStaffDone(''); setStaffAction('clear'); setScreen('staff'); touch() }}
+      style={{ ...(mode === 'absolute' ? { position: 'absolute' as const, bottom: 18, right: 20 } : { flexShrink: 0 }),
+               background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.16)',
+               borderRadius: 999, color: 'rgba(255,255,255,0.45)', fontFamily: 'Inter, sans-serif',
+               fontSize: 12, letterSpacing: '0.22em', cursor: 'pointer', padding: '11px 20px' }}>
+      STAFF
+    </button>
+  )
+
   // ── Screens ──────────────────────────────────────────────────────────────
   if (screen === 'home') return (
     <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
-      {/* Deliberately quiet — staff know it is here, guests have no reason to
-          care, and anyone who taps it meets a PIN. */}
-      {setSlug && (
-        <button
-          onClick={() => { setStaffPin(''); setStaffErr(''); setStaffDone(''); setStaffAction('clear'); setScreen('staff'); touch() }}
-          style={{ position: 'absolute', bottom: 18, right: 20,
-                   background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.16)',
-                   borderRadius: 999, color: 'rgba(255,255,255,0.45)', fontFamily: 'Inter, sans-serif',
-                   fontSize: 12, letterSpacing: '0.22em', cursor: 'pointer', padding: '11px 20px' }}>
-          STAFF
-        </button>
-      )}
-      {/* Jukebox QR, bottom-left (STAFF owns bottom-right). ⚠️ ABSOLUTELY
-          positioned in the SIDE MARGIN beside the tiles, never in the flow —
-          the four-tile note below measured this screen with no height to spare,
-          and an in-flow strip would push GET THE TEAM off a tablet nobody can
-          scroll. Sized from whatever margin the tiles leave (they cap at 680px,
-          or 980px with ADD TIME); on a screen too narrow for it — a tablet
-          mounted portrait — it is left off rather than drawn over a tile. */}
-      {(() => {
-        if (!booted || vw == null) return null
-        const side = (vw - Math.min(vw, canAddTime ? 980 : 680)) / 2
-        const size = Math.min(150, Math.floor(side - 28))
-        if (size < 96) return null
-        return (
-          <div style={{ position: 'absolute', left: 20, bottom: 18, zIndex: 2 }}>
-            <KioskJukeboxQR setSlug={setSlug} size={size} />
-          </div>
-        )
-      })()}
+      {/* STAFF sits bottom-right; while the NOW PLAYING bar is up it moves
+          INTO the bar (passed as `right`) instead of floating over it. */}
+      {setSlug && !barOn && staffBtn('absolute')}
       {header}
       {occupancyLine}
       {/* ⚠️ `flex: 1 1 0` alongside the tile container, NOT a fixed block. The
@@ -755,6 +748,18 @@ export default function KioskPage() {
           <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Need a human — we'll come find you</span>
         </button>
       </div>
+      {/* NOW PLAYING bar — in the flow, at the bottom, so the tiles above give
+          up the room rather than being drawn over. Hidden in the last 15
+          minutes (`urgency`): that screen's job is "pack up", not "pick a song". */}
+      {booted && (
+        <KioskJukeboxBar
+          setSlug={setSlug}
+          sessionLive={!!occLive}
+          suppress={!!urgency}
+          onShow={setBarOn}
+          right={setSlug ? staffBtn('inline') : undefined}
+        />
+      )}
     </main>
   )
 
