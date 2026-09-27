@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 import RescheduleModal from '@/components/RescheduleModal'
+import SaveWithPlusModal from '@/components/SaveWithPlusModal'
 
 interface Booking {
   id: string
+  set_id?: string | null
   start_time: string
   end_time: string
   status: string
@@ -41,11 +43,35 @@ export default function BookingsPage() {
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [isPlus, setIsPlus] = useState(false)
   const [moving, setMoving] = useState<Booking | null>(null)
+  const [plusChecked, setPlusChecked] = useState(false)
+  const [saving, setSaving] = useState<Booking | null>(null)
+  // ?save=<bookingId> — set by the guest manage-link page, which sends a guest
+  // through signup/login and back here to finish "save this booking with Plus".
+  const [saveId, setSaveId] = useState<string | null>(null)
 
   const refetch = () =>
     fetch('/api/account/bookings').then(r => r.json()).then(d => { setBookings(d.bookings ?? []); setLoading(false) })
 
-  useEffect(() => { refetch(); setGearCart(loadGearCart()); fetch('/api/account/plus').then(r => r.ok ? r.json() : null).then(d => setIsPlus(!!d?.active)).catch(() => {}) }, [])
+  useEffect(() => { refetch(); setGearCart(loadGearCart()); fetch('/api/account/plus').then(r => r.ok ? r.json() : null).then(d => setIsPlus(!!d?.active)).catch(() => {}).finally(() => setPlusChecked(true))
+    try { setSaveId(new URLSearchParams(window.location.search).get('save')) } catch {}
+  }, [])
+
+  // Arrived from a manage link to save a booking. Wait until BOTH the bookings
+  // and the Plus status are known, then act once.
+  // ⚠️ /api/account/bookings finds a guest's bookings by the VERIFIED account
+  // email, so a guest who signs up with the email they booked with sees the
+  // booking here with no linking step. A different email (say, Google sign-in
+  // on another address) finds nothing — say so rather than silently showing a
+  // list without it.
+  useEffect(() => {
+    if (!saveId || loading || !plusChecked) return
+    const b = bookings.find(x => x.id === saveId)
+    setSaveId(null)
+    try { window.history.replaceState(null, '', '/account/bookings') } catch {}
+    if (!b) { setError('We couldn’t find that booking on this account. Sign in with the email address you booked with, or text (832) 408-1631.'); return }
+    if (isPlus) { setNotice('You’re already a Plus member — use RESCHEDULE or CANCEL on your booking below.'); return }
+    if (saveEligible(b)) setSaving(b)
+  }, [saveId, loading, plusChecked, bookings, isPlus])
 
   const cartTotal = gearCart.reduce((s, l) => s + l.rate * l.quantity, 0)
 
@@ -104,6 +130,15 @@ export default function BookingsPage() {
       }
       setCancelling(null)
     }
+  }
+
+  // Who is offered "save with Plus": a non-member, an individual set (never a
+  // buyout — see SaveWithPlusModal), inside 48 hours and not yet started. That is
+  // exactly the case the cancel route refuses for standard and allows for Plus.
+  const saveEligible = (b: Booking) => {
+    if (isPlus || b.status === 'cancelled' || !b.set_id) return false
+    const h = (new Date(b.start_time).getTime() - Date.now()) / 3_600_000
+    return h > 0 && h <= 48
   }
 
   const now = new Date()
@@ -185,7 +220,21 @@ export default function BookingsPage() {
                 {cancelling === b.id ? 'CANCELLING...' : 'CANCEL'}
               </button>
             )}
-            {isUpcoming && !canCancel && !canReschedule && !canMove && !isCancelled && (
+            {isUpcoming && !canCancel && !canReschedule && !canMove && !isCancelled && saveEligible(b) && (
+              <>
+                <button
+                  onClick={() => setSaving(b)}
+                  title="Join Plus to move or cancel this booking inside 48 hours"
+                  style={{ background: '#d4a843', border: 'none', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#080808', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  SAVE WITH PLUS
+                </button>
+                <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'right', lineHeight: 1.5, maxWidth: 190 }}>
+                  Plans changed? Plus members can move or cancel inside 48 hours.
+                </span>
+              </>
+            )}
+            {isUpcoming && !canCancel && !canReschedule && !canMove && !isCancelled && !saveEligible(b) && (
               <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'right', lineHeight: 1.5, maxWidth: 180 }}>
                 Inside 48 hours — text (832) 408-1631 and we’ll change it for you.
               </span>
@@ -224,11 +273,31 @@ export default function BookingsPage() {
     />
   ) : null
 
+  const SaveModal = saving ? (
+    <SaveWithPlusModal
+      booking={{
+        setName: saving.sets?.name ?? 'Your session',
+        when: fmt(saving.start_time),
+        totalDollars: saving.total_price ?? null,
+        canMove: !saving.acuity_appointment_id && !!saving.sets?.slug,
+      }}
+      onClose={() => setSaving(null)}
+      onDone={() => {
+        const name = saving.sets?.name ?? 'your'
+        setSaving(null)
+        setIsPlus(true)
+        setNotice(`You’re a Plus member. Your ${name} booking can now be ${!saving.acuity_appointment_id && saving.sets?.slug ? 'rescheduled or ' : ''}cancelled for full studio credit — choose below before the session starts.`)
+        refetch()
+      }}
+    />
+  ) : null
+
   if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', paddingTop: 40 }}>Loading bookings...</div>
 
   return (
     <div>
       {MoveModal}
+      {SaveModal}
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>MY BOOKINGS</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 32 }}>
         Cancel 48+ hours before your session and the full value comes back as studio credit. Full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee.

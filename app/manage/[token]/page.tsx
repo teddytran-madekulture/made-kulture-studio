@@ -137,6 +137,40 @@ export default function ManageBookingPage() {
           </div>
         )}
 
+        {data.canSaveWithPlus && (() => {
+          // ⚠️ Plus lives on an ACCOUNT, so a guest can't buy it on this page.
+          // Signup/login carry ?save=<id> through to /account/bookings, which
+          // finds the booking by the account's email and opens the offer there.
+          // The account MUST use the email the booking was made with — hence the
+          // masked hint. Encoded because it rides inside another query string.
+          const next = encodeURIComponent(`/account/bookings?save=${b.id}`)
+          const price = data.plusPriceCents ? `$${(data.plusPriceCents / 100).toFixed(0)}/year` : ''
+          return (
+            <div style={{
+              marginTop: 16, padding: '18px 18px 16px', borderRadius: 8,
+              background: 'linear-gradient(135deg, rgba(201,178,126,0.14), rgba(201,178,126,0.03))',
+              border: `1px solid ${CHAMP}55`,
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: CHAMP, marginBottom: 6 }}>Plans changed? Save this booking with Plus.</div>
+              <div style={{ fontSize: 13, lineHeight: 1.65, color: 'rgba(255,255,255,0.72)', marginBottom: 14 }}>
+                Plus members can move a booking or cancel it for full studio credit, right up until it starts.
+                Create a free account{data.bookingEmailHint ? <> with <strong style={{ color: '#fff' }}>{data.bookingEmailHint}</strong> (the email you booked with)</> : ''},
+                then join Plus{price ? ` for ${price}` : ''} — this booking will be waiting in your account.
+              </div>
+              <a href={`/signup?next=${next}`} style={{
+                display: 'block', textAlign: 'center', padding: '13px 0', background: CHAMP, color: INK,
+                borderRadius: 8, fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase',
+                fontWeight: 600, textDecoration: 'none',
+              }}>
+                Create account &amp; save it
+              </a>
+              <div style={{ textAlign: 'center', marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+                Already have an account? <a href={`/login?next=${next}`} style={{ color: CHAMP }}>Sign in</a>
+              </div>
+            </div>
+          )
+        })()}
+
         <div style={{ marginTop: 28, fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.45)' }}>
           Need anything else — a different set, more time, or to cancel? Text us at{' '}
           <a href="sms:+18324081631" style={{ color: CHAMP }}>(832) 408-1631</a>.

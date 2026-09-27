@@ -24,6 +24,17 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { rescheduleBooking, rescheduleFailed, SELF_SERVE_HOURS } from '@/lib/reschedule'
 import { plusActive } from '@/lib/short-notice'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
+import { getPlusPricing } from '@/lib/plus-pricing'
+
+// "t•••@gmail.com" — enough for a guest to know WHICH address to sign up with
+// (the account finds the booking by that email), without printing the address
+// on a bearer-link page. See the note on doorCode below for what IS exposed.
+function maskEmail(e: string | null | undefined): string | null {
+  const s = String(e ?? '').trim()
+  const at = s.indexOf('@')
+  if (at < 1) return null
+  return `${s[0]}•••${s.slice(at)}`
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -93,7 +104,20 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       : `Inside ${SELF_SERVE_HOURS} hours of your session, changes are handled by the team — text (832) 408-1631 and we’ll sort it out.`
   }
 
+  // "Save this booking with Plus" (2026-09-27). Offered in exactly the case the
+  // 48-hour lock above refuses a non-member: an individual set, not started, not
+  // an Acuity booking. The guest can't buy Plus here — Plus and credit live on an
+  // ACCOUNT — so the page sends them to signup/login with ?save=<id>, and
+  // /account/bookings (which finds bookings by the account's verified email)
+  // picks it up and opens the offer. Nothing is linked or written from this route.
+  const canSaveWithPlus = !isPlus && b.status !== 'cancelled' && startMs > Date.now()
+    && !!b.set_id && !b.acuity_appointment_id && hoursUntil < SELF_SERVE_HOURS
+  const plusPriceCents = canSaveWithPlus ? (await getPlusPricing(service)).currentCents : null
+
   return NextResponse.json({
+    canSaveWithPlus,
+    plusPriceCents,
+    bookingEmailHint: canSaveWithPlus ? maskEmail(cust.email) : null,
     booking: {
       id: b.id,
       start_time: b.start_time,

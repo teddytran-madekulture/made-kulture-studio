@@ -29,7 +29,11 @@ export async function middleware(request: NextRequest) {
   if ((p.startsWith('/account') || p.startsWith('/work')) && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    url.searchParams.set('next', request.nextUrl.pathname)
+    // Keep the query in `next` (2026-09-27): /account/bookings?save=<id> is how
+    // the "save this booking with Plus" offer survives a sign-in. Clear the
+    // original params first so they don't ride along beside `next`.
+    url.search = ''
+    url.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
     return NextResponse.redirect(url)
   }
 
