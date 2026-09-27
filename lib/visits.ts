@@ -15,8 +15,12 @@
 //     completed. Cancelled, no-show and unpaid holds don't count.
 //   • One ORDER is one visit. Rows sharing an order_group (several sets bought
 //     together) count once.
-//   • Keyed on customer_id. Duplicate customer records split a person's count —
-//     the admin merge tool fixes that.
+//   • Keyed on the customer's LOWERCASED EMAIL, falling back to customer_id.
+//     ⚠️ Found 2026-09-27: the customers table holds case-duplicates —
+//     'Lolavaughnburlesque@gmail.com' and 'lolavaughnburlesque@gmail.com' as two
+//     rows — because email upserts are case-sensitive. Keyed on customer_id, a
+//     regular read as FIRST VISIT. Keying on the lowercased email makes the
+//     count right regardless of which duplicate a booking landed on.
 //   • History from before the Acuity sync (bookings start 2026-02-14) comes from
 //     customer_prior_visits (migration 108, filled by /api/admin/visit-history),
 //     matched by lowercased email and ADDED to the count.
@@ -90,9 +94,12 @@ export function computeVisits(rows: Row[], prior: Map<string, Prior> = new Map()
   const emailOf = new Map<string, string>()
   for (const r of rows) {
     if (!r.customer_id) continue
-    if (r.email && !emailOf.has(r.customer_id)) emailOf.set(r.customer_id, r.email)
-    let visits = byCustomer.get(r.customer_id)
-    if (!visits) { visits = new Map(); byCustomer.set(r.customer_id, visits) }
+    // Person key: lowercased email when we have one, so case-duplicate customer
+    // rows count as ONE person; otherwise the row's own customer_id.
+    const person = r.email ? `e:${r.email}` : `c:${r.customer_id}`
+    if (r.email) emailOf.set(person, r.email)
+    let visits = byCustomer.get(person)
+    if (!visits) { visits = new Map(); byCustomer.set(person, visits) }
     const key = r.order_group ?? r.id
     const v = visits.get(key)
     if (!v) visits.set(key, { start: r.start_time, set: r.set_name, ids: [r.id] })
@@ -125,11 +132,14 @@ export function ordinal(n: number): string {
 
 // One line for the new-booking push: "First visit" or "5th visit · last here Aug 30".
 // Returns '' on any failure — a missing line beats a wrong "first visit".
+// ⚠️ Reads ALL counted bookings, not just this customer_id's: a person's history
+// can sit on a case-duplicate customer row (see the note at the top). At this
+// table's size that is a page or two, once per new booking.
 export async function pushVisitLine(db: SupabaseClient, customerId: string | null | undefined, bookingIds: string[]): Promise<string> {
   if (!customerId || !bookingIds.length) return ''
   try {
-    const rows = await fetchVisitRows(db, customerId)
-    const email = rows.find(r => r.email)?.email ?? null
+    const rows = await fetchVisitRows(db)
+    const email = rows.find(r => r.customer_id === customerId && r.email)?.email ?? null
     const visits = computeVisits(rows, email ? await fetchPrior(db, email) : new Map())
     const v = visits[bookingIds[0]]
     if (!v) return ''
