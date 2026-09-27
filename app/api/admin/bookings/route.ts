@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { computeVisits, fetchVisitRows, type VisitInfo } from '@/lib/visits'
+import { computeVisits, fetchVisitRows, fetchPrior, type VisitInfo } from '@/lib/visits'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
 import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   // Visit history per booking ("FIRST VISIT" / "5th visit"). Non-fatal: if it
   // fails, the calendar simply shows no visit tags rather than wrong ones.
   let visits: Record<string, VisitInfo> = {}
-  try { visits = computeVisits(await fetchVisitRows(supabase)) }
+  try { visits = computeVisits(await fetchVisitRows(supabase), await fetchPrior(supabase)) }
   catch (e) { console.error('[admin/bookings] visit history failed (non-fatal):', e) }
 
   const { data: settingRows } = await supabase

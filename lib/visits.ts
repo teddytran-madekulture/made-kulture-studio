@@ -17,8 +17,9 @@
 //     together) count once.
 //   • Keyed on customer_id. Duplicate customer records split a person's count —
 //     the admin merge tool fixes that.
-//   • Only as good as the history in the table: Acuity visits from before the
-//     Acuity sync started are not here unless backfilled.
+//   • History from before the Acuity sync (bookings start 2026-02-14) comes from
+//     customer_prior_visits (migration 108, filled by /api/admin/visit-history),
+//     matched by lowercased email and ADDED to the count.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -32,7 +33,8 @@ export interface VisitInfo {
   prevSet: string | null
 }
 
-interface Row { id: string; customer_id: string | null; start_time: string; order_group: string | null; set_name: string | null }
+interface Row { id: string; customer_id: string | null; start_time: string; order_group: string | null; set_name: string | null; email?: string | null }
+export interface Prior { visits: number; last_visit: string | null; last_set: string | null }
 
 // Fetch every counted booking, 1,000 rows at a time. Light columns only.
 export async function fetchVisitRows(db: SupabaseClient, customerId?: string): Promise<Row[]> {
@@ -40,7 +42,7 @@ export async function fetchVisitRows(db: SupabaseClient, customerId?: string): P
   const PAGE = 1000
   for (let from = 0; ; from += PAGE) {
     let q = db.from('bookings')
-      .select('id, customer_id, start_time, order_group, sets(name)')
+      .select('id, customer_id, start_time, order_group, sets(name), customers(email)')
       .in('status', COUNTED_STATUSES)
       .not('customer_id', 'is', null)
       .order('start_time', { ascending: true })
@@ -53,19 +55,42 @@ export async function fetchVisitRows(db: SupabaseClient, customerId?: string): P
     if (error) throw new Error(`[visits] read failed: ${error.message}`)
     for (const r of (data ?? []) as any[]) {
       const s = Array.isArray(r.sets) ? r.sets[0] : r.sets
-      out.push({ id: r.id, customer_id: r.customer_id, start_time: r.start_time, order_group: r.order_group, set_name: s?.name ?? null })
+      const c = Array.isArray(r.customers) ? r.customers[0] : r.customers
+      out.push({ id: r.id, customer_id: r.customer_id, start_time: r.start_time, order_group: r.order_group, set_name: s?.name ?? null, email: c?.email ? String(c.email).trim().toLowerCase() : null })
     }
     if (!data || data.length < PAGE) break
   }
   return out
 }
 
+// Pre-sync history, lowercased email → Prior. NON-FATAL by design: before
+// migration 108 is run the table does not exist, and that must not break the
+// calendar — it just means no older history is added yet.
+export async function fetchPrior(db: SupabaseClient, email?: string | null): Promise<Map<string, Prior>> {
+  const out = new Map<string, Prior>()
+  const PAGE = 1000
+  try {
+    for (let from = 0; ; from += PAGE) {
+      let q = db.from('customer_prior_visits').select('email, visits, last_visit, last_set').range(from, from + PAGE - 1)
+      if (email) q = q.eq('email', email.trim().toLowerCase())
+      const { data, error } = await q
+      if (error) { console.warn('[visits] prior history unavailable:', error.message); return out }
+      for (const r of (data ?? []) as any[]) out.set(String(r.email), { visits: Number(r.visits) || 0, last_visit: r.last_visit, last_set: r.last_set })
+      if (!data || data.length < PAGE) break
+    }
+  } catch (e) { console.warn('[visits] prior history unavailable:', e) }
+  return out
+}
+
 // bookingId → VisitInfo, for every counted booking that has a customer.
-export function computeVisits(rows: Row[]): Record<string, VisitInfo> {
+// `prior` adds visits from before the booking table's history begins.
+export function computeVisits(rows: Row[], prior: Map<string, Prior> = new Map()): Record<string, VisitInfo> {
   // Group rows into visits per customer: one visit per order_group (or per row).
   const byCustomer = new Map<string, Map<string, { start: string; set: string | null; ids: string[] }>>()
+  const emailOf = new Map<string, string>()
   for (const r of rows) {
     if (!r.customer_id) continue
+    if (r.email && !emailOf.has(r.customer_id)) emailOf.set(r.customer_id, r.email)
     let visits = byCustomer.get(r.customer_id)
     if (!visits) { visits = new Map(); byCustomer.set(r.customer_id, visits) }
     const key = r.order_group ?? r.id
@@ -77,11 +102,17 @@ export function computeVisits(rows: Row[]): Record<string, VisitInfo> {
     }
   }
   const out: Record<string, VisitInfo> = {}
-  byCustomer.forEach(visits => {
+  byCustomer.forEach((visits, customerId) => {
     const ordered = Array.from(visits.values()).sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+    const email = emailOf.get(customerId)
+    const p = email ? prior.get(email) : undefined
+    const offset = p?.visits ?? 0
     ordered.forEach((v, i) => {
       const prev = i > 0 ? ordered[i - 1] : null
-      for (const id of v.ids) out[id] = { n: i + 1, prevStart: prev?.start ?? null, prevSet: prev?.set ?? null }
+      // The first visit in the table looks back into the imported history.
+      const prevStart = prev?.start ?? (offset > 0 ? p!.last_visit : null)
+      const prevSet   = prev ? prev.set : (offset > 0 ? p!.last_set : null)
+      for (const id of v.ids) out[id] = { n: i + 1 + offset, prevStart, prevSet }
     })
   })
   return out
@@ -97,7 +128,9 @@ export function ordinal(n: number): string {
 export async function pushVisitLine(db: SupabaseClient, customerId: string | null | undefined, bookingIds: string[]): Promise<string> {
   if (!customerId || !bookingIds.length) return ''
   try {
-    const visits = computeVisits(await fetchVisitRows(db, customerId))
+    const rows = await fetchVisitRows(db, customerId)
+    const email = rows.find(r => r.email)?.email ?? null
+    const visits = computeVisits(rows, email ? await fetchPrior(db, email) : new Map())
     const v = visits[bookingIds[0]]
     if (!v) return ''
     if (v.n === 1) return '\nFirst visit: give the orientation'

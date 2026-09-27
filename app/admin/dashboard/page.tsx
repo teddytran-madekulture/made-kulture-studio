@@ -138,8 +138,8 @@ function noteSummary(b: Booking, max = 90): string {
 // door, to decide whether to give the orientation. FIRST VISIT is the loud one on
 // purpose — it is the cue to act. Counts come from lib/visits.ts (sessions that
 // happened or are booked; one multi-set order = one visit). ⚠️ Only as good as
-// the history in the table: Acuity visits from before the sync began are missing
-// unless backfilled, so a long-time Acuity regular can read as a first visit.
+// the history available: visits from before the Acuity sync (2026-02-14) are added
+// from customer_prior_visits once /api/admin/visit-history?apply=1 has been run.
 let REGULAR_AT = 5
 function visitOrdinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100
