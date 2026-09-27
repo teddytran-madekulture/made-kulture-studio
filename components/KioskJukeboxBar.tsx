@@ -134,8 +134,8 @@ export default function KioskJukeboxBar({
           )}
           {playing && !now!.paused ? 'NOW PLAYING' : 'MUSIC'}
         </div>
-        <div style={{ fontSize: 26, fontWeight: 700, marginTop: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {playing && !now!.paused ? playing : 'Pick the next song'}
+        <div style={{ fontSize: 26, fontWeight: 700, marginTop: 8 }}>
+          <Marquee text={playing && !now!.paused ? playing : 'Pick the next song'} />
         </div>
       </div>
 
@@ -144,6 +144,55 @@ export default function KioskJukeboxBar({
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.42)', marginTop: 6 }}>Point your phone camera at the code</div>
       </div>
       {right}
+    </div>
+  )
+}
+
+// Scrolls the title when it is too long to fit, sits still when it fits.
+// Teddy 2026-09-27: an ellipsised title "defeats why it would be there".
+// ⚠️ Measured, not guessed from character count — the bar's width changes with
+// the screen and the REQUEST A SONG block beside it. Re-measured on resize and
+// whenever the song changes. The animation is a CSS transform (GPU, no JS
+// timer), so it costs the tablet nothing and makes ZERO network calls.
+const GAP = 90        // px between the end of the title and its repeat
+const SPEED = 45      // px per second — readable from a few feet away
+function Marquee({ text }: { text: string }) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const txtRef = useRef<HTMLSpanElement>(null)
+  const [w, setW] = useState(0) // text width when it overflows, else 0
+
+  useEffect(() => {
+    const measure = () => {
+      const box = boxRef.current, t = txtRef.current
+      if (!box || !t) return
+      const tw = t.scrollWidth
+      setW(tw > box.clientWidth + 1 ? tw : 0)
+    }
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (ro && boxRef.current) ro.observe(boxRef.current)
+    window.addEventListener('resize', measure)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', measure) }
+  }, [text])
+
+  const dist = w + GAP
+  return (
+    <div ref={boxRef} style={{
+      overflow: 'hidden', whiteSpace: 'nowrap', position: 'relative',
+      // Soft fade at both edges so the text slides in and out instead of being chopped.
+      ...(w ? { WebkitMaskImage: 'linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)',
+                maskImage: 'linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)' } : {}),
+    }}>
+      {w > 0 && <style>{`@keyframes mkMarquee{0%,12%{transform:translateX(0)}100%{transform:translateX(-${dist}px)}}`}</style>}
+      <div key={text} style={{
+        display: 'inline-flex',
+        ...(w ? { animation: `mkMarquee ${(dist / SPEED) * 1.14}s linear infinite`, paddingLeft: 24 } : {}),
+      }}>
+        <span ref={txtRef}>{text}</span>
+        {/* The repeat, so the loop is seamless: when the first copy has slid
+            exactly one title+gap to the left, the second sits where it began. */}
+        {w > 0 && <span aria-hidden style={{ paddingLeft: GAP }}>{text}</span>}
+      </div>
     </div>
   )
 }
