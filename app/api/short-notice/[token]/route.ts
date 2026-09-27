@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { normEmail } from '@/lib/customer-email'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
@@ -239,7 +240,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   const custQ = service.from('customers').select('id, pricing_overrides, email')
   const { data: cust } = reqRow.customer_id
     ? await custQ.eq('id', reqRow.customer_id).maybeSingle()
-    : await custQ.eq('email', reqRow.customer_email).maybeSingle()
+    : await custQ.eq('email', normEmail(reqRow.customer_email)).maybeSingle()
   if (!cust) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
 
   // Timed grant sets a precise expiry and clears any stale date; a date grant
@@ -336,7 +337,7 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   const custQ = service.from('customers').select('id, email, name, phone, pricing_overrides')
   const { data: cust } = reqRow.customer_id
     ? await custQ.eq('id', reqRow.customer_id).maybeSingle()
-    : await custQ.eq('email', reqRow.customer_email).maybeSingle()
+    : await custQ.eq('email', normEmail(reqRow.customer_email)).maybeSingle()
   if (!cust) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
 
   const email = String(cust.email || reqRow.customer_email).toLowerCase().trim()

@@ -4,6 +4,7 @@
 // to the payer. NO card, NO charge here — the payer pays on /pay/[token].
 
 import { NextRequest, NextResponse } from 'next/server'
+import { normEmail } from '@/lib/customer-email'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { validateAndPriceOrder, insertBookingRows, fmt12, type BookingCoreInput } from '@/lib/booking-core'
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
     // 3. Upsert customer + link auth user (so confirmations resolve later).
     const { data: customerData } = await supabase
       .from('customers')
-      .upsert({ email: body.email, name: body.name, phone: body.phone }, { onConflict: 'email' })
+      .upsert({ email: normEmail(body.email), name: body.name, phone: body.phone }, { onConflict: 'email' })
       .select('id').single()
     const supabaseCustomerId = customerData?.id ?? null
 

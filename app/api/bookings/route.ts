@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { normEmail } from '@/lib/customer-email'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
@@ -641,7 +642,7 @@ export async function POST(req: NextRequest) {
     // ── 10. Upsert customer + link auth user ───────────────────────────────
     const { data: customerData } = await supabase
       .from('customers')
-      .upsert({ email: body.email, name: body.name, phone: body.phone }, { onConflict: 'email' })
+      .upsert({ email: normEmail(body.email), name: body.name, phone: body.phone }, { onConflict: 'email' })
       .select('id').single()
     const supabaseCustomerId = customerData?.id
 

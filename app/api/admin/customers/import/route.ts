@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { normEmail } from '@/lib/customer-email'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 
@@ -15,6 +16,8 @@ async function upsertCustomer(fields: {
   square_customer_id?: string
   acuity_client_id?: string
 }) {
+  // Every customers.email is stored lowercased (see lib/customer-email.ts).
+  fields = { ...fields, email: normEmail(fields.email) }
   // Check if customer already exists
   const { data: existing } = await supabase
     .from('customers')

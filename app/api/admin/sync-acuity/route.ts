@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { normEmail } from '@/lib/customer-email'
 import { createClient } from '@supabase/supabase-js'
 import { resolveAcuitySet } from '@/lib/acuity-set-map'
 
@@ -110,7 +111,7 @@ export async function GET(req: NextRequest) {
       if (apt.email) {
         const { data: customer } = await supabase
           .from('customers')
-          .upsert({ email: apt.email, name: fullName, phone: apt.phone ?? '' }, { onConflict: 'email' })
+          .upsert({ email: normEmail(apt.email), name: fullName, phone: apt.phone ?? '' }, { onConflict: 'email' })
           .select('id')
           .single()
         customerId = customer?.id

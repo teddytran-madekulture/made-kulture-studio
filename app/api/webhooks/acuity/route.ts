@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { normEmail } from '@/lib/customer-email'
 import { createClient } from '@supabase/supabase-js'
 import { checkAndAlertFlaggedCustomer } from '@/lib/flagged-customer'
 import { resolveAcuitySet } from '@/lib/acuity-set-map'
@@ -164,7 +165,7 @@ export async function POST(req: NextRequest) {
       const { data: customer } = await supabase
         .from('customers')
         .upsert(
-          { email: apt.email, name: fullName, phone: apt.phone ?? '' },
+          { email: normEmail(apt.email), name: fullName, phone: apt.phone ?? '' },
           { onConflict: 'email' }
         )
         .select('id')
