@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { adjustRewardForRefund } from '@/lib/rewards'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
@@ -163,6 +164,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         await refundPayment({ paymentId: cancelPaymentId, amountCents: cancelTotalCents, reason: 'Made Kulture booking cancelled' })
         refundResult = { ok: true, amountCents: cancelTotalCents }
         await notifyDelegatedRefund(params.id, cancelTotalCents)
+        await adjustRewardForRefund(supabase, params.id, cancelTotalCents, 'booking cancelled and refunded')
       } catch (e: any) {
         console.error('[admin cancel] refund failed', e)
         refundResult = { ok: false, error: e?.errors?.[0]?.detail || 'Refund failed — issue it in Square directly.' }
@@ -184,6 +186,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       })
       if (r.ok) {
         creditResult = { ok: true, amountCents: cancelTotalCents }
+        await adjustRewardForRefund(supabase, params.id, cancelTotalCents, 'booking cancelled to studio credit')
         const dollars = (cancelTotalCents / 100).toFixed(2)
         const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
         if (cancelCustomer.phone) {

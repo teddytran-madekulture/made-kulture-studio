@@ -34,7 +34,7 @@ export const maxDuration = 120
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 // Every table known to hold a customers.id. Checked in the preview and moved on apply.
-const CHILD_TABLES = ['bookings', 'customer_notes', 'short_notice_requests', 'plus_payments'] as const
+const CHILD_TABLES = ['bookings', 'customer_notes', 'short_notice_requests', 'plus_payments', 'customer_incidents'] as const
 
 const COLS = 'id, name, email, phone, status, banned, pricing_overrides, square_customer_id, acuity_client_id, alt_emails, alt_phones, alt_names, created_at'
 

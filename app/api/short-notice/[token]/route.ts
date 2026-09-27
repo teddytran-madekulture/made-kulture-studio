@@ -386,6 +386,8 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
     authUserId,
     notes:      reqRow.note || null,
     squareCardOnFileId: reqRow.square_card_id ?? null,
+    // Earns like any member booking, but only if they have an account.
+    rewardEmail: authUserId ? email : null,
   })
   if (!ins.ok) return NextResponse.json({ error: ins.error }, { status: 500 })
   const { bookingIds, orderGroup } = ins

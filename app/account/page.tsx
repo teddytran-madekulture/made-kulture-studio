@@ -5,6 +5,8 @@ import { shortNoticeViewActive } from '@/lib/short-notice'
 import ShortNoticeRequest from '@/components/ShortNoticeRequest'
 import PlusCard from '@/components/PlusCard'
 import { getCreditBalance } from '@/lib/credits'
+import { rewardPotForUser } from '@/lib/rewards'
+import { standingForCustomerId, LEVEL_LABEL, LEVEL_MEANING, LEVEL_COLOR } from '@/lib/standing'
 
 export default async function AccountDashboard() {
   const supabase = createClient()
@@ -39,6 +41,11 @@ export default async function AccountDashboard() {
     .neq('status', 'cancelled')
 
   const creditCents = await getCreditBalance(user!.id)
+  // Rewards share of that balance + account standing (migration 109).
+  const [{ rewardCents }, standing] = await Promise.all([
+    rewardPotForUser(service, user!.id),
+    standingForCustomerId(service, custIds[0] ?? null),
+  ])
 
   const firstName = profile?.full_name?.split(' ')[0] ?? user!.email?.split('@')[0]
   const acctType = (profile as any)?.account_type ?? 'customer'
@@ -81,6 +88,19 @@ export default async function AccountDashboard() {
         <div style={{ background: creditCents > 0 ? 'linear-gradient(135deg, rgba(201,178,126,0.14), rgba(201,178,126,0.03))' : '#141414', border: `1px solid ${creditCents > 0 ? 'rgba(201,178,126,0.35)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 8, padding: '20px 24px' }}>
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, lineHeight: 1, color: creditCents > 0 ? '#c9b27e' : '#fff' }}>${(creditCents / 100).toFixed(2)}</div>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Studio credit{creditCents > 0 ? ' · applies automatically at checkout' : ''}</div>
+          {rewardCents > 0 && (
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6, lineHeight: 1.5 }}>
+              Includes ${(rewardCents / 100).toFixed(2)} from rewards, which stay active as long as you book once a year.
+            </div>
+          )}
+        </div>
+        <div style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '20px 24px' }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: LEVEL_COLOR[standing.level] }}>{LEVEL_LABEL[standing.level]}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, lineHeight: 1.5 }}>
+            Account standing{standing.level !== 'good' ? ` · ${LEVEL_MEANING[standing.level]}` : ''}
+            {standing.level !== 'good' && standing.nextDropOff ? ` Improves as points drop off; the next on ${standing.nextDropOff}.` : ''}
+            {standing.level !== 'good' ? ' Questions? Text (832) 408-1631.' : ''}
+          </div>
         </div>
       </div>
 

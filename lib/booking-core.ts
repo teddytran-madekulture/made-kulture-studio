@@ -22,6 +22,7 @@ import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush, pushNote } from '@/lib/push'
 import { pushVisitLine } from '@/lib/visits'
+import { rewardRateForEmail } from '@/lib/rewards'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -594,6 +595,11 @@ export interface InsertRowsOptions {
   orderGroup?: string
   squareCardOnFileId?: string | null
   squarePaymentId?: string | null
+  // Made Kulture Rewards (migration 109): the ACCOUNT's email when this booking
+  // should earn. Omit for anything a third party pays for (delegate / pay link).
+  // These paths apply no promo and no credit, so the basis is the full set time
+  // + gear on each row.
+  rewardEmail?: string | null
 }
 
 export type InsertRowsResult =
@@ -611,10 +617,17 @@ export async function insertBookingRows(
   const equipTotal = equipment.reduce(
     (sum, l) => sum + (equipRates[l.equipment_id] ?? 0) * (l.quantity ?? 1), 0)
 
+  let rewardRate: number | null = null
+  if (opts.rewardEmail) {
+    try { rewardRate = await rewardRateForEmail(supabase, opts.rewardEmail) }
+    catch (e) { console.error('[insertBookingRows] reward rate lookup failed (non-fatal)', e) }
+  }
+
   const bookingIds: string[] = []
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]
     const rowTotal = l.spaceDollars + (i === 0 ? equipTotal + guestFeeDollars + guestSurchargeDollars : 0)
+    const rewardBasis = Math.round((l.spaceDollars + (i === 0 ? equipTotal : 0)) * 100)
     const { data: row, error: insErr } = await supabase
       .from('bookings')
       .insert({
@@ -642,6 +655,7 @@ export async function insertBookingRows(
         notes:            opts.notes ?? null,
         ...(opts.squareCardOnFileId ? { square_card_on_file_id: opts.squareCardOnFileId } : {}),
         ...(opts.squarePaymentId    ? { square_payment_id:      opts.squarePaymentId }    : {}),
+        ...(rewardRate != null      ? { reward_rate: rewardRate, reward_basis_cents: rewardBasis } : {}),
       })
       .select('id').single()
 

@@ -88,6 +88,13 @@ export async function POST(req: NextRequest) {
 
   if (notesErr) errors.push(`notes: ${notesErr.message}`)
 
+  // 2b. Reassign the rest of what points at a customer (migration 109 added
+  //     incidents; short-notice requests and Plus payments were never moved).
+  for (const t of ['customer_incidents', 'short_notice_requests', 'plus_payments']) {
+    const { error: e } = await supabase.from(t).update({ customer_id: primaryId }).in('customer_id', duplicateIds)
+    if (e) errors.push(`${t}: ${e.message}`)
+  }
+
   // 3. Update primary with merged fields
   const { error: updateErr } = await supabase
     .from('customers')

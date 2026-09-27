@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { adjustRewardForRefund } from '@/lib/rewards'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
 import { refundPayment } from '@/lib/square-refund'
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
     // If a third party paid (delegated "someone else pays"), tell them.
     await notifyDelegatedRefund(params.id, amountCents)
+    await adjustRewardForRefund(supabaseAdmin(), params.id, amountCents, 'refund from the desk')
     return NextResponse.json({ success: true, amountCents, refundId: refund.id })
   } catch (e: any) {
     console.error('[booking refund] failed', e)

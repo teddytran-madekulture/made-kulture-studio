@@ -10,6 +10,7 @@
 // path around this one.
 
 import { plusActive } from '@/lib/short-notice'
+import { standingForEmail, shortNoticeAllowed } from '@/lib/standing'
 import {
   openWindowsFrom, instantBlocksForSet, isInstantBookable,
   BLOCKING_STATUSES, PLUS_LEAD_MS, type BookingRow,
@@ -46,6 +47,8 @@ export async function sessionMayInstantBook(
     .from('customers').select('pricing_overrides')
     .eq('email', String(sessionEmail).toLowerCase().trim()).maybeSingle()
   if (!plusActive(cust?.pricing_overrides ?? null)) return false
+  // Short-notice perks pause below good standing (lib/standing, migration 109).
+  if (!shortNoticeAllowed(await standingForEmail(supabase, sessionEmail))) return false
 
   // A full-studio buyout can never qualify: it requires the whole warehouse,
   // which by definition cannot fit inside somebody else's shoot.

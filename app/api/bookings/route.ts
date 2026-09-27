@@ -21,6 +21,7 @@ import { sendOwnerPush, pushNote } from '@/lib/push'
 import { pushVisitLine } from '@/lib/visits'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
+import { rewardRateForEmail, rowBasisCents, rewardFor } from '@/lib/rewards'
 import { validatePromo, recordPromoRedemption } from '@/lib/promo'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
@@ -664,8 +665,21 @@ export async function POST(req: NextRequest) {
     // Opens /manage/<token> — how a guest with no account reaches this booking.
     let manageToken: string | null = null
 
+    // ── 10b. Made Kulture Rewards: LOCK the rate now (migration 109) ─────────
+    //     Only a signed-in account earns, and only while the program is on, so
+    //     turning it on at launch never pays for bookings made before. The basis
+    //     is this row's set time + gear, scaled to the card-paid share (promo and
+    //     credit come off proportionally). Paid nightly after the session.
+    let rewardRate: number | null = null
+    try { if (sessionUser?.email) rewardRate = await rewardRateForEmail(supabase, sessionUser.email) }
+    catch (e) { console.error('[bookings] reward rate lookup failed (non-fatal)', e) }
+    let rewardTotalCents = 0
+
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
+      const rowEarnableCents = Math.round((l.spaceDollars + (i === 0 ? equipDollars : 0)) * 100)
+      const rewardBasis = rewardRate != null ? rowBasisCents(rowEarnableCents, chargeCents, verifiedCents) : null
+      if (rewardRate != null && rewardBasis != null) rewardTotalCents += rewardFor(rewardBasis, rewardRate)
       // Promo discount lands on the first row (like equipment/guest fees) so the
       // stored total reflects the post-promo price.
       const rowTotal = Math.max(0, l.spaceDollars + (i === 0 ? equipDollars + guestFeeDollars + guestSurchargeDollars - promoDiscountCents / 100 : 0))
@@ -697,6 +711,7 @@ export async function POST(req: NextRequest) {
           source:                 'website',
           notes:                  body.notes,
           ...(chargeCents === 0 ? { payment_status: 'paid' } : {}),
+          ...(rewardRate != null ? { reward_rate: rewardRate, reward_basis_cents: rewardBasis } : {}),
         })
         .select('id, check_in_token, manage_token').single()
 
@@ -857,6 +872,7 @@ export async function POST(req: NextRequest) {
           startTime: formatTimeLabel(primary.startHour),
           endTime: formatTimeLabel(primary.endHour),
           totalAmount: verifiedCents / 100, bookingId: firstBookingId,
+          rewardCents: rewardTotalCents,
           // Square never emails a receipt by itself — Teddy has been sending
           // them by hand on request. This link is the only itemised record the
           // customer gets otherwise.

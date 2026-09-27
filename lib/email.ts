@@ -124,6 +124,8 @@ interface BookingConfirmationData {
                            // account) can see or move their own booking.
                            // Separate secret from checkInToken on purpose;
                            // see migration 101.
+  rewardCents?: number     // Made Kulture Rewards: credit this booking will earn after
+                           // the session (0/undefined = say nothing). Migration 109.
   receiptUrl?: string      // Square's itemised card receipt. Square does NOT
                            // email one on its own, so without this link the
                            // customer never gets an itemised record at all.
@@ -133,7 +135,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, guestCapacity, doorCode, doorCodeBack, startISO, endISO, checkInToken, manageToken, receiptUrl } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, guestCapacity, doorCode, doorCodeBack, startISO, endISO, checkInToken, manageToken, receiptUrl, rewardCents } = data
   const isBuyout = /full studio takeover/i.test(setName) // buyouts are private — skip the shared-studio note
 
   const manageLink = manageToken ? `${APP_URL}/manage/${manageToken}` : null
@@ -188,7 +190,13 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
           <span style="font-size:15px;color:#fff;font-weight:600;">$${totalAmount.toFixed(2)}</span>${receiptUrl ? `<br/>
           <a href="${receiptUrl}" style="font-size:12px;color:#d4a843;text-decoration:underline;">View your card receipt</a>` : ''}
         </td>
-      </tr>
+      </tr>${rewardCents && rewardCents > 0 ? `
+      <tr>
+        <td style="padding:8px 0;border-bottom:1px solid #2a2a2a;">
+          <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Rewards</span><br/>
+          <span style="font-size:14px;color:#d4a843;">You'll earn $${(rewardCents / 100).toFixed(2)} in studio credit after your session.</span>
+        </td>
+      </tr>` : ''}
       ${notes ? `
       <tr>
         <td style="padding:8px 0;">
@@ -803,4 +811,54 @@ export async function sendReviewFollowupEmail(opts: { to: string; customerName: 
     </p>
   `)
   return sendEmail('review-followup', { from: FROM_EMAIL, to: opts.to, subject: 'One quick favor?', html })
+}
+
+
+// ─── Account standing + rewards (migration 109) ───────────────────────────────
+
+// Calm and factual on purpose: it is what makes the standing system change
+// behaviour, and it must never read as an accusation. No PIN, no amounts owed.
+export async function sendIncidentNoticeEmail(opts: {
+  to: string; customerName?: string | null; occurredOn: string; categoryLabel: string; details?: string | null
+  points: number; levelLabel: string; levelMeaning: string; nextDropOff?: string | null
+}) {
+  const first = (opts.customerName || '').split(' ')[0] || 'there'
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">A note about your recent session</h1>
+    <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#bbb;">Hi ${esc(first)}, we recorded the following on your Made Kulture account.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:24px;">
+      <tr><td style="padding:6px 0;"><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">What happened</span><br/>
+        <span style="font-size:15px;color:#fff;font-weight:600;">${esc(opts.categoryLabel)}</span> <span style="font-size:13px;color:#888;">· ${esc(opts.occurredOn)}</span>
+        ${opts.details ? `<br/><span style="font-size:14px;color:#ccc;line-height:1.6;">${esc(opts.details)}</span>` : ''}</td></tr>
+      <tr><td style="padding:6px 0;"><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Points</span><br/>
+        <span style="font-size:15px;color:#fff;">${opts.points}</span></td></tr>
+      <tr><td style="padding:6px 0;"><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Your account standing</span><br/>
+        <span style="font-size:15px;color:#fff;font-weight:600;">${esc(opts.levelLabel)}</span><br/>
+        <span style="font-size:13px;color:#bbb;">${esc(opts.levelMeaning)}</span></td></tr>
+    </table>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#bbb;">
+      Points drop off 12 months after each incident, and every clean session keeps you on track.
+      ${opts.nextDropOff ? `Your next points drop off on <strong style="color:#fff;">${esc(opts.nextDropOff)}</strong>.` : ''}
+    </p>
+    <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#bbb;">
+      If you think this was recorded in error, just reply to this email and we'll take a look.
+    </p>
+    ${NOTIF_BUTTON(`${APP_URL}/account`, 'View your account')}
+  `
+  return sendEmail('incident_notice', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: 'A note about your Made Kulture account', html: layout(body) })
+}
+
+export async function sendRewardsExpiryWarningEmail(opts: { to: string; cents: number; expiresOn: Date }) {
+  const amount = `$${(opts.cents / 100).toFixed(2)}`
+  const day = opts.expiresOn.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'America/Chicago' })
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">Your rewards expire soon</h1>
+    <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#bbb;">
+      You have <strong style="color:#d4a843;">${amount}</strong> in Made Kulture rewards. It expires on
+      <strong style="color:#fff;">${day}</strong>. Book any session before then to keep it, and it will apply at checkout.
+    </p>
+    ${NOTIF_BUTTON(`${APP_URL}/availability`, 'Book a session')}
+    <p style="margin:0;font-size:12px;color:#777;">Credit from cancellations or rescheduling never expires and isn't affected.</p>
+  `
+  return sendEmail('rewards_expiry_warning', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `Your ${amount} in rewards expires ${day}`, html: layout(body) })
 }

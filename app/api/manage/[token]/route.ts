@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { rescheduleBooking, rescheduleFailed, SELF_SERVE_HOURS } from '@/lib/reschedule'
 import { plusActive } from '@/lib/short-notice'
+import { standingForEmail, cancelProtectionOn } from '@/lib/standing'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { getPlusPricing } from '@/lib/plus-pricing'
 
@@ -80,7 +81,9 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   const { data: custRow } = await service
     .from('customers').select('pricing_overrides')
     .eq('email', String(cust.email ?? '').toLowerCase().trim()).maybeSingle()
-  const isPlus = plusActive(custRow?.pricing_overrides ?? null)
+  const plusMember = plusActive(custRow?.pricing_overrides ?? null)
+  // Protection paused below good standing ⇒ explain it like a standard booking.
+  const isPlus = plusMember && cancelProtectionOn(await standingForEmail(service, cust.email))
 
   // Why the customer may NOT move this one, in the same order lib/reschedule.ts
   // would refuse — so the page can explain up front instead of letting them pick
@@ -110,7 +113,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   // ACCOUNT — so the page sends them to signup/login with ?save=<id>, and
   // /account/bookings (which finds bookings by the account's verified email)
   // picks it up and opens the offer. Nothing is linked or written from this route.
-  const canSaveWithPlus = !isPlus && b.status !== 'cancelled' && startMs > Date.now()
+  const canSaveWithPlus = !plusMember && b.status !== 'cancelled' && startMs > Date.now()
     && !!b.set_id && !b.acuity_appointment_id && hoursUntil < SELF_SERVE_HOURS
   const plusPriceCents = canSaveWithPlus ? (await getPlusPricing(service)).currentCents : null
 

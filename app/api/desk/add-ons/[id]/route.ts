@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { adjustRewardForRefund } from '@/lib/rewards'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
 import { can } from '@/lib/staff-permissions'
@@ -52,6 +53,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       }, { status: 500 })
     }
     await audit(g, 'booking.remove_gear', { entityType: 'booking', entityId: addon.booking_id ?? undefined, amountCents, details: { name, refunded: true } })
+    await adjustRewardForRefund(db, addon.booking_id, amountCents, `${name} removed and refunded`)
     return NextResponse.json({ success: true, refunded: true, amountCents })
   }
 

@@ -7,6 +7,7 @@ import { shortNoticeQuoteCents, SET_MIN_HOURS } from '@/lib/booking-core'
 import { Client, Environment } from 'square'
 import { sendShortNoticeRequestAlert } from '@/lib/email'
 import { sendOwnerSMS } from '@/lib/sms'
+import { standingForCustomerId, standingForEmail, shortNoticeAllowed, SHORT_NOTICE_PAUSED_ERROR } from '@/lib/standing'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,6 +111,9 @@ export async function POST(req: NextRequest) {
   }
   if (shortNoticeActive(c.overrides)) {
     return NextResponse.json({ error: 'You already have short-notice booking access.' }, { status: 400 })
+  }
+  if (!shortNoticeAllowed(c.id ? await standingForCustomerId(service, c.id) : await standingForEmail(service, c.email))) {
+    return NextResponse.json({ error: SHORT_NOTICE_PAUSED_ERROR }, { status: 403 })
   }
 
   // ⚠️ One live request per person — but a SECOND ask REPLACES the first rather

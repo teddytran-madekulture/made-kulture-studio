@@ -20,6 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { plusActive } from '@/lib/short-notice'
 import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
+import { standingForEmail, cancelProtectionOn } from '@/lib/standing'
 import { checkSetWindows } from '@/lib/set-availability'
 import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
@@ -140,7 +141,10 @@ export async function rescheduleBooking(
   const plusEmail = String(cust?.email ?? actorEmail ?? '').toLowerCase().trim()
   const { data: custRow } = await service
     .from('customers').select('pricing_overrides').eq('email', plusEmail).maybeSingle()
+  // Moving a booking inside the window is Plus cancellation protection in
+  // another form, so it pauses at Probation too (lib/standing, migration 109).
   const isPlus = plusActive(custRow?.pricing_overrides ?? null)
+    && cancelProtectionOn(await standingForEmail(service, plusEmail))
   const hoursUntil = (oldStartMs - now) / 3_600_000
   if (hoursUntil < SELF_SERVE_HOURS && !isPlus) {
     return {

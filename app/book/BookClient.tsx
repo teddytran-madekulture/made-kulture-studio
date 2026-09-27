@@ -1547,6 +1547,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               ) : (
                 <SquarePaymentPanel
                   grandTotal={grandTotal}
+                  earnableTotal={spaceTotal + discountedEquipTotal}
                   booking={booking}
                   setCart={setCart}
                   selectedSet={selectedSet}
@@ -1821,9 +1822,10 @@ interface SquarePaymentPanelProps {
   setRate:     number
   onBack:      () => void
   onSuccess:   () => void
+  earnableTotal?: number   // set time + gear (dollars) — the part Made Kulture Rewards pays on
 }
 
-function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCount, setRate, onBack, onSuccess }: SquarePaymentPanelProps) {
+function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCount, setRate, onBack, onSuccess, earnableTotal = 0 }: SquarePaymentPanelProps) {
   const isMobile = useIsMobile()
   const cardContainerRef    = useRef<HTMLDivElement>(null)
   const googlePayContainerRef = useRef<HTMLDivElement>(null)
@@ -1859,14 +1861,28 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   // Credit is opt-OUT: on by default (people expect it spent), but you can
   // bank it for a bigger session. The server already honours applyCredit:false.
   const [useCredit, setUseCredit] = useState(true)
+  // Made Kulture Rewards (migration 109). rewardRate = what THIS account earns
+  // right now (null ⇒ off / not eligible). guestRewardRate drives the sign-in
+  // nudge for someone checking out without an account.
+  const [rewardRate, setRewardRate] = useState<number | null>(null)
+  const [guestRewardRate, setGuestRewardRate] = useState<number | null>(null)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
         const r = await fetch('/api/account/credit')
-        if (!r.ok) return               // 401 for guests — no credit, no noise
+        if (!r.ok) {                    // 401 for guests — no credit, no noise
+          if (r.status === 401) {
+            const st = await fetch('/api/rewards/status').then(x => x.ok ? x.json() : null).catch(() => null)
+            if (!cancelled && st?.enabled && st.memberRate > 0) setGuestRewardRate(Number(st.memberRate))
+          }
+          return
+        }
         const d = await r.json()
-        if (!cancelled) setCreditCents(Number(d?.balanceCents) || 0)
+        if (cancelled) return
+        setCreditCents(Number(d?.balanceCents) || 0)
+        const rate = d?.rewards?.rate
+        setRewardRate(typeof rate === 'number' && rate > 0 ? rate : null)
       } catch { /* never block checkout on this */ }
     })()
     return () => { cancelled = true }
@@ -1904,6 +1920,11 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   const creditApplied = (mode === 'self' && useCredit) ? Math.min(creditCents, payCents) : 0
   const chargeCents = Math.max(0, payCents - creditApplied)
   const chargeDollars = (chargeCents / 100).toFixed(2)
+  // Mirrors lib/rewards rowBasisCents: earnable × card share × rate. Card-paid
+  // part only, so credit and promo shrink it exactly as the server will.
+  const rewardEstimateCents = (mode === 'self' && rewardRate && grandTotal > 0)
+    ? Math.round(earnableTotal * 100 * Math.min(1, chargeCents / (grandTotal * 100)) * rewardRate / 100)
+    : 0
 
   const applyPromo = async () => {
     if (!promo.trim() || promoBusy) return
@@ -2331,6 +2352,17 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
                     ${((creditCents - creditApplied) / 100).toFixed(2)} credit left for next time.
                   </div>
                 )}
+              </div>
+            )}
+
+            {rewardEstimateCents > 0 && (
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#d4a843', marginBottom: 12 }}>
+                You&rsquo;ll earn ${(rewardEstimateCents / 100).toFixed(2)} in studio credit after your session.
+              </div>
+            )}
+            {guestRewardRate != null && (
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                Members earn {guestRewardRate}% back in studio credit. <a href="/login" style={{ color: '#c9b27e', textDecoration: 'underline' }}>Sign in</a> to earn on this booking.
               </div>
             )}
 

@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { sendOwnerSMS } from '@/lib/sms'
+import { standingForCustomerId } from '@/lib/standing'
 
 const OWNER_EMAIL = 'teddytran@madekulture.com'
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
@@ -27,14 +28,20 @@ export async function checkBannedAndAlert(
     .eq('email', email.toLowerCase().trim())
     .maybeSingle()
 
-  if (!customer || !customer.banned) {
-    return { banned: false, customerId: customer?.id }
+  if (!customer) return { banned: false }
+
+  // Account standing (migration 109): a suspension — by points, by a dated
+  // suspension, or the old banned switch — blocks here, before payment. Every
+  // booking door that calls this gets it for free.
+  if (!customer.banned) {
+    const st = await standingForCustomerId(supabase, customer.id)
+    if (st.level !== 'suspended') return { banned: false, customerId: customer.id }
   }
 
   // Fire alert (non-blocking from caller's perspective — we await here but
   // the caller doesn't need to wait for this before returning the error)
   await sendOwnerSMS([
-    `⛔ BANNED CUSTOMER ATTEMPTED TO BOOK`,
+    `⛔ SUSPENDED CUSTOMER ATTEMPTED TO BOOK`,
     ``,
     `${customer.name || email} (${email})`,
     `📍 ${attempt.setName}`,

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { findOrphanedByCancel } from '@/lib/plus-instant-book'
 import { sendCancellationEmail, sendCancellationOwnerAlert, sendSimpleEmail, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { plusActive } from '@/lib/short-notice'
+import { standingForEmail, cancelProtectionOn } from '@/lib/standing'
 import { issueCredit } from '@/lib/credits'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 import { deleteCalendarEvent } from '@/lib/gcal'
@@ -47,7 +48,11 @@ export async function POST(req: NextRequest) {
   const service = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: custRows } = await service
     .from('customers').select('pricing_overrides').eq('email', (user.email ?? '').toLowerCase()).limit(1)
-  const isPlus = plusActive((custRows ?? [])[0]?.pricing_overrides ?? null)
+  // Account standing (migration 109): Plus cancellation protection is PAUSED
+  // at Probation and below. The membership itself stays; only the perk waits.
+  const plusMember = plusActive((custRows ?? [])[0]?.pricing_overrides ?? null)
+  const standing = plusMember ? await standingForEmail(service, user.email) : null
+  const isPlus = plusMember && (!standing || cancelProtectionOn(standing))
 
   // Enforce 48hr cancellation policy (Plus members are exempt — they get credit).
   const startTime = new Date(booking.start_time)
@@ -65,6 +70,9 @@ export async function POST(req: NextRequest) {
   // Policy decided 2026-08-09 — see Cancellation_Policy_Decision.md.
   const isBuyout = booking.set_id == null
 
+  if (hoursUntil < 48 && plusMember && !isPlus && !isBuyout) {
+    return NextResponse.json({ error: 'Plus cancellation protection is paused while your account is below good standing, so inside 48 hours this one goes through us. Text (832) 408-1631.' }, { status: 400 })
+  }
   if (hoursUntil < 48 && !isPlus && !isBuyout) {
     return NextResponse.json({ error: 'Cancellations must be made at least 48 hours in advance to receive studio credit. Text (832) 408-1631 if something has come up.' }, { status: 400 })
   }

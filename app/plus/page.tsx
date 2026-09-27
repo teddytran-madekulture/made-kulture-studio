@@ -45,6 +45,17 @@ export default function MembershipPage() {
   useEffect(() => {
     fetch('/api/account/plus').then(r => r.ok ? r.json() : null).then(d => setP(d)).catch(() => {})
   }, [])
+  // Made Kulture Rewards rows appear only while the program is on (migration 109).
+  const [rw, setRw] = useState<{ enabled: boolean; memberRate: number; plusRate: number } | null>(null)
+  useEffect(() => {
+    fetch('/api/rewards/status').then(r => r.ok ? r.json() : null).then(setRw).catch(() => {})
+  }, [])
+  const freeBenefits = rw?.enabled && rw.memberRate > 0
+    ? [...FREE_BENEFITS.slice(0, 1), `${rw.memberRate}% back in studio credit on every completed booking`, ...FREE_BENEFITS.slice(1)]
+    : FREE_BENEFITS
+  const plusBenefits = rw?.enabled && rw.plusRate > 0
+    ? [`${rw.plusRate}% back in studio credit on every completed booking`, ...PLUS_BENEFITS]
+    : PLUS_BENEFITS
 
   const priceLabel = p ? `$${(p.priceCents / 100).toFixed(0)}` : '$99'
   const stdLabel   = p?.standardCents ? `$${(p.standardCents / 100).toFixed(0)}` : '$149'
@@ -122,7 +133,7 @@ export default function MembershipPage() {
               <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 40 : 52, color: '#fff', lineHeight: 0.9, letterSpacing: '0.01em', margin: '0 0 6px' }}>Member</h2>
               <div style={{ fontFamily: 'Inter', fontSize: 15, color: 'rgba(255,255,255,0.45)', marginBottom: 28 }}>Create a free account — no cost, ever.</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px' }}>
-                {FREE_BENEFITS.map(b => (
+                {freeBenefits.map(b => (
                   <li key={b} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
                     <Mark />
                     <span style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }}>{b}</span>
@@ -142,7 +153,7 @@ export default function MembershipPage() {
               </div>
               <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>Everything in Member, plus:</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px' }}>
-                {PLUS_BENEFITS.map(b => (
+                {plusBenefits.map(b => (
                   <li key={b} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
                     <Mark gold />
                     <span style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.8)', lineHeight: 1.6 }}>{b}</span>

@@ -9,6 +9,7 @@ import AddSetModal from '@/components/AddSetModal'
 import AddChargeModal from '@/components/AddChargeModal'
 import OvertimeModal from '@/components/OvertimeModal'
 import GuestCountModal from '@/components/GuestCountModal'
+import StandingPanel, { StandingChip } from '@/components/admin/StandingPanel'
 import { bookingHourToISO } from '@/lib/booking-times'
 // ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
 // share the API routes' pricing instead of keeping a fourth copy of the rate
@@ -79,6 +80,8 @@ interface Booking {
   cleaning_status: 'charged' | 'waived' | null
   // Visit history, attached client-side from the API's `visits` map (lib/visits.ts).
   visit?: { n: number; prevStart: string | null; prevSet: string | null } | null
+  // Account standing, only when BELOW good (migration 109, /api/admin/bookings).
+  standing?: { level: string; points: number } | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
   booking_add_ons?: {
@@ -152,15 +155,19 @@ function visitTag(b: Booking): { label: string; color: string; bg: string; borde
   if (v.n >= REGULAR_AT) return { label: `REGULAR · ${visitOrdinal(v.n)}`, color: '#8fe0ae', bg: 'rgba(143,224,174,0.10)', border: 'rgba(143,224,174,0.4)' }
   return { label: `${visitOrdinal(v.n).toUpperCase()} VISIT`, color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.2)' }
 }
+// Renders the standing chip too (below good standing only), so every place that
+// shows a visit tag also shows who is on warning/probation/suspended.
 function VisitChip({ b, size = 9 }: { b: Booking; size?: number }) {
   const t = visitTag(b)
-  if (!t) return null
-  return (
+  const st = b.standing ? <StandingChip level={b.standing.level} points={b.standing.points} size={size} /> : null
+  if (!t) return st
+  return (<>
     <span title={b.visit?.prevStart ? `Last here ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(b.visit.prevStart))}${b.visit.prevSet ? ` · ${b.visit.prevSet}` : ''}` : 'First time at the studio'}
       style={{ fontSize: size, fontWeight: 700, letterSpacing: '0.08em', color: t.color, background: t.bg, border: `1px solid ${t.border}`, padding: size <= 8 ? '0 4px' : '1px 6px', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
       {t.label}
     </span>
-  )
+    {st}
+  </>)
 }
 function visitSummary(b: Booking): string {
   const v = b.visit
@@ -909,7 +916,8 @@ export default function AdminDashboard() {
     const data = await res.json()
     const visits = data.visits || {}
     if (data.regularThreshold) REGULAR_AT = Number(data.regularThreshold)
-    setBookings((data.bookings || []).map((b: Booking) => ({ ...b, visit: visits[b.id] ?? null })))
+    const standing = data.standing || {}
+    setBookings((data.bookings || []).map((b: Booking) => ({ ...b, visit: visits[b.id] ?? null, standing: (b.customer_id && standing[b.customer_id]) || null })))
     if (data.guestPenaltyPerHead) setGuestPenalty(Number(data.guestPenaltyPerHead))
     if (data.perPersonFee)        setPerPersonFee(Number(data.perPersonFee))
     if (data.cleaningFeeSet)      setCleanFeeSet(Number(data.cleaningFeeSet))
@@ -1836,6 +1844,13 @@ export default function AdminDashboard() {
             padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
           }}>
             <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>!</span>Notifications
+          </a>
+          <a href="/admin/standing" style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+          }}>
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>★</span>Standing &amp; Rewards
           </a>
 
           {/* CUSTOMERS */}
@@ -4251,6 +4266,9 @@ export default function AdminDashboard() {
                 )
               })()}
 
+              {/* Account standing (migration 109) */}
+              <div style={{ marginBottom: 16 }}><StandingPanel customerId={custDetail.id} /></div>
+
               {/* Notes */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)', marginBottom: 12 }}>NOTES</div>
@@ -4438,6 +4456,7 @@ export default function AdminDashboard() {
             <Detail label="SOURCE"   value={detailBooking.source || '—'} />
             {detailBooking.notes && <Detail label="NOTES" value={detailBooking.notes} />}
             {detailBooking.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={detailBooking.square_payment_id} mono />}
+            {detailBooking.customer_id && <StandingPanel customerId={detailBooking.customer_id} bookingId={detailBooking.id} />}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 32 }}>

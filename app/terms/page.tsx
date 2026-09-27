@@ -1,4 +1,5 @@
 'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
@@ -35,6 +36,10 @@ function UL({ items }: { items: React.ReactNode[] }) {
 
 export default function TermsPage() {
   const isMobile = useIsMobile()
+  // The Rewards section appears only while the program is switched on (it goes
+  // live with the new site). Account Standing applies now, so it always shows.
+  const [rewards, setRewards] = useState<{ enabled: boolean; memberRate: number; plusRate: number } | null>(null)
+  useEffect(() => { fetch('/api/rewards/status').then(r => r.ok ? r.json() : null).then(setRewards).catch(() => {}) }, [])
   return (
     <main style={{ background: '#080808', minHeight: '100vh' }}>
       <SiteNav active="terms" />
@@ -48,7 +53,7 @@ export default function TermsPage() {
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(52px, 9vw, 96px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em', margin: '0 0 24px' }}>
             TERMS &amp;<br />CONDITIONS
           </h1>
-          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Last updated: July 2, 2026</p>
+          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Last updated: September 27, 2026</p>
           <p style={{ ...body, marginTop: 16, maxWidth: 560 }}>By booking studio time at Made Kulture (madekulture.com), you agree to the following terms. Please read them carefully.</p>
         </div>
       </section>
@@ -110,6 +115,20 @@ export default function TermsPage() {
               <><strong style={{ color: '#fff' }}>Messy concepts</strong> (paint, fake blood, glitter, smoke bombs, excessive oils) are not allowed. If your shoot genuinely needs something messy, or anything outside how the studio normally runs, ask us before you book and we will tell you whether a concept review is possible. Approval is case by case and is never guaranteed, and an approved concept carries a refundable cleaning deposit. A minimum $150 cleaning fee is charged if the space is not left clean</>,
               <><strong style={{ color: '#fff' }}>Props:</strong> Included with all rentals on a first-come, first-served basis during shared hours. All props must be returned to their original locations before your session ends</>,
             ]} />
+          </Section>
+
+          {rewards?.enabled && (
+            <Section title="MADE KULTURE REWARDS & STUDIO CREDIT">
+              <P>Members earn studio credit on every completed booking: {rewards.memberRate}% of the amount paid for members and {rewards.plusRate}% for Made Kulture Plus members. Rewards are calculated on set time and equipment rentals paid by card or other payment method, and do not apply to any portion paid with studio credit, taxes, fees, or charges for extra guests, damage, cleaning or overtime. Rewards are added to your account after your session ends. Bookings made without a Made Kulture account do not earn rewards, and accounts that are not in good standing (see Account Standing) do not earn rewards while that remains the case.</P>
+              <P>Reward credit expires if your account has no completed booking for 12 consecutive months. We will email you before any reward credit expires. Credit issued for cancellations, no-shows or rescheduling is not reward credit and does not expire. When you use studio credit, reward credit is applied first.</P>
+              <P>Studio credit has no cash value, cannot be transferred or exchanged for cash, and can be used toward set bookings and equipment rentals. If a booking that earned rewards is later refunded or credited back, the matching reward is removed. Made Kulture may change reward rates or end the program at any time; credit already earned remains usable under the terms in effect when it was earned.</P>
+            </Section>
+          )}
+
+          <Section title="ACCOUNT STANDING">
+            <P>Every Made Kulture account starts in good standing. If a booking results in an incident, such as props not returned, a set left needing cleanup, guests over the limit, use of a set or equipment that was not booked, unpaid overtime, damage, or a violation of the Studio Rules, we may record it on the account. Each incident carries points based on its severity. Points expire 12 months after the incident; incidents involving theft, threats or serious damage may remain on record.</P>
+            <P>An account&rsquo;s standing depends on its points. Accounts below good standing may lose access to rewards, short-notice booking and Plus cancellation protection, may need approval before a booking is confirmed, and may be suspended from booking. We will notify you by email when an incident is recorded. Made Kulture Plus fees are not refunded when perks are paused. Existing studio credit remains yours under the Studio Credit terms.</P>
+            <P>If you believe an incident was recorded in error, reply to the notice or contact us, and we will review it. Made Kulture may suspend or close any account at its discretion for serious incidents.</P>
           </Section>
 
           <Section title="COMMUNITY & MEMBER CONTENT">

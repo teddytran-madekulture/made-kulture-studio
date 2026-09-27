@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail } from '@/lib/customer-email'
+import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
@@ -21,6 +22,19 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+// Made Kulture Rewards (migration 109): an admin booking earns like a website
+// one when the email belongs to an account. Locks the rate now; the nightly
+// payout only pays once a payment is actually recorded on the row.
+async function adminRewardFields(email: string, totalAmount: any): Promise<Record<string, any>> {
+  try {
+    const authId = await authUserIdForEmail(supabase, email)
+    if (!authId) return {}
+    const rate = await rewardRateForEmail(supabase, email)
+    if (rate == null) return {}
+    return { reward_rate: rate, reward_basis_cents: Math.max(0, Math.round(Number(totalAmount || 0) * 100)) }
+  } catch (e) { console.error('[admin] reward lock failed (non-fatal)', e); return {} }
+}
 
 function fmt12(h: number) {
   const hour = Math.floor(h)
@@ -118,6 +132,7 @@ export async function POST(req: NextRequest) {
         square_card_id:     squareCardId,
         source:             'manual',
         notes,
+        ...(await adminRewardFields(email, totalAmount)),
       })
       .select('id')
       .single()

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { autoCloseStaleShifts } from '@/lib/shifts'
+import { payDueRewards, expireRewards } from '@/lib/rewards'
+import { sendRewardsExpiryWarningEmail } from '@/lib/email'
+
+export const maxDuration = 120
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -56,5 +60,15 @@ export async function GET(req: NextRequest) {
   // Close out shifts a worker clocked into but never clocked out of (past their end).
   const shiftsClosed = await autoCloseStaleShifts()
 
-  return NextResponse.json({ success: true, swept, purged, shiftsClosed })
+  // Made Kulture Rewards (migration 109). Runs after the checkout sweep above.
+  // payDueRewards only touches bookings that LOCKED a rate at booking time, so
+  // with rewards_enabled='false' there is nothing to pay. Expiry and its 30-day
+  // warning only ever touch reward credit. Both are non-fatal to the rest.
+  let rewards: any = null, rewardExpiry: any = null
+  try { rewards = await payDueRewards(supabase) } catch (e) { console.error('[auto-checkout] rewards payout error', e) }
+  try {
+    rewardExpiry = await expireRewards(supabase, (to, cents, expiresOn) => sendRewardsExpiryWarningEmail({ to, cents, expiresOn }))
+  } catch (e) { console.error('[auto-checkout] rewards expiry error', e) }
+
+  return NextResponse.json({ success: true, swept, purged, shiftsClosed, rewards, rewardExpiry })
 }
