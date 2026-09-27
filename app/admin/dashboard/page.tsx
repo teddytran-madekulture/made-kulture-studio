@@ -77,6 +77,8 @@ interface Booking {
   checked_out_at: string | null
   arrived_guest_count: number | null
   cleaning_status: 'charged' | 'waived' | null
+  // Visit history, attached client-side from the API's `visits` map (lib/visits.ts).
+  visit?: { n: number; prevStart: string | null; prevSet: string | null } | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
   booking_add_ons?: {
@@ -130,6 +132,42 @@ function gearSummary(b: Booking): string {
 function noteSummary(b: Booking, max = 90): string {
   const t = (b.notes ?? '').replace(/\s+/g, ' ').trim()
   return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t
+}
+
+// "Have they been here before?" (2026-09-27). Teddy kept asking guests at the
+// door, to decide whether to give the orientation. FIRST VISIT is the loud one on
+// purpose — it is the cue to act. Counts come from lib/visits.ts (sessions that
+// happened or are booked; one multi-set order = one visit). ⚠️ Only as good as
+// the history in the table: Acuity visits from before the sync began are missing
+// unless backfilled, so a long-time Acuity regular can read as a first visit.
+let REGULAR_AT = 5
+function visitOrdinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+function visitTag(b: Booking): { label: string; color: string; bg: string; border: string } | null {
+  const v = b.visit
+  if (!v) return null
+  if (v.n === 1) return { label: 'FIRST VISIT', color: '#e6c07a', bg: 'rgba(230,192,122,0.14)', border: 'rgba(230,192,122,0.55)' }
+  if (v.n >= REGULAR_AT) return { label: `REGULAR · ${visitOrdinal(v.n)}`, color: '#8fe0ae', bg: 'rgba(143,224,174,0.10)', border: 'rgba(143,224,174,0.4)' }
+  return { label: `${visitOrdinal(v.n).toUpperCase()} VISIT`, color: 'rgba(255,255,255,0.6)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.2)' }
+}
+function VisitChip({ b, size = 9 }: { b: Booking; size?: number }) {
+  const t = visitTag(b)
+  if (!t) return null
+  return (
+    <span title={b.visit?.prevStart ? `Last here ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(b.visit.prevStart))}${b.visit.prevSet ? ` · ${b.visit.prevSet}` : ''}` : 'First time at the studio'}
+      style={{ fontSize: size, fontWeight: 700, letterSpacing: '0.08em', color: t.color, background: t.bg, border: `1px solid ${t.border}`, padding: size <= 8 ? '0 4px' : '1px 6px', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+      {t.label}
+    </span>
+  )
+}
+function visitSummary(b: Booking): string {
+  const v = b.visit
+  if (!v) return '—'
+  if (v.n === 1) return 'First visit · give the orientation'
+  const last = v.prevStart ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(v.prevStart)) : null
+  return `${visitOrdinal(v.n)} visit${last ? ` · last here ${last}${v.prevSet ? ` (${v.prevSet})` : ''}` : ''}`
 }
 
 interface EmailSetting {
@@ -869,7 +907,9 @@ export default function AdminDashboard() {
     const res = await fetch('/api/admin/bookings', { cache: 'no-store' })
     if (res.status === 401) { router.push('/admin'); return }
     const data = await res.json()
-    setBookings(data.bookings || [])
+    const visits = data.visits || {}
+    if (data.regularThreshold) REGULAR_AT = Number(data.regularThreshold)
+    setBookings((data.bookings || []).map((b: Booking) => ({ ...b, visit: visits[b.id] ?? null })))
     if (data.guestPenaltyPerHead) setGuestPenalty(Number(data.guestPenaltyPerHead))
     if (data.perPersonFee)        setPerPersonFee(Number(data.perPersonFee))
     if (data.cleaningFeeSet)      setCleanFeeSet(Number(data.cleaningFeeSet))
@@ -2242,6 +2282,7 @@ export default function AdminDashboard() {
                             {b.customers?.banned && (
                               <span title="BANNED" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', padding: '2px 6px' }}>BANNED</span>
                             )}
+                            <VisitChip b={b} />
                             {!b.customers?.banned && b.customers?.status === 'warning' && (
                               <span title="WARNING" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#f97316', background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.4)', padding: '2px 6px' }}>⚠ WARNING</span>
                             )}
@@ -2592,6 +2633,7 @@ export default function AdminDashboard() {
                                 <span style={{ fontSize: 10, color: '#fff', fontWeight: 500, lineHeight: 1.3 }}>
                                   {b.customers?.name || '—'}
                                 </span>
+                                <VisitChip b={b} size={8} />
                               </div>
                               <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
                                 {fmtTime(b.start_time)} – {fmtTime(b.end_time)}
@@ -2625,6 +2667,7 @@ export default function AdminDashboard() {
                       <div key={b.id} onClick={() => setDetailBooking(b)}
                         style={{ position: 'absolute', top, left: TIME_COL + TOUR_COL + 4, width: CAL_SETS.length * SET_COL - 8, height: Math.max(height - 4, 20), background: 'rgba(212,168,67,0.18)', border: '1px solid rgba(212,168,67,0.6)', borderRadius: 2, padding: '4px 8px', cursor: 'pointer', overflow: 'hidden', zIndex: 6 }}>
                         <span style={{ fontSize: 10, color: '#fff', fontWeight: 600 }}>FULL STUDIO — {b.customers?.name || '—'}</span>
+                        <span style={{ marginLeft: 8 }}><VisitChip b={b} size={8} /></span>
                         <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginLeft: 8 }}>{fmtTime(b.start_time)} – {fmtTime(b.end_time)}</span>
                         {noteSummary(b) && (
                           <div title={b.notes ?? ''} style={{ fontSize: 9, color: '#8ec5ff', marginTop: 2 }}>NOTE · {noteSummary(b, 160)}</div>
@@ -2677,7 +2720,7 @@ export default function AdminDashboard() {
                       {list.map(b => (
                         <div key={b.id} onClick={() => setDetailBooking(b)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}>
                           <div>
-                            <div style={{ fontSize: 13, color: '#fff' }}>{b.customers?.name || '—'}</div>
+                            <div style={{ fontSize: 13, color: '#fff', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{b.customers?.name || '—'} <VisitChip b={b} /></div>
                             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{b.sets?.name || 'Full Studio'}</div>
                             {gearSummary(b) && (
                               <div style={{ fontSize: 10, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b)}</div>
@@ -2766,7 +2809,7 @@ export default function AdminDashboard() {
                         ) : (
                           <div onClick={() => setDetailBooking(b!)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
                             <div>
-                              <div style={{ fontSize: 14, color: '#fff' }}>{b!.customers?.name || '—'}</div>
+                              <div style={{ fontSize: 14, color: '#fff', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>{b!.customers?.name || '—'} <VisitChip b={b!} /></div>
                               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{b!.sets?.name || 'Full Studio'}</div>
                               {gearSummary(b!) && (
                                 <div style={{ fontSize: 11, color: '#e6c07a', marginTop: 3 }}>GEAR · {gearSummary(b!)}</div>
@@ -4383,6 +4426,7 @@ export default function AdminDashboard() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <Detail label="CUSTOMER" value={detailBooking.customers?.name || '—'} />
+            <Detail label="VISITS"   value={visitSummary(detailBooking)} />
             <Detail label="EMAIL"    value={detailBooking.customers?.email || '—'} />
             <Detail label="PHONE"    value={detailBooking.customers?.phone || '—'} />
             <Detail label="SET"      value={detailBooking.sets?.name || 'Full Studio Takeover'} />

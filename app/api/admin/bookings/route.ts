@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { computeVisits, fetchVisitRows, type VisitInfo } from '@/lib/visits'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
 import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
@@ -19,24 +20,41 @@ const supabase = createClient(
 export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await supabase
-    .from('bookings')
-    .select(`
-      id, start_time, end_time, status, total_amount, notes, source, created_at,
-      square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount,
-      guest_surcharge_amount, customer_id,
-      checked_in_at, checked_out_at, arrived_guest_count, cleaning_status,
-      sets ( name ),
-      customers ( name, email, phone, status, banned, square_customer_id ),
-      booking_add_ons ( id, quantity, rate, paid, label, square_order_id, square_payment_link_id, equipment ( name ) )
-    `)
-    .order('start_time', { ascending: false })
+  // ⚠️ PAGED (2026-09-27). PostgREST returns at most 1,000 rows per request by
+  // default, and this table was ~741 rows on 2026-09-01. One unpaged select would
+  // start SILENTLY dropping the oldest bookings past 1,000 — no error, the
+  // dashboard just forgets history. Read in pages until a short page comes back.
+  const PAGE = 1000
+  const data: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error } = await supabase
+      .from('bookings')
+      .select(`
+        id, start_time, end_time, status, total_amount, notes, source, created_at,
+        square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount,
+        guest_surcharge_amount, customer_id,
+        checked_in_at, checked_out_at, arrived_guest_count, cleaning_status,
+        sets ( name ),
+        customers ( name, email, phone, status, banned, square_customer_id ),
+        booking_add_ons ( id, quantity, rate, paid, label, square_order_id, square_payment_link_id, equipment ( name ) )
+      `)
+      .order('start_time', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    data.push(...(page ?? []))
+    if (!page || page.length < PAGE) break
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Visit history per booking ("FIRST VISIT" / "5th visit"). Non-fatal: if it
+  // fails, the calendar simply shows no visit tags rather than wrong ones.
+  let visits: Record<string, VisitInfo> = {}
+  try { visits = computeVisits(await fetchVisitRows(supabase)) }
+  catch (e) { console.error('[admin/bookings] visit history failed (non-fatal):', e) }
 
   const { data: settingRows } = await supabase
     .from('studio_settings').select('key, value')
-    .in('key', ['guest_penalty_per_head', 'per_person_fee', 'cleaning_fee_set', 'cleaning_fee_studio'])
+    .in('key', ['guest_penalty_per_head', 'per_person_fee', 'cleaning_fee_set', 'cleaning_fee_studio', 'regular_visit_threshold'])
   const s: Record<string, string> = {}
   for (const r of settingRows ?? []) s[r.key] = r.value
   const guestPenaltyPerHead = Number(s['guest_penalty_per_head']) || 50
@@ -46,7 +64,11 @@ export async function GET(req: NextRequest) {
   const cleaningFeeSet      = Number(s['cleaning_fee_set'])    || 100
   const cleaningFeeStudio   = Number(s['cleaning_fee_studio']) || 150
 
-  return NextResponse.json({ bookings: data, guestPenaltyPerHead, perPersonFee, cleaningFeeSet, cleaningFeeStudio })
+  // How many visits make someone a REGULAR on the calendar. studio_settings key
+  // `regular_visit_threshold`, default 5 — change it without a deploy.
+  const regularThreshold    = Number(s['regular_visit_threshold']) || 5
+
+  return NextResponse.json({ bookings: data, visits, regularThreshold, guestPenaltyPerHead, perPersonFee, cleaningFeeSet, cleaningFeeStudio })
 }
 
 // ─── POST /api/admin/bookings — manual booking ────────────────────────────────

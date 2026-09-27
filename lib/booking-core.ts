@@ -21,6 +21,7 @@ import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush, pushNote } from '@/lib/push'
+import { pushVisitLine } from '@/lib/visits'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -376,7 +377,7 @@ export async function finalizeBooking(
 ): Promise<{ doorCode: string | null }> {
   const { data: rows } = await supabase
     .from('bookings')
-    .select('id, start_time, end_time, notes, guest_count, total_amount, check_in_token, manage_token, gcal_event_id, set_id, sets(name), customers(name, email, phone)')
+    .select('id, start_time, end_time, notes, guest_count, total_amount, check_in_token, manage_token, gcal_event_id, set_id, customer_id, sets(name), customers(name, email, phone)')
     .in('id', bookingIds)
 
   if (!rows || rows.length === 0) return { doorCode: null }
@@ -541,12 +542,13 @@ export async function finalizeBooking(
     )
   }
 
+  const visitLine = await pushVisitLine(supabase, (first as any).customer_id, bookingIds)
   notifications.push(
     sendOwnerPush({
       title: '🎉 Booking confirmed',
       // The checkout note rides along (2026-09-26) — it used to reach only the email
       // and the expanded admin row, and a "white wall on Set C" request was missed.
-      body: `${custName} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}${pushNote(notes)}`,
+      body: `${custName} — ${lines.map(l => l.setName).join(', ')} · ${formatDateLabel(primary.date)} ${formatTimeLabel(primary.startHour)}${visitLine}${pushNote(notes)}`,
       url: '/admin/dashboard',
     }).catch(() => {})
   )
