@@ -10,9 +10,9 @@ const sec: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 10
 const body: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 15, color: 'rgba(255,255,255,0.62)', lineHeight: 1.8, margin: '0 0 16px' }
 const subHead: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: '0.02em', margin: '20px 0 8px' }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <div>
+    <div id={id} style={{ scrollMarginTop: 120 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 18 }}>
         <div style={sec}>{title}</div>
         <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
@@ -61,7 +61,7 @@ export default function TermsPage() {
       <section style={{ padding: isMobile ? '44px 20px 80px' : '64px 40px 110px' }}>
         <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: isMobile ? 40 : 56 }}>
 
-          <Section title="BOOKING POLICY">
+          <Section title="BOOKING POLICY" id="booking">
             <UL items={[
               <>All bookings must be made at least <strong style={{ color: '#fff' }}>48 hours in advance</strong></>,
               'Bookings run in 30-minute increments with a 1-hour minimum (some sets have longer minimums)',
@@ -89,14 +89,64 @@ export default function TermsPage() {
             ]} />
           </Section>
 
-          <Section title="MEMBERSHIP (MADE KULTURE PLUS)">
+          {/* Linkable as /terms#plus — send this when someone asks how Plus works or why a request was declined. */}
+          <Section title="MEMBERSHIP (MADE KULTURE PLUS)" id="plus">
+            <div style={subHead}>Billing</div>
             <UL items={[
               <>Made Kulture Plus is an <strong style={{ color: '#fff' }}>annual membership</strong> charged to the card on file. It <strong style={{ color: '#fff' }}>renews automatically</strong> each year at the then-current price unless auto-renew is turned off before the renewal date.</>,
               <>You can <strong style={{ color: '#fff' }}>cancel auto-renew at any time</strong> from your account. Your benefits continue through the end of the paid term; the membership simply does not renew, and you are not charged again.</>,
               <><strong style={{ color: '#fff' }}>Membership fees are non-refundable</strong>, including for partial or unused terms.</>,
-              'Plus benefits (short-notice booking access and cancellation credit) are subject to studio approval and availability and do not change your per-session booking rate. Introductory pricing applies to sign-ups during the intro period; renewals are billed at the price in effect at the time of renewal.',
-              <>An open time slot shown on the availability calendar is <strong style={{ color: '#fff' }}>not a guarantee</strong>. Short-notice bookings must be reviewed and approved by the studio and may be declined — including when the studio is unavailable — even when the calendar appears open.</>,
+              'Plus does not change your per-session booking rate. Introductory pricing applies to sign-ups during the intro period; renewals are billed at the price in effect at the time of renewal.',
             ]} />
+
+            <div style={subHead}>Booking inside 48 hours</div>
+            <UL items={[
+              'Plus members may book, instantly, hours inside the 48-hour window that the studio is already open for.',
+              <>Other times inside the window may be <strong style={{ color: '#fff' }}>requested</strong>. Every request is reviewed by the studio and may be declined. An open time slot shown on the availability calendar is <strong style={{ color: '#fff' }}>not a guarantee</strong>.</>,
+            ]} />
+
+            <div id="plus-requests" style={{ ...subHead, scrollMarginTop: 120 }}>Why a short-notice request may not be approved</div>
+            <P>Short-notice sessions depend on the studio being ready for you. A request may be declined for reasons including:</P>
+            <UL items={[
+              'No team member is available to open, prepare or support the set at that time',
+              'The set, or the whole studio, is booked, held, or being prepared for another session',
+              'There is not enough lead time to get the space ready (for example, a request made minutes before the start time)',
+              'Cleaning, turnover, maintenance, renovation, or a private event',
+              'The account is not in good standing (see Account Standing)',
+            ]} />
+            <P>When a request is declined we will tell you by text and email. You are welcome to request a different set or time.</P>
+
+            <div style={subHead}>Rescheduling</div>
+            <UL items={[
+              'Plus members may move an individual set booking themselves inside the 48-hour window, to another available time on the same set, for the same length and price.',
+              'A session cannot be moved once it has started. Full-warehouse bookings are rescheduled by the studio.',
+            ]} />
+
+            <div style={subHead}>Cancellation protection and no-shows</div>
+            <UL items={[
+              <>Plus members may cancel an individual set booking at any time before it starts, and its <strong style={{ color: '#fff' }}>full value returns as studio credit</strong> (never a cash refund).</>,
+              'Full-warehouse bookings cancelled inside 48 hours carry the 25% late cancellation fee described under Cancellation Policy, for all customers including Plus.',
+              'A no-show may be credited on request, at the studio\u2019s discretion.',
+            ]} />
+
+            <div style={subHead}>Saving an existing booking with Plus</div>
+            <P>If you join Plus after booking, Plus benefits apply from the moment you join, including to bookings already inside the 48-hour window.</P>
+
+            <div id="plus-fair-use" style={{ ...subHead, scrollMarginTop: 120 }}>Fair use</div>
+            <P>Plus benefits exist for genuine changes of plans, not for holding studio time you do not intend to use. We do not set a fixed limit on reschedules or cancellations, but we may act on patterns of misuse, such as:</P>
+            <UL items={[
+              'Repeatedly booking and then cancelling or rescheduling',
+              'Reserving popular times speculatively',
+              'Moving the same session again and again',
+              'Joining Plus mainly to recover a booking and then repeating the pattern',
+            ]} />
+            <P>In those cases we may decline a reschedule, request or cancellation credit; require approval for future bookings; pause Plus benefits; or record it under Account Standing. We will let you know if we do, and you can always contact us to talk it through. Paused benefits do not extend or refund the membership term.</P>
+
+            <div style={subHead}>Account standing</div>
+            <P>Plus benefits may be paused while an account is below good standing, as described under Account Standing. The membership fee is not refunded while benefits are paused.</P>
+
+            <div style={subHead}>Changes to Plus</div>
+            <P>Made Kulture may change Plus benefits or pricing. Changes that reduce benefits take effect at your next renewal, or after notice to you. Studio credit you have already received remains yours.</P>
           </Section>
 
           <Section title="GUEST POLICY">

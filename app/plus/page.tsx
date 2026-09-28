@@ -142,7 +142,7 @@ export default function MembershipPage() {
                   </li>
                 ))}
               </ul>
-              <div style={{ marginTop: 'auto' }}>{filledCta('Create free account', '/signup')}</div>
+              <div style={{ marginTop: 'auto' }}>{filledCta('Create free account', '/signup')}<div><Link href="/terms#booking" style={{ display: 'inline-block', marginTop: 16, fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>Booking, cancellation & member terms →</Link></div></div>
             </div>
 
             {/* PLUS (featured) */}
@@ -162,7 +162,7 @@ export default function MembershipPage() {
                   </li>
                 ))}
               </ul>
-              <div style={{ marginTop: 'auto' }}>{goldCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}</div>
+              <div style={{ marginTop: 'auto' }}>{goldCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}<div><Link href="/terms#plus" style={{ display: 'inline-block', marginTop: 16, fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>Plus terms: requests, rescheduling, fair use →</Link></div></div>
             </div>
 
           </div>
@@ -190,6 +190,25 @@ export default function MembershipPage() {
               </div>
             ))}
           </div>
+
+          {/* Why a request may not be approved — mirrors /terms#plus-requests. */}
+          <div style={{ marginTop: isMobile ? 32 : 48, border: '1px solid rgba(255,255,255,0.08)', background: '#0e0e0e', padding: isMobile ? '24px 20px' : '32px 36px' }}>
+            <div className="label" style={{ color: '#c9b27e', marginBottom: 14 }}>Why a request may not be approved</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px 32px' }}>
+              {[
+                'No one is available to open or prepare the set at that time',
+                'The set or studio is booked, held, or being prepared for another session',
+                'Not enough lead time to get the space ready',
+                'Cleaning, turnover, maintenance, renovation, or a private event',
+                'The account isn\u2019t in good standing',
+              ].map(t => (
+                <li key={t} style={{ display: 'flex', gap: 12, fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}><Mark gold />{t}</li>
+              ))}
+            </ul>
+            <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, margin: '16px 0 0' }}>
+              If we can&rsquo;t approve a request we&rsquo;ll text and email you, and you&rsquo;re welcome to ask for another time. Plus is for genuine changes of plans &mdash; see <Link href="/terms#plus" style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'underline' }}>fair use and the full Plus terms</Link>.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -203,7 +222,7 @@ export default function MembershipPage() {
             {outlineCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}
           </div>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.32)', lineHeight: 1.7, marginTop: 28, maxWidth: 660, marginLeft: isMobile ? 0 : 'auto', marginRight: isMobile ? 0 : 'auto' }}>
-            Plus renews yearly at the then-current price · cancel auto-renew anytime and keep your benefits through the paid term · membership fees are non-refundable · short-notice bookings are studio-approved and not guaranteed · Made Kulture issues studio credit rather than refunds · full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee for all customers, Plus included · Plus perks can pause while an account is below good standing; the membership fee isn&apos;t refunded. Not a member? You can always book with 48 hours&apos; notice. See <Link href="/terms" style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>full terms</Link>.
+            Plus renews yearly at the then-current price · cancel auto-renew anytime and keep your benefits through the paid term · membership fees are non-refundable · short-notice bookings are studio-approved and not guaranteed · Made Kulture issues studio credit rather than refunds · full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee for all customers, Plus included · Plus perks can pause while an account is below good standing; the membership fee isn&apos;t refunded. Not a member? You can always book with 48 hours&apos; notice. See <Link href="/terms#plus" style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>full Plus terms</Link>.
           </div>
         </div>
       </section>
