@@ -133,7 +133,7 @@ export async function runQuestionReview(supabase: any): Promise<ReviewResult> {
   const kbText = (kb ?? []).map((r: any) => `${r.id} · ${r.topic} · ${r.content}`).join('\n\n')
   const ask = [
     'NEW QUESTIONS (id · channel · question):',
-    ...questions.map(q => `${q.id} · ${q.channel ?? 'web'} · ${q.question}${q.kind === 'partial' ? ' (partly answered)' : ''}`),
+    ...questions.map(q => `${q.id} · ${q.channel ?? 'web'} · ${q.question}${q.kind === 'partial' ? ' (partly answered)' : q.kind === 'auto' ? ' (raw customer message, caught automatically — may include other chatter; the TRANSCRIPT shows what June could not answer)' : ''}`),
     '',
     'OPEN GROUPS FROM EARLIER WEEKS (id · label · examples):',
     ...(openGroups.length ? openGroups.map(g => `${g.id} · ${g.label} · ${JSON.stringify(g.examples).slice(0, 300)}`) : ['(none)']),

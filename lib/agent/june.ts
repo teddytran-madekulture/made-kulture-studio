@@ -11,6 +11,8 @@
 //  - Discloses she's an AI when asked. Never claims to be human.
 //  - Books nothing directly; links people into the real booking flow.
 
+import { looksLikePunt } from './question-review-core'
+
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
 const MODEL = process.env.JUNE_MODEL || 'claude-haiku-4-5-20251001'
@@ -412,6 +414,26 @@ export interface JuneResult {
   escalated: boolean
 }
 
+// Non-fatal by design — never changes what the visitor gets back.
+async function autoLogGap(supabase: any, conversationId: string, history: JuneTurn[], page?: string | null): Promise<void> {
+  try {
+    const last = [...history].reverse().find(m => m.role === 'user')
+    const question = String(last?.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 400)
+    if (!question) return
+    const { data: convo } = await supabase
+      .from('agent_conversations').select('channel').eq('id', conversationId).maybeSingle()
+    const { error } = await supabase.from('june_questions').insert({
+      conversation_id: conversationId,
+      channel: convo?.channel ?? (page?.startsWith('kiosk') ? 'kiosk' : 'web'),
+      question,
+      kind: 'auto',
+    })
+    if (error) console.error('[june] auto gap log failed (non-fatal):', error.message)
+  } catch (e) {
+    console.error('[june] auto gap log error (non-fatal):', e)
+  }
+}
+
 export async function runJune(opts: {
   supabase: any
   conversationId: string
@@ -463,6 +485,7 @@ export async function runJune(opts: {
   })
 
   let escalated = false
+  let gapLogged = false
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const res = await fetch(API_URL, {
@@ -488,6 +511,7 @@ export async function runJune(opts: {
       const results: any[] = []
       for (const block of data.content) {
         if (block.type !== 'tool_use') continue
+        if (block.name === 'log_knowledge_gap') gapLogged = true
         const out = await execTool(block.name, block.input, {
           supabase: opts.supabase,
           conversationId: opts.conversationId,
@@ -521,6 +545,12 @@ export async function runJune(opts: {
         messages.push({ role: 'user', content: '[system: your last reply was empty — please answer the visitor in plain text now]' })
         continue
       }
+    }
+    // Safety net: June is told to call log_knowledge_gap on every miss but the
+    // fast model skips it on "live data" questions. If her reply reads as a
+    // punt and she didn't flag it, save the customer's message ourselves.
+    if (text && !gapLogged && looksLikePunt(text)) {
+      await autoLogGap(opts.supabase, opts.conversationId, opts.history, opts.page)
     }
     return { reply: text || "Sorry — I glitched for a second. Mind asking that again?", escalated }
   }

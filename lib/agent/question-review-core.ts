@@ -34,3 +34,24 @@ export function sanitizeGroups(
   }
   return out
 }
+
+// Safety net for June's own log_knowledge_gap flag, which the fast model skips
+// on questions it sees as "live data" rather than "missing knowledge" (first
+// real test, 2026-09-28: "how many members are in the creative directory?" got
+// a punt and no flag). True when a reply reads as June not having the answer.
+// ⚠️ Deliberately does NOT match the studio phone number alone — plenty of
+// ordinary answers say "text (832) 408-1631" and they are not misses.
+const PUNT_PATTERNS: RegExp[] = [
+  /\bI (?:don'?t|do not) have (?:that|the|this|access|info|information|a tool|any|details|specifics|an exact|exact)\b/i,
+  /\bI (?:don'?t|do not) (?:know|see) (?:the|that|if|whether|how|what|exactly)\b/i,
+  /\bI'?m not (?:sure|certain)\b/i,
+  /\bnot (?:in|part of) my (?:info|information|knowledge|notes)\b/i,
+  /\b(?:don'?t|do not|can'?t|cannot) (?:have access|see|look up|check)\b/i,
+  /\bgood question for the team\b/i,
+  /\b(?:let me|I'?ll|I will) check with the team\b/i,
+  /\bthe team (?:can|will|would) (?:tell|confirm|let) you\b/i,
+]
+
+export function looksLikePunt(reply: string): boolean {
+  return PUNT_PATTERNS.some(re => re.test(reply))
+}
