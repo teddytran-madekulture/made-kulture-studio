@@ -9,8 +9,17 @@ const supabase = createClient(
 
 // The exact URL configured in the Square webhook subscription — used for
 // signature verification (Square signs notificationUrl + body).
-const NOTIFICATION_URL =
-  `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://made-kulture-studio.vercel.app'}/api/webhooks/square`
+// ⚠️ 2026-09-28: this has its OWN setting (SQUARE_WEBHOOK_URL) and deliberately
+// does NOT follow NEXT_PUBLIC_APP_URL. It used to, which meant flipping the site
+// to madekulture.com at launch would have made every Square delivery (still
+// addressed to vercel.app) fail the signature check — silently, with add-ons
+// staying unpaid. Now the site address and the webhook address move separately:
+// change the Square subscription URL, set SQUARE_WEBHOOK_URL to match, then
+// press "send test event". Unset = the vercel.app address the subscription
+// uses today.
+const NOTIFICATION_URL = (
+  process.env.SQUARE_WEBHOOK_URL || 'https://made-kulture-studio.vercel.app/api/webhooks/square'
+).replace(/\/$/, '')
 
 function verifySignature(body: string, signature: string | null): boolean {
   const key = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY

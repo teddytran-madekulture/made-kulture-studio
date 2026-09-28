@@ -13,10 +13,15 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
-  // PRE-LAUNCH: keep the whole site out of Google's index until we migrate to
-  // madekulture.com and are ready to launch. DELETE this `robots` block at launch,
-  // then submit the sitemap to Search Console so all the SEO work goes live.
-  robots: { index: false, follow: false },
+  // Indexing follows the SITE ADDRESS, so launch day needs no code change:
+  // while NEXT_PUBLIC_APP_URL is vercel.app the whole site stays out of Google;
+  // flip it to https://madekulture.com and redeploy, and it becomes indexable.
+  // The vercel.app copy stays out of Google permanently via an X-Robots-Tag
+  // header on that host (next.config.js → headers) — otherwise Google would see
+  // two copies of the site after launch.
+  robots: /(^|\.)madekulture\.com$/i.test(new URL(APP_URL).hostname)
+    ? { index: true, follow: true }
+    : { index: false, follow: false },
   title: {
     default: 'Made Kulture — Photography Studio Rental in Houston, TX',
     template: '%s | Made Kulture — Houston Studio Rental',
