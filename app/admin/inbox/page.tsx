@@ -4,6 +4,7 @@
 // give back, close, and the June on/off kill switch (studio_settings.cs_agent_enabled).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import JuneQuestions from '@/components/admin/JuneQuestions'
 import { enablePush, pushStatus } from '@/components/AdminPwa'
 import JuneCoach, { runLearn } from '@/components/JuneCoach'
 
@@ -69,7 +70,7 @@ export default function AdminInboxPage() {
   const [sendError, setSendError]           = useState<string | null>(null)
   const [loadError, setLoadError]           = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [tab, setTab]               = useState<'convos' | 'kb' | 'tours' | 'concepts'>('convos')
+  const [tab, setTab]               = useState<'convos' | 'kb' | 'tours' | 'concepts' | 'questions'>('convos')
   const [tours, setTours]           = useState<any[]>([])
   const [tourBusy, setTourBusy]     = useState<string | null>(null)
   const [kb, setKb]                 = useState<KbEntry[]>([])
@@ -476,7 +477,7 @@ export default function AdminInboxPage() {
   // notification would open the inbox on the wrong tab and look like it failed.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'concepts' || t === 'tours' || t === 'kb') setTab(t)
+    if (t === 'concepts' || t === 'tours' || t === 'kb' || t === 'questions') setTab(t)
   }, [])
 
   const loadConcepts = useCallback(async () => {
@@ -678,8 +679,8 @@ export default function AdminInboxPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <a href="/admin/dashboard" style={{ color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: 13 }}>← Dashboard</a>
             <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>JUNE</h1>
-            <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-              {([['convos', 'INBOX'], ['kb', 'KNOWLEDGE'], ['tours', 'TOURS'], ['concepts', 'CONCEPTS']] as const).map(([t, lbl]) => {
+            <div style={{ display: 'flex', gap: 4, marginLeft: 8, flexWrap: 'wrap' }}>
+              {([['convos', 'INBOX'], ['questions', 'QUESTIONS'], ['kb', 'KNOWLEDGE'], ['tours', 'TOURS'], ['concepts', 'CONCEPTS']] as const).map(([t, lbl]) => {
                 const n = t === 'convos' ? tabCounts.inbox : t === 'tours' ? tabCounts.tours : 0
                 return (
                   <button key={t} onClick={() => setTab(t)} style={{
@@ -850,6 +851,8 @@ export default function AdminInboxPage() {
             })}
           </div>
         )}
+
+        {tab === 'questions' && <JuneQuestions />}
 
         {tab === 'kb' && (
           <div style={{ maxWidth: 760 }}>

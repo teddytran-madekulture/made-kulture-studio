@@ -95,5 +95,11 @@ export async function POST(req: NextRequest) {
   await supabase.from('agent_kb_proposals')
     .update({ status: 'saved', topic, content, decided_at: now }).eq('id', id)
 
+  // A proposal drafted by the weekly question review closes its question group.
+  // Non-fatal: migration 117 may not have run, and the KB save already landed.
+  const { error: gErr } = await supabase.from('june_question_groups')
+    .update({ status: 'done', updated_at: now }).eq('proposal_id', id)
+  if (gErr) console.error('[kb proposal] question group close failed (non-fatal):', gErr.message)
+
   return NextResponse.json({ success: true, status: 'saved' })
 }

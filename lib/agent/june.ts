@@ -75,6 +75,18 @@ const TOOLS = [
     },
   },
   {
+    name: 'log_knowledge_gap',
+    description: 'SILENT, internal. Call this whenever the visitor asks something your KNOWLEDGE section and tools do not answer (fully or partly) — so the team can teach you the answer later. The visitor never sees this. Call it at most once per question, then still reply to the visitor normally.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: "The visitor's question in one plain sentence, as they meant it (e.g. \"How many photos can I upload to my portfolio?\"). No names, emails or phone numbers." },
+        kind: { type: 'string', enum: ['not_in_knowledge', 'partial'], description: 'not_in_knowledge = you had nothing; partial = you answered part of it but a key detail was missing' },
+      },
+      required: ['question'],
+    },
+  },
+  {
     name: 'escalate_to_teddy',
     description: 'Flag this conversation for Teddy (the owner). Use for: refund/cancellation exceptions, complaints, custom or messy-concept requests, pricing negotiations, anything not covered by your knowledge, or when the visitor asks for a human. Teddy gets notified immediately.',
     input_schema: {
@@ -253,6 +265,28 @@ async function execTool(
       }
     }
 
+    if (name === 'log_knowledge_gap') {
+      // Non-fatal by design: a missing june_questions table (migration 117 not
+      // run) or any write error must never change what the visitor gets back.
+      try {
+        const question = String(input?.question ?? '').replace(/\s+/g, ' ').trim().slice(0, 400)
+        if (question) {
+          const { data: convo } = await ctx.supabase
+            .from('agent_conversations').select('channel').eq('id', ctx.conversationId).maybeSingle()
+          const { error } = await ctx.supabase.from('june_questions').insert({
+            conversation_id: ctx.conversationId,
+            channel: convo?.channel ?? (ctx.kiosk ? 'kiosk' : 'web'),
+            question,
+            kind: input?.kind === 'partial' ? 'partial' : 'not_in_knowledge',
+          })
+          if (error) console.error('[june] log_knowledge_gap insert failed (non-fatal):', error.message)
+        }
+      } catch (e) {
+        console.error('[june] log_knowledge_gap error (non-fatal):', e)
+      }
+      return { result: 'Noted for the team. Now reply to the visitor as you normally would. Never mention that you logged anything.' }
+    }
+
     if (name === 'escalate_to_teddy') {
       await ctx.supabase
         .from('agent_conversations')
@@ -316,6 +350,7 @@ HARD RULES (never break these):
 6. If someone asks for a human, use escalate_to_teddy right away — no gatekeeping.
 7. Stay on topic: Made Kulture studio business only. Politely decline anything else.
 8. NEVER mention the owner by name to visitors. Say "the team" or "we" — e.g. "the team will confirm by text", never "Teddy will confirm".
+9. KNOWLEDGE GAPS: whenever a question isn't answered (fully or partly) by your KNOWLEDGE section or your tools, call log_knowledge_gap with the question BEFORE you reply. It's silent — never tell the visitor. Don't log greetings, off-topic chatter, or things your tools answered.
 
 BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio → pick set(s), date, and hours → add equipment if wanted → guest count → pay online. Bookings run in 30-minute increments with a 1-hour minimum, and need 48h notice; the site enforces it. Short-notice requests exist for logged-in members (subject to approval).
 
