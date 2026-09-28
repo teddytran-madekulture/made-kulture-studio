@@ -51,6 +51,9 @@ function SidebarInner() {
         <Item href="/admin/website/pages/book" icon="📅" label="Book Flow" active={on('/admin/website/pages/book')} />
         <Item href="/admin/website/pages/tour" icon="🚪" label="Tour Page" active={on('/admin/website/pages/tour')} />
 
+        <div style={sectionHdr}>MEDIA</div>
+        <Item href="/admin/website/library" icon="▣" label="Photo Library" active={on('/admin/website/library')} />
+
         <div style={sectionHdr}>MARKETING TOOLS</div>
         <Item href="/admin/website/marketing" icon="📣" label="Announcements & Pop-Up" active={on('/admin/website/marketing')} />
 

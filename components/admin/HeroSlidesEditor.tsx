@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import ImageCropper from '@/components/ImageCropper'
+import MediaLibrary from '@/components/admin/MediaLibrary'
 import {
   blankSlide, centralToday, slideStatus, MAX_SLIDES, INTERVAL_MIN, INTERVAL_MAX,
   type HeroSlide, type HeroSlidesConfig, type SlideStatus, type Focal,
@@ -39,7 +40,8 @@ export default function HeroSlidesEditor() {
   const [saved, setSaved] = useState<string>('')      // JSON of last saved state
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState<'save' | string | null>(null)
-  const [crop, setCrop] = useState<{ src: string; slideId: string } | null>(null)
+  const [crop, setCrop] = useState<{ src: string; slideId: string; crossOrigin?: boolean } | null>(null)
+  const [picker, setPicker] = useState<string | null>(null)   // slide id choosing from the library
   const [confirmDel, setConfirmDel] = useState<string | null>(null)
   const today = centralToday()
 
@@ -134,7 +136,8 @@ export default function HeroSlidesEditor() {
                 <label style={{ ...btn(), display: 'inline-block' }}>
                   {busy === s.id ? 'UPLOADING…' : s.imageUrl ? 'REPLACE PHOTO' : 'UPLOAD PHOTO'}
                   <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={e => { pickFile(s.id, e.target.files?.[0]); e.target.value = '' }} />
-                </label>
+                </label>{' '}
+                <button style={btn()} onClick={() => setPicker(s.id)}>FROM LIBRARY</button>
                 <div style={{ marginTop: 10 }}>
                   <span style={lbl}>On phones, keep in view</span>
                   <select style={input} value={s.focal} onChange={e => update(s.id, { focal: e.target.value as Focal })}>
@@ -177,7 +180,16 @@ export default function HeroSlidesEditor() {
         </label>
       </div>
 
-      {crop && <ImageCropper src={crop.src} aspect={2} outWidth={3000} onCancel={() => setCrop(null)} onCropped={onCropped} />}
+      {crop && <ImageCropper src={crop.src} aspect={2} outWidth={3000} crossOrigin={!!crop.crossOrigin} onCancel={() => setCrop(null)} onCropped={onCropped} />}
+
+      {picker && (
+        <div onClick={() => setPicker(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#101012', border: `1px solid ${C.line}`, borderRadius: 12, width: 'min(1100px, 100%)', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxSizing: 'border-box' }}>
+            <MediaLibrary mode="pick" onClose={() => setPicker(null)}
+              onPick={item => { const id = picker; setPicker(null); setCrop({ src: item.url, slideId: id, crossOrigin: true }) }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
