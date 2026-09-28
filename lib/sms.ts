@@ -83,6 +83,41 @@ export function gsmSafe(input: string): string {
     .trim()
 }
 
+// ── Daily text limit ─────────────────────────────────────────────────────────
+// ⚠️ Fails OPEN: if the counter can't be read, the text goes out. A door code
+// that never arrives is worse than an uncounted text. The one alert when the
+// limit is crossed goes by PUSH, since texting is exactly what just stopped.
+const DEFAULT_DAILY_LIMIT = 150
+async function underDailyCap(): Promise<boolean> {
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !key) return true
+    const { createClient } = await import('@supabase/supabase-js')
+    const db = createClient(url, key, { auth: { persistSession: false } })
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
+    const [{ data: n, error }, { data: setting }] = await Promise.all([
+      db.rpc('sms_bump', { p_day: day }),
+      db.from('studio_settings').select('value').eq('key', 'sms_daily_limit').maybeSingle(),
+    ])
+    if (error || typeof n !== 'number') { if (error) console.error('[sms] daily counter failed — sending anyway', error); return true }
+    const limit = Number(setting?.value) > 0 ? Number(setting!.value) : DEFAULT_DAILY_LIMIT
+    if (n <= limit) return true
+    console.error(`[sms] DAILY LIMIT ${limit} reached (${n}) — text NOT sent`)
+    if (n === limit + 1) {
+      const { sendOwnerPush } = await import('@/lib/push')
+      await sendOwnerPush({
+        title: 'Texting paused for today',
+        body: `${limit} texts already sent today (normal is ~10–20), so the app stopped sending to protect the Twilio bill. Something may be looping — check the logs. Resumes at midnight, or raise sms_daily_limit.`,
+        url: '/admin/notifications',
+      }).catch(() => {})
+    }
+    return false
+  } catch (e) {
+    console.error('[sms] daily cap check error — sending anyway', e)
+    return true
+  }
+}
+
 export async function sendSMSResult(to: string, body: string): Promise<SmsResult> {
   if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
     console.error('[sms] NOT sent — Twilio env not configured')
@@ -98,6 +133,11 @@ export async function sendSMSResult(to: string, body: string): Promise<SmsResult
   if (!num) {
     console.error('[sms] NOT sent — unusable phone number:', JSON.stringify(to))
     return { ok: false, error: 'That phone number is not usable.' }
+  }
+  // Daily ceiling (migration 114). Counted BEFORE sending, so a runaway loop
+  // stops at the limit instead of at the bill.
+  if (!(await underDailyCap())) {
+    return { ok: false, error: 'Daily text limit reached — sending is paused until tomorrow.' }
   }
   try {
     // gsmSafe, not body: see the note above. This is the only send in the app.

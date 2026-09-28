@@ -45,7 +45,7 @@ export default function CreditPanel({ customerId }: { customerId: string }) {
       const j = await r.json()
       if (!r.ok) { setMsg(`⚠️ ${j.error || 'Not saved.'}`); return }
       setD(j); setMode(null); setAmt(''); setReason('')
-      setMsg(`${j.appliedCents > 0 ? 'Added' : 'Removed'} ${money(Math.abs(j.appliedCents))}${j.capped ? ' (capped at their balance)' : ''}.${j.notified === 'text' ? ' Texted them.' : j.notified === 'email' ? ' Emailed them.' : j.notified === 'failed' ? ' ⚠️ Notification failed.' : ''}`)
+      setMsg(`${j.appliedCents > 0 ? 'Added' : 'Removed'} ${money(Math.abs(j.appliedCents))}${j.capped ? ' (capped at their balance)' : ''}.${j.notified === 'text' ? ' Text sent to Twilio (delivery not confirmed).' : j.notified === 'email' ? ' Emailed them.' : j.notified === 'email_after_text_failed' ? ' ⚠️ Text failed, emailed them instead.' : j.notified === 'failed' ? ' ⚠️ Could not notify them.' : ''}`)
     } catch { setMsg('⚠️ Not saved — check your connection.') }
     finally { setBusy(false) }
   }

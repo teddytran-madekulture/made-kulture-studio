@@ -102,7 +102,7 @@ export default function StandingPage() {
             </label>
           ))}
           <label style={small}>Email customer from<br />
-            <select value={cfg.emailFrom} onChange={e => setCfg({ ...cfg, emailFrom: e.target.value as Severity })} style={{ ...inp, width: 130 }}>
+            <select value={cfg.emailFrom} onChange={e => setCfg({ ...cfg, emailFrom: e.target.value as Severity })} style={{ ...inp, width: 180 }}>
               {SEVERITIES.map(s => <option key={s} value={s} style={optStyle}>{s} and up</option>)}
             </select>
           </label>

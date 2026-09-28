@@ -8,7 +8,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { loadLedger, authUsers, rewardExpiry, KIND_LABEL } from '@/lib/credit-admin'
 import { splitPots } from '@/lib/rewards'
-import { sendSMS } from '@/lib/sms'
+import { sendSMSResult } from '@/lib/sms'
 import { sendSimpleEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
@@ -92,13 +92,18 @@ export async function POST(req: NextRequest) {
       const dollars = (amount / 100).toFixed(2)
       const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
       try {
-        if (who.phone) { await sendSMS(who.phone, `Made Kulture: we've added $${dollars} in studio credit to your account. It applies automatically at your next booking. ${appUrl}/account`); notified = 'text' }
+        // ⚠️ sendSMS is fire-and-forget and never reports failure — it made this
+        // route claim "Texted them" for a text that never went. Use the result.
+        // ok:true still only means Twilio ACCEPTED it, not that it was delivered.
+        const sms = who.phone ? await sendSMSResult(who.phone, `Made Kulture: we've added $${dollars} in studio credit to your account. It applies automatically at your next booking. ${appUrl}/account`) : null
+        if (sms?.ok) notified = 'text'
         else if (who.email) {
           await sendSimpleEmail({ to: who.email, subject: `$${dollars} studio credit added`, heading: 'Studio credit added',
             paragraphs: [`We've added <strong>$${dollars}</strong> in studio credit to your Made Kulture account. It applies automatically at your next booking.`],
             ctaText: 'View your account', ctaUrl: `${appUrl}/account` })
-          notified = 'email'
-        }
+          notified = sms ? 'email_after_text_failed' : 'email'
+        } else notified = 'failed'
+        if (sms && !sms.ok) console.error('[credit adjust] text failed:', sms.error)
       } catch { notified = 'failed' }
     }
     return NextResponse.json({ ok: true, appliedCents: amount, capped: direction === 'remove' && -amount < cents, notified, ...(await view(db, who)) })
