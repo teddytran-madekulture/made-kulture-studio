@@ -1,7 +1,8 @@
 'use client'
-// Studio Credit — every account holding credit, the full activity feed, and a
+// Credit & Rewards — the rewards settings, every account holding credit, the full activity feed, and a
 // CSV export for bookkeeping. Linked from BOTH admin sidebars.
 import { useCallback, useEffect, useState } from 'react'
+import RewardsSettings from '@/components/admin/RewardsSettings'
 
 const C = { card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
 const inp: React.CSSProperties = { background: '#0b0b0d', border: `1px solid ${C.line}`, color: C.text, padding: '8px 10px', fontFamily: 'Inter, sans-serif', fontSize: 13, colorScheme: 'dark' }
@@ -39,9 +40,11 @@ export default function CreditPage() {
 
   return (
     <div style={{ padding: '32px 24px', maxWidth: 980, color: C.text }}>
-      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 6px' }}>STUDIO CREDIT</h1>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 6px' }}>CREDIT &amp; REWARDS</h1>
       <p style={{ ...small, margin: '0 0 20px' }}>Every change to anyone's credit, newest first. Nothing here is ever edited — to fix something, add or remove credit from the customer's panel on the dashboard and it shows up below.</p>
       {err && <div style={{ ...small, color: '#fbbf24', marginBottom: 16 }}>⚠️ {err}</div>}
+
+      <RewardsSettings />
 
       {d && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 24 }}>

@@ -33,8 +33,9 @@ function Item({ href, icon, label, active, color, indent }: { href: string; icon
 function SidebarInner() {
   const pathname = usePathname() || ''
   const router = useRouter()
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const on = (p: string) => pathname === p || pathname.startsWith(p + '/')
+  // Open by default when you're ON a settings page, so the highlighted item is visible.
+  const [settingsOpen, setSettingsOpen] = useState(on('/admin/funding') || on('/admin/stack'))
   const logout = async () => { await fetch('/api/admin/auth', { method: 'DELETE' }); router.push('/admin') }
   const D = '/admin/dashboard?view='
 
@@ -47,41 +48,45 @@ function SidebarInner() {
       </div>
 
       <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
+        {/* Grouped by what you're doing, not by when it was built (2026-09-27).
+            Mirror any change in app/admin/dashboard/page.tsx — the two-sidebars gotcha. */}
         <div style={sectionHdr}>BOOKINGS</div>
         <Item href={`${D}list`} icon="≡" label="List View" />
         <Item href={`${D}calendar`} icon="⊡" label="Calendar" />
+
+        <div style={sectionHdr}>MESSAGES</div>
         <Item href="/admin/inbox" icon="J" label="June Inbox" active={on('/admin/inbox')} color="#d4a843" />
-        <Item href="/admin/notifications" icon="!" label="Notifications" active={on('/admin/notifications')} />
         <Item href="/admin/texts" icon="✆" label="Texts" active={on('/admin/texts')} />
-        <Item href="/admin/standing" icon="★" label="Standing & Rewards" active={on('/admin/standing')} />
-        <Item href="/admin/credit" icon="$" label="Studio Credit" active={on('/admin/credit')} />
+        <Item href="/admin/notifications" icon="!" label="Notifications" active={on('/admin/notifications')} />
+
+        <div style={sectionHdr}>CUSTOMERS</div>
+        <Item href={`${D}customers`} icon="👤" label="Client List" />
+        <Item href="/admin/standing" icon="★" label="Account Standing" active={on('/admin/standing')} />
+        <Item href="/admin/credit" icon="$" label="Credit & Rewards" active={on('/admin/credit')} />
+        <Item href="/admin/signups" icon="✉" label="Recent Signups" active={on('/admin/signups')} />
+
+        <div style={sectionHdr}>COMMUNITY</div>
+        <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
+        <Item href="/admin/directory" icon="✦" label="Creative Directory" active={on('/admin/directory')} />
+        <Item href="/admin/roles" icon="◆" label="Directory Roles" active={on('/admin/roles')} />
+
+        <div style={sectionHdr}>STUDIO</div>
+        <Item href={`${D}revenue`} icon="📈" label="Revenue" />
+        <Item href={`${D}sets`} icon="▦" label="Products & Pricing" />
+        <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
+        <Item href="/admin/jukebox" icon="♪" label="Jukebox" active={on('/admin/jukebox')} />
 
         <div style={sectionHdr}>WEBSITE</div>
         <Item href="/admin/website" icon="🌐" label="Website Editor →" color="#d4a843" />
 
-        <div style={sectionHdr}>STUDIO</div>
-        <Item href={`${D}sets`} icon="▦" label="Products & Pricing" />
-        <Item href="/admin/jukebox" icon="♪" label="Jukebox" active={on('/admin/jukebox')} />
-
-        <div style={sectionHdr}>CUSTOMERS</div>
-        <Item href={`${D}customers`} icon="👤" label="Client List" />
-        <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
-        <Item href="/admin/directory" icon="✦" label="Creative Directory" active={on('/admin/directory')} />
-        <Item href="/admin/roles" icon="◆" label="Directory Roles" active={on('/admin/roles')} />
-        <Item href="/admin/signups" icon="✉" label="Recent Signups" active={on('/admin/signups')} />
+        <div style={sectionHdr}>MARKETING</div>
+        <Item href="/admin/marketing" icon="📣" label="Email Campaign" active={on('/admin/marketing')} />
 
         <div style={sectionHdr}>STAFFING</div>
         <Item href="/admin/onboarding" icon="🎓" label="Onboarding" active={on('/admin/onboarding')} />
         <Item href="/admin/workers" icon="👥" label="Workers" active={on('/admin/workers')} />
         <Item href="/admin/shifts" icon="🗓" label="Shifts" active={on('/admin/shifts')} />
         <Item href="/admin/payroll" icon="💵" label="Payroll" active={on('/admin/payroll')} />
-
-        <div style={sectionHdr}>MARKETING</div>
-        <Item href="/admin/marketing" icon="📣" label="Email Campaign" active={on('/admin/marketing')} />
-        <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
-
-        <div style={sectionHdr}>FUNDING</div>
-        <Item href="/admin/funding" icon="$" label="Funding Tracker" active={on('/admin/funding')} />
 
         <button onClick={() => setSettingsOpen(o => !o)} style={{ ...sectionHdr, display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', cursor: 'pointer' }}>
           SETTINGS <span style={{ fontSize: 8 }}>{settingsOpen ? '▲' : '▼'}</span>
@@ -92,6 +97,7 @@ function SidebarInner() {
             <Item href={`${D}usage`} icon="📊" label="Usage" />
             <Item href={`${D}legal`} icon="§" label="Legal" />
             <Item href={`${D}profile`} icon="⊙" label="Account" />
+            <Item href="/admin/funding" icon="$" label="Funding Tracker" active={on('/admin/funding')} />
             <Item href="/admin/stack" icon="⚙" label="Services & Stack" active={on('/admin/stack')} />
           </>
         )}

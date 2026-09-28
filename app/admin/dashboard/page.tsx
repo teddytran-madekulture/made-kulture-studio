@@ -522,6 +522,23 @@ function Detail({ label, value, mono }: { label: string; value: string; mono?: b
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
+// ── Sidebar item helpers (keep in step with components/AdminShell.tsx) ──
+const NAV_DIM = 'rgba(255,255,255,0.45)'
+function navHdr(label: string) {
+  return <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>{label}</div>
+}
+function navLink(href: string, icon: string, label: string, color?: string) {
+  return (
+    <a key={href} href={href} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+      background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+      padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: color || NAV_DIM,
+    }}>
+      <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: icon === 'J' ? 800 : undefined }}>{icon}</span>{label}
+    </a>
+  )
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -1735,6 +1752,20 @@ export default function AdminDashboard() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  // Dashboard views switch in place (no page load); see navLink for the rest.
+  const navView = (v: typeof view, icon: string, label: string, indent = false) => (
+    <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+      background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
+      borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
+      padding: indent ? '9px 12px 9px 22px' : '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
+      fontFamily: 'Inter, sans-serif', fontSize: 13,
+      color: view === v ? '#fff' : NAV_DIM,
+    }}>
+      <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
+    </button>
+  )
+
   return (
     <div style={{ background: '#080808', minHeight: 'var(--vh-full)', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
 
@@ -1775,6 +1806,8 @@ export default function AdminDashboard() {
         {/* Nav */}
         <nav style={{ flex: 1, padding: '4px 12px', overflowY: 'auto' }}>
 
+          {/* Grouped by what you're doing, not by when it was built (2026-09-27).
+              Mirror any change in components/AdminShell.tsx — the two-sidebars gotcha. */}
           {/* Bookings group */}
           <button onClick={() => setBookingsOpen(o => !o)} style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1784,167 +1817,45 @@ export default function AdminDashboard() {
           }}>
             BOOKINGS <span style={{ fontSize: 8 }}>{bookingsOpen ? '▲' : '▼'}</span>
           </button>
-
           {bookingsOpen && (
             <div>
-              {([['list', '≡', 'List View'], ['calendar', '⊡', 'Calendar']] as const).map(([v, icon, label]) => (
-                <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
-                  borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
-                  padding: '9px 12px 9px 22px', cursor: 'pointer', textAlign: 'left' as const,
-                  fontFamily: 'Inter, sans-serif', fontSize: 13,
-                  color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
-                }}>
-                  <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
-                </button>
-              ))}
-              <a href="/admin/inbox" style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-                background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-                padding: '9px 12px 9px 22px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#d4a843',
-              }}>
-                <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: 800 }}>J</span>June Inbox
-              </a>
+              {([['list', '≡', 'List View'], ['calendar', '⊡', 'Calendar']] as const).map(([v, icon, label]) => navView(v, icon, label, true))}
             </div>
           )}
 
-          {/* WEBSITE */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>WEBSITE</div>
-          {([['/admin/website', '🌐', 'Website Editor →']] as const).map(([href, icon, label]) => (
-            <a key={href} href={href} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-              background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-              padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#d4a843',
-            }}>
-              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
-            </a>
-          ))}
+          {navHdr('MESSAGES')}
+          {navLink('/admin/inbox', 'J', 'June Inbox', '#d4a843')}
+          {navLink('/admin/texts', '✆', 'Texts')}
+          {navLink('/admin/notifications', '!', 'Notifications')}
 
-          {/* STUDIO */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>STUDIO</div>
-          {([['revenue', '📈', 'Revenue'], ['sets', '▦', 'Products & Pricing']] as const).map(([v, icon, label]) => (
-            <button key={v} onClick={() => { setView(v); if (isMobile) setSidebarOpen(false) }} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-              background: view === v ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
-              borderLeft: view === v ? '2px solid #fff' : '2px solid transparent',
-              padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
-              fontFamily: 'Inter, sans-serif', fontSize: 13,
-              color: view === v ? '#fff' : 'rgba(255,255,255,0.45)',
-            }}>
-              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
-            </button>
-          ))}
-          <a href="/admin/jukebox" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>♪</span>Jukebox
-          </a>
-          <a href="/admin/notifications" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>!</span>Notifications
-          </a>
-          <a href="/admin/texts" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>✆</span>Texts
-          </a>
-          <a href="/admin/standing" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>★</span>Standing &amp; Rewards
-          </a>
-          <a href="/admin/credit" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>$</span>Studio Credit
-          </a>
+          {navHdr('CUSTOMERS')}
+          {navView('customers', '👤', 'Client List')}
+          {navLink('/admin/standing', '★', 'Account Standing')}
+          {navLink('/admin/credit', '$', 'Credit & Rewards')}
+          {navLink('/admin/signups', '✉', 'Recent Signups')}
 
-          {/* CUSTOMERS */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>CUSTOMERS</div>
-          <button onClick={() => { setView('customers'); if (isMobile) setSidebarOpen(false) }} style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-            background: view === 'customers' ? 'rgba(255,255,255,0.07)' : 'transparent', border: 'none',
-            borderLeft: view === 'customers' ? '2px solid #fff' : '2px solid transparent',
-            padding: '9px 12px', cursor: 'pointer', textAlign: 'left' as const,
-            fontFamily: 'Inter, sans-serif', fontSize: 13,
-            color: view === 'customers' ? '#fff' : 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontSize: 12 }}>👤</span>Client List
-          </button>
-          {([['/admin/directory', '✦', 'Creative Directory'], ['/admin/portfolio', '🖼', 'Portfolio'], ['/admin/signups', '✉', 'Recent Signups']] as const).map(([href, icon, label]) => (
-            <a key={href} href={href} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-              background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-              padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-            }}>
-              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
-            </a>
-          ))}
+          {navHdr('COMMUNITY')}
+          {navLink('/admin/portfolio', '🖼', 'Portfolio')}
+          {navLink('/admin/directory', '✦', 'Creative Directory')}
+          {navLink('/admin/roles', '◆', 'Directory Roles')}
 
-          {/* MARKETING */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>MARKETING</div>
-          {([['/admin/marketing', '📣', 'Email Campaign'], ['/admin/promos', '🏷', 'Promo Codes']] as const).map(([href, icon, label]) => (
-            <a key={href} href={href} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-              background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-              padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-            }}>
-              <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
-            </a>
-          ))}
+          {navHdr('STUDIO')}
+          {navView('revenue', '📈', 'Revenue')}
+          {navView('sets', '▦', 'Products & Pricing')}
+          {navLink('/admin/promos', '🏷', 'Promo Codes')}
+          {navLink('/admin/jukebox', '♪', 'Jukebox')}
 
-          {/* FUNDING */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>FUNDING</div>
-          <a href="/admin/funding" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>$</span>Funding Tracker
-          </a>
+          {navHdr('WEBSITE')}
+          {navLink('/admin/website', '🌐', 'Website Editor →', '#d4a843')}
 
-          {/* STAFFING */}
-          <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>STAFFING</div>
-          <a href="/admin/onboarding" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>🎓</span>Onboarding
-          </a>
-          <a href="/admin/workers" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>👥</span>Workers
-          </a>
-          <a href="/admin/shifts" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>🗓</span>Shifts
-          </a>
-          <a href="/admin/payroll" style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
-            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
-            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>💵</span>Payroll
-          </a>
+          {navHdr('MARKETING')}
+          {navLink('/admin/marketing', '📣', 'Email Campaign')}
+
+          {navHdr('STAFFING')}
+          {navLink('/admin/onboarding', '🎓', 'Onboarding')}
+          {navLink('/admin/workers', '👥', 'Workers')}
+          {navLink('/admin/shifts', '🗓', 'Shifts')}
+          {navLink('/admin/payroll', '💵', 'Payroll')}
 
           {/* SETTINGS (collapsible — rarely needed) */}
           <button onClick={() => setSettingsOpen(o => !o)} style={{
@@ -1969,6 +1880,7 @@ export default function AdminDashboard() {
                   <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>{icon}</span>{label}
                 </button>
               ))}
+              {navLink('/admin/funding', '$', 'Funding Tracker')}
               <a href="/admin/stack" style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
                 background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
