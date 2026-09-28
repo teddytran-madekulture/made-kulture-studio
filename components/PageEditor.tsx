@@ -5,6 +5,7 @@
 // repeater (add / remove / reorder items).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ImageCropper from '@/components/ImageCropper'
+import HeroSlidesEditor from '@/components/admin/HeroSlidesEditor'
 import { SITE_IMAGE_SLOTS, type SiteImageSlot } from '@/lib/site-images'
 import { SITE_SETTINGS_DEFAULTS, HERO_HEIGHT_MIN, HERO_HEIGHT_MAX } from '@/lib/site-settings'
 import { getContentPage, type ContentField } from '@/lib/site-content'
@@ -372,6 +373,8 @@ export default function PageEditor({ slug }: { slug: string }) {
               )}
 
               {slots.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>{slots.map(renderImage)}</div>}
+
+              {showHeroSlider && <HeroSlidesEditor />}
             </section>
           )
         })}

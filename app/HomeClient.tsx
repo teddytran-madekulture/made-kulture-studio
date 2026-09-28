@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
@@ -9,6 +9,8 @@ import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
 import { fmt as nl } from '@/lib/fmt'
 import { useGuestPricing } from '@/lib/use-guest-pricing'
+import HeroCarousel, { type CarouselSlide } from '@/components/HeroCarousel'
+import { FOCAL_POSITION, type HeroSlide } from '@/lib/hero-slides'
 
 
 const SETS = [
@@ -47,9 +49,8 @@ const FEATURE_ICONS = [
   (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></svg>),
 ]
 
-export default function HomeClient({ images = {}, focals = {}, settings, content = {} }: { images?: SiteImages; focals?: Record<string, string>; settings?: SiteSettings; content?: PageContent }) {
+export default function HomeClient({ images = {}, focals = {}, settings, content = {}, heroSlides = [], heroIntervalSec = 7 }: { images?: SiteImages; focals?: Record<string, string>; settings?: SiteSettings; content?: PageContent; heroSlides?: HeroSlide[]; heroIntervalSec?: number }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
-  const [heroHover, setHeroHover] = useState<'primary' | 'secondary' | null>(null)
   const [pathHover, setPathHover] = useState<'a' | 'b' | null>(null)
   // ⚠️ The prices in the SETS array below are a FALLBACK for the first paint
   // only. They're hardcoded guest rates that silently stopped matching the
@@ -63,40 +64,27 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
 
   const heroHeightVh = settings?.heroHeightVh ?? SITE_SETTINGS_DEFAULTS.heroHeightVh
 
-  // Fixed-height hero on desktop: scale the content to fit the chosen band height
-  // so the headline/buttons are never clipped, however short the band is. The
-  // content is anchored bottom-left; we shrink from that corner. Mobile is left
-  // untouched (flexible min-height, scale = 1).
-  const heroContentRef = useRef<HTMLDivElement | null>(null)
-  const [heroScale, setHeroScale] = useState(1)
-
-  useEffect(() => {
-    if (isMobile) { setHeroScale(1); return }
-    const el = heroContentRef.current
-    if (!el) return
-    const section = el.closest('section') as HTMLElement | null
-    if (!section) return
-
-    const fit = () => {
-      const cs = getComputedStyle(section)
-      const padTop = parseFloat(cs.paddingTop) || 0
-      const padBot = parseFloat(cs.paddingBottom) || 0
-      const avail = section.clientHeight - padTop - padBot
-      // offsetHeight is the natural (pre-transform) height — transforms don't
-      // change layout box size, so this is stable regardless of the current scale.
-      const natural = el.offsetHeight
-      if (avail > 0 && natural > 0) setHeroScale(Math.min(1, avail / natural))
-    }
-
-    fit()
-    const ro = new ResizeObserver(fit)
-    ro.observe(section)
-    ro.observe(el)
-    window.addEventListener('resize', fit)
-    // Re-fit once the display font (Anton) has loaded and changed the metrics.
-    ;(document as any).fonts?.ready?.then(fit).catch(() => {})
-    return () => { ro.disconnect(); window.removeEventListener('resize', fit) }
-  }, [isMobile, heroHeightVh])
+  // Slide 1 = the original hero, built from the same fields it always used.
+  const heroCarouselSlides: CarouselSlide[] = [
+    {
+      key: 'main',
+      imageUrl: images.hero || null,
+      objectPosition: focals.hero || 'center bottom',
+      eyebrow: c.heroEyebrow || '', headline: c.heroHeadline || '', paragraph: c.heroParagraph || '',
+      primary: c.heroPrimaryLabel ? { label: c.heroPrimaryLabel, href: c.heroPrimaryHref || '/book' } : null,
+      secondary: c.heroSecondaryLabel ? { label: c.heroSecondaryLabel, href: c.heroSecondaryHref || '/book?type=studio' } : null,
+      finePrint: c.heroFinePrint || '',
+    },
+    ...heroSlides.map((h): CarouselSlide => ({
+      key: h.id,
+      imageUrl: h.imageUrl || null,
+      objectPosition: FOCAL_POSITION[h.focal] || 'center center',
+      eyebrow: h.eyebrow, headline: h.headline, paragraph: h.paragraph,
+      primary: h.buttonLabel && h.buttonUrl ? { label: h.buttonLabel, href: h.buttonUrl } : null,
+      secondary: h.button2Label && h.button2Url ? { label: h.button2Label, href: h.button2Url } : null,
+      finePrint: '',
+    })),
+  ]
 
   // Max content width — everything except the full-bleed hero image is centered
   // in this column. Tune this one number to make the page narrower / wider.
@@ -108,78 +96,9 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
       {/* NAV */}
       <SiteNav active="home" />
 
-      {/* HERO */}
-      <section style={{
-        position: 'relative', display: 'flex', alignItems: 'flex-end',
-        ...(isMobile ? { minHeight: '85vh' } : { height: `${heroHeightVh}vh` }),
-        padding: isMobile ? '96px 0 48px' : '84px 0 60px', border: 'none', overflow: 'hidden',
-      }}>
-        {/* Background — editable at /admin/homepage (slot: hero) */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(135deg, #1a0a0a 0%, #0d0d0d 40%, #1a1208 100%)',
-        }}>
-          {images.hero && (
-            <img src={images.hero} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition: focals.hero || 'center bottom' }} />
-          )}
-          {/* Mood/legibility scrim — anchors the headline without dimming the whole image (image stays full opacity) */}
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, #080808 0%, rgba(8,8,8,0.55) 24%, rgba(8,8,8,0.15) 50%, transparent 78%)' }} />
-        </div>
-
-        {/* Coordinates (hidden on mobile to avoid overlapping the headline) */}
-        {!isMobile && (
-          <div style={{ position:'absolute', top:100, right:40, textAlign:'right' }}>
-            <div className="label">HOUSTON / TX</div>
-            <div className="label" style={{ marginTop:4 }}>29.76°N · 95.36°W</div>
-          </div>
-        )}
-
-        <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth:PAGE_MAX, margin:'0 auto', paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, boxSizing:'border-box' }}>
-        <div ref={heroContentRef} style={{ maxWidth:700, transform: isMobile ? undefined : `scale(${heroScale})`, transformOrigin: 'left bottom' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24 }}>
-            <div style={{ width:40, height:1, background:'rgba(255,255,255,0.5)' }} />
-            <span className="label">{c.heroEyebrow}</span>
-          </div>
-          <h1 style={{ fontFamily:'Anton, "Bebas Neue", sans-serif', fontSize:'clamp(84px, 17vw, 170px)', color:'#fff', marginBottom:28, lineHeight:0.9, letterSpacing:'0.005em', textTransform:'uppercase' }}>
-            {nl(c.heroHeadline)}
-          </h1>
-          <p style={{ fontSize:16, color:'rgba(255,255,255,0.6)', lineHeight:1.6, marginBottom:40, maxWidth:420 }}>
-            {nl(c.heroParagraph)}
-          </p>
-          <div style={{ display:'flex', gap:12, flexDirection: isMobile ? 'column' : 'row' }}>
-            <Link href={c.heroPrimaryHref}
-              onMouseEnter={() => setHeroHover('primary')}
-              onMouseLeave={() => setHeroHover(null)}
-              style={{
-              display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
-              background: heroHover === 'secondary' ? 'transparent' : '#fff',
-              color: heroHover === 'secondary' ? '#fff' : '#080808',
-              border: heroHover === 'secondary' ? '1px solid rgba(255,255,255,0.5)' : '1px solid transparent',
-              padding:'16px 24px', textDecoration:'none', transition:'background 0.25s ease, color 0.25s ease, border-color 0.25s ease',
-            }}>
-              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroPrimaryLabel}</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-            </Link>
-            <Link href={c.heroSecondaryHref}
-              onMouseEnter={() => setHeroHover('secondary')}
-              onMouseLeave={() => setHeroHover(null)}
-              style={{
-              display:'flex', alignItems:'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap:24,
-              background: heroHover === 'secondary' ? '#fff' : 'transparent',
-              color: heroHover === 'secondary' ? '#080808' : '#fff',
-              border: heroHover === 'secondary' ? '1px solid #fff' : '1px solid rgba(255,255,255,0.18)',
-              padding:'16px 24px', textDecoration:'none', transition:'background 0.25s ease, color 0.25s ease, border-color 0.25s ease',
-            }}>
-              <span style={{ fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:12, fontWeight:500, letterSpacing:'0.25em', textTransform:'uppercase' }}>{c.heroSecondaryLabel}</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-            </Link>
-          </div>
-          <div style={{ marginTop:20, fontFamily:'"JetBrains Mono", ui-monospace, monospace', fontSize:11, letterSpacing:'0.18em', color:'rgba(255,255,255,0.4)', textTransform:'uppercase' }}>
-            {nl(c.heroFinePrint)}
-          </div>
-        </div>
-        </div>
-      </section>
+      {/* HERO — slide 1 is the original hero; extra banners come from
+          Website Editor → Home → Hero banners (lib/hero-slides.ts) */}
+      <HeroCarousel slides={heroCarouselSlides} intervalSec={heroIntervalSec} isMobile={isMobile} heightVh={heroHeightVh} pageMax={PAGE_MAX} />
 
       {/* FEATURES BAR — full-width top/bottom divider lines (border-y span to the
           screen edge); tiles stay in the centered column. gap:1 + bg draws the
