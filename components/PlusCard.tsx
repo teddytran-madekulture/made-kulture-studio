@@ -13,6 +13,12 @@ export default function PlusCard() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
+  // Account standing (migration 109) — the perks line must not promise what is paused.
+  const [standing, setStanding] = useState<string>('good')
+  useEffect(() => {
+    fetch('/api/account/credit', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.standing) setStanding(d.standing) }).catch(() => {})
+  }, [])
   const load = () => fetch('/api/account/plus').then(r => r.ok ? r.json() : null).then(d => { setS(d); setLoading(false) }).catch(() => setLoading(false))
   useEffect(() => { load() }, [])
 
@@ -60,7 +66,11 @@ export default function PlusCard() {
         </div>
       </div>
       <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5, marginTop: 6 }}>
-        You can view the 48-hour window, request short-notice bookings, and cancellations come back as studio credit.
+        {standing === 'warning'
+          ? 'Your Plus perks are partly paused while your account is below good standing: short-notice booking is off for now. Cancellations still come back as studio credit.'
+          : standing === 'probation' || standing === 'suspended'
+            ? 'Your Plus perks are paused while your account is below good standing: short-notice booking and cancellation protection are off for now. They come back automatically as your standing improves.'
+            : 'You can view the 48-hour window, request short-notice bookings, and cancellations come back as studio credit.'}
       </div>
       {!s.comp && (
         <>

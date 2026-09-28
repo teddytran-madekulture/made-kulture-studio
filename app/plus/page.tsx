@@ -33,7 +33,9 @@ const FREE_BENEFITS = [
 ]
 
 const PLUS_BENEFITS = [
-  'Book on short notice — request near-term slots inside the 48-hour window. Studio-approved, so an open slot is not a guarantee.',
+  'Book inside 48 hours — grab hours the studio is already open for instantly, or request any other time and we\u2019ll text you back. Requests are studio-approved, so an open slot is not a guarantee.',
+  'Reschedule inside 48 hours — move a session yourself, even close to the day',
+  'Save a booking with Plus — already booked and inside 48 hours? Join Plus and keep that booking\u2019s value if plans change',
   'Cancellation protection — cancel an individual set anytime and the full value comes back as studio credit',
   'No-show credit — your money stays in the building for next time',
 ]
@@ -108,7 +110,7 @@ export default function MembershipPage() {
             Two ways<br />to belong.
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: isMobile ? 15 : 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, maxWidth: 580, margin: '0 0 8px' }}>
-            Every shoot starts with an account — it&apos;s free, and it unlocks member rates, your profile, and the creator directory. When you&apos;re ready to move faster, <strong style={{ color: '#c9b27e' }}>Made Kulture Plus</strong> adds short-notice booking and cancellation protection.
+            Every shoot starts with an account — it&apos;s free, and it unlocks member rates, your profile, and the creator directory. When you&apos;re ready to move faster, <strong style={{ color: '#c9b27e' }}>Made Kulture Plus</strong> adds short-notice booking and cancellation protection.{rw?.enabled && rw.memberRate > 0 ? <> Every completed booking earns cash back as studio credit: {rw.memberRate}% for members, {rw.plusRate}% on Plus.</> : null}
           </p>
         </div>
       </section>
@@ -174,11 +176,12 @@ export default function MembershipPage() {
             <div className="label" style={{ marginBottom: 20 }}>How Plus works</div>
             <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(36px, 6vw, 76px)', color: '#fff', lineHeight: 0.9, margin: 0 }}>Move fast.<br />Never lose a session.</h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (rw?.enabled && rw.plusRate > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)'), gap: 1, background: 'rgba(255,255,255,0.06)' }}>
             {[
-              { n: '01', t: 'REQUEST YOUR SLOT', d: 'Spot a near-term opening inside the 48-hour window and request it. An open slot is not a guarantee — the studio may be unavailable even when the calendar looks open. If we approve, you have a short window to lock it in.' },
+              { n: '01', t: 'BOOK INSIDE 48 HOURS', d: 'If the studio is already open for the hours you want, book them instantly. Need a different time? Tap it to request, and we\u2019ll text you back. A request isn\u2019t a guarantee \u2014 the studio may be unavailable even when the calendar looks open.' },
               { n: '02', t: 'CANCEL WORRY-FREE', d: 'Plans change? Cancel an individual set before your session and the full value comes back as studio credit — automatically. Full-warehouse bookings are the one exception: cancelled inside 48 hours they carry a 25% late cancellation fee, with the rest returned as credit — the whole building comes off the calendar and can\u2019t be re-booked at short notice.' },
               { n: '03', t: 'NEVER LOSE MONEY', d: 'Even a true no-show can be credited on request. Your money stays in the building for the next shoot.' },
+              ...(rw?.enabled && rw.plusRate > 0 ? [{ n: '04', t: 'EARN BACK', d: `${rw.plusRate}% of every Plus session comes back as studio credit after you shoot \u2014 use it on sets and gear.` }] : []),
             ].map(s => (
               <div key={s.n} style={{ background: '#111111', padding: isMobile ? '32px 24px' : '44px 32px' }}>
                 <div className="label" style={{ color: '#c9b27e', marginBottom: 22 }}>{s.n}</div>
@@ -200,7 +203,7 @@ export default function MembershipPage() {
             {outlineCta(member ? 'Manage membership' : 'Go Plus', '/account/plus')}
           </div>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.32)', lineHeight: 1.7, marginTop: 28, maxWidth: 660, marginLeft: isMobile ? 0 : 'auto', marginRight: isMobile ? 0 : 'auto' }}>
-            Plus renews yearly at the then-current price · cancel auto-renew anytime and keep your benefits through the paid term · membership fees are non-refundable · short-notice bookings are studio-approved and not guaranteed · Made Kulture issues studio credit rather than refunds · full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee for all customers, Plus included. Not a member? You can always book with 48 hours&apos; notice. See <Link href="/terms" style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>full terms</Link>.
+            Plus renews yearly at the then-current price · cancel auto-renew anytime and keep your benefits through the paid term · membership fees are non-refundable · short-notice bookings are studio-approved and not guaranteed · Made Kulture issues studio credit rather than refunds · full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee for all customers, Plus included · Plus perks can pause while an account is below good standing; the membership fee isn&apos;t refunded. Not a member? You can always book with 48 hours&apos; notice. See <Link href="/terms" style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'underline' }}>full terms</Link>.
           </div>
         </div>
       </section>
