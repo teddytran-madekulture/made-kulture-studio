@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import NavAuthLink from '@/components/NavAuthLink'
+import { AnnouncementBar } from '@/components/MarketingTools'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import { createClient } from '@/lib/supabase/client'
 
@@ -43,8 +44,11 @@ export default function SiteNav({ active }: { active?: string }) {
 
   return (
     <>
+      {/* Marketing Tools announcement strip (edited in the Website Editor). It sets
+          --mk-announce-h to its own height so the nav sits just below it. */}
+      <AnnouncementBar />
       <nav style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        position: 'fixed', top: 'var(--mk-announce-h, 0px)', left: 0, right: 0, zIndex: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: isMobile ? '16px 20px' : '20px 40px',
         background: (scrolled || (isMobile && menuOpen)) ? '#080808' : 'transparent',
@@ -116,7 +120,7 @@ export default function SiteNav({ active }: { active?: string }) {
 
       {/* Mobile full-screen menu */}
       {isMobile && menuOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99, background: '#080808', display: 'flex', flexDirection: 'column', padding: '104px 24px 40px' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99, background: '#080808', display: 'flex', flexDirection: 'column', padding: 'calc(104px + var(--mk-announce-h, 0px)) 24px 40px' }}>
           {[...LINKS, { label: 'BOOK', href: '/book' }].map(l => (
             <Link key={l.label} href={l.href} onClick={() => setMenuOpen(false)}
               style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>

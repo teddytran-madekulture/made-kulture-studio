@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import JuneChatWidget from '@/components/JuneChatWidget'
+import { MarketingOverlays } from '@/components/MarketingTools'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         {children}
         <JuneChatWidget />
+        <MarketingOverlays />
       </body>
     </html>
   )
