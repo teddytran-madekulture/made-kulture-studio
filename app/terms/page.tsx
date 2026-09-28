@@ -217,8 +217,9 @@ export default function TermsPage() {
           </Section>
 
           <Section title="SMS COMMUNICATIONS">
-            <P>By providing your phone number during booking, you consent to receive text messages from Made Kulture related to your reservation, including booking confirmations, appointment reminders, and session notifications.</P>
-            <P><strong style={{ color: '#fff' }}>Message and data rates may apply.</strong> To opt out, reply STOP to any message. For help, reply HELP or email info@madekulture.com.</P>
+            <P>When you book and check the text-message consent box, you agree to receive transactional text messages from Made Kulture about your reservation, including booking confirmations, appointment reminders, door codes and session notifications. Message frequency varies based on your booking activity.</P>
+            <P><strong style={{ color: '#fff' }}>Message and data rates may apply</strong> depending on your mobile carrier and plan. To opt out, reply STOP to any message; you will receive one confirmation and no further messages. For help, reply HELP or email info@madekulture.com.</P>
+            <P>Carriers are not liable for delayed or undelivered messages, and Made Kulture is not responsible for messages delayed or not delivered by your carrier. No mobile information will be shared with third parties or affiliates for marketing or promotional purposes; text-messaging opt-in data and consent are never shared with any third party. See our <Link href="/privacy-policy" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }}>Privacy Policy</Link>.</P>
           </Section>
 
           <Section title="LIABILITY">

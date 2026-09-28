@@ -16,6 +16,10 @@ const nextConfig = {
     return [
       { source: '/membership',  destination: '/plus', permanent: true },
       { source: '/memberships', destination: '/plus', permanent: true },
+      // Old Squarespace/Acuity booking page. It is also the opt-in URL on file
+      // with Twilio's toll-free verification, so after the domain move it must
+      // land on the booking flow (which shows the SMS consent), never a 404.
+      { source: '/bookingselections', destination: '/book', permanent: false },
     ]
   },
 

@@ -1418,7 +1418,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   {booking.smsConsent && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
                 </div>
                 <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
-                  I agree to receive text messages from Made Kulture at the number above, including booking confirmations and reminders. Msg &amp; data rates may apply. Reply STOP to opt out.{' '}
+                  I agree to receive text messages from Made Kulture at the number above, including booking confirmations, reminders and door codes. Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help.{' '}
                   <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Terms</a>
                   {' '}·{' '}
                   <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>

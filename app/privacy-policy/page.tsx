@@ -89,7 +89,7 @@ export default function PrivacyPolicyPage() {
             <P><strong style={{ color: '#fff' }}>Message and data rates may apply.</strong> Message frequency varies based on your booking activity.</P>
             <P><strong style={{ color: '#fff' }}>To opt out:</strong> Reply STOP to any text message at any time. You will receive a confirmation and no further messages will be sent.</P>
             <P><strong style={{ color: '#fff' }}>For help:</strong> Reply HELP to any message or contact us at (832) 408-1631.</P>
-            <P>We will never sell your phone number or use it for marketing purposes unrelated to your booking.</P>
+            <P>We will never sell your phone number or use it for marketing purposes unrelated to your booking. No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. Text-messaging originator opt-in data and consent will not be shared with any third parties. Message frequency varies based on your booking activity.</P>
           </Section>
 
           <Section title="PAYMENT INFORMATION">
