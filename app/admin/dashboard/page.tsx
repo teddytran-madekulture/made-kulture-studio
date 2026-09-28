@@ -10,6 +10,7 @@ import AddChargeModal from '@/components/AddChargeModal'
 import OvertimeModal from '@/components/OvertimeModal'
 import GuestCountModal from '@/components/GuestCountModal'
 import StandingPanel, { StandingChip, QuickIncidentPrompt } from '@/components/admin/StandingPanel'
+import CreditPanel from '@/components/admin/CreditPanel'
 import { bookingHourToISO } from '@/lib/booking-times'
 // ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
 // share the API routes' pricing instead of keeping a fourth copy of the rate
@@ -1854,6 +1855,13 @@ export default function AdminDashboard() {
             padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
           }}>
             <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>★</span>Standing &amp; Rewards
+          </a>
+          <a href="/admin/credit" style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
+            background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
+            padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.45)',
+          }}>
+            <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0 }}>$</span>Studio Credit
           </a>
 
           {/* CUSTOMERS */}
@@ -4268,6 +4276,9 @@ export default function AdminDashboard() {
                   </div>
                 )
               })()}
+
+              {/* Studio credit — balance, history, add/remove */}
+              <CreditPanel customerId={custDetail.id} />
 
               {/* Account standing (migration 109) */}
               <div style={{ marginBottom: 16 }}><StandingPanel customerId={custDetail.id} /></div>

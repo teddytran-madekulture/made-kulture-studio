@@ -78,12 +78,9 @@ export default function StandingPage() {
         <p style={{ ...small, marginTop: 12 }}>
           Paid nightly after each session, only in good standing, on set time + gear paid by card. Reward credit expires after 12 months with no completed booking (30-day warning email first).
         </p>
-        {owed && (
-          <p style={{ ...small, marginTop: 8 }}>
-            Studio credit outstanding (services owed): <strong style={{ color: C.text }}>${(owed.all / 100).toFixed(2)}</strong>
-            {' '}· of which rewards: <strong style={{ color: C.text }}>${(owed.rewards / 100).toFixed(2)}</strong>
-          </p>
-        )}
+        <p style={{ ...small, marginTop: 8 }}>
+          Balances, history and the bookkeeping export are on the <a href="/admin/credit" style={{ color: C.accent }}>Studio Credit</a> page.
+        </p>
       </div>
 
       {/* ── Standing rules ── */}
