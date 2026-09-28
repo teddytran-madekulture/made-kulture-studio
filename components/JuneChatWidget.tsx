@@ -126,6 +126,13 @@ export default function JuneChatWidget() {
 
   // Render June's text with [label](/path) markdown links as tappable gold
   // buttons (internal paths navigate in-tab; full URLs open a new tab).
+  // Plain-text runs: turn **bold** into <strong> so asterisks never show raw.
+  const renderBold = (t: string, keyBase: string): React.ReactNode[] =>
+    t.split(/(\*\*[^*\n]+\*\*)/g).map((seg, j) =>
+      /^\*\*[^*\n]+\*\*$/.test(seg)
+        ? <strong key={`${keyBase}-${j}`} style={{ fontWeight: 700, color: '#fff' }}>{seg.slice(2, -2)}</strong>
+        : seg)
+
   const renderContent = (text: string) => {
     const parts: React.ReactNode[] = []
     const re = /(!?)\[([^\]]+)\]\((\/[^\s)]+|https?:\/\/[^\s)]+)\)/g
@@ -133,7 +140,7 @@ export default function JuneChatWidget() {
     let match: RegExpExecArray | null
     let k = 0
     while ((match = re.exec(text)) !== null) {
-      if (match.index > last) parts.push(text.slice(last, match.index))
+      if (match.index > last) parts.push(...renderBold(text.slice(last, match.index), `t${k++}`))
       const isImg = match[1] === '!'
       const label = match[2]
       const href = match[3]
@@ -155,7 +162,7 @@ export default function JuneChatWidget() {
       }
       last = match.index + match[0].length
     }
-    if (last < text.length) parts.push(text.slice(last))
+    if (last < text.length) parts.push(...renderBold(text.slice(last), `t${k++}`))
     return parts
   }
 
