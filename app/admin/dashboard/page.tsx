@@ -9,7 +9,7 @@ import AddSetModal from '@/components/AddSetModal'
 import AddChargeModal from '@/components/AddChargeModal'
 import OvertimeModal from '@/components/OvertimeModal'
 import GuestCountModal from '@/components/GuestCountModal'
-import StandingPanel, { StandingChip } from '@/components/admin/StandingPanel'
+import StandingPanel, { StandingChip, QuickIncidentPrompt } from '@/components/admin/StandingPanel'
 import { bookingHourToISO } from '@/lib/booking-times'
 // ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
 // share the API routes' pricing instead of keeping a fourth copy of the rate
@@ -599,6 +599,8 @@ export default function AdminDashboard() {
   const [calDate,       setCalDate]       = useState(todayStr)
   const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
+  // "Log this as an incident?" after a cleaning fee / overtime charge (migration 109).
+  const [incidentPrompt, setIncidentPrompt] = useState<{ bookingId: string; category: string; feeCents?: number; name?: string | null } | null>(null)
   const [detailTour,    setDetailTour]    = useState<TourRequest | null>(null)
   const [tourBusy,      setTourBusy]      = useState(false)
   const [tourMsg,       setTourMsg]       = useState<string | null>(null)
@@ -1018,6 +1020,7 @@ export default function AdminDashboard() {
       setCleanMsg(`Charged $${Number(data.amount).toFixed(2)}`)
       setCleanBusy(false)
       fetchBookings(true)
+      setIncidentPrompt({ bookingId: b.id, category: 'messy', feeCents: Math.round(Number(data.amount) * 100), name: b.customers?.name })
       setTimeout(() => { setCleanFor(null); setCleanMsg(null); setCleanAmount('') }, 2200)
     } catch {
       setCleanMsg('Charge failed'); setCleanBusy(false)
@@ -2182,7 +2185,7 @@ export default function AdminDashboard() {
             {shortReqs.map(r => (
               <div key={r.id} style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.customer_name} <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>{r.customer_email}</span></div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.customer_name} <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>{r.customer_email}</span>{(r as any).reason === 'probation' && <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#fb923c', border: '1px solid #fb923c', padding: '1px 5px' }}>PROBATION · APPROVE &amp; CHARGE</span>}</div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
                     {r.desired_set_name ? `${r.desired_set_name} · ` : ''}{r.desired_date ? `${r.desired_date}${r.desired_start != null ? ' · ' + fmt12(Number(r.desired_start)) : ''}` : 'Any near-term slot'}{r.desired_hours ? ` · ${r.desired_hours} hr` : ''}{r.quoted_cents != null ? ` · $${(r.quoted_cents / 100).toFixed(2)}${r.square_card_id ? ' (card on file)' : ' (no card — link)'}` : ''}{r.note ? ` · “${r.note}”` : ''}
                   </div>
@@ -4810,8 +4813,17 @@ export default function AdminDashboard() {
           booking={overtimeFor as any}
           rate={effectiveRateFor(overtimeFor.sets?.name ?? '', overtimeFor)}
           onClose={() => setOvertimeFor(null)}
-          onSuccess={() => { setOvertimeFor(null); setDetailBooking(null); fetchBookings() }}
+          onSuccess={() => {
+            const ob = overtimeFor
+            setOvertimeFor(null); setDetailBooking(null); fetchBookings()
+            if (ob?.id) setIncidentPrompt({ bookingId: ob.id, category: 'overtime', name: ob.customers?.name })
+          }}
         />
+      )}
+
+      {incidentPrompt && (
+        <QuickIncidentPrompt bookingId={incidentPrompt.bookingId} category={incidentPrompt.category}
+          feeCents={incidentPrompt.feeCents} customerName={incidentPrompt.name} onClose={() => { setIncidentPrompt(null); fetchBookings(true) }} />
       )}
 
       {/* PARTY SIZE — guest_count + the fee difference (refund / credit / charge) */}

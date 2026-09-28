@@ -29,5 +29,6 @@ export async function GET() {
   return NextResponse.json({
     balanceCents, history,
     rewards: { enabled: settings.enabled, rate, eligible, rewardCents: pot.rewardCents },
+    standing: standing.level,
   })
 }

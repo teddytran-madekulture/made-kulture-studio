@@ -74,7 +74,7 @@ Made Kulture is a smoke-free facility. Smoking and vaping are not permitted anyw
 
 ## Cancellations
 
-Made Kulture issues **studio credit**, not refunds. Credit never expires and applies automatically to your next booking.
+Made Kulture issues **studio credit**, not refunds. Cancellation credit never expires and applies automatically to your next booking.
 
 - Cancel at least 48 hours before your reserved start time and the full value of your booking returns to your account as studio credit.
 - Cancellations made within 48 hours of the reserved start time are not credited. **Made Kulture Plus members are protected inside this window** — a Plus cancellation returns the full value as studio credit at any time before the session starts.
@@ -153,7 +153,7 @@ Made Kulture is a smoke-free facility. Smoking and vaping are not permitted anyw
 
 ## Cancellations
 
-Made Kulture issues **studio credit**, not refunds. Credit never expires and applies automatically to your next booking.
+Made Kulture issues **studio credit**, not refunds. Cancellation credit never expires and applies automatically to your next booking.
 
 - Cancel at least 48 hours before your reserved start time and the full value of your booking returns to your account as studio credit.
 - Cancel within 48 hours of the reserved start time and a **25% late cancellation fee** applies. The remaining 75% returns to your account as studio credit.

@@ -63,7 +63,7 @@ export default function SaveWithPlusModal({
         </p>
         <ul style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.7)', margin: '0 0 12px', paddingLeft: 18 }}>
           {booking.canMove && <li>Move it to another time — same set, same length, no extra charge.</li>}
-          <li>Or cancel it and get {value} back as studio credit. Credit never expires.</li>
+          <li>Or cancel it and get {value} back as studio credit. Cancellation credit never expires.</li>
           <li>Plus stays active for a year: short-notice booking and cancellation protection on every booking.</li>
         </ul>
         <p style={{ fontFamily: 'Inter', fontSize: 12, lineHeight: 1.6, color: 'rgba(255,255,255,0.45)', margin: '0 0 18px' }}>

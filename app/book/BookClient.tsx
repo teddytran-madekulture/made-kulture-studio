@@ -327,6 +327,18 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   // selected set. Empty whenever the date is outside the window or the member
   // is not Plus — so every guard below is a no-op in the normal case.
   const [plusBlocks, setPlusBlocks] = useState<{ start: number; end: number }[]>([])
+  // Account standing (migration 109): on PROBATION every set time is a request
+  // Teddy approves (auto-pay charges on approval). The server refuses a direct
+  // booking for these accounts anyway; this just makes the page say so up front.
+  const [needsApproval, setNeedsApproval] = useState(false)
+  useEffect(() => {
+    let dead = false
+    fetch('/api/account/credit', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!dead) setNeedsApproval(d?.standing === 'probation') })
+      .catch(() => {})
+    return () => { dead = true }
+  }, [])
   // Closed-but-free hours are ASKABLE, not dead. Without this a member sees a
   // mostly-grey grid, no idea the rest can be requested, and has to go hunting
   // in their account — or just gives up and texts.
@@ -932,6 +944,16 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 Wrong start? Tap it again to clear it, or hit ↺ Reset Time below.
               </p>
             )}
+            {needsApproval && (
+              <div style={{ border: '1px solid rgba(251,146,60,0.4)', background: 'rgba(251,146,60,0.06)', padding: '12px 14px', marginBottom: 16 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: '#fb923c', marginBottom: 6 }}>
+                  BOOKING BY REQUEST
+                </div>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55 }}>
+                  New bookings on your account need a quick approval right now. Tap the time you want to send a request. Nothing is charged unless we approve it, and we&rsquo;ll text you once it&rsquo;s confirmed.
+                </div>
+              </div>
+            )}
             {plusWindowDate && (
               <div style={{ border: '1px solid rgba(201,178,126,0.35)', background: 'rgba(201,178,126,0.06)', padding: '12px 14px', marginBottom: 16 }}>
                 <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em', color: '#c9b27e', marginBottom: 6 }}>
@@ -1009,7 +1031,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // a box promising "same booking · one payment · one door code", and
                 // the member gets a second charge and a second door code they never
                 // agreed to. They can ask for the gold hour once this booking is done.
-                const requestable = notOpenForPlus && !booked && !isPast
+                const requestable = (notOpenForPlus || (needsApproval && booking.type !== 'studio')) && !booked && !isPast
                   && setCart.length === 0
                   && booking.startHour === null && h % 1 === 0 && h <= CLOSE_HOUR - minHours
                 const inRange   = isInRange(h)

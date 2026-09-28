@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     // dashboard banner. ⚠️ The banner is the SECOND approval surface (the token
     // page is the first) — without these it silently offers only the no-charge
     // path, which is the wrong default for a request that came with consent.
-    .select('id, customer_name, customer_email, desired_set, desired_date, desired_start, desired_hours, quoted_cents, square_card_id, note, approve_token, requested_at')
+    .select('id, customer_name, customer_email, desired_set, desired_date, desired_start, desired_hours, quoted_cents, square_card_id, note, approve_token, requested_at, reason')
     .eq('status', 'pending')
     .order('requested_at', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

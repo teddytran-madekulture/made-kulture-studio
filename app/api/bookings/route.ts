@@ -22,6 +22,7 @@ import { pushVisitLine } from '@/lib/visits'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
 import { rewardRateForEmail, rowBasisCents, rewardFor } from '@/lib/rewards'
+import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
 import { validatePromo, recordPromoRedemption } from '@/lib/promo'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
@@ -500,6 +501,19 @@ export async function POST(req: NextRequest) {
         const banMessage = setting?.value
           ?? 'We were unable to process your booking. Please contact the studio directly at (832) 408-1631.'
         return NextResponse.json({ error: banMessage }, { status: 403 })
+      }
+    }
+
+    // ── 8a'. Probation (migration 109): new bookings need Teddy's approval.
+    //     Checked on the typed email AND the signed-in one, before any charge.
+    //     The checkout turns every slot into a request for these accounts; this
+    //     is the server's copy of that rule.
+    {
+      const emails = Array.from(new Set([body.email, sessionUser?.email].filter(Boolean).map(e => String(e).toLowerCase().trim())))
+      for (const e of emails) {
+        if ((await standingForEmail(supabase, e)).level === 'probation') {
+          return NextResponse.json({ error: PROBATION_BOOKING_ERROR, code: 'needs_approval' }, { status: 403 })
+        }
       }
     }
 

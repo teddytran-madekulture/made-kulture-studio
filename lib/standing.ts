@@ -134,6 +134,9 @@ export const canBook              = (s: Standing) => s.level !== 'suspended'
 export const SHORT_NOTICE_PAUSED_ERROR =
   'Short-notice booking is paused while your account is below good standing. Text (832) 408-1631 if you have questions.'
 
+export const PROBATION_BOOKING_ERROR =
+  'New bookings on your account need a quick approval right now. Pick your time and tap it to send a request — nothing is charged unless we approve it. Questions? Text (832) 408-1631.'
+
 export const GOOD: Standing = { level: 'good', points: 0, activeCount: 0, nextDropOff: null, suspendedUntil: null, reason: null }
 
 // ── DB helpers (caller passes a SERVICE-ROLE client) ─────────────────────────

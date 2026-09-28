@@ -23,6 +23,7 @@ import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush, pushNote } from '@/lib/push'
 import { pushVisitLine } from '@/lib/visits'
 import { rewardRateForEmail } from '@/lib/rewards'
+import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -145,7 +146,7 @@ export type ValidateResult =
 export async function validateAndPriceOrder(
   supabase: SupabaseClient,
   body: BookingCoreInput,
-  opts: { isMember?: boolean; allowShortNotice?: boolean } = {}
+  opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean } = {}
 ): Promise<ValidateResult> {
   // 1. Customer pricing overrides
   let customerPricingOverrides: any = null
@@ -358,6 +359,11 @@ export async function validateAndPriceOrder(
       const banMessage = setting?.value
         ?? 'We were unable to process your booking. Please contact the studio directly at (832) 408-1631.'
       return { ok: false, error: banMessage, status: 403 }
+    }
+    // Probation (migration 109): only an APPROVED request may book. The approval
+    // route passes approved:true; every other caller is gated here.
+    if (!opts.approved && (await standingForEmail(supabase, body.email)).level === 'probation') {
+      return { ok: false, error: PROBATION_BOOKING_ERROR, status: 403 }
     }
   }
 

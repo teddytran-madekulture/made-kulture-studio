@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { randomBytes } from 'crypto'
-import { shortNoticeActive, shortNoticeViewActive, shortNoticeExpiresAtMs } from '@/lib/short-notice'
+import { shortNoticeActive, shortNoticeViewActive, shortNoticeExpiresAtMs, plusActive, violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
 import { shortNoticeQuoteCents, SET_MIN_HOURS } from '@/lib/booking-core'
 import { Client, Environment } from 'square'
 import { sendShortNoticeRequestAlert } from '@/lib/email'
@@ -106,14 +106,25 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const c = await currentCustomer()
   if (!c) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!shortNoticeViewActive(c.overrides)) {
-    return NextResponse.json({ error: 'Short-notice requests are only available to approved customers.' }, { status: 403 })
+  // Account standing (migration 109). On PROBATION every new booking comes
+  // through here as a request that Teddy approves (and auto-pay charges), so the
+  // Plus-only gates below do not apply — but a date inside the advance window
+  // still needs Plus, exactly as for anyone else.
+  const standing = c.id ? await standingForCustomerId(service, c.id) : await standingForEmail(service, c.email)
+  if (standing.level === 'suspended') {
+    return NextResponse.json({ error: 'Booking is paused on this account. Text (832) 408-1631 if you have questions.' }, { status: 403 })
   }
-  if (shortNoticeActive(c.overrides)) {
-    return NextResponse.json({ error: 'You already have short-notice booking access.' }, { status: 400 })
-  }
-  if (!shortNoticeAllowed(c.id ? await standingForCustomerId(service, c.id) : await standingForEmail(service, c.email))) {
-    return NextResponse.json({ error: SHORT_NOTICE_PAUSED_ERROR }, { status: 403 })
+  const probation = standing.level === 'probation'
+  if (!probation) {
+    if (!shortNoticeViewActive(c.overrides)) {
+      return NextResponse.json({ error: 'Short-notice requests are only available to approved customers.' }, { status: 403 })
+    }
+    if (shortNoticeActive(c.overrides)) {
+      return NextResponse.json({ error: 'You already have short-notice booking access.' }, { status: 400 })
+    }
+    if (!shortNoticeAllowed(standing)) {
+      return NextResponse.json({ error: SHORT_NOTICE_PAUSED_ERROR }, { status: 403 })
+    }
   }
 
   // ⚠️ One live request per person — but a SECOND ask REPLACES the first rather
@@ -133,6 +144,14 @@ export async function POST(req: NextRequest) {
   if (!desiredSet)                              return NextResponse.json({ error: 'Please choose the set you want.' }, { status: 400 })
   if (!/^\d{4}-\d{2}-\d{2}$/.test(desiredDate)) return NextResponse.json({ error: 'Please choose the date you want.' }, { status: 400 })
   if (desiredStart == null)                     return NextResponse.json({ error: 'Please choose the time you want.' }, { status: 400 })
+  if (probation) {
+    if (!(Number(body.desiredHours) > 0) || body.consent !== true) {
+      return NextResponse.json({ error: 'Choose how long you need and confirm the charge, so we can book it the moment it’s approved.' }, { status: 400 })
+    }
+    if (violatesAdvanceWindow([desiredDate]) && !plusActive(c.overrides)) {
+      return NextResponse.json({ error: ADVANCE_WINDOW_ERROR }, { status: 400 })
+    }
+  }
 
   // ── Auto-pay consent (optional) ─────────────────────────────────────
   // A request that carries a LENGTH can be priced, and a priced request can be
@@ -202,6 +221,7 @@ export async function POST(req: NextRequest) {
     // had already been fulfilled and refuse to do anything.
     hold_expires_at: null,
     booking_id:      null,
+    reason:          probation ? 'probation' : 'short_notice',
   }
   const { error } = existing
     ? await service.from('short_notice_requests').update(row).eq('id', existing.id)
@@ -212,7 +232,9 @@ export async function POST(req: NextRequest) {
 
   const approveUrl = `${APP_URL}/short-notice/approve/${token}`
   // Notify the owner — non-fatal if either channel fails.
-  const verb = existing ? 'CHANGED their request to' : 'Short-notice request from'
+  const verb = probation
+    ? (existing ? 'CHANGED their approval request to' : 'APPROVAL NEEDED (probation) — booking request from')
+    : (existing ? 'CHANGED their request to' : 'Short-notice request from')
   await Promise.allSettled([
     sendShortNoticeRequestAlert({ customerName: c.name, customerEmail: c.email, desiredSetName, desiredDate: row.desired_date, desiredStart: row.desired_start, note: row.note, approveUrl }),
     // The text carries the money now: length and price, so the decision can be

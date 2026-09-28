@@ -21,7 +21,7 @@ export const fetchCache = 'force-no-store'
 
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-const INC_COLS = 'id, customer_id, booking_id, occurred_on, category, severity, points, details, fee_cents, logged_by, customer_notified_at, voided_at, void_reason, created_at'
+const INC_COLS = 'id, customer_id, booking_id, occurred_on, category, severity, points, details, photo_urls, fee_cents, logged_by, customer_notified_at, voided_at, void_reason, created_at'
 
 async function customerFor(q: { customerId?: string | null; bookingId?: string | null }) {
   let id = q.customerId ?? null
@@ -40,7 +40,14 @@ async function meter(customer: any) {
     .eq('customer_id', customer.id).order('occurred_on', { ascending: false }).order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   const standing = computeStanding(incidents ?? [], customer, config)
-  return { customer, standing, incidents: incidents ?? [], config }
+  // Private bucket → 10-minute signed URLs, never public ones.
+  const withPhotos = await Promise.all((incidents ?? []).map(async (i: any) => {
+    const paths: string[] = Array.isArray(i.photo_urls) ? i.photo_urls : []
+    if (!paths.length) return { ...i, photos: [] }
+    const { data } = await db.storage.from('incident-photos').createSignedUrls(paths, 600)
+    return { ...i, photos: (data ?? []).map((d: any) => ({ path: d.path, url: d.signedUrl })).filter((x: any) => x.url) }
+  }))
+  return { customer, standing, incidents: withPhotos, config }
 }
 
 export async function GET(req: NextRequest) {

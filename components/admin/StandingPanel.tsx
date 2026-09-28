@@ -193,3 +193,67 @@ export default function StandingPanel({ customerId, bookingId }: { customerId?: 
     </div>
   )
 }
+
+// "Log this as an incident?" — offered right after a cleaning fee or overtime
+// charge, because that is the moment Teddy is already looking at the problem.
+// Declining writes nothing.
+export function QuickIncidentPrompt({ bookingId, category, feeCents, customerName, onClose }: {
+  bookingId: string; category: string; feeCents?: number | null; customerName?: string | null; onClose: () => void
+}) {
+  const [cfg, setCfg] = useState<StandingConfig | null>(null)
+  const [sev, setSev] = useState<Severity>('moderate')
+  const [details, setDetails] = useState('')
+  const [notify, setNotify] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  useEffect(() => {
+    fetch('/api/admin/incidents?bookingId=' + bookingId, { cache: 'no-store' }).then(r => r.json()).then(d => {
+      const c: StandingConfig | undefined = d?.config
+      if (!c) { setMsg(d?.error || 'Could not load.'); return }
+      setCfg(c)
+      const s0 = c.categories.find(x => x.key === category)?.severity ?? 'moderate'
+      setSev(s0); setNotify(severityAtLeast(s0, c.emailFrom))
+    }).catch(() => setMsg('Could not load.'))
+  }, [bookingId, category])
+
+  const save = async () => {
+    setBusy(true); setMsg(null)
+    try {
+      const r = await fetch('/api/admin/incidents', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId, category, severity: sev, occurredOn: todayCentral(), details, notify, feeCents: feeCents ?? null }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setMsg('⚠️ ' + (d.error || 'Not saved.')); return }
+      setMsg('Logged. Now: ' + LEVEL_LABEL[d.standing.level as keyof typeof LEVEL_LABEL] + (d.emailed ? ' · customer emailed' : ''))
+      setTimeout(onClose, 1600)
+    } catch { setMsg('⚠️ Not saved.') }
+    finally { setBusy(false) }
+  }
+
+  const label = cfg?.categories.find(x => x.key === category)?.label ?? category
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.12)', width: '100%', maxWidth: 420, padding: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff' }}>LOG THIS AS AN INCIDENT?</div>
+        <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
+          {label}{customerName ? ` · ${customerName}` : ''}. It counts toward their account standing.
+        </div>
+        {cfg && (
+          <select value={sev} onChange={e => { const v = e.target.value as Severity; setSev(v); setNotify(severityAtLeast(v, cfg.emailFrom)) }} style={inp}>
+            {SEVERITIES.map(s => <option key={s} value={s} style={optStyle}>{s} · {cfg.points[s]} pt</option>)}
+          </select>
+        )}
+        <textarea value={details} onChange={e => setDetails(e.target.value)} rows={3} placeholder="What happened (the customer sees this if emailed)" style={{ ...inp, resize: 'vertical' }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+          <input type="checkbox" checked={notify} onChange={e => setNotify(e.target.checked)} /> Email the customer
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={save} disabled={busy || !cfg} style={{ ...btn('#fbbf24'), flex: 1 }}>{busy ? 'SAVING…' : 'LOG IT'}</button>
+          <button onClick={onClose} disabled={busy} style={btn('rgba(255,255,255,0.3)')}>NO THANKS</button>
+        </div>
+        {msg && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: msg.startsWith('⚠️') ? '#fbbf24' : '#4ade80' }}>{msg}</div>}
+      </div>
+    </div>
+  )
+}
