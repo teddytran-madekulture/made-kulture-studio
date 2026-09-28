@@ -193,7 +193,7 @@ export default function HeroCarousel({ slides, intervalSec, isMobile, heightVh, 
   }
 
   const ctrlBtn: React.CSSProperties = {
-    width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
     background: 'rgba(8,8,8,0.35)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', cursor: 'pointer', padding: 0,
   }
 
@@ -246,20 +246,29 @@ export default function HeroCarousel({ slides, intervalSec, isMobile, heightVh, 
         </div>
       )}
 
+      {multi && !isMobile && (
+        <>
+          <button type="button" aria-label="Previous slide" onClick={prev}
+            style={{ ...ctrlBtn, position: 'absolute', zIndex: 3, left: 24, top: '50%', transform: 'translateY(-50%)' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <button type="button" aria-label="Next slide" onClick={next}
+            style={{ ...ctrlBtn, position: 'absolute', zIndex: 3, right: 24, top: '50%', transform: 'translateY(-50%)' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        </>
+      )}
+
       {multi && (
         <div style={{
-          position: 'absolute', zIndex: 3, display: 'flex', alignItems: 'center', gap: 14,
-          ...(isMobile ? { left: 0, right: 0, bottom: 22, justifyContent: 'center' } : { right: 40, bottom: 60 }),
+          position: 'absolute', zIndex: 3, left: 0, right: 0, bottom: isMobile ? 22 : 28,
+          display: 'flex', justifyContent: 'center', gap: 8, pointerEvents: 'none',
         }}>
-          {!isMobile && <button type="button" aria-label="Previous slide" onClick={prev} style={ctrlBtn}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="15 18 9 12 15 6" /></svg></button>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {slides.map((s, i) => (
-              <button key={s.key} type="button" aria-label={`Go to slide ${i + 1}`} aria-current={i === stage.active || undefined}
-                onClick={() => go(i, i > stage.active ? 1 : -1)}
-                style={{ width: i === stage.active ? 28 : 8, height: 8, padding: 0, border: 'none', cursor: 'pointer', borderRadius: 4, background: i === stage.active ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'width 0.3s ease, background 0.3s ease' }} />
-            ))}
-          </div>
-          {!isMobile && <button type="button" aria-label="Next slide" onClick={next} style={ctrlBtn}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="9 18 15 12 9 6" /></svg></button>}
+          {slides.map((s, i) => (
+            <button key={s.key} type="button" aria-label={`Go to slide ${i + 1}`} aria-current={i === stage.active || undefined}
+              onClick={() => go(i, i > stage.active ? 1 : -1)}
+              style={{ pointerEvents: 'auto', width: i === stage.active ? 28 : 8, height: 8, padding: 0, border: 'none', cursor: 'pointer', borderRadius: 4, background: i === stage.active ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'width 0.3s ease, background 0.3s ease' }} />
+          ))}
         </div>
       )}
     </section>
