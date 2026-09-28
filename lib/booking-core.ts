@@ -24,6 +24,7 @@ import { sendOwnerPush, pushNote } from '@/lib/push'
 import { pushVisitLine } from '@/lib/visits'
 import { rewardRateForEmail } from '@/lib/rewards'
 import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
+import { screenBooking } from '@/lib/identity-match'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -146,7 +147,7 @@ export type ValidateResult =
 export async function validateAndPriceOrder(
   supabase: SupabaseClient,
   body: BookingCoreInput,
-  opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean } = {}
+  opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean; payerContacts?: string[] } = {}
 ): Promise<ValidateResult> {
   // 1. Customer pricing overrides
   let customerPricingOverrides: any = null
@@ -364,6 +365,21 @@ export async function validateAndPriceOrder(
     // route passes approved:true; every other caller is gated here.
     if (!opts.approved && (await standingForEmail(supabase, body.email)).level === 'probation') {
       return { ok: false, error: PROBATION_BOOKING_ERROR, status: 403 }
+    }
+    // Suspended customer under new details — or a friend paying for one
+    // (migration 113, lib/identity-match). Strong match blocks before payment.
+    {
+      const { data: own } = await supabase.from('customers').select('id').eq('email', String(body.email).toLowerCase().trim())
+      const screen = await screenBooking(supabase, {
+        emails: [body.email], phones: [body.phone], name: body.name, payerContacts: opts.payerContacts ?? [],
+        excludeIds: (own ?? []).map((r: any) => r.id),
+        where: opts.approved ? 'request approval' : 'someone-else-pays checkout',
+        bookerLabel: `${body.name || 'Someone'} · ${body.email}`,
+      })
+      if (screen.block) {
+        const { data: setting } = await supabase.from('studio_settings').select('value').eq('key', 'ban_message').maybeSingle()
+        return { ok: false, error: setting?.value ?? 'We were unable to process your booking. Please contact the studio directly at (832) 408-1631.', status: 403 }
+      }
     }
   }
 

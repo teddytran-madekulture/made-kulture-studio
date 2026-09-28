@@ -40,7 +40,13 @@ export async function GET(req: NextRequest) {
     outstandingCents += Math.max(0, p.rewardCents + p.otherCents)
     rewardOutstandingCents += p.rewardCents
   })
-  return NextResponse.json({ config, rewards, outstandingCents, rewardOutstandingCents })
+  // Suspended-customer matches (migration 113). Non-fatal: before 113 runs the
+  // table doesn't exist, and that must not take the whole settings page down.
+  const { data: matches, error: mErr } = await db.from('identity_matches')
+    .select('id, signal, strength, detail, action, booker, where_seen, created_at, customers ( name, email )')
+    .order('created_at', { ascending: false }).limit(50)
+  if (mErr) console.error('[standing-settings] identity_matches read failed', mErr)
+  return NextResponse.json({ config, rewards, outstandingCents, rewardOutstandingCents, matches: matches ?? [], matchesError: mErr?.message ?? null })
 }
 
 export async function PUT(req: NextRequest) {

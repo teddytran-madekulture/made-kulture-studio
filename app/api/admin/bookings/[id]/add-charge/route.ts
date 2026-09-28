@@ -6,6 +6,8 @@ import { sendSMSResult } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
+import { getCreditBalance, redeemCredit } from '@/lib/credits'
+import { authUserIdForEmail, rewardFor } from '@/lib/rewards'
 
 // POST /api/admin/bookings/[id]/add-charge
 // Charge a customer for equipment they used and/or any one-off fee — AFTER THE
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       phone,
       customerName,
       sendSms,
+      useCredit,         // spend the customer's studio credit first (migration 112)
     } = await req.json()
 
     // ── Validate + normalize the line items ──────────────────────────────────
@@ -77,13 +80,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // ── Load the booking + customer ──────────────────────────────────────────
     const { data: booking } = await supabase
       .from('bookings')
-      .select(`id, start_time, total_amount, square_card_on_file_id, customer_id,
+      .select(`id, start_time, total_amount, square_card_on_file_id, customer_id, auth_user_id,
+               reward_rate, reward_basis_cents, reward_paid_at,
                customers ( id, name, email, phone, square_customer_id )`)
       .eq('id', params.id)
       .single()
 
     if (!booking) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 })
     const customer = booking.customers as any
+    const totalCents = Math.round(total * 100)
+
+    // ── Studio credit (rewards spent first — lib/rewards splitPots) ──────────
+    //     Worked out BEFORE the card so the card is charged only the remainder.
+    //     The ledger row is written only AFTER the card succeeds, so a decline
+    //     never consumes credit.
+    let creditUserId: string | null = null
+    let creditCents = 0
+    if (useCredit) {
+      creditUserId = booking.auth_user_id ?? await authUserIdForEmail(supabase, customer?.email ?? email)
+      if (!creditUserId) return NextResponse.json({ error: 'This customer has no account, so there is no studio credit to use.' }, { status: 400 })
+      const bal = await getCreditBalance(creditUserId)
+      creditCents = Math.max(0, Math.min(bal, totalCents))
+      if (creditCents <= 0) return NextResponse.json({ error: 'They have no studio credit left.' }, { status: 400 })
+    }
+    const cardCents = totalCents - creditCents
 
     // ── Resolve the charge source ────────────────────────────────────────────
     let chargeSource: string | null = null
@@ -135,22 +155,45 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       chargeCustomerId = customer.square_customer_id
     }
 
-    if (!chargeSource) {
+    if (!chargeSource && cardCents > 0) {
       return NextResponse.json({ error: 'No card on file for this booking — key a card in.' }, { status: 400 })
     }
 
-    // ── Charge ───────────────────────────────────────────────────────────────
+    // ── Charge (only the part credit doesn't cover) ─────────────────────────
     const summary = clean.map(l => (l.quantity > 1 ? `${l.quantity}× ${l.label}` : l.label)).join(', ')
-    const { result } = await square.paymentsApi.createPayment({
-      sourceId:          chargeSource,
-      idempotencyKey:    randomUUID(),
-      amountMoney:       { amount: BigInt(Math.round(total * 100)), currency: 'USD' },
-      ...(chargeCustomerId ? { customerId: chargeCustomerId } : {}),
-      locationId:        process.env.SQUARE_LOCATION_ID!,
-      note:              `Made Kulture — ${summary}`.slice(0, 500),
-      buyerEmailAddress: (customer?.email || email) || undefined,
+    let squarePaymentId: string | null = null
+    if (cardCents > 0) {
+      const { result } = await square.paymentsApi.createPayment({
+        sourceId:          chargeSource!,
+        idempotencyKey:    randomUUID(),
+        amountMoney:       { amount: BigInt(cardCents), currency: 'USD' },
+        ...(chargeCustomerId ? { customerId: chargeCustomerId } : {}),
+        locationId:        process.env.SQUARE_LOCATION_ID!,
+        note:              `Made Kulture — ${summary}${creditCents ? ` (+$${(creditCents / 100).toFixed(2)} studio credit)` : ''}`.slice(0, 500),
+        buyerEmailAddress: (customer?.email || email) || undefined,
+      })
+      squarePaymentId = result.payment!.id!
+    }
+
+    // ── Spend the credit (now that the card, if any, went through) ──────────
+    let creditWarning: string | null = null
+    if (creditUserId && creditCents > 0) {
+      const { appliedCents } = await redeemCredit(creditUserId, creditCents, { bookingId: booking.id, reason: `Applied to ${summary}` })
+      if (appliedCents !== creditCents) {
+        creditWarning = `Only $${(appliedCents / 100).toFixed(2)} of the $${(creditCents / 100).toFixed(2)} credit could be taken — the balance moved. Collect the difference by hand.`
+        console.error('[add-charge] credit redemption mismatch', { wanted: creditCents, applied: appliedCents })
+        await sendOwnerPush({ title: '⚠️ Credit short on add-on', body: creditWarning, url: '/admin/dashboard' }).catch(() => {})
+      }
+    }
+
+    // Credit share per line (proportional; the last line takes the rounding),
+    // so removing one line later returns exactly its credit part.
+    const lineCents = clean.map(l => Math.round(l.amount * 100))
+    let left = creditCents
+    const lineCredit = lineCents.map((c, i) => {
+      if (i === lineCents.length - 1) return left
+      const share = Math.min(left, Math.round(creditCents * c / totalCents)); left -= share; return share
     })
-    const squarePaymentId = result.payment!.id!
 
     // ── Record the line items on the booking (best-effort) ──────────────────
     // booking_add_ons.rate is per-unit: equipment stores its unit rate; a
@@ -168,12 +211,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // note — it just never landed on the row, so a non-equipment charge showed
       // in the dashboard as the word "Item" and became unidentifiable later.
       label:        l.label || null,
+      // Migration 112: what this line took from studio credit, and the card
+      // payment it came from — so the desk's "remove" can undo each part.
+      credit_cents:    lineCredit[clean.indexOf(l)],
+      square_order_id: squarePaymentId,
     }))
     // ⚠️ try/catch was DEAD CODE here — supabase-js resolves with an `error`
     // property rather than throwing, so a rejected insert vanished silently after
     // the card had already been charged. Read `error`.
     const { error: addOnErr } = await supabase.from('booking_add_ons').insert(rows)
     if (addOnErr) console.error('[add-charge] add_ons insert failed', addOnErr)
+
+    // Gear paid by CARD before the nightly payout earns like gear at checkout
+    // (Made Kulture Rewards). Fees don't earn; neither does the credit part.
+    if ((booking as any).reward_rate != null && !(booking as any).reward_paid_at) {
+      const gearCardCents = clean.reduce((s, l, i) => s + (l.equipmentId ? lineCents[i] - lineCredit[i] : 0), 0)
+      if (gearCardCents > 0) {
+        const { error: rErr } = await supabase.from('bookings')
+          .update({ reward_basis_cents: ((booking as any).reward_basis_cents ?? 0) + gearCardCents })
+          .eq('id', booking.id).is('reward_paid_at', null)
+        if (rErr) console.error('[add-charge] reward basis bump failed (non-fatal)', rErr)
+      }
+    }
 
     // ── Reflect the charge on the booking total ─────────────────────────────
     // The money is already gone, so this write is verified, not assumed: an
@@ -204,7 +263,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await supabase.from('customer_notes').insert({
         customer_id: booking.customer_id,
         tag:         'note',
-        note:        `Charged $${total.toFixed(2)} for ${summary} on the ${dateLabel} booking${savedCardId ? ' (keyed card, saved on file)' : ''}.`,
+        note:        `${creditCents ? `$${(creditCents / 100).toFixed(2)} from studio credit${cardCents ? ` + $${(cardCents / 100).toFixed(2)} charged` : ''}` : `Charged $${total.toFixed(2)}`} for ${summary} on the ${dateLabel} booking${savedCardId ? ' (keyed card, saved on file)' : ''}.`,
       })
     }
 
@@ -212,11 +271,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let smsError: string | null = null
     const toPhone = phone || customer?.phone
     if (sendSms && toPhone) {
-      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${customer?.name || customerName || 'there'}, we've charged $${total.toFixed(2)} for ${summary}. Questions? Text (832) 408-1631.`)
+      const paid = creditCents
+        ? `$${(creditCents / 100).toFixed(2)} from your studio credit${cardCents ? ` and $${(cardCents / 100).toFixed(2)} charged to your card` : ''}`
+        : `we've charged $${total.toFixed(2)}`
+      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${customer?.name || customerName || 'there'}, ${creditCents ? `we've used ${paid}` : paid} for ${summary}. Questions? Text (832) 408-1631.`)
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
-    return NextResponse.json({ success: true, squarePaymentId, cardSaved: !!savedCardId, total, smsError, totalWarning })
+    return NextResponse.json({ success: true, squarePaymentId, cardSaved: !!savedCardId, total, creditCents, cardCents, smsError, totalWarning, creditWarning })
   } catch (err: any) {
     console.error('[add-charge] error:', err)
     const msg = err?.errors?.[0]?.detail || err?.message || 'Charge failed'

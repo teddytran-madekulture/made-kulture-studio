@@ -23,6 +23,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
 import { rewardRateForEmail, rowBasisCents, rewardFor } from '@/lib/rewards'
 import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
+import { screenBooking, rememberCard } from '@/lib/identity-match'
 import { validatePromo, recordPromoRedemption } from '@/lib/promo'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
@@ -517,6 +518,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── 8a''. A suspended customer under new details? (migration 113) ───────
+    //     Strong match (phone, email incl. Gmail variants, old alt contacts) ⇒
+    //     blocked here like a ban. Weak (Instagram) ⇒ Teddy is pushed, booking
+    //     continues. The card is screened separately once Square has it, below.
+    const blockMessage = async () => {
+      const { data: setting } = await supabase.from('studio_settings').select('value').eq('key', 'ban_message').maybeSingle()
+      return setting?.value ?? 'We were unable to process your booking. Please contact the studio directly at (832) 408-1631.'
+    }
+    const bookerLabel = `${body.name || 'Someone'} · ${body.email || sessionUser?.email || ''}`
+    const { data: ownRows } = await supabase.from('customers').select('id')
+      .in('email', Array.from(new Set([body.email, sessionUser?.email].filter(Boolean).map(e => String(e).toLowerCase().trim()))))
+    const ownIds = (ownRows ?? []).map((r: any) => r.id)
+    let bookerIg: string | null = null
+    if (sessionUser?.id) {
+      const { data: prof } = await supabase.from('customer_profiles').select('instagram').eq('id', sessionUser.id).maybeSingle()
+      bookerIg = (prof as any)?.instagram ?? null
+    }
+    {
+      const screen = await screenBooking(supabase, {
+        emails: [body.email, sessionUser?.email], phones: [body.phone], name: body.name, instagram: bookerIg,
+        excludeIds: ownIds, where: 'website checkout', bookerLabel,
+      })
+      if (screen.block) return NextResponse.json({ error: await blockMessage() }, { status: 403 })
+    }
+
     // ── 9. Square: customer + card + ONE payment for the whole order ────────
     //     Comp ($0) customers flagged "no card required" skip Square entirely.
     //     Security: a $0 total with no card is only allowed for comp customers,
@@ -562,6 +588,7 @@ export async function POST(req: NextRequest) {
     let customerId: string | null = null
     let savedCardId: string | null = null
     let squarePaymentId: string | null = null
+    let usedCard: any = null   // the Square card object, for its fingerprint (migration 113)
 
     if (body.sourceId) {
       // Reuse an existing Square profile for this email — never spawn a duplicate.
@@ -590,10 +617,11 @@ export async function POST(req: NextRequest) {
         if (!ownerSquareId) {
           return NextResponse.json({ error: 'That saved card is no longer available — please enter a card.' }, { status: 400 })
         }
-        const owned = await square.cardsApi.listCards(undefined, ownerSquareId)
-          .then(r => (r.result.cards ?? []).some(c => c.id === body.savedCardId && c.enabled))
-          .catch(() => false)
-        if (!owned) {
+        const ownedCard = await square.cardsApi.listCards(undefined, ownerSquareId)
+          .then(r => (r.result.cards ?? []).find(c => c.id === body.savedCardId && c.enabled) ?? null)
+          .catch(() => null)
+        usedCard = ownedCard
+        if (!ownedCard) {
           return NextResponse.json({ error: 'That saved card is no longer available — please enter a card.' }, { status: 400 })
         }
         // Charge the customer profile that actually owns the card, not one
@@ -607,6 +635,16 @@ export async function POST(req: NextRequest) {
           card: { customerId: customerId!, referenceId: `made-kulture-${primary.date}` },
         })
         savedCardId = cardResult.card!.id!
+        usedCard = cardResult.card ?? null
+      }
+
+      // Same card as a suspended account? Checked BEFORE any money moves.
+      if (usedCard?.fingerprint) {
+        const screen = await screenBooking(supabase, {
+          fingerprint: usedCard.fingerprint, zip: usedCard.billingAddress?.postalCode, name: body.name,
+          excludeIds: ownIds, where: 'website checkout (card)', bookerLabel,
+        })
+        if (screen.block) return NextResponse.json({ error: await blockMessage() }, { status: 403 })
       }
 
       if (chargeCents > 0) {
@@ -660,6 +698,7 @@ export async function POST(req: NextRequest) {
       .upsert({ email: normEmail(body.email), name: body.name, phone: body.phone }, { onConflict: 'email' })
       .select('id').single()
     const supabaseCustomerId = customerData?.id
+    await rememberCard(supabase, supabaseCustomerId, usedCard)
 
     const { data: authUsers } = await supabase.auth.admin.listUsers()
     const authUser = authUsers?.users?.find((u: any) => u.email === body.email)

@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     } catch { /* guest */ }
     // Short-notice eligibility comes from the VERIFIED session, never body.email.
     const allowShortNotice = await sessionMayBookShortNotice(supabase, sessionEmail)
-    const v = await validateAndPriceOrder(supabase, body, { isMember, allowShortNotice })
+    const v = await validateAndPriceOrder(supabase, body, { isMember, allowShortNotice, payerContacts: [body.payerContact] })
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: v.status })
     const { lines, verifiedCents } = v.order
 

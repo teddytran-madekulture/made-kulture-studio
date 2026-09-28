@@ -67,6 +67,18 @@ export default function AddChargeModal({
   const [removing, setRemoving]   = useState(false)
   const [payLink, setPayLink]     = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  // Studio credit (migration 112). OFF by default — used only when the customer
+  // asks. Rewards are spent first, same as checkout.
+  const [credit, setCredit]       = useState<{ balanceCents: number; rewardCents: number } | null>(null)
+  const [useCredit, setUseCredit] = useState(false)
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/admin/bookings/${booking.id}/credit`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (alive && d && d.balanceCents > 0) setCredit({ balanceCents: d.balanceCents, rewardCents: d.rewardCents || 0 }) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [booking.id])
 
   // Load the equipment catalog + the customer's saved cards.
   useEffect(() => {
@@ -110,6 +122,9 @@ export default function AddChargeModal({
 
   const total = useMemo(() => Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100, [lines])
   const chosenCard = cards.find(c => c.id === chosenCardId) || null
+  const creditCents = useCredit && credit ? Math.min(credit.balanceCents, Math.round(total * 100)) : 0
+  const cardAmount  = Math.round((total * 100 - creditCents)) / 100
+  const creditOnly  = creditCents > 0 && cardAmount <= 0
 
   // Send the customer a Square link to pay it themselves. This is the way out
   // when the card on file declines — a GENERIC_DECLINE is the issuer refusing
@@ -160,15 +175,33 @@ export default function AddChargeModal({
           squareCardId:     chosenCard.id,
           squareCustomerId: chosenCard.squareCustomerId,
           sendSms,
+          useCredit: creditCents > 0,
         }),
       })
       const d = await res.json()
-      if (res.ok && d.success) { onSuccess() }
+      if (res.ok && d.success) { if (d.creditWarning) alert(d.creditWarning); onSuccess() }
       else { setError(d.error || 'Charge failed — try again.'); setBusy(false) }
     } catch {
       setError('Something went wrong. Please try again.'); setBusy(false)
     }
-  }, [busy, total, chosenCard, booking.id, lines, sendSms, onSuccess])
+  }, [busy, total, chosenCard, booking.id, lines, sendSms, onSuccess, creditCents])
+
+  // Credit covers the whole thing — no card involved.
+  const payWithCredit = useCallback(async () => {
+    if (busy || !creditOnly) return
+    setBusy(true); setError(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/add-charge`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lines, sendSms, useCredit: true }),
+      })
+      const d = await res.json()
+      if (res.ok && d.success) { if (d.creditWarning) alert(d.creditWarning); onSuccess() }
+      else { setError(d.error || 'Could not use the credit — try again.'); setBusy(false) }
+    } catch {
+      setError('Something went wrong. Please try again.'); setBusy(false)
+    }
+  }, [busy, creditOnly, booking.id, lines, sendSms, onSuccess])
 
   // Permanently remove a dead / unusable card on file.
   const removeCard = useCallback(async (cardId: string) => {
@@ -203,7 +236,7 @@ export default function AddChargeModal({
   if (keying) {
     return (
       <AdminCardCharge
-        amount={total}
+        amount={cardAmount}
         title="KEY IN A CARD"
         description={`Made Kulture — ${summary}`}
         bookingId={booking.id}
@@ -213,7 +246,7 @@ export default function AddChargeModal({
         customerName={booking.customers?.name}
         sendSmsDefault={sendSms}
         endpoint={`/api/admin/bookings/${booking.id}/add-charge`}
-        extraPayload={{ lines }}
+        extraPayload={{ lines, useCredit: creditCents > 0 }}
         onClose={() => setKeying(false)}
         onSuccess={onSuccess}
       />
@@ -299,8 +332,26 @@ export default function AddChargeModal({
               <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 32, color: '#4ade80', letterSpacing: '0.03em' }}>${total.toFixed(2)}</span>
             </div>
 
+            {/* STUDIO CREDIT (migration 112) — off unless the customer asks */}
+            {credit && (
+              <div style={{ marginTop: 14, padding: '10px 12px', border: `1px solid ${useCredit ? 'rgba(212,168,67,0.55)' : 'rgba(255,255,255,0.14)'}` }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={useCredit} onChange={e => setUseCredit(e.target.checked)} />
+                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff' }}>
+                    Use studio credit · ${(credit.balanceCents / 100).toFixed(2)} available
+                    {credit.rewardCents > 0 && <span style={{ color: 'rgba(255,255,255,0.45)' }}> (incl. ${(credit.rewardCents / 100).toFixed(2)} rewards)</span>}
+                  </span>
+                </label>
+                {creditCents > 0 && (
+                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#d4a843', marginTop: 6 }}>
+                    −${(creditCents / 100).toFixed(2)} credit · {creditOnly ? 'nothing charged to a card' : `card pays $${cardAmount.toFixed(2)}`}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* SAVED CARDS */}
-            {cards.length > 0 && (
+            {cards.length > 0 && !creditOnly && (
               <div style={{ marginTop: 18 }}>
                 <div style={{ ...label, marginBottom: 8 }}>CHARGE CARD ON FILE</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -351,11 +402,16 @@ export default function AddChargeModal({
             {error && <div style={{ color: '#ff6b6b', fontSize: 13, marginTop: 14, lineHeight: 1.5 }}>{error}</div>}
 
             {/* ACTIONS */}
-            {cards.length > 0 ? (
+            {creditOnly ? (
+              <button onClick={payWithCredit} disabled={busy}
+                style={{ width: '100%', marginTop: 18, padding: 14, background: !busy ? '#d4a843' : 'rgba(212,168,67,0.4)', border: 'none', color: '#080808', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', cursor: !busy ? 'pointer' : 'default' }}>
+                {busy ? 'APPLYING…' : `USE $${(creditCents / 100).toFixed(2)} STUDIO CREDIT`}
+              </button>
+            ) : cards.length > 0 ? (
               <>
                 <button onClick={chargeSaved} disabled={busy || total <= 0 || !chosenCard}
                   style={{ width: '100%', marginTop: 18, padding: 14, background: !busy && total > 0 ? '#4ade80' : 'rgba(74,222,128,0.4)', border: 'none', color: '#080808', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', cursor: !busy && total > 0 ? 'pointer' : 'default' }}>
-                  {busy ? 'CHARGING…' : `CHARGE $${total.toFixed(2)}${chosenCard ? ` TO ····${chosenCard.last4}` : ''}`}
+                  {busy ? 'CHARGING…' : `CHARGE $${cardAmount.toFixed(2)}${chosenCard ? ` TO ····${chosenCard.last4}` : ''}${creditCents ? ` + $${(creditCents / 100).toFixed(2)} CREDIT` : ''}`}
                 </button>
                 <button onClick={() => setKeying(true)} disabled={busy || total <= 0}
                   style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.14em', cursor: busy || total <= 0 ? 'default' : 'pointer' }}>
@@ -365,13 +421,13 @@ export default function AddChargeModal({
             ) : (
               <button onClick={() => setKeying(true)} disabled={busy || total <= 0}
                 style={{ width: '100%', marginTop: 18, padding: 14, background: total > 0 ? '#4ade80' : 'rgba(74,222,128,0.4)', border: 'none', color: '#080808', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', cursor: total > 0 ? 'pointer' : 'default' }}>
-                {`KEY IN A CARD → $${total.toFixed(2)}`}
+                {`KEY IN A CARD → $${cardAmount.toFixed(2)}`}
               </button>
             )}
 
             {/* Outside the branch on purpose: a booking with NO card on file is
                 the case that needs this most, and the first version hid it there. */}
-            <button onClick={sendPayLink} disabled={busy || total <= 0}
+            <button onClick={sendPayLink} disabled={busy || total <= 0 || useCredit} title={useCredit ? 'A payment link can’t use studio credit — untick credit first' : undefined}
               style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.14em', cursor: busy || total <= 0 ? 'default' : 'pointer' }}>
               {busy ? 'WORKING…' : `SEND THEM A PAYMENT LINK${sendSms ? ' (TEXT)' : ''}`}
             </button>

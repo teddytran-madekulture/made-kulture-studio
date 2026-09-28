@@ -19,6 +19,7 @@ export default function StandingPage() {
   const [rw, setRw] = useState<Rewards | null>(null)
   const [owed, setOwed] = useState<{ all: number; rewards: number } | null>(null)
   const [incidents, setIncidents] = useState<any[]>([])
+  const [matches, setMatches] = useState<any[]>([])
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [unauth, setUnauth] = useState(false)
@@ -30,6 +31,7 @@ export default function StandingPage() {
     if (!a.ok) { setMsg(`⚠️ ${d.error || 'Could not load settings.'}`); return }
     setCfg(d.config); setRw(d.rewards); setOwed({ all: d.outstandingCents, rewards: d.rewardOutstandingCents })
     setIncidents(e.incidents ?? [])
+    setMatches(d.matches ?? [])
   }
   useEffect(() => { load() }, [])
 
@@ -124,6 +126,27 @@ export default function StandingPage() {
         <button disabled={busy} onClick={() => save({ config: cfg }, 'Standing rules saved. Every customer’s standing uses them from now.')}
           style={{ ...inp, cursor: 'pointer', background: C.accent, color: '#080808', fontWeight: 700, border: 'none', letterSpacing: '0.1em', fontSize: 11 }}>SAVE RULES</button>
         <p style={{ ...small, marginTop: 12 }}>Points drop off {cfg.expiryMonths} months after an incident. Critical incidents never drop off.</p>
+      </div>
+
+      {/* ── Suspended-customer matches (migration 113) ── */}
+      <div style={card}>
+        <h2 style={h2}>POSSIBLE SUSPENDED CUSTOMERS</h2>
+        <p style={{ ...small, marginTop: 0 }}>
+          New bookings are checked against suspended accounts. Same card, phone or email (including Gmail variations) is blocked before payment; an Instagram or name + ZIP match goes through and lands here for you to check.
+        </p>
+        {matches.length === 0 ? <div style={small}>No matches yet.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {matches.map(m => (
+              <div key={m.id} style={{ borderBottom: `1px solid ${C.line}`, paddingBottom: 8 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 13 }}>
+                  <span style={{ color: m.action === 'blocked' ? '#ef4444' : '#fbbf24', fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', marginRight: 8 }}>{String(m.action).toUpperCase()}</span>
+                  {m.booker} <span style={{ color: C.dim }}>matches</span> <strong>{m.customers?.name || m.customers?.email || 'a suspended account'}</strong>
+                </div>
+                <div style={small}>{m.detail} · {m.strength} · {m.where_seen} · {new Date(m.created_at).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Recent incidents ── */}
