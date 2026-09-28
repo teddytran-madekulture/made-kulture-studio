@@ -118,7 +118,22 @@ async function underDailyCap(): Promise<boolean> {
   }
 }
 
-export async function sendSMSResult(to: string, body: string): Promise<SmsResult> {
+// Every text to a CUSTOMER is also written to sms_messages (migration 115) so the
+// /admin/texts thread shows what they're replying to. Owner alerts are skipped.
+// ⚠️ Logging never blocks or fails a send: the text has already gone out.
+async function logOutbound(to: string, body: string, sid: string | null, sentBy: 'system' | 'admin'): Promise<void> {
+  if (to === OWNER_PHONE) return
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !key) return
+    const { createClient } = await import('@supabase/supabase-js')
+    const db = createClient(url, key, { auth: { persistSession: false } })
+    const { error } = await db.from('sms_messages').insert({ phone: to, direction: 'out', body, sent_by: sentBy, twilio_sid: sid })
+    if (error) console.error('[sms] outbound log failed (text WAS sent)', error)
+  } catch (e) { console.error('[sms] outbound log error (text WAS sent)', e) }
+}
+
+export async function sendSMSResult(to: string, body: string, opts?: { sentBy?: 'admin' }): Promise<SmsResult> {
   if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
     console.error('[sms] NOT sent — Twilio env not configured')
     return { ok: false, error: 'Texting is not configured.' }
@@ -141,7 +156,9 @@ export async function sendSMSResult(to: string, body: string): Promise<SmsResult
   }
   try {
     // gsmSafe, not body: see the note above. This is the only send in the app.
-    await client().messages.create({ body: gsmSafe(body), from: process.env.TWILIO_PHONE_NUMBER, to: num })
+    const text = gsmSafe(body)
+    const m = await client().messages.create({ body: text, from: process.env.TWILIO_PHONE_NUMBER, to: num })
+    await logOutbound(num, text, m?.sid ?? null, opts?.sentBy ?? 'system')
     return { ok: true }
   } catch (e: any) {
     console.error('[sms] send failed:', e)
