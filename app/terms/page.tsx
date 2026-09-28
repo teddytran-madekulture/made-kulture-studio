@@ -210,7 +210,7 @@ export default function TermsPage() {
             <div style={subHead}>Moderation & Removal</div>
             <P>Made Kulture is under no obligation to host any content. We may <strong style={{ color: '#fff' }}>archive (hide) or permanently remove</strong> any Member Content, and may suspend or terminate any account, at our sole discretion and without notice — including for any suspected violation of these standards. Archived content is hidden from other members but may be retained by Made Kulture.</P>
             <div style={subHead}>Reporting</div>
-            <P>To report content you believe violates these standards, contact us at teddytran@madekulture.com or (832) 408-1631. We review reports and act on violations, prioritizing anything involving minors.</P>
+            <P>To report content you believe violates these standards, contact us at info@madekulture.com. We review reports and act on violations, prioritizing anything involving minors.</P>
             <div style={{ borderLeft: '2px solid rgba(201,178,126,0.5)', paddingLeft: 18, margin: '8px 0', fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.7, fontStyle: 'italic' }}>
               At upload, members confirm: &ldquo;I own or have the rights to these images, everyone shown is 18 or older and has consented, and this content follows Made Kulture&rsquo;s content standards.&rdquo;
             </div>
@@ -218,7 +218,7 @@ export default function TermsPage() {
 
           <Section title="SMS COMMUNICATIONS">
             <P>By providing your phone number during booking, you consent to receive text messages from Made Kulture related to your reservation, including booking confirmations, appointment reminders, and session notifications.</P>
-            <P><strong style={{ color: '#fff' }}>Message and data rates may apply.</strong> To opt out, reply STOP to any message. For help, reply HELP or contact us at (832) 408-1631.</P>
+            <P><strong style={{ color: '#fff' }}>Message and data rates may apply.</strong> To opt out, reply STOP to any message. For help, reply HELP or email info@madekulture.com.</P>
           </Section>
 
           <Section title="LIABILITY">
@@ -233,8 +233,7 @@ export default function TermsPage() {
             <P>
               Made Kulture<br />
               4825 Gulf Freeway, Houston TX 77023<br />
-              Email: teddytran@madekulture.com<br />
-              Phone: (832) 408-1631 (text only)<br />
+              Email: info@madekulture.com<br />
               Website: madekulture.com
             </P>
           </Section>
