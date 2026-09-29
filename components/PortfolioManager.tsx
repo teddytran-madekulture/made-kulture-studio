@@ -15,6 +15,9 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [agreed, setAgreed] = useState(false)
+  const [progress, setProgress] = useState('')      // "2 of 5" during a multi-photo upload
+  const [dropActive, setDropActive] = useState(false) // files being dragged over the grid
+  const dropDepth = useRef(0)
 
   // Cropper state: which image we're composing, and where the result goes.
   const [cropSrc, setCropSrc] = useState<string | null>(null)
@@ -30,7 +33,9 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   imagesRef.current = images
 
-  const sync = (list: Img[]) => { setImages(list); onCountChange?.(list.length) }
+  // Keep the ref current immediately so back-to-back uploads (multi-select / drop)
+  // see each other's rows without waiting for a re-render.
+  const sync = (list: Img[]) => { imagesRef.current = list; setImages(list); onCountChange?.(list.length) }
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -55,6 +60,86 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     setError(''); setCropSrc(url); setCropCross(false); setCropReplaceId(null); setCropRevoke(url)
   }
 
+  // Center-crop a file to the portfolio's 4:5 frame (same output as the cropper:
+  // 1000px wide JPEG). Used for multi-photo uploads — reframe later with ⟳.
+  const centerCrop = async (file: File): Promise<Blob> => {
+    const url = URL.createObjectURL(file)
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = () => reject(new Error('load'))
+        el.src = url
+      })
+      const w = img.naturalWidth, h = img.naturalHeight
+      let sW = w, sH = Math.round(w / PORTFOLIO_ASPECT)
+      if (sH > h) { sH = h; sW = Math.round(h * PORTFOLIO_ASPECT) }
+      const sx = Math.round((w - sW) / 2), sy = Math.round((h - sH) / 2)
+      const outW = Math.min(1000, sW), outH = Math.round(outW / PORTFOLIO_ASPECT)
+      const canvas = document.createElement('canvas')
+      canvas.width = outW; canvas.height = outH
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('canvas')
+      ctx.drawImage(img, sx, sy, sW, sH, 0, 0, outW, outH)
+      return await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(b => (b ? resolve(b) : reject(new Error('blob'))), 'image/jpeg', 0.85))
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  }
+
+  // Entry point for the file picker AND drag-and-drop. One photo opens the
+  // cropper like before; several are center-cropped and uploaded in order.
+  const addFiles = async (list: File[]) => {
+    if (uploading) return
+    if (!agreed) { setError('Check the box above first.'); return }
+    const files = list.filter(f => f.type.startsWith('image/'))
+    if (files.length === 0) { setError('Please choose image files.'); return }
+    const room = PORTFOLIO_MAX - imagesRef.current.length
+    if (room <= 0) { setError(`You've reached the ${PORTFOLIO_MAX}-photo limit.`); return }
+    if (files.length === 1) { openCropForFile(files[0]); return }
+
+    const tooBig = files.filter(f => f.size > 60 * 1024 * 1024)
+    const usable = files.filter(f => f.size <= 60 * 1024 * 1024)
+    const batch = usable.slice(0, room)
+    const notes: string[] = []
+    if (tooBig.length) notes.push(`${tooBig.length} skipped (over 60 MB)`)
+    if (usable.length > room) notes.push(`${usable.length - room} skipped (${PORTFOLIO_MAX}-photo limit)`)
+
+    setError(''); setUploading(true)
+    let failed = 0
+    for (let i = 0; i < batch.length; i++) {
+      setProgress(`${i + 1} of ${batch.length}`)
+      try {
+        const blob = await centerCrop(batch[i])
+        const ok = await uploadBlob(blob, null, false)
+        if (!ok) failed++
+      } catch { failed++ }
+    }
+    setProgress(''); setUploading(false)
+    if (failed) notes.push(`${failed} failed to upload`)
+    if (notes.length) setError(`Added ${batch.length - failed}. ${notes.join(', ')}.`)
+  }
+
+  const onDragEnter = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault(); dropDepth.current++; setDropActive(true)
+  }
+  const onDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy'
+  }
+  const onDragLeave = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    dropDepth.current = Math.max(0, dropDepth.current - 1)
+    if (dropDepth.current === 0) setDropActive(false)
+  }
+  const onDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault(); dropDepth.current = 0; setDropActive(false)
+    addFiles(Array.from(e.dataTransfer.files))
+  }
+
   const openCropForExisting = (img: Img) => {
     setError(''); setCropSrc(img.url); setCropCross(true); setCropReplaceId(img.id); setCropRevoke(null)
   }
@@ -70,17 +155,19 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     await uploadBlob(blob, replaceId)
   }
 
-  const uploadBlob = async (blob: Blob, replaceId: string | null) => {
-    setError('')
+  const uploadBlob = async (blob: Blob, replaceId: string | null, manageBusy = true): Promise<boolean> => {
+    if (manageBusy) setError('')
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Please sign in again.'); return }
-    if (!replaceId && images.length >= PORTFOLIO_MAX) { setError(`You've reached the ${PORTFOLIO_MAX}-photo limit.`); return }
-    setUploading(true)
+    if (!user) { setError('Please sign in again.'); return false }
+    if (!replaceId && imagesRef.current.length >= PORTFOLIO_MAX) { setError(`You've reached the ${PORTFOLIO_MAX}-photo limit.`); return false }
+    const setBusy = (v: boolean) => { if (manageBusy) setUploading(v) }
+    setBusy(true)
+    const images = imagesRef.current
     try {
       const path = `${user.id}/${crypto.randomUUID()}.jpg`
       const { error: upErr } = await supabase.storage
         .from('portfolios').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
-      if (upErr) { setError(upErr.message); setUploading(false); return }
+      if (upErr) { setError(upErr.message); setBusy(false); return false }
       const { data: pub } = supabase.storage.from('portfolios').getPublicUrl(path)
 
       if (replaceId) {
@@ -89,7 +176,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
           .from('portfolio_images').update({ url: pub.publicUrl }).eq('id', replaceId)
         if (updErr) {
           await supabase.storage.from('portfolios').remove([path])
-          setError(updErr.message); setUploading(false); return
+          setError(updErr.message); setBusy(false); return false
         }
         sync(images.map(i => (i.id === replaceId ? { ...i, url: pub.publicUrl } : i)))
         const oldPath = old?.url?.split('/portfolios/')[1]?.split('?')[0]
@@ -104,14 +191,16 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
         if (insErr) {
           await supabase.storage.from('portfolios').remove([path])
           setError(insErr.message.includes('limit') ? `You've reached the ${PORTFOLIO_MAX}-photo limit.` : insErr.message)
-          setUploading(false); return
+          setBusy(false); return false
         }
         sync([...images, row as Img])
       }
     } catch {
       setError('Upload failed.')
+      setBusy(false); return false
     }
-    setUploading(false)
+    setBusy(false)
+    return true
   }
 
   const removeImage = async (img: Img) => {
@@ -187,7 +276,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
-          Up to {PORTFOLIO_MAX} photos. Frame each shot, drag to reorder, mark sensitive work 18+.
+          Up to {PORTFOLIO_MAX} photos. Add several at once or drop them in, drag to reorder, mark sensitive work 18+.
         </div>
         <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, color: atMax ? '#e6c07a' : 'rgba(255,255,255,0.4)' }}>
           {images.length} / {PORTFOLIO_MAX}
@@ -217,9 +306,15 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
           .pm-controls { opacity: 0; transition: opacity .15s; }
           .pm-tile:hover .pm-controls { opacity: 1; }
           .pm-tile.pm-dragging .pm-controls { opacity: 1; }
-          @media (hover: none) { .pm-controls { opacity: 1; } }
+          @media (hover: none) { .pm-controls { opacity: 1; } .pm-drop-hint { display: none; } }
         `}</style>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+        <div onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, position: 'relative', borderRadius: 8, outline: dropActive ? '2px dashed #e6c07a' : 'none', outlineOffset: 6, transition: 'outline-color .15s' }}>
+          {dropActive && (
+            <div style={{ position: 'absolute', inset: -6, zIndex: 10, borderRadius: 8, background: 'rgba(8,8,8,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', textAlign: 'center', padding: 12 }}>
+              {atMax ? `Portfolio is full (${PORTFOLIO_MAX} photos)` : !agreed ? 'Check the box above first' : 'Drop photos to add them'}
+            </div>
+          )}
           {images.map((img) => {
             const active = dragId === img.id
             return (
@@ -255,9 +350,10 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
             <label title={!agreed ? 'Check the box above first' : undefined}
               style={{ aspectRatio: '4 / 5', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: (uploading || !agreed) ? 'default' : 'pointer', color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.02)', opacity: agreed ? 1 : 0.4 }}>
               <span style={{ fontSize: 22, lineHeight: 1 }}>{uploading ? '…' : '+'}</span>
-              <span style={{ fontFamily: 'Inter', fontSize: 11 }}>{uploading ? 'Uploading' : 'Add photo'}</span>
-              <input type="file" accept="image/*" disabled={uploading || !agreed}
-                onChange={e => { const f = e.target.files?.[0]; if (f) openCropForFile(f); e.target.value = '' }}
+              <span style={{ fontFamily: 'Inter', fontSize: 11 }}>{uploading ? (progress ? `Uploading ${progress}` : 'Uploading') : 'Add photos'}</span>
+              {!uploading && <span className="pm-drop-hint" style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>or drop them here</span>}
+              <input type="file" accept="image/*" multiple disabled={uploading || !agreed}
+                onChange={e => { const list = Array.from(e.target.files ?? []); e.target.value = ''; if (list.length) addFiles(list) }}
                 style={{ display: 'none' }} />
             </label>
           )}
