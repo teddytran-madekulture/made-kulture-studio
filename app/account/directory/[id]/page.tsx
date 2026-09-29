@@ -429,7 +429,7 @@ export default function MemberProfilePage() {
 
           {(member.credits ?? []).length === 0 && !member.video_url && !member.cv_url && (
             <div style={{ fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', textAlign: 'center', padding: '40px 0' }}>
-              {member.is_self ? <>No credits yet. <Link href="/account/profile" style={{ color: 'var(--t-gold)' }}>Add your publications, campaigns and more</Link>.</> : 'No credits listed yet.'}
+              {member.is_self ? <>No credits yet. <Link href="/account/profile?s=credits" style={{ color: 'var(--t-gold)' }}>Add your publications, campaigns and more</Link>.</> : 'No credits listed yet.'}
             </div>
           )}
         </div>

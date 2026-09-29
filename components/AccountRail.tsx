@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { SETTINGS_PAGES } from '@/lib/settings-sections'
 
 // Account area navigation, Instagram-style.
 //   Desktop: a slim icon rail on the far left that slides out (labels + full
@@ -13,15 +15,15 @@ type Item = { href: string; label: string; icon: string }
 const ITEMS: Item[] = [
   { href: '/account', label: 'Dashboard', icon: 'home' },
   { href: '/account/bookings', label: 'My Bookings', icon: 'cal' },
-  { href: '/account/plus', label: 'Membership', icon: 'star' },
   { href: '/account/directory', label: 'Directory', icon: 'search' },
   { href: '/account/castings', label: 'Castings', icon: 'cast' },
   { href: '/account/messages', label: 'Messages', icon: 'msg' },
-  { href: '/account/profile', label: 'Profile', icon: 'user' },
-  { href: '/account/security', label: 'Login & Security', icon: 'lock' },
-  { href: '/account/payment', label: 'Payment Methods', icon: 'card' },
+  { href: '/account/me', label: 'Profile', icon: 'user' },
 ]
-const MOBILE_BAR = ['/account', '/account/directory', '/account/castings', '/account/messages', '/account/profile']
+// Membership, Login & Security, Payment Methods and the profile editor live
+// under Settings (components/SettingsShell) — Instagram-style second menu.
+const SETTINGS: Item = { href: '/account/profile', label: 'Settings', icon: 'gear' }
+const MOBILE_BAR = ['/account', '/account/directory', '/account/castings', '/account/messages', '/account/me']
 
 const PATHS: Record<string, React.ReactNode> = {
   home: <path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
@@ -37,6 +39,7 @@ const PATHS: Record<string, React.ReactNode> = {
   moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />,
   out: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
   site: <><path d="M15 3h6v6M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>,
+  gear: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></>,
   more: <><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></>,
 }
 const Icon = ({ name, active }: { name: string; active?: boolean }) => (
@@ -50,6 +53,10 @@ export default function AccountRail() {
   const [unread, setUnread] = useState(0)
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [moreOpen, setMoreOpen] = useState(false)
+  const [myId, setMyId] = useState<string | null>(null)
+  useEffect(() => {
+    createClient().auth.getSession().then(({ data }) => setMyId(data.session?.user.id ?? null)).catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetch('/api/messages/unread').then(r => (r.ok ? r.json() : { unread: 0 })).then(d => setUnread(d.unread ?? 0)).catch(() => {})
@@ -83,7 +90,14 @@ export default function AccountRail() {
     try { localStorage.setItem(THEME_KEY, next) } catch {}
     setTheme(next)
   }
-  const isActive = (href: string) => href === '/account' ? pathname === '/account' : pathname === href || pathname.startsWith(href + '/')
+  const onOwnProfile = !!myId && pathname === `/account/directory/${myId}`
+  const isActive = (href: string) => {
+    if (href === '/account') return pathname === '/account'
+    if (href === '/account/me') return pathname === '/account/me' || onOwnProfile
+    if (href === SETTINGS.href) return SETTINGS_PAGES.includes(pathname)
+    if (href === '/account/directory' && onOwnProfile) return false
+    return pathname === href || pathname.startsWith(href + '/')
+  }
   const badge = (href: string) => href === '/account/messages' && unread > 0
 
   return (
@@ -131,6 +145,9 @@ export default function AccountRail() {
           ))}
         </nav>
         <div className="ar-bot">
+          <Link href={SETTINGS.href} className={`ar-it${isActive(SETTINGS.href) ? ' on' : ''}`} title="Settings">
+            <Icon name="gear" active={isActive(SETTINGS.href)} /><span className="lbl">Settings</span>
+          </Link>
           <button type="button" className="ar-it" onClick={flipTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
             <Icon name={theme === 'light' ? 'moon' : 'sun'} /><span className="lbl">{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
           </button>
@@ -163,7 +180,7 @@ export default function AccountRail() {
         <>
           <div className="am-scrim" onClick={() => setMoreOpen(false)} />
           <div className="am-sheet">
-            {ITEMS.filter(i => !MOBILE_BAR.includes(i.href)).map(it => (
+            {[...ITEMS.filter(i => !MOBILE_BAR.includes(i.href)), SETTINGS].map(it => (
               <Link key={it.href} href={it.href} className={`ar-it${isActive(it.href) ? ' on' : ''}`}><Icon name={it.icon} /><span>{it.label}</span></Link>
             ))}
             <Link href="/" className="ar-it"><Icon name="site" /><span>Made Kulture home</span></Link>

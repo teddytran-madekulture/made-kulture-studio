@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import AccountRail from '@/components/AccountRail'
+import SettingsShell from '@/components/SettingsShell'
 
 // Runs before first paint so a light-mode user never sees a dark flash:
 // saved choice first, otherwise the device's light/dark setting.
@@ -23,9 +24,11 @@ export default async function AccountLayout({ children }: { children: React.Reac
       {/* Icon rail (desktop, slides out on hover) / top + bottom bars (phones) */}
       <AccountRail />
       <div className="acct-main">
-        <div className="acct-content">
-          {children}
-        </div>
+        <SettingsShell>
+          <div className="acct-content">
+            {children}
+          </div>
+        </SettingsShell>
       </div>
     </div>
   )

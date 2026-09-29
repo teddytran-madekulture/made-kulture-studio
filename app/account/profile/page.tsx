@@ -1,5 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { PROFILE_SECTIONS } from '@/lib/settings-sections'
 import { CREATIVE_ROLES } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
@@ -51,7 +54,19 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
+// Settings sections (Instagram-style): one section per screen, picked by ?s=
+// from the settings menu (components/SettingsShell). One form underneath, so
+// SAVE CHANGES always saves everything.
+type Sec = keyof typeof PROFILE_SECTIONS
+
 export default function ProfilePage() {
+  return <Suspense fallback={null}><ProfileSettings /></Suspense>
+}
+
+function ProfileSettings() {
+  const sp = useSearchParams()
+  const sParam = sp?.get('s') ?? 'edit'
+  const sec: Sec = (sParam in PROFILE_SECTIONS ? sParam : 'edit') as Sec
   const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false , profile_color: null, cover_url: null, credits: [], cv_url: null })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
@@ -235,18 +250,14 @@ export default function ProfilePage() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, margin: '0 0 8px' }}>PROFILE</h1>
-      {form.id && form.directory_opt_in
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, letterSpacing: '0.02em', margin: '0 0 6px' }}>{PROFILE_SECTIONS[sec]}</h1>
+      {form.id && form.directory_opt_in && !isCustomer
         ? (
-          <a href={`/account/directory/${form.id}`} target="_blank" rel="noopener noreferrer"
+          <Link href={`/account/directory/${form.id}`}
             style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', textDecoration: 'none', marginBottom: 28 }}>
-            View public profile →
-          </a>
-        ) : (
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 28 }}>
-            Turn on the directory listing below to get a public profile.
-          </div>
-        )}
+            View your profile →
+          </Link>
+        ) : <div style={{ marginBottom: 24 }} />}
       <form onSubmit={save}>
         {error && (
           <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-err)', marginBottom: 20 }}>
@@ -259,8 +270,8 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Always-visible directory guidance so people know what to do. */}
-        {isCustomer ? (
+        {/* Directory guidance so people know what to do (Edit profile only). */}
+        {sec !== 'edit' ? null : isCustomer ? (
           <div style={{ background: 'rgba(var(--t-gold-rgb), 0.08)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', lineHeight: 1.55, marginBottom: 24 }}>
             <strong>Want to join the Made Kulture creator directory?</strong> Your account is set to <strong>Customer</strong> (booking only). Switch it to <strong>Creative</strong> or <strong>Brand</strong> below, then fill out the fields marked <span style={{ whiteSpace: 'nowrap' }}>“· for directory”</span> so brands and other creatives can find you.
           </div>
@@ -277,7 +288,7 @@ export default function ProfilePage() {
                 ...(!isBrand ? [{ done: (form.roles?.length ?? 0) > 0, label: 'Pick at least one role' }] : []),
                 { done: !!(form.bio ?? '').trim(), label: isBrand ? 'Write a short about' : 'Write a short bio' },
                 { done: portfolioCount > 0 || (form.links?.length ?? 0) > 0 || !!(form.instagram ?? '').trim(), label: 'Add a portfolio photo, a link, or Instagram' },
-                { done: form.directory_opt_in, label: 'Turn on “List me in the creative directory” (below)' },
+                { done: form.directory_opt_in, label: 'Turn on the directory listing (Directory & notifications)' },
               ].map((s, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'Inter', fontSize: 13, color: s.done ? 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))' : 'var(--t-fg)' }}>
                   <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: '50%', border: `1px solid ${s.done ? 'var(--t-ok)' : 'rgba(var(--t-gold-rgb), 0.5)'}`, color: 'var(--t-ok)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>{s.done ? '✓' : ''}</span>
@@ -289,7 +300,7 @@ export default function ProfilePage() {
         )}
 
         {/* Founding Creatives status */}
-        {founding && !isCustomer && (founding.mine ? (
+        {founding && !isCustomer && (sec === 'edit' || sec === 'look') && (founding.mine ? (
           <div style={{ background: 'rgba(var(--t-gold-rgb), 0.1)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', marginBottom: 24, lineHeight: 1.5 }}>
             <HexCrest size={18} /> <strong>You&apos;re No. {String(founding.mine).padStart(2, '0')} of the First 100.</strong> <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.65 * var(--t-a)))' }}>Your perks, for good: the First 100 badge on the directory, a cover photo on your profile, and 15 portfolio photos instead of 12. You&apos;ll also sometimes get to try new features before everyone else.</span>
           </div>
@@ -299,8 +310,14 @@ export default function ProfilePage() {
           </div>
         ) : null)}
 
-        <div className="prof-grid">
-        <div className="prof-col">
+        {isCustomer && (sec === 'look' || sec === 'portfolio' || sec === 'credits') && (
+          <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px dashed rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 8, padding: '16px 18px', lineHeight: 1.55 }}>
+            This is for directory profiles. Switch your account type to <strong>Creative</strong> or <strong>Brand</strong> in <Link href="/account/profile" style={{ color: 'var(--t-gold)' }}>Edit profile</Link> to use it.
+          </div>
+        )}
+
+        <div style={{ maxWidth: 640 }}>
+        {sec === 'edit' && (<>
         <Field label="ACCOUNT TYPE">
           <div style={{ display: 'flex', gap: 8 }}>
             {([['customer', 'Customer'], ['creative', 'Creative'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
@@ -336,6 +353,8 @@ export default function ProfilePage() {
           </div>
         </Field>
 
+        </>)}
+        {sec === 'look' && (<>
         {!isCustomer && (
           <Field label="BANNER COLOR" hint="for directory">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -386,6 +405,8 @@ export default function ProfilePage() {
           </Field>
         )}
 
+        </>)}
+        {sec === 'edit' && (<>
         <Field label={isBrand ? 'COMPANY NAME' : 'FULL NAME'} hint="for directory">
           <input value={form.full_name} onChange={set('full_name')} placeholder={isBrand ? 'Your company name' : 'Your full name'} style={inputStyle} />
         </Field>
@@ -426,14 +447,21 @@ export default function ProfilePage() {
         </Field>
 
         </>)}
-        </div>
+        </>)}
 
-        <div className="prof-col">
+        {/* Always mounted (hidden elsewhere) so the photo count feeds the
+            directory checklist on Edit profile. */}
+        {!isCustomer && (
+          <div style={{ display: sec === 'portfolio' ? 'block' : 'none' }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', marginBottom: 14, lineHeight: 1.5 }}>
+              Photos save as soon as they upload.
+            </div>
+            <PortfolioManager onCountChange={setPortfolioCount} ownerName={form.full_name} />
+          </div>
+        )}
+
         {!isCustomer && (<>
-        <Field label="PORTFOLIO" hint="for directory">
-          <PortfolioManager onCountChange={setPortfolioCount} ownerName={form.full_name} />
-        </Field>
-
+        {sec === 'edit' && (
         <Field label="LINKS">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {form.links.map((link, i) => (
@@ -464,6 +492,9 @@ export default function ProfilePage() {
           </div>
         </Field>
 
+        )}
+
+        {sec === 'credits' && (<>
         <Field label="CREDITS" hint="your résumé">
           <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 10, lineHeight: 1.5 }}>
             Publications, campaigns, music videos, shows, awards, schooling. They appear under the CREDITS tab on your profile, grouped by type, newest first.
@@ -524,6 +555,9 @@ export default function ProfilePage() {
           </div>
         </Field>
 
+        </>)}
+
+        {sec === 'privacy' && (<>
         {/* Public contact display */}
         <Field label="CONTACT SHOWN ON YOUR PROFILE">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -557,7 +591,9 @@ export default function ProfilePage() {
           </div>
         </div>
         </>)}
+        </>)}
 
+        {sec === 'privacy' && (<>
         {!isCustomer && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <input type="checkbox" id="notify_email" checked={!!form.notify_email} onChange={e => setForm(f => ({ ...f, notify_email: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
@@ -585,6 +621,9 @@ export default function ProfilePage() {
           </label>
         </div>
 
+        </>)}
+
+        {sec !== 'portfolio' && !(isCustomer && (sec === 'look' || sec === 'credits')) && (
         <button type="submit" disabled={saving} style={{
           background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4,
           padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600,
@@ -592,7 +631,7 @@ export default function ProfilePage() {
         }}>
           {saving ? 'SAVING...' : 'SAVE CHANGES'}
         </button>
-        </div>
+        )}
         </div>
       </form>
       {coverSrc && <ImageCropper src={coverSrc} aspect={3} outWidth={1800} onCancel={closeCover} onCropped={onCoverCropped} />}
