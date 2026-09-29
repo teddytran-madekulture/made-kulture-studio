@@ -50,7 +50,7 @@ export default function CommunityPage() {
 
   const s = data?.summary ?? {}
   const tiles: [string, number | string, string?][] = data ? [
-    ['Active members', s.activeMembers, `${s.listedCreatives} listed in directory`],
+    ['Active members', s.activeMembers, `${s.listedCreatives} opted in to the directory`],
     ['Searches', s.searches],
     ['Profile views', s.profileViews],
     ['Portfolio photos opened', s.portfolioOpens],
