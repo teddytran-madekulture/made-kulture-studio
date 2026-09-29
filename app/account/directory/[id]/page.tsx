@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { track, trackNow } from '@/lib/track'
-import FoundingBadge from '@/components/FoundingBadge'
+import { HexCrest } from '@/components/FoundingBadge'
 import { colorVars, colorByKey } from '@/lib/profile-colors'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -192,92 +192,152 @@ export default function MemberProfilePage() {
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: (member.cover_url || colorByKey(member.profile_color)) ? 'flex-start' : 'center', gap: 18, margin: (member.cover_url || colorByKey(member.profile_color)) ? '0 0 8px' : '20px 0 8px', paddingLeft: (member.cover_url || colorByKey(member.profile_color)) ? 20 : 0 }}>
-        <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: (member.cover_url || colorByKey(member.profile_color)) ? '3px solid var(--t-bg)' : '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', marginTop: (member.cover_url || colorByKey(member.profile_color)) ? -42 : 0, position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Header — Instagram-style: big photo left, details stacked right */}
+      <style>{`
+        .pf-head { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "av top" "av body"; column-gap: 40px; align-items: start; margin: 22px 0 8px; }
+        .pf-avatar { grid-area: av; }
+        .pf-top { grid-area: top; min-width: 0; }
+        .pf-body { grid-area: body; min-width: 0; }
+        .pf-stats { display: flex; gap: 22px; margin-top: 14px; font-family: Inter; font-size: 15px; }
+        .pf-head.has-banner { margin-top: 0; padding-left: 20px; }
+        .pf-avatar { width: 150px; height: 150px; }
+        .pf-head.has-banner .pf-avatar { margin-top: -56px; }
+        .pf-head.has-banner .pf-top { padding-top: 16px; }
+        .pf-link { display: flex; align-items: center; gap: 9px; color: var(--t-gold); text-decoration: none; font-family: Inter; font-size: 14px; font-weight: 500; padding: 3px 0; width: fit-content; max-width: 100%; }
+        .pf-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pf-link:hover span { text-decoration: underline; }
+        .pf-link svg { flex-shrink: 0; opacity: 0.85; }
+        /* Phones: Instagram layout — photo + name/stats side by side, then
+           roles, bio, links and buttons full width underneath. */
+        @media (max-width: 640px) {
+          .pf-head { grid-template-areas: "av top" "body body"; column-gap: 16px; }
+          .pf-head.has-banner { padding-left: 12px; padding-right: 12px; }
+          .pf-avatar { width: 88px; height: 88px; }
+          .pf-head.has-banner .pf-avatar { margin-top: -34px; }
+          .pf-head.has-banner .pf-top { padding-top: 8px; }
+          .pf-top h1 { font-size: 26px !important; }
+          .pf-stats { gap: 16px; font-size: 13.5px; margin-top: 10px; }
+          .pf-stats button { font-size: 13.5px !important; }
+          .pf-body { margin-top: 6px; }
+          .pf-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 2px !important; margin-left: -24px; margin-right: -24px; }
+          .pf-grid > div { border-radius: 0 !important; border: none !important; }
+        }
+      `}</style>
+      <div className={`pf-head${(member.cover_url || colorByKey(member.profile_color)) ? ' has-banner' : ''}`}>
+        <div className="pf-avatar" style={{ borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: (member.cover_url || colorByKey(member.profile_color)) ? '4px solid var(--t-bg)' : '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {member.avatar_url
             ? <img src={member.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))' }}>No photo</span>}
+            : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{(member.full_name || '?').charAt(0).toUpperCase()}</span>}
         </div>
-        <div style={{ paddingTop: (member.cover_url || colorByKey(member.profile_color)) ? 12 : 0, minWidth: 0 }}>
-          <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '0 0 6px', lineHeight: 1 }}>{member.full_name}</h1>
-          {member.founding_number ? <div style={{ margin: '2px 0 8px' }}><FoundingBadge number={member.founding_number} size="lg" brand={member.account_type === 'brand'} /></div> : null}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {member.account_type === 'brand' && (
-              <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '3px 8px' }}>BRAND</span>
-            )}
-            {member.roles.map(r => (
-              <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
-            ))}
+
+        <div className="pf-top">
+          {/* Name + First 100 crest, like a verified mark */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: 0, lineHeight: 1.05 }}>{member.full_name}</h1>
+            {member.founding_number ? <HexCrest size={26} title={`First 100 · No. ${String(member.founding_number).padStart(2, '0')}`} /> : null}
           </div>
-          <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
-            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+          {member.founding_number ? (
+            <div style={{ fontFamily: 'Inter', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--t-gold)', marginTop: 6 }}>
+              FIRST 100 · NO. {String(member.founding_number).padStart(2, '0')}
+            </div>
+          ) : null}
+
+          {/* Stats */}
+          <div className="pf-stats">
+            <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))' }}><strong style={{ color: 'var(--t-fg)' }}>{member.portfolio.length}</strong> photo{member.portfolio.length === 1 ? '' : 's'}</span>
+            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', fontFamily: 'Inter', fontSize: 15, cursor: 'pointer' }}>
               <strong style={{ color: 'var(--t-fg)' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}
             </button>
-            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', fontFamily: 'Inter', fontSize: 15, cursor: 'pointer' }}>
               <strong style={{ color: 'var(--t-fg)' }}>{member.following}</strong> following
             </button>
           </div>
         </div>
-      </div>
 
-      {member.bio && (
-        <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', lineHeight: 1.6, margin: '16px 0' }}>{member.bio}</p>
-      )}
+        <div className="pf-body">
 
-      {!member.is_self && (
-        <div style={{ margin: '4px 0 12px' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="button" onClick={toggleFollow} disabled={followBusy}
-              style={following
-                ? { background: 'transparent', color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
-                : { background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
-              {following ? 'Following' : 'Follow'}
-            </button>
-            <button type="button" onClick={startChat} disabled={starting}
-              style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
-              {starting ? 'Opening…' : 'Message'}
-            </button>
-            {myCastings.length > 0 && (
-              <button type="button" onClick={() => setInviteOpen(o => !o)}
-                style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
-                Invite {inviteOpen ? '▴' : '▾'}
-              </button>
-            )}
-          </div>
-          {inviteOpen && myCastings.length > 0 && (
-            <div style={{ marginTop: 10, border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
-              {myCastings.map(c => {
-                const done = invitedIds.includes(c.id)
-                return (
-                  <button key={c.id} type="button" onClick={() => invite(c.id)} disabled={done}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', fontFamily: 'Inter', fontSize: 13, color: done ? 'var(--t-ok)' : 'var(--t-fg)', cursor: done ? 'default' : 'pointer' }}>
-                    {done ? '✓ Invited — ' : ''}{c.title}
-                  </button>
-                )
-              })}
+          {/* Roles — a quiet category line, like Instagram's */}
+          {(member.roles.length > 0 || member.account_type === 'brand') && (
+            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', marginTop: 14 }}>
+              {[member.account_type === 'brand' ? 'Brand' : null, ...member.roles].filter(Boolean).join(' · ')}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Contact + links */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, margin: '12px 0 8px' }}>
-        {member.instagram && (
-          <a href={`https://instagram.com/${member.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
-            onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'instagram' } })}
-            style={pillLink}>@{member.instagram.replace('@', '')}</a>
-        )}
-        {member.email && <a href={`mailto:${member.email}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'email' } })} style={pillLink}>{member.email}</a>}
-        {member.phone && <a href={`tel:${member.phone}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'phone' } })} style={pillLink}>{member.phone}</a>}
-        {member.links.map((l, i) => {
-          let host = l.url
-          try { host = new URL(withProtocol(l.url)).hostname.replace('www.', '') } catch { /* keep raw */ }
-          return (
-            <a key={i} href={withProtocol(l.url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'link' } })} style={pillLink}>{l.label || host}</a>
-          )
-        })}
+          {member.bio && (
+            <p style={{ fontFamily: 'Inter', fontSize: 15, color: 'var(--t-fg)', lineHeight: 1.55, margin: '6px 0 0', whiteSpace: 'pre-line' }}>{member.bio}</p>
+          )}
+
+          {/* Links — stacked, no borders */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12 }}>
+            {member.instagram && (
+              <a className="pf-link" href={`https://instagram.com/${member.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
+                onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'instagram' } })}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
+                <span>@{member.instagram.replace('@', '')}</span>
+              </a>
+            )}
+            {member.email && (
+              <a className="pf-link" href={`mailto:${member.email}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'email' } })}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+                <span>{member.email}</span>
+              </a>
+            )}
+            {member.phone && (
+              <a className="pf-link" href={`tel:${member.phone}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'phone' } })}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg>
+                <span>{member.phone}</span>
+              </a>
+            )}
+            {member.links.map((l, i) => {
+              let host = l.url
+              try { host = new URL(withProtocol(l.url)).hostname.replace('www.', '') } catch { /* keep raw */ }
+              return (
+                <a key={i} className="pf-link" href={withProtocol(l.url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'link' } })}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
+                  <span>{l.label || host}</span>
+                </a>
+              )
+            })}
+          </div>
+
+      {!member.is_self && (
+            <div style={{ margin: '18px 0 4px' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button type="button" onClick={toggleFollow} disabled={followBusy}
+                  style={following
+                    ? { background: 'transparent', color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
+                    : { background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
+                  {following ? 'Following' : 'Follow'}
+                </button>
+                <button type="button" onClick={startChat} disabled={starting}
+                  style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
+                  {starting ? 'Opening…' : 'Message'}
+                </button>
+                {myCastings.length > 0 && (
+                  <button type="button" onClick={() => setInviteOpen(o => !o)}
+                    style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
+                    Invite {inviteOpen ? '▴' : '▾'}
+                  </button>
+                )}
+              </div>
+              {inviteOpen && myCastings.length > 0 && (
+                <div style={{ marginTop: 10, border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>
+                  <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
+                  {myCastings.map(c => {
+                    const done = invitedIds.includes(c.id)
+                    return (
+                      <button key={c.id} type="button" onClick={() => invite(c.id)} disabled={done}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', fontFamily: 'Inter', fontSize: 13, color: done ? 'var(--t-ok)' : 'var(--t-fg)', cursor: done ? 'default' : 'pointer' }}>
+                        {done ? '✓ Invited — ' : ''}{c.title}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
       </div>
 
       {/* Video */}
@@ -306,7 +366,7 @@ export default function MemberProfilePage() {
               </button>
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+          <div className="pf-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
             {member.portfolio.map((img, idx) => {
               const hidden = img.is_mature && !revealMature
               return (
