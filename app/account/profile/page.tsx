@@ -181,7 +181,7 @@ export default function ProfilePage() {
             Turn on the directory listing below to get a public profile.
           </div>
         )}
-      <form onSubmit={save} style={{ maxWidth: 480 }}>
+      <form onSubmit={save}>
         {error && (
           <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b', marginBottom: 20 }}>
             {error}
@@ -222,6 +222,8 @@ export default function ProfilePage() {
           </div>
         )}
 
+        <div className="prof-grid">
+        <div className="prof-col">
         <Field label="ACCOUNT TYPE">
           <div style={{ display: 'flex', gap: 8 }}>
             {([['customer', 'Customer'], ['creative', 'Creative'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
@@ -296,6 +298,11 @@ export default function ProfilePage() {
           <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6, textAlign: 'right' }}>{form.bio.length}/600</div>
         </Field>
 
+        </>)}
+        </div>
+
+        <div className="prof-col">
+        {!isCustomer && (<>
         <Field label="PORTFOLIO" hint="for directory">
           <PortfolioManager onCountChange={setPortfolioCount} />
         </Field>
@@ -410,6 +417,8 @@ export default function ProfilePage() {
         }}>
           {saving ? 'SAVING...' : 'SAVE CHANGES'}
         </button>
+        </div>
+        </div>
       </form>
     </div>
   )

@@ -95,6 +95,13 @@ h1, h2, h3, .display {
   .acct-bar { padding-left: 48px !important; padding-right: 48px !important; }
   .acct-nav { width: 200px; }
 }
+/* Profile form: one column on phones, two on desktop (details | portfolio + settings) */
+.prof-grid { display: grid; }
+.prof-col { min-width: 0; }
+@media (max-width: 1023px) { .prof-grid { max-width: 560px; } }
+@media (min-width: 1024px) {
+  .prof-grid { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 56px; align-items: start; }
+}
 /* Plus page: benefits left, checkout pinned right on desktop */
 .plus-grid { display: grid; gap: 24px; }
 @media (min-width: 1024px) {
