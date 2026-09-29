@@ -58,7 +58,8 @@ export default function PlusPage() {
               <span style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.65)' }}> {priceLabel}/year is the founding rate through {fmtDay(status.introUntil)}. It goes up to ${(status.standardCents / 100).toFixed(0)}/year after that, so join now to lock in your first year at {priceLabel}.</span>
             </div>
           )}
-          <div style={{ display: 'grid', gap: 12, marginBottom: 28 }}>
+          <div className="plus-grid">
+          <div style={{ display: 'grid', gap: 12 }}>
             {BENEFITS.map(([title, desc]) => (
               <div key={title} style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '16px 20px' }}>
                 <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 3 }}>{title}</div>
@@ -66,7 +67,10 @@ export default function PlusPage() {
               </div>
             ))}
           </div>
-          <PlusCheckout priceLabel={priceLabel} onSuccess={load} />
+          <div className="plus-grid-pay">
+            <PlusCheckout priceLabel={priceLabel} onSuccess={load} />
+          </div>
+          </div>
         </>
       )}
     </div>

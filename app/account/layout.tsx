@@ -19,7 +19,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
       {/* Top nav */}
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '0 24px' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
+        <div style={{ maxWidth: 1320, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <Link href="/" style={{ textDecoration: 'none' }}>
             <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff' }}>
               MADE KULTURE
@@ -30,9 +30,9 @@ export default async function AccountLayout({ children }: { children: React.Reac
       </div>
 
       {/* Sidebar + content */}
-      <div className="acct-shell" style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px' }}>
+      <div className="acct-shell" style={{ maxWidth: 1320, margin: '0 auto', padding: '40px 24px' }}>
         <AccountNav />
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           {children}
         </div>
       </div>

@@ -90,6 +90,16 @@ h1, h2, h3, .display {
 /* Account area responsive shell */
 .acct-shell { display: flex; gap: 48px; }
 .acct-nav { width: 180px; flex-shrink: 0; }
+@media (min-width: 1024px) {
+  .acct-shell { gap: 64px; }
+  .acct-nav { width: 200px; }
+}
+/* Plus page: benefits left, checkout pinned right on desktop */
+.plus-grid { display: grid; gap: 24px; }
+@media (min-width: 1024px) {
+  .plus-grid { grid-template-columns: minmax(0, 1fr) 440px; gap: 32px; align-items: start; }
+  .plus-grid-pay { position: sticky; top: 24px; }
+}
 @media (max-width: 640px) {
   .acct-shell { flex-direction: column; gap: 22px; }
   .acct-nav { width: 100%; }
