@@ -15,6 +15,25 @@ interface Member {
   account_type?: string
   founding_number?: number | null
   profile_color?: string | null
+  photos?: string[]
+}
+
+// ── Fair ordering ─────────────────────────────────────────────────────────
+// No alphabetical head start: members are ordered by a hash of (visit seed +
+// id). The seed lives for the browser-tab session, so the order holds steady
+// while someone browses and hits Back, and changes on the next visit.
+function visitSeed(): string {
+  try {
+    let s = sessionStorage.getItem('mk-dir-seed')
+    if (!s) { s = Math.random().toString(36).slice(2); sessionStorage.setItem('mk-dir-seed', s) }
+    return s
+  } catch { return 'mk' }
+}
+function rank(seed: string, id: string): number {
+  let h = 2166136261 // FNV-1a
+  const str = seed + id
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) }
+  return h >>> 0
 }
 
 export default function DirectoryPage() {
@@ -29,6 +48,9 @@ export default function DirectoryPage() {
   const [sortMode, setSortMode]   = useState<'common' | 'az'>('common')
   const [peopleQuery, setPeople]  = useState('')
   const [foundingOnly, setFoundingOnly] = useState(false)
+  const [view, setView] = useState<'explore' | 'people'>('explore')
+  const [seed, setSeed] = useState('mk')
+  useEffect(() => { setSeed(visitSeed()) }, [])
   const [founding, setFounding] = useState<{ cap: number; taken: number } | null>(null)
 
   useEffect(() => {
@@ -76,8 +98,19 @@ export default function DirectoryPage() {
         || (m.full_name || '').toLowerCase().includes(pq)
         || (m.instagram || '').toLowerCase().includes(pq)
       return roleMatch && peopleMatch
-    })
-  }, [members, selected, peopleQuery, foundingOnly])
+    }).sort((a, b) => rank(seed, a.id) - rank(seed, b.id))
+  }, [members, selected, peopleQuery, foundingOnly, seed])
+
+  // Explore feed: every member's first photo (in shuffled member order), then
+  // everyone's second — so each creative appears before anyone appears twice.
+  const feed = useMemo(() => {
+    const out: { m: Member; url: string }[] = []
+    for (let round = 0; round < 2; round++)
+      for (const m of filtered) { const u = m.photos?.[round]; if (u) out.push({ m, url: u }) }
+    return out
+  }, [filtered])
+  // Typing a name means "find this person": show people, not photos.
+  const showPeople = view === 'people' || peopleQuery.trim().length > 0
 
   const toggleRole = (r: string) => {
     // Analytics: which roles people filter for (demand), vs who is listed (supply).
@@ -214,10 +247,50 @@ export default function DirectoryPage() {
               <span style={{ color: 'var(--t-gold)', marginLeft: 12 }}>★ {founding.cap - founding.taken} of {founding.cap} Founding spots left</span>
             )}
           </div>
+          <div style={{ display: 'inline-flex', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 3, marginBottom: 16, gap: 2 }}>
+            {(['explore', 'people'] as const).map(v => {
+              const on = (v === 'people') === showPeople
+              return (
+                <button key={v} type="button" onClick={() => { setView(v); if (v === 'explore') setPeople('') }}
+                  style={{ padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', background: on ? 'var(--t-fg)' : 'transparent', color: on ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>
+                  {v === 'explore' ? 'Explore' : 'People'}
+                </button>
+              )
+            })}
+          </div>
           {filtered.length === 0 ? (
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
               {members.length === 0 ? 'No one has joined the directory yet.' : 'No matches — try clearing a filter.'}
             </div>
+          ) : !showPeople ? (
+            feed.length === 0 ? (
+              <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
+                No portfolio photos to explore yet. Switch to People to see everyone.
+              </div>
+            ) : (
+              <>
+                <style>{`
+                  .dx-tile .dx-cap { opacity: 0; transition: opacity .15s; }
+                  .dx-tile:hover .dx-cap { opacity: 1; }
+                  .dx-tile img { transition: transform .35s ease; }
+                  .dx-tile:hover img { transform: scale(1.03); }
+                  @media (hover: none) { .dx-tile .dx-cap { opacity: 1; } }
+                `}</style>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
+                  {feed.map(({ m, url }, i) => (
+                    <Link key={m.id + i} href={`/account/directory/${m.id}`} className="dx-tile"
+                      style={{ position: 'relative', display: 'block', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
+                      <img src={url} alt={m.full_name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <div className="dx-cap" style={{ position: 'absolute', inset: 'auto 0 0 0', padding: '28px 10px 9px', background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)', color: '#fff', display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 15, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.full_name}</span>
+                        {m.founding_number ? <span style={{ color: '#e6c07a', fontSize: 11 }} title="Founding Creative">★</span> : null}
+                        {m.roles[0] && <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.7)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>{m.roles[0]}</span>}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {filtered.map(m => (

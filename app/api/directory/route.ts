@@ -40,8 +40,17 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Members with at least one portfolio image (one query, built into a Set).
-  const { data: pics } = await service.from('portfolio_images').select('user_id')
+  const { data: pics } = await service.from('portfolio_images').select('user_id, url, is_mature, hidden, sort_order')
   const withPhotos = new Set((pics ?? []).map((p: { user_id: string }) => p.user_id))
+  // Explore feed: up to 2 photos per member, never 18+ or archived — the grid
+  // is browsed without the profile page's over-18 reveal. Capped per person so
+  // a full 15-photo portfolio can't take over the feed.
+  const feedPhotos = new Map<string, string[]>()
+  for (const p of [...(pics ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
+    if (p.is_mature || p.hidden) continue
+    const list = feedPhotos.get(p.user_id) ?? []
+    if (list.length < 2) { list.push(p.url); feedPhotos.set(p.user_id, list) }
+  }
 
   // Minimum profile to be listed: name + bio + (photo | link | IG), and — for
   // creatives — at least one role. Brands don't have creative roles.
@@ -65,7 +74,7 @@ export async function GET(req: NextRequest) {
   }
 
   const members = listed
-    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative', founding_number: m.founding_number ?? null, profile_color: m.profile_color ?? null }))
+    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative', founding_number: m.founding_number ?? null, profile_color: m.profile_color ?? null, photos: feedPhotos.get(m.id) ?? [] }))
 
   return NextResponse.json({ members, founding: { cap: FOUNDING_CAP, taken: Math.min(taken, FOUNDING_CAP) } })
 }
