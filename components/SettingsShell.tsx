@@ -22,8 +22,8 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
         .st-link.on { background: rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a))); font-weight: 600; }
         .st-main { flex: 1; min-width: 0; }
         .st-main .acct-content { max-width: 820px; }
-        .st-main .sec-grid { flex-direction: column !important; }
-        .st-main .sec-grid > div { max-width: none !important; }
+        .st-main .sec-grid { flex-direction: column !important; align-items: stretch !important; }
+        .st-main .sec-grid > div { max-width: 640px !important; }
         .st-main .plus-grid { grid-template-columns: minmax(0, 1fr) !important; }
         .st-main .plus-grid-pay { position: static !important; }
         @media (max-width: 768px) {
