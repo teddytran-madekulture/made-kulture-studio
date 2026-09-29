@@ -147,6 +147,11 @@ html[data-acct-theme="light"] .acct-theme select option { background: #ffffff; c
   .acct-nav { width: 100%; }
 }
 
+/* Admin → Community summary tiles: even rows (4 → 2 → 1) */
+.cm-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .cm-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .cm-tiles { grid-template-columns: 1fr; } }
+
 /* Hide an element on phones (used for the desktop-only account sign-out) */
 @media (max-width: 640px) { .acct-hide-mobile { display: none !important; } }
 

@@ -19,11 +19,11 @@ type Data = {
 }
 
 const GOLD = '#e6c07a'
-const card: React.CSSProperties = { background: '#111', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '18px 20px' }
-const h2: React.CSSProperties = { fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)', margin: '0 0 4px', fontWeight: 600 }
-const hint: React.CSSProperties = { fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: '0 0 14px', lineHeight: 1.5 }
-const th: React.CSSProperties = { textAlign: 'left', fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.4)', fontWeight: 600, padding: '0 10px 8px 0', whiteSpace: 'nowrap' }
-const td: React.CSSProperties = { fontFamily: 'Inter', fontSize: 13, color: '#fff', padding: '8px 10px 8px 0', borderTop: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'middle' }
+const card: React.CSSProperties = { background: '#111', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '26px 28px' }
+const h2: React.CSSProperties = { fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)', margin: '0 0 6px', fontWeight: 600 }
+const hint: React.CSSProperties = { fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.38)', margin: '0 0 20px', lineHeight: 1.55, maxWidth: 560 }
+const th: React.CSSProperties = { textAlign: 'left', fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.4)', fontWeight: 600, padding: '0 12px 10px 0', whiteSpace: 'nowrap' }
+const td: React.CSSProperties = { fontFamily: 'Inter', fontSize: 13, color: '#fff', padding: '11px 12px 11px 0', borderTop: '1px solid rgba(255,255,255,0.06)', verticalAlign: 'middle' }
 const num: React.CSSProperties = { ...td, fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, textAlign: 'right' }
 const numTh: React.CSSProperties = { ...th, textAlign: 'right' }
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—')
@@ -60,12 +60,26 @@ export default function CommunityPage() {
     ['Casting applications', s.castingApplications, `${s.castingConfirmed} confirmed`],
   ] : []
   const maxAct = Math.max(1, ...(data?.activity ?? []).map(a => a.activeMembers))
+  // One slot per Houston day in the range, so a single active day is one bar,
+  // not a slab across the whole card.
+  const series = (() => {
+    if (!data) return [] as { day: string; activeMembers: number; messages: number }[]
+    const byDay = new Map(data.activity.map(a => [a.day, a]))
+    const span = Math.min(data.days, 90)
+    const out: { day: string; activeMembers: number; messages: number }[] = []
+    for (let i = span - 1; i >= 0; i--) {
+      const day = new Date(Date.now() - i * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' })
+      const a = byDay.get(day)
+      out.push({ day, activeMembers: a?.activeMembers ?? 0, messages: a?.messages ?? 0 })
+    }
+    return out
+  })()
 
   return (
-    <div style={{ color: '#fff', maxWidth: 1400 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+    <div style={{ color: '#fff', maxWidth: 1400, padding: '28px 8px 48px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
         <div>
-          <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, letterSpacing: '0.02em', margin: '0 0 6px' }}>COMMUNITY</h1>
+          <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, letterSpacing: '0.02em', margin: '0 0 8px', lineHeight: 1.1 }}>COMMUNITY</h1>
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
             How members use the directory, portfolios, messages and castings. Signed-in members only; message content is never logged.
           </div>
@@ -86,23 +100,23 @@ export default function CommunityPage() {
       {data && !loading && (
         <>
           {!data.trackingSince && (
-            <div style={{ ...card, borderColor: 'rgba(230,192,122,0.35)', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 16, lineHeight: 1.5 }}>
+            <div style={{ ...card, borderColor: 'rgba(230,192,122,0.35)', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 24, lineHeight: 1.5 }}>
               <strong style={{ color: GOLD }}>Tracking just started.</strong> Searches, profile views and portfolio activity fill in as members use the site. Messages, follows and castings below are already real.
             </div>
           )}
 
           {/* Summary tiles */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginBottom: 16 }}>
+          <div className="cm-tiles" style={{ display: 'grid', gap: 16, marginBottom: 24 }}>
             {tiles.map(([label, value, sub]) => (
               <div key={label} style={card}>
-                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 30, lineHeight: 1 }}>{value ?? 0}</div>
-                <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 6 }}>{label}</div>
-                {sub && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{sub}</div>}
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, lineHeight: 1 }}>{value ?? 0}</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 10 }}>{label}</div>
+                {sub && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>{sub}</div>}
               </div>
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 24, marginBottom: 24 }}>
             {/* Funnel */}
             <div style={card}>
               <div style={h2}>ARE PEOPLE LOOKING AT THE WORK?</div>
@@ -112,10 +126,10 @@ export default function CommunityPage() {
                 ['Scrolled to the portfolio', data.funnel.sawPortfolio],
                 ['Clicked Message', data.funnel.messaged],
               ].map(([label, n], i) => {
-                const w = data.funnel.profilePairs ? Math.max(2, ((n as number) / data.funnel.profilePairs) * 100) : 0
+                const w = data.funnel.profilePairs && (n as number) > 0 ? Math.max(2, ((n as number) / data.funnel.profilePairs) * 100) : 0
                 return (
-                  <div key={label as string} style={{ marginBottom: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 4 }}>
+                  <div key={label as string} style={{ marginBottom: 18 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.75)', marginBottom: 7 }}>
                       <span>{label}</span><span style={{ fontFamily: '"JetBrains Mono", monospace' }}>{n as number}{i > 0 && ` · ${pct(n as number, data.funnel.profilePairs)}`}</span>
                     </div>
                     <div style={{ height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4 }}>
@@ -131,17 +145,22 @@ export default function CommunityPage() {
               <div style={h2}>ACTIVE MEMBERS PER DAY</div>
               <p style={hint}>Members who searched, viewed, clicked or sent a message that day (Houston time).</p>
               {data.activity.length === 0 ? <div style={hint}>No activity yet.</div> : (
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 110 }}>
-                  {data.activity.map(a => (
-                    <div key={a.day} title={`${a.day}: ${a.activeMembers} active · ${a.messages} messages`}
-                      style={{ flex: 1, minWidth: 3, height: `${Math.max(4, (a.activeMembers / maxAct) * 100)}%`, background: GOLD, opacity: 0.8, borderRadius: '2px 2px 0 0' }} />
-                  ))}
-                </div>
+                <>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    {series.map(a => (
+                      <div key={a.day} title={`${a.day}: ${a.activeMembers} active · ${a.messages} messages`}
+                        style={{ flex: 1, maxWidth: 28, height: a.activeMembers ? `${Math.max(6, (a.activeMembers / maxAct) * 100)}%` : 2, background: a.activeMembers ? GOLD : 'rgba(255,255,255,0.08)', opacity: 0.85, borderRadius: '2px 2px 0 0' }} />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 8 }}>
+                    <span>{series[0]?.day.slice(5)}</span><span>peak {maxAct}/day</span><span>today</span>
+                  </div>
+                </>
               )}
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 24, marginBottom: 24 }}>
             {/* Top searches */}
             <div style={card}>
               <div style={h2}>WHAT PEOPLE SEARCH FOR</div>
@@ -172,7 +191,7 @@ export default function CommunityPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 24, marginBottom: 24 }}>
             {/* Roles */}
             <div style={card}>
               <div style={h2}>ROLES: WANTED VS LISTED</div>
@@ -195,7 +214,7 @@ export default function CommunityPage() {
               {data.contactBreakdown.length === 0 ? <div style={hint}>No clicks yet.</div> : (() => {
                 const max = Math.max(...data.contactBreakdown.map(c => c.count))
                 return data.contactBreakdown.map(c => (
-                  <div key={c.what} style={{ display: 'grid', gridTemplateColumns: '130px 1fr 40px', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <div key={c.what} style={{ display: 'grid', gridTemplateColumns: '140px 1fr 40px', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                     <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{WHAT[c.what] ?? c.what}</span>
                     <div style={{ height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4 }}><div style={{ width: `${(c.count / max) * 100}%`, height: '100%', background: GOLD, borderRadius: 4 }} /></div>
                     <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12, textAlign: 'right' }}>{c.count}</span>
@@ -206,7 +225,7 @@ export default function CommunityPage() {
           </div>
 
           {/* Profiles */}
-          <div style={{ ...card, marginBottom: 16, overflowX: 'auto' }}>
+          <div style={{ ...card, marginBottom: 24, overflowX: 'auto' }}>
             <div style={h2}>MOST-VIEWED CREATIVES</div>
             <p style={hint}>&ldquo;Saw portfolio&rdquo; means the viewer scrolled to their work. &ldquo;Deepest photo&rdquo; is the furthest photo anyone opened.</p>
             {data.profiles.length === 0 ? <div style={hint}>No profile views yet.</div> : (
