@@ -100,6 +100,8 @@ export default function AccountRail() {
         .ar-it .lbl { opacity: 0; transition: opacity .12s ease; }
         .ar:hover .ar-it .lbl, .ar:has(:focus-visible) .ar-it .lbl { opacity: 1; }
         .ar-dot { position: absolute; left: 30px; top: 8px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--t-gold); color: var(--t-on-fg); font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: Inter; }
+        .ar-home { margin-bottom: 10px; }
+        .ar-home::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -6px; height: 1px; background: rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a))); }
         .ar-bot { display: flex; flex-direction: column; gap: 2px; }
         .am-top, .am-bar, .am-sheet { display: none; }
         @media (max-width: 768px) {
@@ -118,6 +120,7 @@ export default function AccountRail() {
       {/* Desktop rail */}
       <aside className="ar" aria-label="Account menu">
         <Link href="/" className="ar-logo" title="Made Kulture home"><span className="mk">MK</span><span className="full">MADE KULTURE</span></Link>
+        <Link href="/" className="ar-it ar-home" title="Made Kulture home"><Icon name="site" /><span className="lbl">Made Kulture home</span></Link>
         <nav className="ar-nav">
           {ITEMS.map(it => (
             <Link key={it.href} href={it.href} className={`ar-it${isActive(it.href) ? ' on' : ''}`} title={it.label}>
@@ -128,7 +131,12 @@ export default function AccountRail() {
           ))}
         </nav>
         <div className="ar-bot">
-          <Link href="/" className="ar-it" title="Back to the website"><Icon name="site" /><span className="lbl">Back to website</span></Link>
+          <button type="button" className="ar-it" onClick={flipTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
+            <Icon name={theme === 'light' ? 'moon' : 'sun'} /><span className="lbl">{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
+          </button>
+          <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
+            <button type="submit" className="ar-it" title="Sign out"><Icon name="out" /><span className="lbl">Sign out</span></button>
+          </form>
         </div>
       </aside>
 
@@ -158,7 +166,7 @@ export default function AccountRail() {
             {ITEMS.filter(i => !MOBILE_BAR.includes(i.href)).map(it => (
               <Link key={it.href} href={it.href} className={`ar-it${isActive(it.href) ? ' on' : ''}`}><Icon name={it.icon} /><span>{it.label}</span></Link>
             ))}
-            <Link href="/" className="ar-it"><Icon name="site" /><span>Back to website</span></Link>
+            <Link href="/" className="ar-it"><Icon name="site" /><span>Made Kulture home</span></Link>
             <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
               <button type="submit" className="ar-it"><Icon name="out" /><span>Sign out</span></button>
             </form>
@@ -169,35 +177,3 @@ export default function AccountRail() {
   )
 }
 
-// Desktop top bar (restored): wordmark left, light/dark + SIGN OUT right —
-// the same bar the account area had before the icon rail. Phones keep their
-// own slim top bar inside AccountRail.
-export function AccountTopBar() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
-  useEffect(() => { setTheme(document.documentElement.dataset.acctTheme === 'light' ? 'light' : 'dark') }, [])
-  const flip = () => {
-    const next = theme === 'light' ? 'dark' : 'light'
-    document.documentElement.dataset.acctTheme = next
-    try { localStorage.setItem(THEME_KEY, next) } catch {}
-    setTheme(next)
-  }
-  const box: React.CSSProperties = { background: 'none', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 4, color: 'var(--t-fg)', cursor: 'pointer' }
-  return (
-    <div className="at-top">
-      <style>{`
-        .at-top { position: sticky; top: 0; z-index: 50; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; background: var(--t-bg); border-bottom: 1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a))); }
-        @media (max-width: 768px) { .at-top { display: none; } }
-      `}</style>
-      <Link href="/" style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: 'var(--t-fg)', textDecoration: 'none' }}>MADE KULTURE</Link>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button type="button" onClick={flip} aria-label={theme === 'light' ? 'Dark mode' : 'Light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-          style={{ ...box, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{PATHS[theme === 'light' ? 'moon' : 'sun']}</svg>
-        </button>
-        <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
-          <button type="submit" style={{ ...box, padding: '8px 16px', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.08em' }}>SIGN OUT</button>
-        </form>
-      </div>
-    </div>
-  )
-}
