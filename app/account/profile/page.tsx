@@ -260,7 +260,7 @@ export default function ProfilePage() {
         {/* Founding Creatives status */}
         {founding && !isCustomer && (founding.mine ? (
           <div style={{ background: 'rgba(var(--t-gold-rgb), 0.1)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', marginBottom: 24, lineHeight: 1.5 }}>
-            ★ <strong>You&apos;re Founding {isBrand ? 'Member' : 'Creative'} #{founding.mine}.</strong> <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.65 * var(--t-a)))' }}>Your gold badge shows on the directory, and you can add up to 15 portfolio photos instead of 12, for good.</span>
+            ★ <strong>You&apos;re Founding {isBrand ? 'Member' : 'Creative'} #{founding.mine}.</strong> <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.65 * var(--t-a)))' }}>Your perks, for good: a gold Founding badge on the directory, a cover photo on your profile, and 15 portfolio photos instead of 12.</span>
           </div>
         ) : founding.left > 0 ? (
           <div style={{ background: 'rgba(var(--t-gold-rgb), 0.06)', border: '1px dashed rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', marginBottom: 24, lineHeight: 1.5 }}>
