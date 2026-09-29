@@ -274,13 +274,23 @@ export default function DirectoryPage() {
                   .dx-tile:hover .dx-cap { opacity: 1; }
                   .dx-tile img { transition: transform .35s ease; }
                   .dx-tile:hover img { transform: scale(1.03); }
-                  @media (hover: none) { .dx-tile .dx-cap { opacity: 1; } }
+                  /* Phones: a tight 3-across grid like Instagram Explore; names
+                     appear on the profile you open, so tiles stay clean. */
+                  .dx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+                  @media (max-width: 640px) {
+                    .dx-grid { grid-template-columns: repeat(3, 1fr); gap: 2px; }
+                    .dx-tile { border-radius: 0 !important; }
+                    .dx-tile .dx-cap { display: none !important; }
+                    .dx-tile .dx-star { display: block !important; }
+                  }
+                  @media (hover: none) and (min-width: 641px) { .dx-tile .dx-cap { opacity: 1; } }
                 `}</style>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
+                <div className="dx-grid">
                   {feed.map(({ m, url }, i) => (
                     <Link key={m.id + i} href={`/account/directory/${m.id}`} className="dx-tile"
                       style={{ position: 'relative', display: 'block', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
                       <img src={url} alt={m.full_name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      {m.founding_number ? <span className="dx-star" style={{ display: 'none', position: 'absolute', top: 5, right: 6, color: '#e6c07a', fontSize: 12, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>★</span> : null}
                       <div className="dx-cap" style={{ position: 'absolute', inset: 'auto 0 0 0', padding: '28px 10px 9px', background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)', color: '#fff', display: 'flex', alignItems: 'center', gap: 7 }}>
                         <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 15, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.full_name}</span>
                         {m.founding_number ? <span style={{ color: '#e6c07a', fontSize: 11 }} title="Founding Creative">★</span> : null}
