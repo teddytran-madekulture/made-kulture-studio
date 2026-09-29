@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
 import PortfolioManager from '@/components/PortfolioManager'
 import ImageCropper from '@/components/ImageCropper'
+import { HexCrest } from '@/components/FoundingBadge'
 import { PROFILE_COLORS } from '@/lib/profile-colors'
 
 type ProfileLink = { label: string; url: string }
@@ -260,11 +261,11 @@ export default function ProfilePage() {
         {/* Founding Creatives status */}
         {founding && !isCustomer && (founding.mine ? (
           <div style={{ background: 'rgba(var(--t-gold-rgb), 0.1)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', marginBottom: 24, lineHeight: 1.5 }}>
-            ★ <strong>You&apos;re Founding {isBrand ? 'Member' : 'Creative'} #{founding.mine}.</strong> <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.65 * var(--t-a)))' }}>Your perks, for good: a gold Founding badge on the directory, a cover photo on your profile, and 15 portfolio photos instead of 12. You&apos;ll also sometimes get to try new features before everyone else.</span>
+            <HexCrest size={18} /> <strong>You&apos;re No. {String(founding.mine).padStart(2, '0')} of the First 100.</strong> <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.65 * var(--t-a)))' }}>Your perks, for good: the First 100 badge on the directory, a cover photo on your profile, and 15 portfolio photos instead of 12. You&apos;ll also sometimes get to try new features before everyone else.</span>
           </div>
         ) : founding.left > 0 ? (
           <div style={{ background: 'rgba(var(--t-gold-rgb), 0.06)', border: '1px dashed rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', marginBottom: 24, lineHeight: 1.5 }}>
-            <strong style={{ color: 'var(--t-gold)' }}>★ {founding.left} of {founding.cap} Founding spots left.</strong> Complete your profile and turn on the directory listing to claim one: a permanent gold Founding badge and 15 portfolio photos instead of 12.
+            <strong style={{ color: 'var(--t-gold)' }}>{founding.left} of {founding.cap} First 100 spots left.</strong> Complete your profile and turn on the directory listing to claim one: a permanent First 100 badge, a cover photo, and 15 portfolio photos instead of 12.
           </div>
         ) : null)}
 
@@ -325,7 +326,7 @@ export default function ProfilePage() {
         )}
 
         {!isCustomer && (
-          <Field label="COVER PHOTO" hint="Founding perk">
+          <Field label="COVER PHOTO" hint="First 100 perk">
             {founding?.mine ? (
               <>
                 <div style={{ height: 110, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', background: 'var(--t-surface-hi)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
@@ -349,7 +350,7 @@ export default function ProfilePage() {
               </>
             ) : (
               <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', border: '1px dashed rgba(var(--t-gold-rgb), 0.4)', borderRadius: 8, padding: '12px 14px', lineHeight: 1.5 }}>
-                ★ Cover photos are a <strong style={{ color: 'var(--t-gold)' }}>Founding Creative</strong> perk{founding && founding.left > 0 ? ` (${founding.left} spots left)` : ''}. Complete your profile and list yourself in the directory to claim one.
+                Cover photos are a <strong style={{ color: 'var(--t-gold)' }}>First 100</strong> perk{founding && founding.left > 0 ? ` (${founding.left} spots left)` : ''}. Complete your profile and list yourself in the directory to claim one.
               </div>
             )}
           </Field>

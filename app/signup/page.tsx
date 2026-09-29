@@ -146,7 +146,7 @@ export default function SignupPage() {
                 : 'List your brand, post castings, and hire creatives from the community.'}
               {foundingLeft && foundingLeft.left > 0 && (
                 <div style={{ color: '#e6c07a', marginTop: 6 }}>
-                  ★ {foundingLeft.left} of {foundingLeft.cap} Founding spots left: the first {foundingLeft.cap} complete profiles get a permanent gold badge and 15 portfolio photos.
+                  {foundingLeft.left} of {foundingLeft.cap} First 100 spots left: the first {foundingLeft.cap} complete profiles get a permanent First 100 badge, a cover photo and 15 portfolio photos.
                 </div>
               )}
             </div>

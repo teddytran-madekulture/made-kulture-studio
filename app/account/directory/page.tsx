@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CREATIVE_ROLES } from '@/lib/roles'
 import { track } from '@/lib/track'
-import FoundingBadge from '@/components/FoundingBadge'
+import FoundingBadge, { HexCrest } from '@/components/FoundingBadge'
 import { colorVars, colorByKey } from '@/lib/profile-colors'
 
 interface Member {
@@ -101,14 +101,17 @@ export default function DirectoryPage() {
     }).sort((a, b) => rank(seed, a.id) - rank(seed, b.id))
   }, [members, selected, peopleQuery, foundingOnly, seed])
 
-  // Explore feed: every member's first photo (in shuffled member order), then
-  // everyone's second — so each creative appears before anyone appears twice.
+  // Explore feed: ONE photo per member, in shuffled member order. Which photo
+  // rotates with the visit seed, so each visit shows a different piece of
+  // their portfolio while nobody gets more space than anyone else.
   const feed = useMemo(() => {
     const out: { m: Member; url: string }[] = []
-    for (let round = 0; round < 2; round++)
-      for (const m of filtered) { const u = m.photos?.[round]; if (u) out.push({ m, url: u }) }
+    for (const m of filtered) {
+      const ps = m.photos ?? []
+      if (ps.length) out.push({ m, url: ps[rank(seed + ':photo', m.id) % ps.length] })
+    }
     return out
-  }, [filtered])
+  }, [filtered, seed])
   // Typing a name means "find this person": show people, not photos.
   const showPeople = view === 'people' || peopleQuery.trim().length > 0
 
@@ -184,7 +187,7 @@ export default function DirectoryPage() {
         {members.some(m => m.founding_number) && (
           <button onClick={() => { setFoundingOnly(f => !f); if (!foundingOnly) track('filter', { meta: { role: 'Founding', results: members.filter(m => m.founding_number).length } }) }}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: foundingOnly ? 'var(--t-gold)' : 'rgba(var(--t-gold-rgb), 0.08)', color: foundingOnly ? 'var(--t-on-fg)' : 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            ★ Founding
+            <HexCrest size={16} /> First 100
           </button>
         )}
         {(selected.length > 0 || peopleQuery || foundingOnly) && (
@@ -244,7 +247,7 @@ export default function DirectoryPage() {
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 14 }}>
             {filtered.length} {filtered.length === 1 ? 'creative' : 'creatives'}
             {founding && founding.taken < founding.cap && (
-              <span style={{ color: 'var(--t-gold)', marginLeft: 12 }}>★ {founding.cap - founding.taken} of {founding.cap} Founding spots left</span>
+              <span style={{ color: 'var(--t-gold)', marginLeft: 12 }}>{founding.cap - founding.taken} of {founding.cap} First 100 spots left</span>
             )}
           </div>
           <div style={{ display: 'inline-flex', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 3, marginBottom: 16, gap: 2 }}>
@@ -290,10 +293,10 @@ export default function DirectoryPage() {
                     <Link key={m.id + i} href={`/account/directory/${m.id}`} className="dx-tile"
                       style={{ position: 'relative', display: 'block', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
                       <img src={url} alt={m.full_name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      {m.founding_number ? <span className="dx-star" style={{ display: 'none', position: 'absolute', top: 5, right: 6, color: '#e6c07a', fontSize: 12, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>★</span> : null}
+                      {m.founding_number ? <span className="dx-star" style={{ display: 'none', position: 'absolute', top: 5, right: 5, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.7))' }}><HexCrest size={16} /></span> : null}
                       <div className="dx-cap" style={{ position: 'absolute', inset: 'auto 0 0 0', padding: '28px 10px 9px', background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)', color: '#fff', display: 'flex', alignItems: 'center', gap: 7 }}>
                         <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 15, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.full_name}</span>
-                        {m.founding_number ? <span style={{ color: '#e6c07a', fontSize: 11 }} title="Founding Creative">★</span> : null}
+                        {m.founding_number ? <HexCrest size={15} title="First 100" /> : null}
                         {m.roles[0] && <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.7)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>{m.roles[0]}</span>}
                       </div>
                     </Link>

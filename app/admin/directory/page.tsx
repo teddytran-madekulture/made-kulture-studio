@@ -105,7 +105,7 @@ export default function AdminDirectoryPage() {
   }
 
   async function setFounding(m: Member, action: 'grant' | 'revoke') {
-    if (action === 'revoke' && !confirm(`Remove ${m.name || 'this member'}'s Founding badge? They lose the badge and the 15-photo limit, and won't get it back automatically.`)) return
+    if (action === 'revoke' && !confirm(`Remove ${m.name || 'this member'}'s First 100 badge? They lose the badge and the 15-photo limit, and won't get it back automatically.`)) return
     setBusy(m.id); setError('')
     try {
       const res = await fetch(`/api/admin/directory/${m.id}`, {
@@ -179,7 +179,7 @@ export default function AdminDirectoryPage() {
                   {m.name || <span style={{ color: 'rgba(255,255,255,0.35)' }}>(no name)</span>}
                 </span>
                 <span style={chip('mute')}>{m.accountType}</span>
-                {m.foundingNumber && <span style={{ ...chip('mute'), color: '#e6c07a', borderColor: 'rgba(230,192,122,0.5)' }}>★ founding #{m.foundingNumber}</span>}
+                {m.foundingNumber && <span style={{ ...chip('mute'), color: '#e6c07a', borderColor: 'rgba(230,192,122,0.5)' }}>First 100 · No. {m.foundingNumber}</span>}
                 {m.listed
                   ? <span style={chip('good')}>listed</span>
                   : m.optedIn
@@ -226,11 +226,11 @@ export default function AdminDirectoryPage() {
               )}
               {m.accountType !== 'customer' && (m.foundingNumber ? (
                 <button onClick={() => setFounding(m, 'revoke')} disabled={busy === m.id} style={{ ...btn(), color: '#e6c07a', opacity: busy === m.id ? 0.5 : 1 }}>
-                  {busy === m.id ? '…' : 'REMOVE FOUNDING'}
+                  {busy === m.id ? '…' : 'REMOVE FIRST 100'}
                 </button>
               ) : (
                 <button onClick={() => setFounding(m, 'grant')} disabled={busy === m.id} style={{ ...btn(), color: '#e6c07a', opacity: busy === m.id ? 0.5 : 1 }}>
-                  {busy === m.id ? '…' : '★ MAKE FOUNDING'}
+                  {busy === m.id ? '…' : 'MAKE FIRST 100'}
                 </button>
               ))}
               {m.photos.visible + m.photos.hidden > 0 && (

@@ -95,6 +95,7 @@ h1, h2, h3, .display {
    Colors are written as rgba(var(--t-fg-rgb), a) so every translucent
    white-on-black line flips to translucent ink-on-paper automatically. */
 :root {
+  --t-on-gold: #080808;
   --t-fg-rgb: 255, 255, 255;  --t-fg: #ffffff;   --t-on-fg: #080808;
   --t-bg: #080808;  --t-surface: #141414;  --t-surface-lo: #0f0f0f;  --t-surface-hi: #1f1f1f;
   --t-gold: #e6c07a;  --t-gold-rgb: 230, 192, 122;
@@ -110,6 +111,7 @@ html[data-acct-theme="light"] .acct-theme {
   --t-ok: #15803d;  --t-err: #c62828;  --t-scheme: light;
   --t-warn: #b45309;  --t-warn-hi: #c2410c;  --t-link: #1a56db;  --t-link-mine: #9cc3ff;
   --t-a: 1.55;
+  --t-on-gold: #fff8e8;
   color-scheme: light;
 }
 html[data-acct-theme="light"] .acct-theme select option { background: #ffffff; color: #1c1814; }

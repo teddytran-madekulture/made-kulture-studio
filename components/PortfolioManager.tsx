@@ -286,7 +286,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>
-          Up to {max} photos{foundingNo ? ` (Founding Creative #${foundingNo})` : ''}. Add several at once or drop them in, drag to reorder, mark sensitive work 18+.
+          Up to {max} photos{foundingNo ? ` (First 100 perk)` : ''}. Add several at once or drop them in, drag to reorder, mark sensitive work 18+.
         </div>
         <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, color: atMax ? 'var(--t-gold)' : 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>
           {images.length} / {max}

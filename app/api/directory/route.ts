@@ -42,14 +42,15 @@ export async function GET(req: NextRequest) {
   // Members with at least one portfolio image (one query, built into a Set).
   const { data: pics } = await service.from('portfolio_images').select('user_id, url, is_mature, hidden, sort_order')
   const withPhotos = new Set((pics ?? []).map((p: { user_id: string }) => p.user_id))
-  // Explore feed: up to 2 photos per member, never 18+ or archived — the grid
-  // is browsed without the profile page's over-18 reveal. Capped per person so
-  // a full 15-photo portfolio can't take over the feed.
+  // Explore feed candidates: every photo a member could show in Explore —
+  // never 18+ or archived (the grid has no over-18 reveal). The page shows ONE
+  // per member per visit and rotates which one, so a full portfolio gets seen
+  // over time without taking over the grid.
   const feedPhotos = new Map<string, string[]>()
   for (const p of [...(pics ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
     if (p.is_mature || p.hidden) continue
     const list = feedPhotos.get(p.user_id) ?? []
-    if (list.length < 2) { list.push(p.url); feedPhotos.set(p.user_id, list) }
+    if (list.length < 15) { list.push(p.url); feedPhotos.set(p.user_id, list) }
   }
 
   // Minimum profile to be listed: name + bio + (photo | link | IG), and — for
