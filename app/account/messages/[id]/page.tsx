@@ -81,7 +81,7 @@ export default function ThreadPage() {
   )
 
   return (
-    <div style={{ maxWidth: 620 }}>
+    <div style={{ maxWidth: 1000 }}>
       <Link href="/account/messages" style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginBottom: 12 }}>← Messages</Link>
 
       {meta && (

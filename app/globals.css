@@ -95,6 +95,9 @@ h1, h2, h3, .display {
   .acct-bar { padding-left: 48px !important; padding-right: 48px !important; }
   .acct-nav { width: 200px; }
 }
+/* Login & Security: cards stack on phones, side by side on desktop */
+.sec-grid { display: flex; flex-direction: column; gap: 24px; }
+@media (min-width: 1024px) { .sec-grid { flex-direction: row; align-items: flex-start; } .sec-grid > div { flex: 1; max-width: 520px !important; } }
 /* Profile form: one column on phones, two on desktop (details | portfolio + settings) */
 .prof-grid { display: grid; }
 .prof-col { min-width: 0; }

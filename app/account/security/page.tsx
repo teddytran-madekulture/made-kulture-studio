@@ -62,8 +62,9 @@ export default function SecurityPage() {
     <div>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 32px' }}>LOGIN &amp; SECURITY</h1>
 
+      <div className="sec-grid">
       {/* Change password */}
-      <div style={{ background: '#0f0f0f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '24px', marginBottom: 24, maxWidth: 480 }}>
+      <div style={{ background: '#0f0f0f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '24px', maxWidth: 480 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Change password</div>
         <form onSubmit={changePw} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {pwErr && <div style={errBox}>{pwErr}</div>}
@@ -99,6 +100,7 @@ export default function SecurityPage() {
           </div>
           <button type="submit" disabled={emSaving} style={btnStyle(emSaving)}>{emSaving ? 'SENDING…' : 'UPDATE EMAIL'}</button>
         </form>
+      </div>
       </div>
     </div>
   )

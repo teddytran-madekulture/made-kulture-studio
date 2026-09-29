@@ -41,7 +41,7 @@ export default function MessagesPage() {
           <Link href="/account/directory" style={{ color: '#e6c07a' }}>directory</Link> and hit Message to start a conversation.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 620 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 1000 }}>
           {convs.map(c => (
             <Link key={c.id} href={`/account/messages/${c.id}`}
               style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit', background: c.unread ? 'rgba(230,192,122,0.06)' : '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '12px 14px' }}>
