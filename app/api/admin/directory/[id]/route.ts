@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
+import { FOUNDING_CAP } from '@/lib/founding'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -23,6 +24,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Expected JSON' }, { status: 400 }) }
+
+  // { founding: 'grant' | 'revoke' } — Founding Creatives by hand (migration 120).
+  // Revoke BLOCKS the member so the automatic claim doesn't hand it straight
+  // back, and frees their number for the next person. Photos above 12 stay;
+  // they just can't add more until they're under the cap.
+  if (body?.founding === 'grant' || body?.founding === 'revoke') {
+    if (body.founding === 'revoke') {
+      const { data, error } = await supabase.from('customer_profiles')
+        .update({ founding_number: null, founding_blocked: true, founding_at: null })
+        .eq('id', params.id).select('id')
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (!data?.length) return NextResponse.json({ error: 'No profile with that id — nothing was changed.' }, { status: 404 })
+      return NextResponse.json({ id: params.id, foundingNumber: null })
+    }
+    const { data: un, error: unErr } = await supabase.from('customer_profiles')
+      .update({ founding_blocked: false }).eq('id', params.id).select('id')
+    if (unErr) return NextResponse.json({ error: unErr.message }, { status: 500 })
+    if (!un?.length) return NextResponse.json({ error: 'No profile with that id — nothing was changed.' }, { status: 404 })
+    const { data: n, error } = await supabase.rpc('claim_founding_number', { p_user: params.id, p_cap: FOUNDING_CAP })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (typeof n !== 'number') return NextResponse.json({ error: `All ${FOUNDING_CAP} Founding spots are taken. Remove one first.` }, { status: 409 })
+    return NextResponse.json({ id: params.id, foundingNumber: n })
+  }
+
   if (typeof body?.optedIn !== 'boolean') {
     return NextResponse.json({ error: 'optedIn must be true or false' }, { status: 400 })
   }

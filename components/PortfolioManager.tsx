@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ImageCropper from '@/components/ImageCropper'
 
-export const PORTFOLIO_MAX = 12
+export const PORTFOLIO_MAX = 12 // base cap; Founding Creatives get 15 (lib/founding.ts, migration 120)
 export const PORTFOLIO_ASPECT = 4 / 5 // width / height — Instagram-style portrait
 
 type Img = { id: string; url: string; is_mature: boolean; sort_order: number }
@@ -15,6 +15,12 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [agreed, setAgreed] = useState(false)
+  // Photo cap for THIS member: 12, or 15 for Founding Creatives. The database
+  // trigger enforces the same number; this just keeps the UI honest.
+  const [max, setMax] = useState(PORTFOLIO_MAX)
+  const maxRef = useRef(PORTFOLIO_MAX)
+  maxRef.current = max
+  const [foundingNo, setFoundingNo] = useState<number | null>(null)
   const [progress, setProgress] = useState('')      // "2 of 5" during a multi-photo upload
   const [dropActive, setDropActive] = useState(false) // files being dragged over the grid
   const dropDepth = useRef(0)
@@ -49,6 +55,10 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
       sync(list)
       if (list.length > 0) setAgreed(true)
       setLoading(false)
+      fetch('/api/founding', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(d => {
+        if (d?.portfolioMax) setMax(d.portfolioMax)
+        if (d?.mine) setFoundingNo(d.mine)
+      }).catch(() => {})
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -95,8 +105,8 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     if (!agreed) { setError('Check the box above first.'); return }
     const files = list.filter(f => f.type.startsWith('image/'))
     if (files.length === 0) { setError('Please choose image files.'); return }
-    const room = PORTFOLIO_MAX - imagesRef.current.length
-    if (room <= 0) { setError(`You've reached the ${PORTFOLIO_MAX}-photo limit.`); return }
+    const room = maxRef.current - imagesRef.current.length
+    if (room <= 0) { setError(`You've reached the ${maxRef.current}-photo limit.`); return }
     if (files.length === 1) { openCropForFile(files[0]); return }
 
     const tooBig = files.filter(f => f.size > 60 * 1024 * 1024)
@@ -104,7 +114,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     const batch = usable.slice(0, room)
     const notes: string[] = []
     if (tooBig.length) notes.push(`${tooBig.length} skipped (over 60 MB)`)
-    if (usable.length > room) notes.push(`${usable.length - room} skipped (${PORTFOLIO_MAX}-photo limit)`)
+    if (usable.length > room) notes.push(`${usable.length - room} skipped (${maxRef.current}-photo limit)`)
 
     setError(''); setUploading(true)
     let failed = 0
@@ -159,7 +169,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     if (manageBusy) setError('')
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError('Please sign in again.'); return false }
-    if (!replaceId && imagesRef.current.length >= PORTFOLIO_MAX) { setError(`You've reached the ${PORTFOLIO_MAX}-photo limit.`); return false }
+    if (!replaceId && imagesRef.current.length >= maxRef.current) { setError(`You've reached the ${maxRef.current}-photo limit.`); return false }
     const setBusy = (v: boolean) => { if (manageBusy) setUploading(v) }
     setBusy(true)
     const images = imagesRef.current
@@ -190,7 +200,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
           .single()
         if (insErr) {
           await supabase.storage.from('portfolios').remove([path])
-          setError(insErr.message.includes('limit') ? `You've reached the ${PORTFOLIO_MAX}-photo limit.` : insErr.message)
+          setError(insErr.message.includes('limit') ? `You've reached the ${maxRef.current}-photo limit.` : insErr.message)
           setBusy(false); return false
         }
         sync([...images, row as Img])
@@ -269,17 +279,17 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     })
   }
 
-  const atMax = images.length >= PORTFOLIO_MAX
+  const atMax = images.length >= max
   const iconBtn: React.CSSProperties = { background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 4, width: 24, height: 24, cursor: 'pointer', fontSize: 12, lineHeight: 1 }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>
-          Up to {PORTFOLIO_MAX} photos. Add several at once or drop them in, drag to reorder, mark sensitive work 18+.
+          Up to {max} photos{foundingNo ? ` (Founding Creative #${foundingNo})` : ''}. Add several at once or drop them in, drag to reorder, mark sensitive work 18+.
         </div>
         <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, color: atMax ? 'var(--t-gold)' : 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>
-          {images.length} / {PORTFOLIO_MAX}
+          {images.length} / {max}
         </div>
       </div>
 
@@ -312,7 +322,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, position: 'relative', borderRadius: 8, outline: dropActive ? '2px dashed #e6c07a' : 'none', outlineOffset: 6, transition: 'outline-color .15s' }}>
           {dropActive && (
             <div style={{ position: 'absolute', inset: -6, zIndex: 10, borderRadius: 8, background: 'rgba(8,8,8,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', textAlign: 'center', padding: 12 }}>
-              {atMax ? `Portfolio is full (${PORTFOLIO_MAX} photos)` : !agreed ? 'Check the box above first' : 'Drop photos to add them'}
+              {atMax ? `Portfolio is full (${max} photos)` : !agreed ? 'Check the box above first' : 'Drop photos to add them'}
             </div>
           )}
           {images.map((img) => {

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
   const { data: profiles, error } = await supabase
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, directory_opt_in, account_type, onboarded')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, directory_opt_in, account_type, onboarded, founding_number')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Photo counts for everyone in ONE query — a per-row lookup would be ~N
@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
         linkCount: Array.isArray(p.links) ? p.links.length : 0,
         photos: ph,
         optedIn: !!p.directory_opt_in,
+        foundingNumber: (p as any).founding_number ?? null,
         onboarded: p.onboarded !== false,
         joined: au.created_at,
         // listed = what a member browsing /account/directory actually sees.

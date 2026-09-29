@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { isProfileComplete } from '@/lib/directory-listing'
+import { claimFoundingSpots, FOUNDING_CAP } from '@/lib/founding'
 
 // Service client to read across profiles; we only ever expose opted-in members
 // and never return email/phone.
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   let q = service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type, founding_number, founding_blocked, created_at')
     .eq('directory_opt_in', true)
   if (role) q = q.contains('roles', [role])
 
@@ -47,9 +48,24 @@ export async function GET(req: NextRequest) {
   // ⚠️ The rule itself lives in lib/directory-listing.ts so /admin/directory can
   // show WHY an opted-in member is not showing up, using this exact test rather
   // than a second copy of it.
-  const members = (data ?? [])
-    .filter(m => isProfileComplete(m, withPhotos.has(m.id)))
-    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative' }))
+  const listed = (data ?? []).filter(m => isProfileComplete(m, withPhotos.has(m.id)))
 
-  return NextResponse.json({ members })
+  // Founding Creatives: anyone listed without a number gets one while spots
+  // remain (only when the WHOLE directory is fetched — a role-filtered list
+  // would hand numbers out of join order).
+  let taken = listed.filter(m => m.founding_number).length
+  if (!role) {
+    const { count } = await service.from('customer_profiles').select('id', { count: 'exact', head: true }).not('founding_number', 'is', null)
+    taken = count ?? taken
+    if (taken < FOUNDING_CAP && listed.some(m => !m.founding_number && !m.founding_blocked)) {
+      const got = await claimFoundingSpots(service, listed, id => withPhotos.has(id))
+      for (const m of listed) if (got.has(m.id)) m.founding_number = got.get(m.id)!
+      taken += got.size
+    }
+  }
+
+  const members = listed
+    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative', founding_number: m.founding_number ?? null }))
+
+  return NextResponse.json({ members, founding: { cap: FOUNDING_CAP, taken: Math.min(taken, FOUNDING_CAP) } })
 }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CREATIVE_ROLES } from '@/lib/roles'
 import { track } from '@/lib/track'
+import FoundingBadge from '@/components/FoundingBadge'
 
 interface Member {
   id: string
@@ -11,6 +12,7 @@ interface Member {
   instagram: string | null
   avatar_url: string | null
   account_type?: string
+  founding_number?: number | null
 }
 
 export default function DirectoryPage() {
@@ -24,6 +26,8 @@ export default function DirectoryPage() {
   const [roleQuery, setRoleQuery] = useState('')
   const [sortMode, setSortMode]   = useState<'common' | 'az'>('common')
   const [peopleQuery, setPeople]  = useState('')
+  const [foundingOnly, setFoundingOnly] = useState(false)
+  const [founding, setFounding] = useState<{ cap: number; taken: number } | null>(null)
 
   useEffect(() => {
     fetch('/api/roles').then(r => (r.ok ? r.json() : null))
@@ -38,7 +42,7 @@ export default function DirectoryPage() {
       .then(async r => {
         const d = await r.json().catch(() => ({}))
         if (r.status === 403 && d.optedOut) { setOptedOut(true); setMembers([]) }
-        else { setOptedOut(false); setMembers(d.members ?? []) }
+        else { setOptedOut(false); setMembers(d.members ?? []); if (d.founding) setFounding(d.founding) }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -64,13 +68,14 @@ export default function DirectoryPage() {
   const filtered = useMemo(() => {
     const pq = peopleQuery.trim().toLowerCase()
     return members.filter(m => {
+      if (foundingOnly && !m.founding_number) return false
       const roleMatch = selected.length === 0 || m.roles.some(r => selected.includes(r))
       const peopleMatch = !pq
         || (m.full_name || '').toLowerCase().includes(pq)
         || (m.instagram || '').toLowerCase().includes(pq)
       return roleMatch && peopleMatch
     })
-  }, [members, selected, peopleQuery])
+  }, [members, selected, peopleQuery, foundingOnly])
 
   const toggleRole = (r: string) => {
     // Analytics: which roles people filter for (demand), vs who is listed (supply).
@@ -141,8 +146,14 @@ export default function DirectoryPage() {
           {selected.length ? `Roles · ${selected.length}` : 'Filter by role'}
           <span style={{ fontSize: 10, opacity: 0.7 }}>{open ? '▲' : '▼'}</span>
         </button>
-        {(selected.length > 0 || peopleQuery) && (
-          <button onClick={() => { setSelected([]); setPeople('') }}
+        {members.some(m => m.founding_number) && (
+          <button onClick={() => { setFoundingOnly(f => !f); if (!foundingOnly) track('filter', { meta: { role: 'Founding', results: members.filter(m => m.founding_number).length } }) }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: foundingOnly ? 'var(--t-gold)' : 'rgba(var(--t-gold-rgb), 0.08)', color: foundingOnly ? 'var(--t-on-fg)' : 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            ★ Founding
+          </button>
+        )}
+        {(selected.length > 0 || peopleQuery || foundingOnly) && (
+          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false) }}
             style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
             Clear
           </button>
@@ -197,6 +208,9 @@ export default function DirectoryPage() {
         <>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 14 }}>
             {filtered.length} {filtered.length === 1 ? 'creative' : 'creatives'}
+            {founding && founding.taken < founding.cap && (
+              <span style={{ color: 'var(--t-gold)', marginLeft: 12 }}>★ {founding.cap - founding.taken} of {founding.cap} Founding spots left</span>
+            )}
           </div>
           {filtered.length === 0 ? (
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
@@ -205,16 +219,19 @@ export default function DirectoryPage() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {filtered.map(m => (
-                <Link key={m.id} href={`/account/directory/${m.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '18px 20px' }}>
+                <Link key={m.id} href={`/account/directory/${m.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: m.founding_number ? '1px solid rgba(var(--t-gold-rgb), 0.4)' : '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                     <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {m.avatar_url
                         ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{(m.full_name || '?').charAt(0).toUpperCase()}</span>}
                     </div>
+                    <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
                       {m.full_name}
                       {m.account_type === 'brand' && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>BRAND</span>}
+                    </div>
+                    {m.founding_number ? <div style={{ marginTop: 5 }}><FoundingBadge number={m.founding_number} /></div> : null}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: m.instagram ? 12 : 0 }}>

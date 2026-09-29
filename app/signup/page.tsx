@@ -18,6 +18,12 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false)
   const [showPw, setShowPw]   = useState(false)
   const [password2, setPassword2] = useState('')
+  // Founding Creatives counter ("63 of 100 left") — public, no sign-in needed.
+  const [foundingLeft, setFoundingLeft] = useState<{ left: number; cap: number } | null>(null)
+  useEffect(() => {
+    fetch('/api/founding').then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && typeof d.left === 'number') setFoundingLeft({ left: d.left, cap: d.cap }) }).catch(() => {})
+  }, [])
   const supabase = createClient()
 
   useEffect(() => {
@@ -138,6 +144,11 @@ export default function SignupPage() {
               {accountType === 'creative'
                 ? 'Get listed in the creative directory, build a portfolio, and find collaborations.'
                 : 'List your brand, post castings, and hire creatives from the community.'}
+              {foundingLeft && foundingLeft.left > 0 && (
+                <div style={{ color: '#e6c07a', marginTop: 6 }}>
+                  ★ {foundingLeft.left} of {foundingLeft.cap} Founding spots left: the first {foundingLeft.cap} complete profiles get a permanent gold badge and 15 portfolio photos.
+                </div>
+              )}
             </div>
           )}
           <input placeholder={accountType === 'brand' ? 'Company name' : 'Full name'} value={form.full_name} onChange={set('full_name')} required style={inputStyle} />

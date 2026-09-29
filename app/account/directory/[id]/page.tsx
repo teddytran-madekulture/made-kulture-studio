@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { track, trackNow } from '@/lib/track'
+import FoundingBadge from '@/components/FoundingBadge'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -9,6 +10,7 @@ type Member = {
   id: string
   full_name: string
   account_type?: string
+  founding_number?: number | null
   roles: string[]
   instagram: string | null
   avatar_url: string | null
@@ -188,6 +190,7 @@ export default function MemberProfilePage() {
         </div>
         <div>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '0 0 6px', lineHeight: 1 }}>{member.full_name}</h1>
+          {member.founding_number ? <div style={{ margin: '2px 0 8px' }}><FoundingBadge number={member.founding_number} size="lg" brand={member.account_type === 'brand'} /></div> : null}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {member.account_type === 'brand' && (
               <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '3px 8px' }}>BRAND</span>

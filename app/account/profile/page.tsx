@@ -47,6 +47,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
+  // Founding Creatives (first 100 complete listed profiles): badge + 15 photos.
+  const [founding, setFounding] = useState<{ cap: number; left: number; mine: number | null } | null>(null)
+  const loadFounding = () => fetch('/api/founding', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null))
+    .then(d => { if (d && typeof d.cap === 'number') setFounding({ cap: d.cap, left: d.left, mine: d.mine ?? null }) }).catch(() => {})
+  useEffect(() => { loadFounding() }, [])
   const [error, setError]     = useState('')
   const [uploading, setUploading] = useState(false)
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
@@ -156,6 +161,7 @@ export default function ProfilePage() {
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
     else {
       setSaved(true); setSaving(false)
+      loadFounding() // saving may have just completed the profile → claims a Founding spot
     }
   }
 
@@ -221,6 +227,17 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        {/* Founding Creatives status */}
+        {founding && !isCustomer && (founding.mine ? (
+          <div style={{ background: 'rgba(var(--t-gold-rgb), 0.1)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', marginBottom: 24, lineHeight: 1.5 }}>
+            ★ <strong>You&apos;re Founding {isBrand ? 'Member' : 'Creative'} #{founding.mine}.</strong> <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.65 * var(--t-a)))' }}>Your gold badge shows on the directory, and you can add up to 15 portfolio photos instead of 12, for good.</span>
+          </div>
+        ) : founding.left > 0 ? (
+          <div style={{ background: 'rgba(var(--t-gold-rgb), 0.06)', border: '1px dashed rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', marginBottom: 24, lineHeight: 1.5 }}>
+            <strong style={{ color: 'var(--t-gold)' }}>★ {founding.left} of {founding.cap} Founding spots left.</strong> Complete your profile and turn on the directory listing to claim one: a permanent gold Founding badge and 15 portfolio photos instead of 12.
+          </div>
+        ) : null)}
 
         <div className="prof-grid">
         <div className="prof-col">

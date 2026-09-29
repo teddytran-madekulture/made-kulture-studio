@@ -28,6 +28,7 @@ type Member = {
   joined: string | null
   listed: boolean
   blockers: string[]
+  foundingNumber: number | null
 }
 type Counts = { total: number; listed: number; incomplete: number; optedOut: number }
 type Filter = 'all' | 'listed' | 'incomplete' | 'optedOut'
@@ -103,6 +104,20 @@ export default function AdminDirectoryPage() {
     } catch (e: any) { setError(e.message) } finally { setBusy(null) }
   }
 
+  async function setFounding(m: Member, action: 'grant' | 'revoke') {
+    if (action === 'revoke' && !confirm(`Remove ${m.name || 'this member'}'s Founding badge? They lose the badge and the 15-photo limit, and won't get it back automatically.`)) return
+    setBusy(m.id); setError('')
+    try {
+      const res = await fetch(`/api/admin/directory/${m.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ founding: action }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+      setMembers(list => list.map(x => x.id === m.id ? { ...x, foundingNumber: data.foundingNumber ?? null } : x))
+    } catch (e: any) { setError(e.message) } finally { setBusy(null) }
+  }
+
   if (unauth) return <Wrap><p style={text}>Admin sign-in required. <a href="/admin" style={{ color: '#e6c07a' }}>Sign in →</a></p></Wrap>
 
   return (
@@ -164,6 +179,7 @@ export default function AdminDirectoryPage() {
                   {m.name || <span style={{ color: 'rgba(255,255,255,0.35)' }}>(no name)</span>}
                 </span>
                 <span style={chip('mute')}>{m.accountType}</span>
+                {m.foundingNumber && <span style={{ ...chip('mute'), color: '#e6c07a', borderColor: 'rgba(230,192,122,0.5)' }}>★ founding #{m.foundingNumber}</span>}
                 {m.listed
                   ? <span style={chip('good')}>listed</span>
                   : m.optedIn
@@ -208,6 +224,15 @@ export default function AdminDirectoryPage() {
                   {busy === m.id ? '…' : 'ADD TO DIRECTORY'}
                 </button>
               )}
+              {m.accountType !== 'customer' && (m.foundingNumber ? (
+                <button onClick={() => setFounding(m, 'revoke')} disabled={busy === m.id} style={{ ...btn(), color: '#e6c07a', opacity: busy === m.id ? 0.5 : 1 }}>
+                  {busy === m.id ? '…' : 'REMOVE FOUNDING'}
+                </button>
+              ) : (
+                <button onClick={() => setFounding(m, 'grant')} disabled={busy === m.id} style={{ ...btn(), color: '#e6c07a', opacity: busy === m.id ? 0.5 : 1 }}>
+                  {busy === m.id ? '…' : '★ MAKE FOUNDING'}
+                </button>
+              ))}
               {m.photos.visible + m.photos.hidden > 0 && (
                 <a href="/admin/portfolio" style={{ ...btn(), textDecoration: 'none', textAlign: 'center' }}>PORTFOLIO →</a>
               )}
