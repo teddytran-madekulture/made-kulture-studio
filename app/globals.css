@@ -91,7 +91,8 @@ h1, h2, h3, .display {
 .acct-shell { display: flex; gap: 48px; }
 .acct-nav { width: 180px; flex-shrink: 0; }
 @media (min-width: 1024px) {
-  .acct-shell { gap: 64px; }
+  .acct-shell { gap: 64px; padding-left: 48px !important; padding-right: 48px !important; }
+  .acct-bar { padding-left: 48px !important; padding-right: 48px !important; }
   .acct-nav { width: 200px; }
 }
 /* Plus page: benefits left, checkout pinned right on desktop */
