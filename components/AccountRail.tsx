@@ -129,12 +129,6 @@ export default function AccountRail() {
         </nav>
         <div className="ar-bot">
           <Link href="/" className="ar-it" title="Back to the website"><Icon name="site" /><span className="lbl">Back to website</span></Link>
-          <button type="button" className="ar-it" onClick={flipTheme} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
-            <Icon name={theme === 'light' ? 'moon' : 'sun'} /><span className="lbl">{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
-          </button>
-          <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
-            <button type="submit" className="ar-it" title="Sign out"><Icon name="out" /><span className="lbl">Sign out</span></button>
-          </form>
         </div>
       </aside>
 
@@ -172,5 +166,38 @@ export default function AccountRail() {
         </>
       )}
     </>
+  )
+}
+
+// Desktop top bar (restored): wordmark left, light/dark + SIGN OUT right —
+// the same bar the account area had before the icon rail. Phones keep their
+// own slim top bar inside AccountRail.
+export function AccountTopBar() {
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  useEffect(() => { setTheme(document.documentElement.dataset.acctTheme === 'light' ? 'light' : 'dark') }, [])
+  const flip = () => {
+    const next = theme === 'light' ? 'dark' : 'light'
+    document.documentElement.dataset.acctTheme = next
+    try { localStorage.setItem(THEME_KEY, next) } catch {}
+    setTheme(next)
+  }
+  const box: React.CSSProperties = { background: 'none', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 4, color: 'var(--t-fg)', cursor: 'pointer' }
+  return (
+    <div className="at-top">
+      <style>{`
+        .at-top { position: sticky; top: 0; z-index: 50; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; background: var(--t-bg); border-bottom: 1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a))); }
+        @media (max-width: 768px) { .at-top { display: none; } }
+      `}</style>
+      <Link href="/" style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: 'var(--t-fg)', textDecoration: 'none' }}>MADE KULTURE</Link>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" onClick={flip} aria-label={theme === 'light' ? 'Dark mode' : 'Light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+          style={{ ...box, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{PATHS[theme === 'light' ? 'moon' : 'sun']}</svg>
+        </button>
+        <form action="/api/auth/signout" method="POST" style={{ margin: 0 }}>
+          <button type="submit" style={{ ...box, padding: '8px 16px', fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.08em' }}>SIGN OUT</button>
+        </form>
+      </div>
+    </div>
   )
 }
