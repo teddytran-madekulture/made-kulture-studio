@@ -68,6 +68,7 @@ function SidebarInner() {
         <div style={sectionHdr}>COMMUNITY</div>
         <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
         <Item href="/admin/directory" icon="✦" label="Creative Directory" active={on('/admin/directory')} />
+        <Item href="/admin/community" icon="📈" label="Community" active={on('/admin/community')} />
         <Item href="/admin/roles" icon="◆" label="Directory Roles" active={on('/admin/roles')} />
 
         <div style={sectionHdr}>STUDIO</div>

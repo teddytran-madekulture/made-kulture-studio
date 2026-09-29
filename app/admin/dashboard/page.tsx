@@ -1837,6 +1837,7 @@ export default function AdminDashboard() {
           {navHdr('COMMUNITY')}
           {navLink('/admin/portfolio', '🖼', 'Portfolio')}
           {navLink('/admin/directory', '✦', 'Creative Directory')}
+          {navLink('/admin/community', '📈', 'Community')}
           {navLink('/admin/roles', '◆', 'Directory Roles')}
 
           {navHdr('STUDIO')}

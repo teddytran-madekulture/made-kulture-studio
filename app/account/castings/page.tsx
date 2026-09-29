@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { track } from '@/lib/track'
 import Link from 'next/link'
 import { CREATIVE_ROLES } from '@/lib/roles'
 
@@ -56,6 +57,22 @@ export default function CastingsPage() {
       })
       .catch(() => setLoading(false))
   }, [comp, role, q, mine])
+
+  // Analytics: casting searches + filters, logged once they settle for 1.2s
+  // (the list refetches per keystroke; the log must not).
+  const lastCastingQ = useRef('')
+  useEffect(() => {
+    if (loading || mine) return
+    const qq = q.trim().toLowerCase()
+    if (qq.length < 2 && !comp && !role) return
+    const key = `${qq}|${comp}|${role}`
+    const t = setTimeout(() => {
+      if (key === lastCastingQ.current) return
+      lastCastingQ.current = key
+      track('search', { query: qq || undefined, meta: { kind: 'casting', comp, role, results: items.length } })
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [q, comp, role, mine, loading, items.length])
 
   const chip = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} style={{

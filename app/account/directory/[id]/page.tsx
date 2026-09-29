@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { track, trackNow } from '@/lib/track'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -87,7 +88,7 @@ export default function MemberProfilePage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toUserId: member.id }),
     })
-    if (res.ok) setInvitedIds(prev => (prev.includes(castingId) ? prev : [...prev, castingId]))
+    if (res.ok) { setInvitedIds(prev => (prev.includes(castingId) ? prev : [...prev, castingId])); track('contact_click', { target_id: member.id, meta: { what: 'invite' } }) }
     else { const d = await res.json().catch(() => ({})); setError(d.error ?? 'Could not invite.') }
   }
 
@@ -95,6 +96,7 @@ export default function MemberProfilePage() {
     if (!member || followBusy) return
     setFollowBusy(true)
     const next = !following
+    track('contact_click', { target_id: member.id, meta: { what: next ? 'follow' : 'unfollow' } })
     setFollowing(next); setFollowers(c => Math.max(0, c + (next ? 1 : -1))) // optimistic
     const res = await fetch('/api/follow', {
       method: next ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -110,6 +112,7 @@ export default function MemberProfilePage() {
 
   const startChat = async () => {
     if (!member || starting) return
+    trackNow('contact_click', { target_id: member.id, meta: { what: 'message' } })
     setStarting(true)
     const res = await fetch('/api/messages/start', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -126,7 +129,10 @@ export default function MemberProfilePage() {
       .then(async r => {
         const d = await r.json().catch(() => ({}))
         if (!r.ok) { setError(d.error ?? 'Could not load profile.'); setMember(null) }
-        else { setMember(d.member); setFollowing(!!d.member.is_following); setFollowers(d.member.followers ?? 0) }
+        else {
+          setMember(d.member); setFollowing(!!d.member.is_following); setFollowers(d.member.followers ?? 0)
+          if (!d.member.is_self) track('profile_view', { target_id: d.member.id, meta: { photos: d.member.portfolio?.length ?? 0 } })
+        }
         setLoading(false)
       })
       .catch(() => { setError('Could not load profile.'); setLoading(false) })
@@ -141,6 +147,22 @@ export default function MemberProfilePage() {
       setMyCastings(open.map((c: { id: string; title: string }) => ({ id: c.id, title: c.title })))
     }).catch(() => {})
   }, [member])
+
+  // Analytics: did the viewer actually scroll down to the portfolio? Logged
+  // once per profile visit when at least a third of the grid is on screen.
+  const portfolioRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = portfolioRef.current
+    if (!el || !member || member.is_self || typeof IntersectionObserver === 'undefined') return
+    const obs = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) {
+        track('portfolio_seen', { target_id: member.id, meta: { photos: member.portfolio.length } })
+        obs.disconnect()
+      }
+    }, { threshold: 0.33 })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [member, loading])
 
   if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 40 }}>Loading…</div>
   if (error || !member) return (
@@ -230,15 +252,16 @@ export default function MemberProfilePage() {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, margin: '12px 0 8px' }}>
         {member.instagram && (
           <a href={`https://instagram.com/${member.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
+            onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'instagram' } })}
             style={pillLink}>@{member.instagram.replace('@', '')}</a>
         )}
-        {member.email && <a href={`mailto:${member.email}`} style={pillLink}>{member.email}</a>}
-        {member.phone && <a href={`tel:${member.phone}`} style={pillLink}>{member.phone}</a>}
+        {member.email && <a href={`mailto:${member.email}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'email' } })} style={pillLink}>{member.email}</a>}
+        {member.phone && <a href={`tel:${member.phone}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'phone' } })} style={pillLink}>{member.phone}</a>}
         {member.links.map((l, i) => {
           let host = l.url
           try { host = new URL(withProtocol(l.url)).hostname.replace('www.', '') } catch { /* keep raw */ }
           return (
-            <a key={i} href={withProtocol(l.url)} target="_blank" rel="noopener noreferrer" style={pillLink}>{l.label || host}</a>
+            <a key={i} href={withProtocol(l.url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'link' } })} style={pillLink}>{l.label || host}</a>
           )
         })}
       </div>
@@ -252,14 +275,14 @@ export default function MemberProfilePage() {
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} />
             </div>
           ) : (
-            <a href={withProtocol(member.video_url)} target="_blank" rel="noopener noreferrer" style={pillLink}>▶ Watch reel</a>
+            <a href={withProtocol(member.video_url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'reel' } })} style={pillLink}>▶ Watch reel</a>
           )}
         </div>
       )}
 
       {/* Portfolio */}
       {member.portfolio.length > 0 && (
-        <div style={{ marginTop: 28 }}>
+        <div ref={portfolioRef} style={{ marginTop: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <h2 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.04em', margin: 0 }}>PORTFOLIO</h2>
             {hasMature && !revealMature && (
@@ -270,11 +293,11 @@ export default function MemberProfilePage() {
             )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
-            {member.portfolio.map(img => {
+            {member.portfolio.map((img, idx) => {
               const hidden = img.is_mature && !revealMature
               return (
                 <div key={img.id}
-                  onClick={() => { if (!hidden) setLightbox(img.url) }}
+                  onClick={() => { if (!hidden) { setLightbox(img.url); track('portfolio_open', { target_id: member.id, meta: { index: idx + 1, of: member.portfolio.length } }) } }}
                   style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
                   <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: hidden ? 'blur(18px)' : 'none' }} />
                   {hidden && (

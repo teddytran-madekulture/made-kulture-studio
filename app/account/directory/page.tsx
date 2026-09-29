@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CREATIVE_ROLES } from '@/lib/roles'
+import { track } from '@/lib/track'
 
 interface Member {
   id: string
@@ -71,8 +72,39 @@ export default function DirectoryPage() {
     })
   }, [members, selected, peopleQuery])
 
-  const toggleRole = (r: string) =>
+  const toggleRole = (r: string) => {
+    // Analytics: which roles people filter for (demand), vs who is listed (supply).
+    if (!selected.includes(r)) track('filter', { meta: { role: r, results: members.filter(m => m.roles.includes(r)).length } })
     setSelected(s => s.includes(r) ? s.filter(x => x !== r) : [...s, r])
+  }
+
+  // ── Analytics (Admin → Community): what people search for ─────────────────
+  // Logged once the member stops typing for 1.2s, so "photographer" is one
+  // event, not twelve. Zero-result searches are the most useful signal: they
+  // name the creatives the directory doesn't have yet.
+  const lastPeopleQ = useRef('')
+  useEffect(() => {
+    const q = peopleQuery.trim().toLowerCase()
+    if (q.length < 2 || loading) return
+    const t = setTimeout(() => {
+      if (q === lastPeopleQ.current) return
+      lastPeopleQ.current = q
+      track('search', { query: q, meta: { kind: 'people', results: filtered.length } })
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [peopleQuery, filtered.length, loading])
+
+  const lastRoleQ = useRef('')
+  useEffect(() => {
+    const q = roleQuery.trim().toLowerCase()
+    if (q.length < 2) return
+    const t = setTimeout(() => {
+      if (q === lastRoleQ.current) return
+      lastRoleQ.current = q
+      track('search', { query: q, meta: { kind: 'role', results: displayRoles.length } })
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [roleQuery, displayRoles.length])
 
   const input: React.CSSProperties = {
     background: 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))', color: 'var(--t-fg)',

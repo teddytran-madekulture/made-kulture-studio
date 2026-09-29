@@ -65,6 +65,7 @@ export default function PrivacyPolicyPage() {
               'Booking details (date, time, set, add-ons)',
               'Any notes or special requests you provide',
             ]} />
+            <P>When you use the member community (creative directory, profiles, portfolios, messages and castings) while signed in, we also record how it is used: searches and filters, which profiles and castings are viewed, portfolio photos opened, and buttons clicked (such as Message, Follow or Instagram). We use this only to improve the community features. We do not record the content of your messages for this purpose, and this activity data is deleted after 12 months.</P>
           </Section>
 
           <Section title="HOW WE USE YOUR INFORMATION">

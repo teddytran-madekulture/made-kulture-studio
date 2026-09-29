@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
+import { track, trackNow } from '@/lib/track'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { estimatePlan, type Rates } from '@/lib/estimate'
@@ -40,10 +41,12 @@ export default function CastingDetailPage() {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setError(d.error ?? 'Could not load.'); setLoading(false); return }
     setCasting(d.casting); setParticipants(d.participants ?? []); setIsAuthor(d.isAuthor); setMyStatus(d.myStatus); setLoading(false)
+    return d
   }).catch(() => { setError('Could not load.'); setLoading(false) })
 
   useEffect(() => {
-    load()
+    // Analytics: one view per page load (reloads after actions aren't counted).
+    load().then(d => { if (d?.casting && !d.isAuthor) track('casting_view', { target_id: d.casting.id, meta: { comp: d.casting.compensation_type ?? '' } }) })
     fetch('/api/sets').then(r => r.json()).then(d => setRates({
       sets: (d.sets ?? []).map((s: { slug: string; name: string; rate_per_hour: number; capacity?: number; min_hours?: number }) => ({ slug: s.slug, name: s.name, rate_per_hour: Number(s.rate_per_hour), capacity: s.capacity, min_hours: s.min_hours })),
       buyoutRate: Number(d.buyoutRate) || 400,
@@ -64,6 +67,7 @@ export default function CastingDetailPage() {
   const active = casting?.status === 'open' && !expired
 
   const interestClick = async () => {
+    if (casting) trackNow('casting_apply', { target_id: casting.id })
     setBusy(true)
     const res = await fetch(`/api/castings/${id}/interest`, { method: 'POST' })
     const d = await res.json().catch(() => ({}))
@@ -73,6 +77,7 @@ export default function CastingDetailPage() {
   }
   const messageAuthor = async () => {
     if (!casting) return
+    trackNow('contact_click', { target_id: casting.author.id, meta: { what: 'message', from: 'casting' } })
     setBusy(true)
     const res = await fetch('/api/messages/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toUserId: casting.author.id }) })
     const d = await res.json().catch(() => ({})); setBusy(false)
