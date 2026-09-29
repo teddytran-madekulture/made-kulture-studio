@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
-export default function PlusCheckout({ priceLabel, onSuccess }: { priceLabel: string; onSuccess: () => void }) {
+export default function PlusCheckout({ priceLabel, onSuccess, reason }: { priceLabel: string; onSuccess: () => void; reason?: 'save-booking' }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [card, setCard] = useState<unknown>(null)
   const [paying, setPaying] = useState(false)
@@ -57,7 +57,7 @@ export default function PlusCheckout({ priceLabel, onSuccess }: { priceLabel: st
       if (result.status !== 'OK') throw new Error(result.errors?.[0]?.message ?? 'Card error')
       const res = await fetch('/api/account/plus', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'checkout', sourceId: result.token }),
+        body: JSON.stringify({ action: 'checkout', sourceId: result.token, ...(reason ? { reason } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Payment failed.')

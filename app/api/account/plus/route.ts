@@ -7,6 +7,7 @@ import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { plusActive, plusExpiresAtMs } from '@/lib/short-notice'
 import { getPlusPricing } from '@/lib/plus-pricing'
 import { sendPlusReceiptEmail } from '@/lib/email'
+import { sendOwnerPush } from '@/lib/push'
 
 export const dynamic = 'force-dynamic'
 
@@ -147,6 +148,20 @@ export async function POST(req: NextRequest) {
     }
 
     try { await sendPlusReceiptEmail({ customerName: name, customerEmail: email, amountCents: cents, expiresAt: expiresIso }) } catch {}
+
+    // Tell the owner. Before this, a Plus signup was silent: the money landed and
+    // nobody knew until they went looking. Non-fatal; the member is already active.
+    // `reason` comes from SaveWithPlusModal: they bought Plus to move/cancel a
+    // booking inside 48h, which is worth knowing (a slot may be about to open).
+    try {
+      const why = body.reason === 'save-booking' ? ' · bought to save a booking inside 48h' : ''
+      await sendOwnerPush({
+        title: '⭐ New Plus member',
+        body: `${name} · $${(cents / 100).toFixed(cents % 100 ? 2 : 0)}/yr${why}`,
+        url: '/admin/plus',
+        tag: `plus-signup-${cust?.id ?? email}`,
+      })
+    } catch (e) { console.error('[account/plus] owner push failed (non-fatal):', e) }
 
     return NextResponse.json({ ok: true, expiresAt: new Date(expiresIso).getTime() })
   } catch (err: any) {

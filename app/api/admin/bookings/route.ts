@@ -4,6 +4,7 @@ import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
 import { computeVisits, fetchVisitRows, fetchPrior, type VisitInfo } from '@/lib/visits'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { standingForCustomerIds } from '@/lib/standing'
+import { plusActive } from '@/lib/short-notice'
 import { bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
 import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 import { createClient } from '@supabase/supabase-js'
@@ -76,6 +77,17 @@ export async function GET(req: NextRequest) {
     m.forEach((st, id) => { if (st.level !== 'good') standing[id] = { level: st.level, points: st.points } })
   } catch (e) { console.error('[admin/bookings] standing failed (non-fatal):', e) }
 
+  // Active Plus members by customer id, so the calendar can chip them. Plus lives
+  // in customers.pricing_overrides; only ACTIVE (unexpired) memberships count.
+  // Non-fatal like visits: a failure means no chips, never wrong ones.
+  const plus: Record<string, { comp: boolean }> = {}
+  try {
+    const { data: plusRows, error: plusErr } = await supabase
+      .from('customers').select('id, pricing_overrides').eq('pricing_overrides->>plus', 'true')
+    if (plusErr) throw plusErr
+    for (const c of plusRows ?? []) if (plusActive(c.pricing_overrides)) plus[c.id] = { comp: !!(c.pricing_overrides as any)?.plus_comp }
+  } catch (e) { console.error('[admin/bookings] plus lookup failed (non-fatal):', e) }
+
   const { data: settingRows } = await supabase
     .from('studio_settings').select('key, value')
     .in('key', ['guest_penalty_per_head', 'per_person_fee', 'cleaning_fee_set', 'cleaning_fee_studio', 'regular_visit_threshold'])
@@ -92,7 +104,7 @@ export async function GET(req: NextRequest) {
   // `regular_visit_threshold`, default 5 — change it without a deploy.
   const regularThreshold    = Number(s['regular_visit_threshold']) || 5
 
-  return NextResponse.json({ bookings: data, visits, standing, regularThreshold, guestPenaltyPerHead, perPersonFee, cleaningFeeSet, cleaningFeeStudio })
+  return NextResponse.json({ bookings: data, visits, standing, plus, regularThreshold, guestPenaltyPerHead, perPersonFee, cleaningFeeSet, cleaningFeeStudio })
 }
 
 // ─── POST /api/admin/bookings — manual booking ────────────────────────────────

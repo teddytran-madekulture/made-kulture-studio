@@ -83,6 +83,8 @@ interface Booking {
   visit?: { n: number; prevStart: string | null; prevSet: string | null } | null
   // Account standing, only when BELOW good (migration 109, /api/admin/bookings).
   standing?: { level: string; points: number } | null
+  // Active Plus membership, attached client-side from the API's `plus` map.
+  plus?: { comp: boolean } | null
   sets: { name: string } | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
   booking_add_ons?: {
@@ -161,8 +163,15 @@ function visitTag(b: Booking): { label: string; color: string; bg: string; borde
 function VisitChip({ b, size = 9 }: { b: Booking; size?: number }) {
   const t = visitTag(b)
   const st = b.standing ? <StandingChip level={b.standing.level} points={b.standing.points} size={size} /> : null
-  if (!t) return st
+  const pl = b.plus ? (
+    <span title={b.plus.comp ? 'Plus member (comped)' : 'Plus member'}
+      style={{ fontSize: size, fontWeight: 800, letterSpacing: '0.08em', color: '#080808', background: '#d4a843', border: '1px solid #d4a843', padding: size <= 8 ? '0 4px' : '1px 6px', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+      PLUS
+    </span>
+  ) : null
+  if (!t) return (pl || st) ? <>{pl}{st}</> : null
   return (<>
+    {pl}
     <span title={b.visit?.prevStart ? `Last here ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(b.visit.prevStart))}${b.visit.prevSet ? ` · ${b.visit.prevSet}` : ''}` : 'First time at the studio'}
       style={{ fontSize: size, fontWeight: 700, letterSpacing: '0.08em', color: t.color, background: t.bg, border: `1px solid ${t.border}`, padding: size <= 8 ? '0 4px' : '1px 6px', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
       {t.label}
@@ -937,7 +946,8 @@ export default function AdminDashboard() {
     const visits = data.visits || {}
     if (data.regularThreshold) REGULAR_AT = Number(data.regularThreshold)
     const standing = data.standing || {}
-    setBookings((data.bookings || []).map((b: Booking) => ({ ...b, visit: visits[b.id] ?? null, standing: (b.customer_id && standing[b.customer_id]) || null })))
+    const plusMap = data.plus || {}
+    setBookings((data.bookings || []).map((b: Booking) => ({ ...b, visit: visits[b.id] ?? null, standing: (b.customer_id && standing[b.customer_id]) || null, plus: (b.customer_id && plusMap[b.customer_id]) || null })))
     if (data.guestPenaltyPerHead) setGuestPenalty(Number(data.guestPenaltyPerHead))
     if (data.perPersonFee)        setPerPersonFee(Number(data.perPersonFee))
     if (data.cleaningFeeSet)      setCleanFeeSet(Number(data.cleaningFeeSet))
@@ -1831,6 +1841,7 @@ export default function AdminDashboard() {
           {navHdr('CUSTOMERS')}
           {navView('customers', '👤', 'Client List')}
           {navLink('/admin/standing', '★', 'Account Standing')}
+          {navLink('/admin/plus', '+', 'Plus Members', '#d4a843')}
           {navLink('/admin/credit', '$', 'Credit & Rewards')}
           {navLink('/admin/signups', '✉', 'Recent Signups')}
 

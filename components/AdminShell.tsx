@@ -62,6 +62,7 @@ function SidebarInner() {
         <div style={sectionHdr}>CUSTOMERS</div>
         <Item href={`${D}customers`} icon="👤" label="Client List" />
         <Item href="/admin/standing" icon="★" label="Account Standing" active={on('/admin/standing')} />
+        <Item href="/admin/plus" icon="+" label="Plus Members" active={on('/admin/plus')} />
         <Item href="/admin/credit" icon="$" label="Credit & Rewards" active={on('/admin/credit')} />
         <Item href="/admin/signups" icon="✉" label="Recent Signups" active={on('/admin/signups')} />
 

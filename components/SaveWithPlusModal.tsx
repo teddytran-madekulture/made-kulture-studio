@@ -70,7 +70,7 @@ export default function SaveWithPlusModal({
           Joining doesn’t change your booking by itself. Once you’re in, you choose what to do with it — before the session starts.
         </p>
 
-        <PlusCheckout priceLabel={priceLabel} onSuccess={onDone} />
+        <PlusCheckout priceLabel={priceLabel} onSuccess={onDone} reason="save-booking" />
       </div>
     </div>
   )
