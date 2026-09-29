@@ -34,9 +34,9 @@ export default function MessagesPage() {
       <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, margin: '0 0 24px' }}>MESSAGES</h1>
 
       {loading ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)' }}>Loading…</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>Loading…</div>
       ) : convs.length === 0 ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', lineHeight: 1.6 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', lineHeight: 1.6 }}>
           No messages yet. Open a member from the{' '}
           <Link href="/account/directory" style={{ color: 'var(--t-gold)' }}>directory</Link> and hit Message to start a conversation.
         </div>
@@ -44,18 +44,18 @@ export default function MessagesPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 1000 }}>
           {convs.map(c => (
             <Link key={c.id} href={`/account/messages/${c.id}`}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit', background: c.unread ? 'rgba(var(--t-gold-rgb), 0.06)' : 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '12px 14px' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit', background: c.unread ? 'rgba(var(--t-gold-rgb), 0.06)' : 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '12px 14px' }}>
               <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {c.other.avatar_url
                   ? <img src={c.other.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 18, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>{c.other.name.charAt(0).toUpperCase()}</span>}
+                  : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 18, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{c.other.name.charAt(0).toUpperCase()}</span>}
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: c.unread ? 700 : 600, color: 'var(--t-fg)' }}>{c.other.name}</span>
-                  {c.last && <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.35)', flexShrink: 0 }}>{when(c.last.at)}</span>}
+                  {c.last && <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', flexShrink: 0 }}>{when(c.last.at)}</span>}
                 </div>
-                <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.unread ? 'rgba(var(--t-fg-rgb), 0.8)' : 'rgba(var(--t-fg-rgb), 0.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: c.unread ? 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))' : 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
                   {c.last ? `${c.last.fromMe ? 'You: ' : ''}${c.last.body}` : 'No messages yet'}
                 </div>
               </div>

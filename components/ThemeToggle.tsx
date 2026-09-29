@@ -25,7 +25,7 @@ export default function ThemeToggle() {
     <button type="button" onClick={flip}
       aria-label={light ? 'Switch to dark mode' : 'Switch to light mode'}
       title={light ? 'Dark mode' : 'Light mode'}
-      style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid rgba(var(--t-fg-rgb), 0.15)', borderRadius: 4, color: 'var(--t-fg)', cursor: 'pointer', padding: 0, visibility: theme ? 'visible' : 'hidden' }}>
+      style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 4, color: 'var(--t-fg)', cursor: 'pointer', padding: 0, visibility: theme ? 'visible' : 'hidden' }}>
       {light ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
       ) : (

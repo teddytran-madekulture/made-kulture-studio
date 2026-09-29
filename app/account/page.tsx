@@ -56,7 +56,7 @@ export default async function AccountDashboard() {
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, letterSpacing: '0.02em', margin: '0 0 4px' }}>
         HEY {firstName?.toUpperCase()}
       </h1>
-      <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', margin: '0 0 24px' }}>
+      <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', margin: '0 0 24px' }}>
         {user!.email}
       </p>
 
@@ -67,7 +67,7 @@ export default async function AccountDashboard() {
             <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-gold)', marginBottom: 4 }}>
               {acctType === 'customer' ? 'Join the Made Kulture creator directory →' : 'You’re not in the creator directory yet →'}
             </div>
-            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.6)', lineHeight: 1.5 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', lineHeight: 1.5 }}>
               {acctType === 'customer'
                 ? 'Switch your account to Creative or Brand and complete your profile so brands and other creatives can find you.'
                 : 'Complete your profile and switch on your listing so other members can find you by role.'}
@@ -81,22 +81,22 @@ export default async function AccountDashboard() {
 
       {/* Quick stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 40 }}>
-        <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '20px 24px' }}>
+        <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '20px 24px' }}>
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, lineHeight: 1 }}>{upcoming?.length ?? 0}</div>
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.4)', marginTop: 4 }}>Upcoming bookings</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginTop: 4 }}>Upcoming bookings</div>
         </div>
-        <div style={{ background: creditCents > 0 ? 'linear-gradient(135deg, rgba(var(--t-gold-rgb), 0.14), rgba(var(--t-gold-rgb), 0.03))' : 'var(--t-surface)', border: `1px solid ${creditCents > 0 ? 'rgba(var(--t-gold-rgb), 0.35)' : 'rgba(var(--t-fg-rgb), 0.08)'}`, borderRadius: 8, padding: '20px 24px' }}>
+        <div style={{ background: creditCents > 0 ? 'linear-gradient(135deg, rgba(var(--t-gold-rgb), 0.14), rgba(var(--t-gold-rgb), 0.03))' : 'var(--t-surface)', border: `1px solid ${creditCents > 0 ? 'rgba(var(--t-gold-rgb), 0.35)' : 'rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))'}`, borderRadius: 8, padding: '20px 24px' }}>
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, lineHeight: 1, color: creditCents > 0 ? 'var(--t-gold)' : 'var(--t-fg)' }}>${(creditCents / 100).toFixed(2)}</div>
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.4)', marginTop: 4 }}>Studio credit{creditCents > 0 ? ' · applies automatically at checkout' : ''}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginTop: 4 }}>Studio credit{creditCents > 0 ? ' · applies automatically at checkout' : ''}</div>
           {rewardCents > 0 && (
-            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.4)', marginTop: 6, lineHeight: 1.5 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginTop: 6, lineHeight: 1.5 }}>
               Includes ${(rewardCents / 100).toFixed(2)} from rewards, which stay active as long as you book once a year.
             </div>
           )}
         </div>
-        <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '20px 24px' }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: LEVEL_COLOR[standing.level] }}>{LEVEL_LABEL[standing.level]}</div>
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.4)', marginTop: 4, lineHeight: 1.5 }}>
+        <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '20px 24px' }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: ({ good: 'var(--t-ok)', warning: 'var(--t-warn)', probation: 'var(--t-warn-hi)', suspended: 'var(--t-err)' } as Record<string, string>)[standing.level] ?? LEVEL_COLOR[standing.level] }}>{LEVEL_LABEL[standing.level]}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginTop: 4, lineHeight: 1.5 }}>
             Account standing{standing.level !== 'good' ? ` · ${LEVEL_MEANING[standing.level]}` : ''}
             {standing.level !== 'good' && standing.nextDropOff ? ` Improves as points drop off; the next on ${standing.nextDropOff}.` : ''}
             {standing.level !== 'good' ? ' Questions? Text (832) 408-1631.' : ''}
@@ -115,10 +115,10 @@ export default async function AccountDashboard() {
           { href: '/account/profile', label: 'Edit profile →', desc: 'Update your name, phone, and Instagram' },
         ].map(({ href, label, desc }) => (
           <Link key={href} href={href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', marginBottom: 2 }}>{label}</div>
-                <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>{desc}</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{desc}</div>
               </div>
             </div>
           </Link>

@@ -75,22 +75,22 @@ export default function DirectoryPage() {
     setSelected(s => s.includes(r) ? s.filter(x => x !== r) : [...s, r])
 
   const input: React.CSSProperties = {
-    background: 'rgba(var(--t-fg-rgb), 0.05)', border: '1px solid rgba(var(--t-fg-rgb), 0.14)', color: 'var(--t-fg)',
+    background: 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))', color: 'var(--t-fg)',
     fontFamily: 'Inter', fontSize: 14, padding: '10px 13px', borderRadius: 8, outline: 'none', width: '100%', boxSizing: 'border-box',
   }
 
   return (
     <div>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>CREATIVE DIRECTORY</h1>
-      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 24 }}>
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 24 }}>
         Find collaborators in the Made Kulture community. Want to be listed? Turn on the directory toggle in your{' '}
-        <a href="/account/profile" style={{ color: 'rgba(var(--t-fg-rgb), 0.7)', textDecoration: 'underline' }}>profile</a>.
+        <a href="/account/profile" style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', textDecoration: 'underline' }}>profile</a>.
       </p>
 
       {optedOut ? (
         <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '28px 24px', maxWidth: 520 }}>
           <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: 'var(--t-gold)', marginBottom: 8 }}>You&apos;re not in the directory</div>
-          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.6)', lineHeight: 1.6, margin: '0 0 18px' }}>
+          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', lineHeight: 1.6, margin: '0 0 18px' }}>
             The creative directory is members-only both ways — to browse other creatives, you need to be listed yourself.
             Turn on directory visibility in your profile to join and unlock browsing. Only your name, roles, and Instagram are ever shown.
           </p>
@@ -105,13 +105,13 @@ export default function DirectoryPage() {
           <input value={peopleQuery} onChange={e => setPeople(e.target.value)} placeholder="Search by name or @handle" style={input} />
         </div>
         <button onClick={() => setOpen(o => !o)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: selected.length ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), 0.05)', color: selected.length ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), 0.8)', border: '1px solid rgba(var(--t-fg-rgb), 0.16)', borderRadius: 8, padding: '10px 16px', fontFamily: 'Inter', fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: selected.length ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', color: selected.length ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))', borderRadius: 8, padding: '10px 16px', fontFamily: 'Inter', fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
           {selected.length ? `Roles · ${selected.length}` : 'Filter by role'}
           <span style={{ fontSize: 10, opacity: 0.7 }}>{open ? '▲' : '▼'}</span>
         </button>
         {(selected.length > 0 || peopleQuery) && (
           <button onClick={() => { setSelected([]); setPeople('') }}
-            style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.45)', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
+            style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
             Clear
           </button>
         )}
@@ -131,27 +131,27 @@ export default function DirectoryPage() {
 
       {/* Role dropdown */}
       {open && (
-        <div style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), 0.14)', borderRadius: 10, padding: 12, marginBottom: 20, maxWidth: 460 }}>
+        <div style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))', borderRadius: 10, padding: 12, marginBottom: 20, maxWidth: 460 }}>
           <input value={roleQuery} onChange={e => setRoleQuery(e.target.value)} placeholder="Search roles…" style={{ ...input, marginBottom: 10 }} autoFocus />
           <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
             {([['common', 'Most common'], ['az', 'A–Z']] as const).map(([v, label]) => (
               <button key={v} onClick={() => setSortMode(v)}
-                style={{ background: sortMode === v ? 'rgba(var(--t-fg-rgb), 0.14)' : 'transparent', color: sortMode === v ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), 0.5)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 6, padding: '5px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                style={{ background: sortMode === v ? 'rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))' : 'transparent', color: sortMode === v ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 6, padding: '5px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
                 {label}
               </button>
             ))}
           </div>
           <div style={{ maxHeight: 300, overflowY: 'auto', margin: '0 -4px' }}>
             {displayRoles.length === 0 ? (
-              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', padding: '10px 4px' }}>No roles match.</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', padding: '10px 4px' }}>No roles match.</div>
             ) : displayRoles.map(r => {
               const on = selected.includes(r)
               return (
                 <button key={r} onClick={() => toggleRole(r)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: on ? 'rgba(var(--t-fg-rgb), 0.07)' : 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', cursor: 'pointer' }}>
-                  <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: 4, border: `1.5px solid ${on ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), 0.3)'}`, background: on ? 'var(--t-fg)' : 'transparent', color: 'var(--t-on-fg)', fontSize: 12, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{on ? '✓' : ''}</span>
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: on ? 'rgba(var(--t-fg-rgb), calc(0.07 * var(--t-a)))' : 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', cursor: 'pointer' }}>
+                  <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: 4, border: `1.5px solid ${on ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))'}`, background: on ? 'var(--t-fg)' : 'transparent', color: 'var(--t-on-fg)', fontSize: 12, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{on ? '✓' : ''}</span>
                   <span style={{ flex: 1, fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)' }}>{r}</span>
-                  {counts[r] ? <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>{counts[r]}</span> : null}
+                  {counts[r] ? <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{counts[r]}</span> : null}
                 </button>
               )
             })}
@@ -160,34 +160,34 @@ export default function DirectoryPage() {
       )}
 
       {loading ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)' }}>Loading…</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>Loading…</div>
       ) : (
         <>
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 14 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 14 }}>
             {filtered.length} {filtered.length === 1 ? 'creative' : 'creatives'}
           </div>
           {filtered.length === 0 ? (
-            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.35)', paddingTop: 6 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
               {members.length === 0 ? 'No one has joined the directory yet.' : 'No matches — try clearing a filter.'}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {filtered.map(m => (
-                <Link key={m.id} href={`/account/directory/${m.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '18px 20px' }}>
+                <Link key={m.id} href={`/account/directory/${m.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {m.avatar_url
                         ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>{(m.full_name || '?').charAt(0).toUpperCase()}</span>}
+                        : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{(m.full_name || '?').charAt(0).toUpperCase()}</span>}
                     </div>
                     <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
                       {m.full_name}
-                      {m.account_type === 'brand' && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#8ab4f8', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>BRAND</span>}
+                      {m.account_type === 'brand' && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>BRAND</span>}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: m.instagram ? 12 : 0 }}>
                     {m.roles.map(r => (
-                      <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.6)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 4, padding: '3px 8px' }}>
+                      <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 4, padding: '3px 8px' }}>
                         {r}
                       </span>
                     ))}

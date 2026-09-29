@@ -24,7 +24,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
     <div className="acct-theme" style={{ background: 'var(--t-bg)', minHeight: '100vh', color: 'var(--t-fg)' }}>
       <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       {/* Top nav */}
-      <div className="acct-bar" style={{ borderBottom: '1px solid rgba(var(--t-fg-rgb), 0.08)', padding: '0 24px' }}>
+      <div className="acct-bar" style={{ borderBottom: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', padding: '0 24px' }}>
         <div style={{ maxWidth: 1800, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <Link href="/" style={{ textDecoration: 'none' }}>
             <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: 'var(--t-fg)' }}>

@@ -50,23 +50,23 @@ export default function SaveWithPlusModal({
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, letterSpacing: '0.02em', color: GOLD }}>
             SAVE THIS BOOKING WITH PLUS
           </div>
-          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.5)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
 
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.55)', margin: '8px 0 18px' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', margin: '8px 0 18px' }}>
           {booking.setName} · {booking.when}
         </div>
 
-        <p style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 1.6, color: 'rgba(var(--t-fg-rgb), 0.8)', margin: '0 0 12px' }}>
+        <p style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 1.6, color: 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', margin: '0 0 12px' }}>
           You’re inside 48 hours, so this booking can’t be changed or cancelled on a standard account.
           Plus members can, right up until the session starts.
         </p>
-        <ul style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 1.7, color: 'rgba(var(--t-fg-rgb), 0.7)', margin: '0 0 12px', paddingLeft: 18 }}>
+        <ul style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 1.7, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', margin: '0 0 12px', paddingLeft: 18 }}>
           {booking.canMove && <li>Move it to another time — same set, same length, no extra charge.</li>}
           <li>Or cancel it and get {value} back as studio credit. Cancellation credit never expires.</li>
           <li>Plus stays active for a year: short-notice booking and cancellation protection on every booking.</li>
         </ul>
-        <p style={{ fontFamily: 'Inter', fontSize: 12, lineHeight: 1.6, color: 'rgba(var(--t-fg-rgb), 0.45)', margin: '0 0 18px' }}>
+        <p style={{ fontFamily: 'Inter', fontSize: 12, lineHeight: 1.6, color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', margin: '0 0 18px' }}>
           Joining doesn’t change your booking by itself. Once you’re in, you choose what to do with it — before the session starts.
         </p>
 

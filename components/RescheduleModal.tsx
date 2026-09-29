@@ -145,46 +145,46 @@ export default function RescheduleModal({
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
   }
   const box: React.CSSProperties = {
-    background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 10,
+    background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 10,
     padding: 24, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
   }
 
   return (
     <div style={overlay} onClick={onClose}>
       <div style={box} onClick={e => e.stopPropagation()}>
-        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.16em', color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 8 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.16em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 8 }}>
           MOVE THIS SESSION
         </div>
         <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 24, marginBottom: 4 }}>
           {booking.setName}
         </div>
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.45)', marginBottom: 18, lineHeight: 1.5 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', marginBottom: 18, lineHeight: 1.5 }}>
           Currently {fmt12(cur.hour)}–{fmt12(cur.hour + durationHours)} on {cur.date}.<br />
           Same set, same {durationHours} hour{durationHours === 1 ? '' : 's'}, same price — only the time changes.
         </div>
 
-        <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'rgba(var(--t-fg-rgb), 0.4)', marginBottom: 8 }}>
+        <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginBottom: 8 }}>
           NEW DATE
         </label>
         <input type="date" value={date} min={isPlus ? todayCentral() : plusDays(ADVANCE_DAYS)}
           onChange={e => setDate(e.target.value)}
-          style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(var(--t-fg-rgb), 0.15)', color: 'var(--t-fg)', colorScheme: 'var(--t-scheme)' as any, padding: '12px', fontFamily: 'Inter', fontSize: 14, boxSizing: 'border-box', marginBottom: 18 }} />
+          style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', color: 'var(--t-fg)', colorScheme: 'var(--t-scheme)' as any, padding: '12px', fontFamily: 'Inter', fontSize: 14, boxSizing: 'border-box', marginBottom: 18 }} />
 
         {inWindow && (
-          <div style={{ border: '1px solid rgba(var(--t-gold-rgb), 0.35)', background: 'rgba(var(--t-gold-rgb), 0.06)', padding: '10px 14px', marginBottom: 16, fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.7)', lineHeight: 1.55 }}>
+          <div style={{ border: '1px solid rgba(var(--t-gold-rgb), 0.35)', background: 'rgba(var(--t-gold-rgb), 0.06)', padding: '10px 14px', marginBottom: 16, fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', lineHeight: 1.55 }}>
             {isPlus
               ? 'Short notice — as a Plus member you can move into hours the studio is already open. Anything else, text us and we’ll sort it out.'
               : 'That’s inside 48 hours. Text (832) 408-1631 and we’ll move it for you.'}
           </div>
         )}
 
-        <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'rgba(var(--t-fg-rgb), 0.4)', marginBottom: 8 }}>
+        <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginBottom: 8 }}>
           NEW START TIME
         </label>
         {loading ? (
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.3)', letterSpacing: '0.1em', padding: '12px 0' }}>CHECKING AVAILABILITY…</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', letterSpacing: '0.1em', padding: '12px 0' }}>CHECKING AVAILABILITY…</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 1, background: 'rgba(var(--t-fg-rgb), 0.06)', marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 1, background: 'rgba(var(--t-fg-rgb), calc(0.06 * var(--t-a)))', marginBottom: 18 }}>
             {starts.map(h => {
               const st = stateOf(h)
               const on = picked === h
@@ -193,7 +193,7 @@ export default function RescheduleModal({
                   title={st === 'taken' ? 'Already booked' : st === 'past' ? 'Too soon' : st === 'closed' ? 'Studio isn’t open then' : undefined}
                   style={{
                     background: on ? 'var(--t-fg)' : '#0d0d0d', border: 'none', padding: '14px 6px',
-                    color: on ? 'var(--t-on-fg)' : st === 'ok' ? 'rgba(var(--t-fg-rgb), 0.75)' : 'rgba(var(--t-fg-rgb), 0.16)',
+                    color: on ? 'var(--t-on-fg)' : st === 'ok' ? 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))' : 'rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))',
                     cursor: st === 'ok' ? 'pointer' : 'not-allowed',
                     fontFamily: 'Inter', fontSize: 12, fontWeight: on ? 600 : 400,
                   }}>
@@ -213,16 +213,16 @@ export default function RescheduleModal({
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={submit} disabled={picked == null || busy}
-            style={{ background: picked == null || busy ? 'rgba(var(--t-fg-rgb), 0.2)' : 'var(--t-fg)', border: 'none', color: picked == null || busy ? 'rgba(var(--t-fg-rgb), 0.5)' : 'var(--t-on-fg)', padding: '12px 20px', cursor: picked == null || busy ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em' }}>
+            style={{ background: picked == null || busy ? 'rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))' : 'var(--t-fg)', border: 'none', color: picked == null || busy ? 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' : 'var(--t-on-fg)', padding: '12px 20px', cursor: picked == null || busy ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em' }}>
             {busy ? 'MOVING…' : 'CONFIRM NEW TIME'}
           </button>
           <button onClick={onClose} disabled={busy}
-            style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), 0.2)', color: 'rgba(var(--t-fg-rgb), 0.6)', padding: '12px 20px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
+            style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', padding: '12px 20px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
             KEEP CURRENT TIME
           </button>
         </div>
 
-        <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)', marginTop: 14, lineHeight: 1.5 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginTop: 14, lineHeight: 1.5 }}>
           Your door code changes when the session moves — we’ll text you the new one. The old code stops working.
         </div>
       </div>

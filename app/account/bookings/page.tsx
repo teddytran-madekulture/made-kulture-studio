@@ -159,23 +159,23 @@ export default function BookingsPage() {
       && (isPlus || hoursUntil > 48)
 
     return (
-      <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '20px 24px', marginBottom: 12 }}>
+      <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '20px 24px', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.03em', marginBottom: 4 }}>
               {b.sets?.name ?? 'Studio'}
             </div>
-            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', marginBottom: 2 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', marginBottom: 2 }}>
               {fmt(b.start_time)}
             </div>
-            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>
               {b.total_price != null ? `$${b.total_price.toFixed(2)}` : ''}
             </div>
             {(b.booking_add_ons?.length ?? 0) > 0 && (
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(var(--t-fg-rgb), 0.06)' }}>
-                <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(var(--t-fg-rgb), 0.3)', marginBottom: 4 }}>GEAR</div>
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(var(--t-fg-rgb), calc(0.06 * var(--t-a)))' }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginBottom: 4 }}>GEAR</div>
                 {b.booking_add_ons!.map((a, i) => (
-                  <div key={i} style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.55)' }}>
+                  <div key={i} style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))' }}>
                     {a.equipment?.name ?? 'Item'}{a.quantity > 1 ? ` × ${a.quantity}` : ''}
                     {a.paid === false && <span style={{ color: 'var(--t-gold)', marginLeft: 6 }}>· payment pending</span>}
                   </div>
@@ -187,8 +187,8 @@ export default function BookingsPage() {
             <span style={{
               fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', fontWeight: 600,
               padding: '4px 10px', borderRadius: 20,
-              background: isCancelled ? 'rgba(255,60,60,0.1)' : isUpcoming ? 'rgba(60,255,120,0.1)' : 'rgba(var(--t-fg-rgb), 0.05)',
-              color: isCancelled ? 'var(--t-err)' : isUpcoming ? 'var(--t-ok)' : 'rgba(var(--t-fg-rgb), 0.35)',
+              background: isCancelled ? 'rgba(255,60,60,0.1)' : isUpcoming ? 'rgba(60,255,120,0.1)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))',
+              color: isCancelled ? 'var(--t-err)' : isUpcoming ? 'var(--t-ok)' : 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))',
             }}>
               {b.status?.toUpperCase()}
             </span>
@@ -229,20 +229,20 @@ export default function BookingsPage() {
                 >
                   SAVE WITH PLUS
                 </button>
-                <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.35)', textAlign: 'right', lineHeight: 1.5, maxWidth: 190 }}>
+                <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', textAlign: 'right', lineHeight: 1.5, maxWidth: 190 }}>
                   Plans changed? Plus members can move or cancel inside 48 hours.
                 </span>
               </>
             )}
             {isUpcoming && !canCancel && !canReschedule && !canMove && !isCancelled && !saveEligible(b) && (
-              <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)', textAlign: 'right', lineHeight: 1.5, maxWidth: 180 }}>
+              <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', textAlign: 'right', lineHeight: 1.5, maxWidth: 180 }}>
                 Inside 48 hours — text (832) 408-1631 and we’ll change it for you.
               </span>
             )}
             {isUpcoming && !isCancelled && (
               <a href={googleCalUrl({ title: `Made Kulture — ${b.sets?.name ?? 'Studio'}`, startISO: b.start_time, endISO: b.end_time, location: STUDIO_ADDRESS, details: 'Your Made Kulture session.' })}
                 target="_blank" rel="noopener noreferrer"
-                style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), 0.55)', textDecoration: 'none', border: '1px solid rgba(var(--t-fg-rgb), 0.15)', borderRadius: 4, padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', textDecoration: 'none', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 4, padding: '6px 12px', whiteSpace: 'nowrap' }}>
                 + CALENDAR
               </a>
             )}
@@ -292,14 +292,14 @@ export default function BookingsPage() {
     />
   ) : null
 
-  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 40 }}>Loading bookings...</div>
+  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 40 }}>Loading bookings...</div>
 
   return (
     <div>
       {MoveModal}
       {SaveModal}
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>MY BOOKINGS</h1>
-      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 32 }}>
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 32 }}>
         Cancel 48+ hours before your session and the full value comes back as studio credit. Full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee.
       </p>
 
@@ -323,7 +323,7 @@ export default function BookingsPage() {
 
       {upcoming.length === 0 && past.length === 0 && (
         <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 20 }}>No bookings yet</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 20 }}>No bookings yet</div>
           <Link href="/availability" style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', borderRadius: 4, padding: '12px 24px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', textDecoration: 'none' }}>
             BOOK A SET
           </Link>
@@ -332,14 +332,14 @@ export default function BookingsPage() {
 
       {upcoming.length > 0 && (
         <div style={{ marginBottom: 40 }}>
-          <h2 style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), 0.3)', margin: '0 0 12px' }}>UPCOMING</h2>
+          <h2 style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', margin: '0 0 12px' }}>UPCOMING</h2>
           {upcoming.map(b => <Card key={b.id} b={b} />)}
         </div>
       )}
 
       {past.length > 0 && (
         <div>
-          <h2 style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), 0.3)', margin: '0 0 12px' }}>PAST & CANCELLED</h2>
+          <h2 style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', margin: '0 0 12px' }}>PAST & CANCELLED</h2>
           {past.map(b => <Card key={b.id} b={b} />)}
         </div>
       )}

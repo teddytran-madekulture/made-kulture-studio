@@ -142,11 +142,11 @@ export default function MemberProfilePage() {
     }).catch(() => {})
   }, [member])
 
-  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 40 }}>Loading…</div>
+  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 40 }}>Loading…</div>
   if (error || !member) return (
     <div style={{ paddingTop: 20 }}>
-      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Back to directory</Link>
-      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 24 }}>{error || 'Member not found.'}</div>
+      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Back to directory</Link>
+      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 24 }}>{error || 'Member not found.'}</div>
     </div>
   )
 
@@ -155,30 +155,30 @@ export default function MemberProfilePage() {
 
   return (
     <div style={{ maxWidth: 760 }}>
-      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Back to directory</Link>
+      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Back to directory</Link>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, margin: '20px 0 8px' }}>
-        <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {member.avatar_url
             ? <img src={member.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)' }}>No photo</span>}
+            : <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))' }}>No photo</span>}
         </div>
         <div>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '0 0 6px', lineHeight: 1 }}>{member.full_name}</h1>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {member.account_type === 'brand' && (
-              <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#8ab4f8', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '3px 8px' }}>BRAND</span>
+              <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '3px 8px' }}>BRAND</span>
             )}
             {member.roles.map(r => (
-              <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.6)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
+              <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
-            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), 0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
               <strong style={{ color: 'var(--t-fg)' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}
             </button>
-            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), 0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
               <strong style={{ color: 'var(--t-fg)' }}>{member.following}</strong> following
             </button>
           </div>
@@ -186,7 +186,7 @@ export default function MemberProfilePage() {
       </div>
 
       {member.bio && (
-        <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.7)', lineHeight: 1.6, margin: '16px 0' }}>{member.bio}</p>
+        <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', lineHeight: 1.6, margin: '16px 0' }}>{member.bio}</p>
       )}
 
       {!member.is_self && (
@@ -194,24 +194,24 @@ export default function MemberProfilePage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button type="button" onClick={toggleFollow} disabled={followBusy}
               style={following
-                ? { background: 'transparent', color: 'rgba(var(--t-fg-rgb), 0.75)', border: '1px solid rgba(var(--t-fg-rgb), 0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
+                ? { background: 'transparent', color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
                 : { background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
               {following ? 'Following' : 'Follow'}
             </button>
             <button type="button" onClick={startChat} disabled={starting}
-              style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), 0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
+              style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
               {starting ? 'Opening…' : 'Message'}
             </button>
             {myCastings.length > 0 && (
               <button type="button" onClick={() => setInviteOpen(o => !o)}
-                style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), 0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
+                style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
                 Invite {inviteOpen ? '▴' : '▾'}
               </button>
             )}
           </div>
           {inviteOpen && myCastings.length > 0 && (
-            <div style={{ marginTop: 10, border: '1px solid rgba(var(--t-fg-rgb), 0.15)', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), 0.4)', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
+            <div style={{ marginTop: 10, border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
               {myCastings.map(c => {
                 const done = invitedIds.includes(c.id)
                 return (
@@ -247,7 +247,7 @@ export default function MemberProfilePage() {
       {member.video_url && (
         <div style={{ margin: '24px 0' }}>
           {embed ? (
-            <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), 0.1)' }}>
+            <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))' }}>
               <iframe src={embed} title="Reel" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} />
             </div>
@@ -275,7 +275,7 @@ export default function MemberProfilePage() {
               return (
                 <div key={img.id}
                   onClick={() => { if (!hidden) setLightbox(img.url) }}
-                  style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
+                  style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
                   <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: hidden ? 'blur(18px)' : 'none' }} />
                   {hidden && (
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
@@ -290,7 +290,7 @@ export default function MemberProfilePage() {
       )}
 
       {member.portfolio.length === 0 && !member.bio && member.links.length === 0 && !member.video_url && (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.35)', marginTop: 24 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginTop: 24 }}>
           {member.is_self ? 'Your profile is looking empty — add a bio and some work.' : 'This member hasn’t added work yet.'}
         </div>
       )}
@@ -306,26 +306,26 @@ export default function MemberProfilePage() {
       {/* Followers / following list */}
       {listOpen && (
         <div onClick={() => setListOpen(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 10, width: '100%', maxWidth: 380, maxHeight: 'calc(70 * var(--svh))', overflowY: 'auto', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 10, width: '100%', maxWidth: 380, maxHeight: 'calc(70 * var(--svh))', overflowY: 'auto', padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.03em' }}>{listOpen === 'followers' ? 'FOLLOWERS' : 'FOLLOWING'}</div>
-              <button type="button" onClick={() => setListOpen(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.5)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+              <button type="button" onClick={() => setListOpen(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', fontSize: 18, cursor: 'pointer' }}>✕</button>
             </div>
             {listLoading ? (
-              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.4)', padding: '12px 0' }}>Loading…</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', padding: '12px 0' }}>Loading…</div>
             ) : listMembers.length === 0 ? (
-              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.4)', padding: '12px 0' }}>{listOpen === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', padding: '12px 0' }}>{listOpen === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {listMembers.map(m => (
                   <Link key={m.id} href={`/account/directory/${m.id}`} onClick={() => setListOpen(null)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', padding: '8px 6px', borderRadius: 6 }}>
                     <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {m.avatar_url ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>{m.name.charAt(0).toUpperCase()}</span>}
+                      {m.avatar_url ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{m.name.charAt(0).toUpperCase()}</span>}
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>{m.name}</div>
-                      {m.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.roles.join(' · ')}</div>}
+                      {m.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.roles.join(' · ')}</div>}
                     </div>
                   </Link>
                 ))}

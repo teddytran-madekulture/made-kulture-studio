@@ -99,6 +99,8 @@ h1, h2, h3, .display {
   --t-bg: #080808;  --t-surface: #141414;  --t-surface-lo: #0f0f0f;  --t-surface-hi: #1f1f1f;
   --t-gold: #e6c07a;  --t-gold-rgb: 230, 192, 122;
   --t-ok: #6bffaa;  --t-err: #ff6b6b;  --t-scheme: dark;
+  --t-warn: #fbbf24;  --t-warn-hi: #fb923c;  --t-link: #8ab4f8;  --t-link-mine: #1a56db;
+  --t-a: 1;  /* alpha boost: light mode lifts faint greys/borders so they stay readable on paper */
 }
 .acct-theme { color-scheme: dark; transition: background-color .2s ease, color .2s ease; }
 html[data-acct-theme="light"] .acct-theme {
@@ -106,6 +108,8 @@ html[data-acct-theme="light"] .acct-theme {
   --t-bg: #f4f1eb;  --t-surface: #ffffff;  --t-surface-lo: #faf8f4;  --t-surface-hi: #ebe6dc;
   --t-gold: #8a6418;  --t-gold-rgb: 176, 128, 40;
   --t-ok: #15803d;  --t-err: #c62828;  --t-scheme: light;
+  --t-warn: #b45309;  --t-warn-hi: #c2410c;  --t-link: #1a56db;  --t-link-mine: #9cc3ff;
+  --t-a: 1.55;
   color-scheme: light;
 }
 html[data-acct-theme="light"] .acct-theme select option { background: #ffffff; color: #1c1814; }

@@ -72,25 +72,25 @@ export default function ThreadPage() {
     setInput(''); setSending(false)
   }
 
-  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 20 }}>Loading…</div>
+  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 20 }}>Loading…</div>
   if (error && !meta) return (
     <div style={{ paddingTop: 20 }}>
-      <Link href="/account/messages" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Messages</Link>
-      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 20 }}>{error}</div>
+      <Link href="/account/messages" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Messages</Link>
+      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 20 }}>{error}</div>
     </div>
   )
 
   return (
     <div style={{ maxWidth: 1000 }}>
-      <Link href="/account/messages" style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none', marginBottom: 12 }}>← Messages</Link>
+      <Link href="/account/messages" style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none', marginBottom: 12 }}>← Messages</Link>
 
       {meta && (
         <Link href={`/account/directory/${meta.other.id}`}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', paddingBottom: 14, borderBottom: '1px solid rgba(var(--t-fg-rgb), 0.1)', marginBottom: 14 }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', paddingBottom: 14, borderBottom: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', marginBottom: 14 }}>
           <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {meta.other.avatar_url
               ? <img src={meta.other.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 16, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>{meta.other.name.charAt(0).toUpperCase()}</span>}
+              : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 16, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{meta.other.name.charAt(0).toUpperCase()}</span>}
           </div>
           <span style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: 'var(--t-fg)' }}>{meta.other.name}</span>
         </Link>
@@ -98,7 +98,7 @@ export default function ThreadPage() {
 
       <div ref={listRef} style={{ height: 'min(58vh, 520px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
         {messages.length === 0 && (
-          <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', textAlign: 'center', marginTop: 20 }}>Say hello 👋</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', textAlign: 'center', marginTop: 20 }}>Say hello 👋</div>
         )}
         {messages.map(m => {
           const mine = meta && m.sender_id === meta.me
@@ -107,10 +107,10 @@ export default function ThreadPage() {
               <div style={{
                 background: mine ? 'var(--t-fg)' : 'var(--t-surface-hi)',
                 color: mine ? 'var(--t-on-fg)' : 'var(--t-fg)',
-                border: mine ? 'none' : '1px solid rgba(var(--t-fg-rgb), 0.1)',
+                border: mine ? 'none' : '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))',
                 borderRadius: 14, padding: '9px 13px', fontFamily: 'Inter', fontSize: 14, lineHeight: 1.4,
                 whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              }}>{linkify(m.body, mine ? '#1a56db' : '#8ab4f8')}</div>
+              }}>{linkify(m.body, mine ? 'var(--t-link-mine)' : 'var(--t-link)')}</div>
             </div>
           )
         })}
@@ -118,14 +118,14 @@ export default function ThreadPage() {
 
       {error && <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-err)', marginTop: 8 }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(var(--t-fg-rgb), 0.1)' }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))' }}>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
           placeholder="Message…"
           maxLength={2000}
-          style={{ flex: 1, background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 22, padding: '12px 16px', fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)', outline: 'none' }}
+          style={{ flex: 1, background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 22, padding: '12px 16px', fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)', outline: 'none' }}
         />
         <button onClick={send} disabled={sending || !input.trim()}
           style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 22, padding: '0 20px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: (sending || !input.trim()) ? 'default' : 'pointer', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>

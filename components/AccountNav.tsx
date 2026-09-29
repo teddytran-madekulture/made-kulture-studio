@@ -36,17 +36,17 @@ export default function AccountNav() {
     <nav className="acct-nav">
       <Link href="/" style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'Inter', fontSize: 13,
-        color: 'rgba(var(--t-fg-rgb), 0.55)', textDecoration: 'none', marginBottom: 24,
+        color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', textDecoration: 'none', marginBottom: 24,
       }}
         onMouseEnter={e => (e.currentTarget.style.color = 'var(--t-fg)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(var(--t-fg-rgb), 0.55)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))')}
       >← Back to Home</Link>
-      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), 0.3)', marginBottom: 16 }}>ACCOUNT</div>
+      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginBottom: 16 }}>ACCOUNT</div>
       {ITEMS.map(({ href, label }) => (
         <Link key={href} href={href} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontFamily: 'Inter', fontSize: 14,
-          color: href === pathname ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), 0.6)',
-          textDecoration: 'none', padding: '8px 0', borderBottom: '1px solid rgba(var(--t-fg-rgb), 0.05)',
+          color: href === pathname ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))',
+          textDecoration: 'none', padding: '8px 0', borderBottom: '1px solid rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))',
         }}>
           <span>{label}</span>
           {href === '/account/messages' && unread > 0 && (

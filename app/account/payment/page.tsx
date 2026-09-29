@@ -53,7 +53,7 @@ export default function PaymentPage() {
   return (
     <div>
       <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, margin: '0 0 8px' }}>PAYMENT METHODS</h1>
-      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 32 }}>
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 32 }}>
         Saved cards speed up checkout — no re-entering details every time.
       </p>
 
@@ -64,23 +64,23 @@ export default function PaymentPage() {
       )}
 
       {loading ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>Loading...</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>Loading...</div>
       ) : (
         <>
           {cards.length === 0 && !showAdd && (
-            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 24 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 24 }}>
               No saved cards yet.
             </div>
           )}
           {cards.map(card => (
-            <div key={card.id} style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div key={card.id} style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <span style={{ fontSize: 24 }}>{brandIcon(card.card_brand)}</span>
                 <div>
                   <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>
                     {card.card_brand} •••• {card.last_4}
                   </div>
-                  <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>
+                  <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>
                     Expires {card.exp_month}/{card.exp_year}
                   </div>
                 </div>
@@ -181,8 +181,8 @@ function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
   }
 
   return (
-    <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', borderRadius: 8, padding: 24, marginTop: 16 }}>
-      <div style={{ fontFamily: 'Inter', fontSize: 13, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), 0.4)', marginBottom: 16 }}>ADD NEW CARD</div>
+    <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', borderRadius: 8, padding: 24, marginTop: 16 }}>
+      <div style={{ fontFamily: 'Inter', fontSize: 13, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginBottom: 16 }}>ADD NEW CARD</div>
       {error && (
         <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-err)', marginBottom: 16 }}>
           {error}
@@ -193,7 +193,7 @@ function AddCardForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
         <button onClick={save} disabled={saving || !card} style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4, padding: '12px 24px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', cursor: 'pointer', opacity: saving || !card ? 0.6 : 1 }}>
           {saving ? 'SAVING...' : 'SAVE CARD'}
         </button>
-        <button onClick={onCancel} style={{ background: 'none', border: '1px solid rgba(var(--t-fg-rgb), 0.15)', borderRadius: 4, padding: '12px 24px', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', cursor: 'pointer' }}>
+        <button onClick={onCancel} style={{ background: 'none', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 4, padding: '12px 24px', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', cursor: 'pointer' }}>
           CANCEL
         </button>
       </div>

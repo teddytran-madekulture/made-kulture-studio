@@ -20,7 +20,7 @@ type Casting = {
 const COMP: Record<string, { label: string; bg: string; fg: string }> = {
   paid: { label: 'Paid', bg: 'rgba(60,255,120,0.12)', fg: 'var(--t-ok)' },
   tfp: { label: 'TFP', bg: 'rgba(var(--t-gold-rgb), 0.15)', fg: 'var(--t-gold)' },
-  unpaid: { label: 'Unpaid', bg: 'rgba(var(--t-fg-rgb), 0.08)', fg: 'rgba(var(--t-fg-rgb), 0.6)' },
+  unpaid: { label: 'Unpaid', bg: 'rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', fg: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' },
 }
 
 export default function CastingDetailPage() {
@@ -110,38 +110,38 @@ export default function CastingDetailPage() {
     return '/book?' + p.toString()
   })()
 
-  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 20 }}>Loading…</div>
+  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 20 }}>Loading…</div>
   if (error || !casting) return (
     <div style={{ paddingTop: 20 }}>
-      <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Castings</Link>
-      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 20 }}>{error || 'Not found.'}</div>
+      <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Castings</Link>
+      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 20 }}>{error || 'Not found.'}</div>
     </div>
   )
 
   const cc = COMP[casting.compensation_type]
   const pill = (p: Participant, actions: React.ReactNode) => (
-    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '10px 12px' }}>
+    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '10px 12px' }}>
       <Link href={`/account/directory/${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', flex: 1, minWidth: 0 }}>
         <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', flexShrink: 0 }}>
           {p.avatar_url && <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, color: 'var(--t-fg)' }}>{p.name}</div>
-          {p.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.roles.join(' · ')}</div>}
+          {p.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.roles.join(' · ')}</div>}
         </div>
       </Link>
       {p.role && <span style={{ background: 'rgba(var(--t-gold-rgb), 0.15)', color: 'var(--t-gold)', fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', padding: '3px 8px', borderRadius: 4, flexShrink: 0 }}>{p.role}</span>}
       {actions}
     </div>
   )
-  const selectStyle: React.CSSProperties = { background: 'var(--t-surface-lo)', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), 0.2)', borderRadius: 4, padding: '5px 7px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }
+  const selectStyle: React.CSSProperties = { background: 'var(--t-surface-lo)', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 4, padding: '5px 7px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }
   const smallBtn = (txt: string, onClick: () => void, danger = false): React.ReactNode => (
-    <button type="button" disabled={busy} onClick={onClick} style={{ background: 'transparent', border: `1px solid ${danger ? 'rgba(255,80,80,0.4)' : 'rgba(var(--t-fg-rgb), 0.2)'}`, color: danger ? 'var(--t-err)' : 'rgba(var(--t-fg-rgb), 0.8)', borderRadius: 4, padding: '5px 9px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>{txt}</button>
+    <button type="button" disabled={busy} onClick={onClick} style={{ background: 'transparent', border: `1px solid ${danger ? 'rgba(255,80,80,0.4)' : 'rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))'}`, color: danger ? 'var(--t-err)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', borderRadius: 4, padding: '5px 9px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>{txt}</button>
   )
 
   return (
     <div style={{ maxWidth: 620 }}>
-      <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Castings</Link>
+      <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Castings</Link>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, margin: '14px 0 6px' }}>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 30, margin: 0, lineHeight: 1.1 }}>{casting.title}</h1>
@@ -160,26 +160,26 @@ export default function CastingDetailPage() {
         <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)' }}>
           {casting.author.avatar_url && <img src={casting.author.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
         </div>
-        <span style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.6)' }}>{casting.author.name}{isAuthor ? ' (you)' : ''}</span>
+        <span style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>{casting.author.name}{isAuthor ? ' (you)' : ''}</span>
       </Link>
 
-      {casting.description && <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.75)', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: '0 0 16px' }}>{casting.description}</p>}
+      {casting.description && <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: '0 0 16px' }}>{casting.description}</p>}
 
       <MoodBoard castingId={id} canEdit={isAuthor} initial={casting.mood_board ?? []} castingMature={!!casting.mature} />
 
 
       {casting.roles_needed.length > 0 && (
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 8 }}>ROLES</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 8 }}>ROLES</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {casting.roles_needed.map(r => {
               const fillers = confirmed.filter(p => p.role === r)
               const filled = fillers.length > 0
               return (
                 <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'Inter', fontSize: 12 }}>
-                  <span style={{ color: filled ? 'var(--t-ok)' : 'rgba(var(--t-fg-rgb), 0.35)', fontSize: 13, width: 14, flexShrink: 0 }}>{filled ? '✓' : '○'}</span>
-                  <span style={{ color: filled ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), 0.7)', fontWeight: 600, flexShrink: 0 }}>{r}</span>
-                  <span style={{ color: filled ? 'rgba(var(--t-fg-rgb), 0.5)' : 'rgba(var(--t-fg-rgb), 0.3)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: filled ? 'var(--t-ok)' : 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', fontSize: 13, width: 14, flexShrink: 0 }}>{filled ? '✓' : '○'}</span>
+                  <span style={{ color: filled ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', fontWeight: 600, flexShrink: 0 }}>{r}</span>
+                  <span style={{ color: filled ? 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' : 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {filled ? `— ${fillers.map(f => f.name).join(', ')}` : '— open'}
                   </span>
                 </div>
@@ -196,7 +196,7 @@ export default function CastingDetailPage() {
             ? <button onClick={interestClick} disabled={busy} style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '11px 20px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>I&apos;m interested</button>
             : <>
                 <span style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-ok)', alignSelf: 'center' }}>✓ You&apos;re {myStatus === 'confirmed' ? 'confirmed' : 'interested'}</span>
-                <button onClick={messageAuthor} disabled={busy} style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), 0.25)', borderRadius: 6, padding: '11px 20px', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer' }}>Message {casting.author.name.split(' ')[0]}</button>
+                <button onClick={messageAuthor} disabled={busy} style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 20px', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer' }}>Message {casting.author.name.split(' ')[0]}</button>
               </>}
         </div>
       )}
@@ -208,10 +208,10 @@ export default function CastingDetailPage() {
             ESTIMATED STUDIO COST{casting.shoot_date ? ` · ${new Date(casting.shoot_date + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
           </div>
           {estimate.lines.map((l, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.6)', marginBottom: 4 }}><span>{l.label}</span><span>${l.amount}</span></div>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', marginBottom: 4 }}><span>{l.label}</span><span>${l.amount}</span></div>
           ))}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', borderTop: '1px solid rgba(var(--t-fg-rgb), 0.1)', paddingTop: 8, marginTop: 6 }}><span>Estimate</span><span>${total}</span></div>
-          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(var(--t-fg-rgb), 0.3)', marginTop: 8 }}>Estimate only. The organizer books &amp; pays the studio.</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', borderTop: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', paddingTop: 8, marginTop: 6 }}><span>Estimate</span><span>${total}</span></div>
+          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginTop: 8 }}>Estimate only. The organizer books &amp; pays the studio.</div>
         </div>
       )}
 
@@ -219,7 +219,7 @@ export default function CastingDetailPage() {
       {isAuthor && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
           {bookHref && <Link href={bookHref} style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', textDecoration: 'none', borderRadius: 6, padding: '10px 16px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600 }}>Book this →</Link>}
-          <Link href={`/account/castings/new?id=${id}`} style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), 0.2)', color: 'rgba(var(--t-fg-rgb), 0.8)', borderRadius: 4, padding: '6px 12px', fontFamily: 'Inter', fontSize: 11, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Edit</Link>
+          <Link href={`/account/castings/new?id=${id}`} style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', color: 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', borderRadius: 4, padding: '6px 12px', fontFamily: 'Inter', fontSize: 11, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Edit</Link>
           {casting.status === 'open'
             ? smallBtn('Close casting', () => setStatus('closed'))
             : smallBtn('Reopen', () => setStatus('open'))}
@@ -233,7 +233,7 @@ export default function CastingDetailPage() {
         <div style={{ marginTop: 6 }}>
           {confirmed.length > 0 && (
             <>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.35)', margin: '0 0 8px' }}>THE TEAM ({confirmed.length})</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '0 0 8px' }}>THE TEAM ({confirmed.length})</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
                 {confirmed.map(p => pill(p, isAuthor ? <>{smallBtn('Remove', () => setParticipant(p.id, 'unconfirm'))}</> : null))}
               </div>
@@ -241,7 +241,7 @@ export default function CastingDetailPage() {
           )}
           {interested.length > 0 && (
             <>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.35)', margin: '0 0 8px' }}>INTERESTED ({interested.length})</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '0 0 8px' }}>INTERESTED ({interested.length})</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {interested.map(p => pill(p, isAuthor ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

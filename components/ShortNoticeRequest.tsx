@@ -16,13 +16,13 @@ function fmtRemaining(ms: number) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`
 }
 
-const card: React.CSSProperties = { background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '20px 24px', marginBottom: 40 }
-const input: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: '#0d0d0d', border: '1px solid rgba(var(--t-fg-rgb), 0.15)', color: 'var(--t-fg)', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, colorScheme: 'var(--t-scheme)' as any }
+const card: React.CSSProperties = { background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '20px 24px', marginBottom: 40 }
+const input: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: '#0d0d0d', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', color: 'var(--t-fg)', padding: '10px 12px', fontFamily: 'Inter, sans-serif', fontSize: 14, colorScheme: 'var(--t-scheme)' as any }
 // Native <option> popups are drawn by the OS, not the page. Without an explicit
 // background AND color they follow the browser theme — which is how these went
 // black-on-black for a real customer. Always state both.
 const opt: React.CSSProperties = { background: 'var(--t-surface)', color: 'var(--t-fg)' }
-const label: React.CSSProperties = { display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), 0.4)', marginBottom: 6 }
+const label: React.CSSProperties = { display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginBottom: 6 }
 
 interface SetOpt { slug: string; name: string }
 
@@ -100,7 +100,7 @@ export default function ShortNoticeRequest() {
     return (
       <div style={{ ...card, borderColor: 'rgba(93,202,143,0.3)' }}>
         <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#5dca8f', marginBottom: 4 }}>✓ Short-notice booking is open</div>
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>
           {remaining != null && remaining > 0
             ? <>You can book inside the 48-hour window right now — but only for the next <strong style={{ color: 'var(--t-fg)' }}>{fmtRemaining(remaining)}</strong>. Head to availability and grab your time before it expires.</>
             : <>You can book inside the 48-hour window right now. Head to availability to grab your time.</>}
@@ -114,11 +114,11 @@ export default function ShortNoticeRequest() {
       ? new Date(deniedAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
       : null
     return (
-      <div style={{ ...card, borderColor: 'rgba(var(--t-fg-rgb), 0.14)' }}>
+      <div style={{ ...card, borderColor: 'rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))' }}>
         <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', marginBottom: 4 }}>
           Your last request wasn&apos;t approved{when ? ` \u00b7 ${when}` : ''}
         </div>
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', marginBottom: 14 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', marginBottom: 14 }}>
           We sent you the reason by text and email. You&apos;re welcome to ask for a different set
           or time &mdash; a lot of requests come down to who else is in the building that day.
         </div>
@@ -134,7 +134,7 @@ export default function ShortNoticeRequest() {
     return (
       <div style={{ ...card, borderColor: 'rgba(var(--t-gold-rgb), 0.3)' }}>
         <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-gold)', marginBottom: 4 }}>⏳ Request sent</div>
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>Your short-notice booking request is pending. We&apos;ll text and email you once we&apos;ve reviewed it — if approved, you&apos;ll have a short window to book. An open slot isn&apos;t guaranteed until then.</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>Your short-notice booking request is pending. We&apos;ll text and email you once we&apos;ve reviewed it — if approved, you&apos;ll have a short window to book. An open slot isn&apos;t guaranteed until then.</div>
       </div>
     )
   }
@@ -145,7 +145,7 @@ export default function ShortNoticeRequest() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', marginBottom: 2 }}>Need to book inside 48 hours?</div>
-            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.4)' }}>Tell us the set, date, and time you want. Every request is reviewed by the studio — an open calendar slot isn&apos;t a guarantee until we approve it.</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>Tell us the set, date, and time you want. Every request is reviewed by the studio — an open calendar slot isn&apos;t a guarantee until we approve it.</div>
           </div>
           <button onClick={() => setOpen(true)} style={{ flexShrink: 0, background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', padding: '11px 18px', cursor: 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em' }}>REQUEST ACCESS</button>
         </div>
@@ -177,7 +177,7 @@ export default function ShortNoticeRequest() {
           {err && <div style={{ color: 'var(--t-err)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={submit} disabled={saving || !canSubmit} style={{ background: 'var(--t-gold)', color: 'var(--t-on-fg)', border: 'none', padding: '10px 18px', cursor: (saving || !canSubmit) ? 'default' : 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', opacity: (saving || !canSubmit) ? 0.5 : 1 }}>{saving ? 'SENDING…' : 'SEND REQUEST'}</button>
-            <button onClick={() => setOpen(false)} disabled={saving} style={{ background: 'transparent', color: 'rgba(var(--t-fg-rgb), 0.5)', border: '1px solid rgba(var(--t-fg-rgb), 0.15)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>CANCEL</button>
+            <button onClick={() => setOpen(false)} disabled={saving} style={{ background: 'transparent', color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>CANCEL</button>
           </div>
         </div>
       )}
