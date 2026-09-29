@@ -5,8 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
 import PortfolioManager from '@/components/PortfolioManager'
 import ImageCropper from '@/components/ImageCropper'
+import { stampCopyright } from '@/lib/jpeg-copyright'
 import { HexCrest } from '@/components/FoundingBadge'
 import { PROFILE_COLORS } from '@/lib/profile-colors'
+import { CREDIT_TYPES, MAX_CREDITS, type Credit } from '@/lib/profile-credits'
 
 type ProfileLink = { label: string; url: string }
 
@@ -30,6 +32,8 @@ interface Profile {
   notify_sms: boolean
   profile_color: string | null
   cover_url: string | null
+  credits: Credit[]
+  cv_url: string | null
 }
 
 // Defined at module scope (NOT inside the page component) so its identity is
@@ -48,7 +52,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export default function ProfilePage() {
-  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false , profile_color: null, cover_url: null })
+  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false , profile_color: null, cover_url: null, credits: [], cv_url: null })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -85,6 +89,8 @@ export default function ProfilePage() {
           notify_sms: !!d.profile.notify_sms,
           profile_color: d.profile.profile_color ?? null,
           cover_url: d.profile.cover_url ?? null,
+          credits: Array.isArray(d.profile.credits) ? d.profile.credits : [],
+          cv_url: d.profile.cv_url ?? null,
         })
         setLoading(false)
       })
@@ -128,6 +134,26 @@ export default function ProfilePage() {
       img.src = URL.createObjectURL(file)
     })
 
+  // ── CV / résumé PDF (migration 123) ──────────────────────────────────────
+  const [cvBusy, setCvBusy] = useState(false)
+  const uploadCv = async (file: File) => {
+    if (file.type !== 'application/pdf') { setError('Please choose a PDF file.'); return }
+    if (file.size > 10 * 1024 * 1024) { setError('That PDF is over 10 MB.'); return }
+    setError(''); setCvBusy(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError('Please sign in again.'); return }
+      const path = `${user.id}/cv.pdf`
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: 'application/pdf' })
+      if (upErr) { setError(upErr.message); return }
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      setForm(f => ({ ...f, cv_url: `${data.publicUrl}?t=${Date.now()}` }))
+    } catch { setError('Could not upload the PDF.') }
+    finally { setCvBusy(false) }
+  }
+  const setCredit = (i: number, patch: Partial<Credit>) =>
+    setForm(f => ({ ...f, credits: f.credits.map((c, j) => (j === i ? { ...c, ...patch } : c)) }))
+
   // ── Cover photo (Founding Creatives) ──────────────────────────────────────
   const [coverSrc, setCoverSrc] = useState<string | null>(null)
   const [coverBusy, setCoverBusy] = useState(false)
@@ -143,7 +169,8 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setError('Please sign in again.'); return }
       const path = `${user.id}/cover.jpg`
-      const { error: upErr } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
+      const stamped = await stampCopyright(blob, form.full_name)
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, stamped, { upsert: true, contentType: 'image/jpeg' })
       if (upErr) { setError(upErr.message); return }
       const { data } = supabase.storage.from('avatars').getPublicUrl(path)
       setForm(f => ({ ...f, cover_url: `${data.publicUrl}?t=${Date.now()}` }))
@@ -161,8 +188,11 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setError('Please sign in again.'); setUploading(false); return }
 
-      let upload: Blob = file
-      try { upload = await resizeImage(file) } catch { /* fall back to original if resize fails */ }
+      // Never fall back to the original file: it would carry its hidden data
+      // (GPS etc.). The resize re-encodes, which strips it.
+      let upload: Blob
+      try { upload = await stampCopyright(await resizeImage(file), form.full_name) }
+      catch { setError('Could not process that photo. Try a JPG or PNG.'); setUploading(false); return }
 
       const path = `${user.id}/avatar.jpg`
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, upload, { upsert: true, contentType: 'image/jpeg' })
@@ -185,7 +215,7 @@ export default function ProfilePage() {
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '' }),
+      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '', credits: form.credits.filter(c => c.title.trim()), cv_url: form.cv_url ?? '' }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
@@ -401,7 +431,7 @@ export default function ProfilePage() {
         <div className="prof-col">
         {!isCustomer && (<>
         <Field label="PORTFOLIO" hint="for directory">
-          <PortfolioManager onCountChange={setPortfolioCount} />
+          <PortfolioManager onCountChange={setPortfolioCount} ownerName={form.full_name} />
         </Field>
 
         <Field label="LINKS">
@@ -431,6 +461,54 @@ export default function ProfilePage() {
                 + Add link
               </button>
             )}
+          </div>
+        </Field>
+
+        <Field label="CREDITS" hint="your résumé">
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 10, lineHeight: 1.5 }}>
+            Publications, campaigns, music videos, shows, awards, schooling. They appear under the CREDITS tab on your profile, grouped by type, newest first.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {form.credits.map((c, i) => (
+              <div key={i} style={{ border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', borderRadius: 8, padding: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: 'rgba(var(--t-fg-rgb), calc(0.02 * var(--t-a)))' }}>
+                <select value={c.type} onChange={e => setCredit(i, { type: e.target.value as Credit['type'] })}
+                  style={{ ...inputStyle, padding: '10px 12px', colorScheme: 'var(--t-scheme)' as any }}>
+                  {CREDIT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input value={c.year ?? ''} inputMode="numeric" placeholder="Year" maxLength={4}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setCredit(i, { year: v ? Number(v) : null }) }}
+                  style={{ ...inputStyle, padding: '10px 12px' }} />
+                <input value={c.title} onChange={e => setCredit(i, { title: e.target.value })} placeholder="Title / client (e.g. Vogue Mexico)" maxLength={120}
+                  style={{ ...inputStyle, padding: '10px 12px', gridColumn: '1 / -1' }} />
+                <input value={c.role} onChange={e => setCredit(i, { role: e.target.value })} placeholder="Your role (e.g. Photographer)" maxLength={80}
+                  style={{ ...inputStyle, padding: '10px 12px' }} />
+                <input value={c.url} onChange={e => setCredit(i, { url: e.target.value })} placeholder="Link (optional)" maxLength={300}
+                  style={{ ...inputStyle, padding: '10px 12px' }} />
+                <button type="button" onClick={() => setForm(f => ({ ...f, credits: f.credits.filter((_, j) => j !== i) }))}
+                  style={{ gridColumn: '1 / -1', justifySelf: 'end', background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>Remove</button>
+              </div>
+            ))}
+            {form.credits.length < MAX_CREDITS && (
+              <button type="button" onClick={() => setForm(f => ({ ...f, credits: [...f.credits, { type: 'Publication', title: '', role: '', year: new Date().getFullYear(), url: '' }] }))}
+                style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px dashed rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', borderRadius: 4, padding: '8px 14px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                + Add credit
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <label style={{ border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 4, padding: '9px 14px', fontFamily: 'Inter', fontSize: 12, color: 'var(--t-fg)', cursor: cvBusy ? 'default' : 'pointer', opacity: cvBusy ? 0.6 : 1 }}>
+              {cvBusy ? 'UPLOADING…' : form.cv_url ? 'REPLACE CV (PDF)' : 'UPLOAD CV (PDF)'}
+              <input type="file" accept="application/pdf" disabled={cvBusy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadCv(f) }} style={{ display: 'none' }} />
+            </label>
+            {form.cv_url && (
+              <>
+                <a href={form.cv_url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-gold)' }}>View</a>
+                <button type="button" onClick={() => setForm(f => ({ ...f, cv_url: null }))} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>Remove</button>
+              </>
+            )}
+          </div>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginTop: 6 }}>
+            Optional. Members get a &ldquo;Download CV&rdquo; button on your profile. Click <strong>Save Changes</strong> to keep changes.
           </div>
         </Field>
 

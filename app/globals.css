@@ -119,6 +119,8 @@ html[data-acct-theme="light"] .acct-theme select option { background: #ffffff; c
 /* Account area frame: icon rail is 72px wide on desktop (components/AccountRail);
    phones get a top bar + a 62px bottom bar instead. */
 .acct-main { padding-left: 72px; }
+/* No drag-to-desktop, no long-press "Save to Photos" on member images. */
+.acct-theme img { -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .acct-content { max-width: 1800px; margin: 0 auto; padding: 36px 48px 60px; }
 @media (max-width: 768px) {
   .acct-main { padding-left: 0; }

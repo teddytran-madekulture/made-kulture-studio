@@ -2,13 +2,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ImageCropper from '@/components/ImageCropper'
+import { stampCopyright } from '@/lib/jpeg-copyright'
 
 export const PORTFOLIO_MAX = 12 // base cap; Founding Creatives get 15 (lib/founding.ts, migration 120)
 export const PORTFOLIO_ASPECT = 4 / 5 // width / height — Instagram-style portrait
 
 type Img = { id: string; url: string; is_mature: boolean; sort_order: number }
 
-export default function PortfolioManager({ onCountChange }: { onCountChange?: (n: number) => void }) {
+export default function PortfolioManager({ onCountChange, ownerName = '' }: { onCountChange?: (n: number) => void; ownerName?: string }) {
   const supabase = createClient()
   const [images, setImages] = useState<Img[]>([])
   const [loading, setLoading] = useState(true)
@@ -175,8 +176,10 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     const images = imagesRef.current
     try {
       const path = `${user.id}/${crypto.randomUUID()}.jpg`
+      // blob is already canvas re-encoded (all hidden data stripped); add back only the copyright credit.
+      const stamped = await stampCopyright(blob, ownerName)
       const { error: upErr } = await supabase.storage
-        .from('portfolios').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+        .from('portfolios').upload(path, stamped, { contentType: 'image/jpeg', upsert: false })
       if (upErr) { setError(upErr.message); setBusy(false); return false }
       const { data: pub } = supabase.storage.from('portfolios').getPublicUrl(path)
 

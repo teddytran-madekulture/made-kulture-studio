@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const { data: p } = await service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, show_email, show_phone, directory_opt_in, account_type, founding_number, profile_color, cover_url')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, show_email, show_phone, directory_opt_in, account_type, founding_number, profile_color, cover_url, credits, cv_url')
     .eq('id', params.id)
     .maybeSingle()
 
@@ -69,6 +69,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       portfolio: (images ?? []).map(i => ({ id: i.id, url: i.url, is_mature: i.is_mature })),
       founding_number: p.founding_number ?? null,
       profile_color: p.profile_color ?? null,
+      credits: Array.isArray(p.credits) ? p.credits : [],
+      cv_url: p.cv_url ?? null,
       cover_url: p.founding_number ? (p.cover_url ?? null) : null,
       is_self: p.id === user.id,
       followers: followersRes.count ?? 0,

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { track, trackNow } from '@/lib/track'
 import { HexCrest } from '@/components/FoundingBadge'
 import { colorVars, colorByKey } from '@/lib/profile-colors'
+import { groupCredits, type Credit } from '@/lib/profile-credits'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -14,6 +15,8 @@ type Member = {
   founding_number?: number | null
   profile_color?: string | null
   cover_url?: string | null
+  credits?: Credit[]
+  cv_url?: string | null
   roles: string[]
   instagram: string | null
   avatar_url: string | null
@@ -68,7 +71,7 @@ export default function MemberProfilePage() {
   const [error, setError] = useState('')
   const [revealMature, setRevealMature] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
-  const [tab, setTab] = useState<'portfolio' | 'about'>('portfolio')
+  const [tab, setTab] = useState<'portfolio' | 'credits'>('portfolio')
   const [starting, setStarting] = useState(false)
   const [following, setFollowing] = useState(false)
   const [followers, setFollowers] = useState(0)
@@ -235,7 +238,6 @@ export default function MemberProfilePage() {
         .ig-head { display: grid; grid-template-columns: 290px minmax(0, 1fr); padding-bottom: 36px; border-bottom: 1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a))); }
         .ig-av-wrap { display: flex; justify-content: center; }
         .ig-av { width: 150px; height: 150px; border-radius: 50%; overflow: hidden; background: var(--t-surface-hi); display: flex; align-items: center; justify-content: center; }
-        .ig-av.ring { box-shadow: 0 0 0 3px var(--t-bg), 0 0 0 5px var(--t-gold); }
         .ig-row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .ig-name { font-family: Inter; font-size: 21px; font-weight: 700; margin: 0 6px 0 0; line-height: 1.2; }
         .ig-no { font-family: Inter; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; color: var(--t-gold); margin-top: 6px; }
@@ -283,7 +285,7 @@ export default function MemberProfilePage() {
 
       <div className="ig-head" style={{ marginTop: hasBanner ? 0 : 16 }}>
         <div className="ig-av-wrap">
-          <div className={`ig-av${no ? ' ring' : ''}`}>
+          <div className="ig-av">
             {member.avatar_url
               ? <img src={member.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{(member.full_name || '?').charAt(0).toUpperCase()}</span>}
@@ -336,9 +338,9 @@ export default function MemberProfilePage() {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
           PORTFOLIO
         </button>
-        <button type="button" className={`ig-tab${tab === 'about' ? ' on' : ''}`} onClick={() => setTab('about')}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
-          ABOUT
+        <button type="button" className={`ig-tab${tab === 'credits' ? ' on' : ''}`} onClick={() => setTab('credits')}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+          CREDITS
         </button>
       </div>
 
@@ -378,10 +380,39 @@ export default function MemberProfilePage() {
         )
       ) : (
         <div className="ig-about">
-          {no && (<><h3>FIRST 100</h3><div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}><HexCrest size={26} /> Member No. {no} of the first 100 in the Made Kulture directory.</div></>)}
-          {category && (<><h3>{member.account_type === 'brand' ? 'TYPE' : 'ROLES'}</h3><div style={{ fontSize: 14.5 }}>{category}</div></>)}
-          {member.bio && (<><h3>BIO</h3><p style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-line' }}>{member.bio}</p></>)}
-          {linkRows.length > 0 && (<><h3>CONTACT &amp; LINKS</h3>{links}</>)}
+          {(member.cv_url || no) && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+              {no ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))' }}><HexCrest size={24} /> First 100 · Member No. {no}</div> : <span />}
+              {member.cv_url && (
+                <a href={member.cv_url} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'cv' } })}
+                  style={{ ...btn(true), textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
+                  Download CV
+                </a>
+              )}
+            </div>
+          )}
+
+          {groupCredits(member.credits ?? []).map(g => (
+            <div key={g.type}>
+              <h3>{g.type.toUpperCase()}</h3>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {g.items.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '10px 0', borderBottom: '1px solid rgba(var(--t-fg-rgb), calc(0.07 * var(--t-a)))' }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      {c.url ? (
+                        <a href={withProtocol(c.url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'credit' } })}
+                          style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', textDecoration: 'none', borderBottom: '1px solid rgba(var(--t-gold-rgb), 0.6)' }}>{c.title}</a>
+                      ) : <span style={{ fontSize: 15, fontWeight: 700 }}>{c.title}</span>}
+                      {c.role && <div style={{ fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', marginTop: 2 }}>{c.role}</div>}
+                    </div>
+                    {c.year && <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12.5, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{c.year}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
           {member.video_url && (
             <>
               <h3>REEL</h3>
@@ -395,8 +426,11 @@ export default function MemberProfilePage() {
               )}
             </>
           )}
-          {!category && !member.bio && linkRows.length === 0 && !member.video_url && !no && (
-            <div style={{ fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', textAlign: 'center', padding: '32px 0' }}>Nothing here yet.</div>
+
+          {(member.credits ?? []).length === 0 && !member.video_url && !member.cv_url && (
+            <div style={{ fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', textAlign: 'center', padding: '40px 0' }}>
+              {member.is_self ? <>No credits yet. <Link href="/account/profile" style={{ color: 'var(--t-gold)' }}>Add your publications, campaigns and more</Link>.</> : 'No credits listed yet.'}
+            </div>
           )}
         </div>
       )}

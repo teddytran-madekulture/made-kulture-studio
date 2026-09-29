@@ -56,6 +56,18 @@ export default function AccountRail() {
     setMoreOpen(false)
   }, [pathname])
   useEffect(() => { setTheme(document.documentElement.dataset.acctTheme === 'light' ? 'light' : 'dark') }, [])
+  // Make member photos harder to save: no right-click "Save image as", no
+  // dragging to the desktop. (Screenshots can't be stopped; this removes the
+  // one-click grab.) Scoped to the account area's images.
+  useEffect(() => {
+    const block = (e: Event) => {
+      const t = e.target as HTMLElement | null
+      if (t?.tagName === 'IMG' && t.closest('.acct-theme')) e.preventDefault()
+    }
+    document.addEventListener('contextmenu', block)
+    document.addEventListener('dragstart', block)
+    return () => { document.removeEventListener('contextmenu', block); document.removeEventListener('dragstart', block) }
+  }, [])
   // Lift the June button above the phone bottom bar.
   useEffect(() => {
     const root = document.documentElement
