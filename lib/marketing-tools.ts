@@ -42,7 +42,7 @@ export const THEMES: Record<Theme, { bg: string; fg: string; link: string }> = {
 const HIDDEN_PREFIXES = [
   '/admin', '/desk', '/checkin', '/kiosk', '/tour-admin', '/t', '/jukebox', '/staff', '/work', '/concept-review', '/review',
   '/book', '/pay', '/manage', '/extend', '/short-notice',
-  '/login', '/signup', '/forgot-password', '/auth',   // already doing the thing the message asks
+  '/login', '/signup', '/forgot-password', '/auth', '/account',   // already doing the thing the message asks
 ]
 export function hiddenOnPath(path: string | null | undefined): boolean {
   const p = path || '/'

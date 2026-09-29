@@ -68,6 +68,7 @@ export default function MemberProfilePage() {
   const [error, setError] = useState('')
   const [revealMature, setRevealMature] = useState(false)
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const [tab, setTab] = useState<'portfolio' | 'about'>('portfolio')
   const [starting, setStarting] = useState(false)
   const [following, setFollowing] = useState(false)
   const [followers, setFollowers] = useState(0)
@@ -180,215 +181,223 @@ export default function MemberProfilePage() {
   const embed = member.video_url ? embedUrl(member.video_url) : null
   const hasMature = member.portfolio.some(p => p.is_mature)
 
-  return (
-    <div style={{ maxWidth: 760 }}>
-      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Back to directory</Link>
+  const hasBanner = !!(member.cover_url || colorByKey(member.profile_color))
+  const no = member.founding_number ? String(member.founding_number).padStart(2, '0') : null
+  const btn = (primary: boolean): React.CSSProperties => ({
+    background: primary ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', color: primary ? 'var(--t-on-fg)' : 'var(--t-fg)',
+    border: 'none', borderRadius: 8, padding: '8px 18px', fontFamily: 'Inter', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+  })
+  const icon = (d: React.ReactNode) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+  const linkRows: { key: string; href: string; label: string; what: string; external: boolean; ico: React.ReactNode }[] = []
+  if (member.instagram) linkRows.push({ key: 'ig', href: `https://instagram.com/${member.instagram.replace('@', '')}`, label: `@${member.instagram.replace('@', '')}`, what: 'instagram', external: true, ico: icon(<><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /></>) })
+  if (member.email) linkRows.push({ key: 'em', href: `mailto:${member.email}`, label: member.email, what: 'email', external: false, ico: icon(<><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>) })
+  if (member.phone) linkRows.push({ key: 'ph', href: `tel:${member.phone}`, label: member.phone, what: 'phone', external: false, ico: icon(<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" />) })
+  member.links.forEach((l, i) => {
+    let host = l.url
+    try { host = new URL(withProtocol(l.url)).hostname.replace('www.', '') } catch { /* keep raw */ }
+    linkRows.push({ key: 'l' + i, href: withProtocol(l.url), label: l.label || host, what: 'link', external: true, ico: icon(<><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></>) })
+  })
+  const links = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8 }}>
+      {linkRows.map(l => (
+        <a key={l.key} className="ig-link" href={l.href} {...(l.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: l.what } })}>
+          {l.ico}<span>{l.label}</span>
+        </a>
+      ))}
+    </div>
+  )
+  const actions = member.is_self ? (
+    <Link href="/account/profile" style={{ ...btn(false), textDecoration: 'none', display: 'inline-block' }}>Edit profile</Link>
+  ) : (
+    <>
+      <button type="button" onClick={toggleFollow} disabled={followBusy} style={{ ...btn(!following), opacity: followBusy ? 0.6 : 1 }}>{following ? 'Following' : 'Follow'}</button>
+      <button type="button" onClick={startChat} disabled={starting} style={{ ...btn(false), opacity: starting ? 0.6 : 1 }}>{starting ? 'Opening…' : 'Message'}</button>
+      {myCastings.length > 0 && (
+        <button type="button" onClick={() => setInviteOpen(o => !o)} style={btn(false)}>Invite {inviteOpen ? '▴' : '▾'}</button>
+      )}
+    </>
+  )
+  const stats = (
+    <div className="ig-stats">
+      <span><b>{member.portfolio.length}</b> photo{member.portfolio.length === 1 ? '' : 's'}</span>
+      <button type="button" onClick={() => openList('followers')}><b>{followers}</b> follower{followers === 1 ? '' : 's'}</button>
+      <button type="button" onClick={() => openList('following')}><b>{member.following}</b> following</button>
+    </div>
+  )
+  const category = [member.account_type === 'brand' ? 'Brand' : null, ...member.roles].filter(Boolean).join(' · ')
 
-      {/* Banner: cover photo (Founding) or chosen color (migration 121) */}
-      {(member.cover_url || colorByKey(member.profile_color)) && (
-        <div className={member.cover_url ? undefined : 'pc-fill'}
-          style={{ ...colorVars(member.profile_color), marginTop: 20, height: member.cover_url ? 'clamp(140px, 26vw, 240px)' : 110, borderRadius: 12, overflow: 'hidden', background: member.cover_url ? 'var(--t-surface-hi)' : undefined }}>
+  return (
+    <div className="ig-page">
+      <style>{`
+        .ig-page { max-width: 935px; margin: 0 auto; }
+        .ig-cover { border-radius: 12px; overflow: hidden; height: clamp(120px, 20vw, 210px); margin-bottom: 30px; }
+        .ig-head { display: grid; grid-template-columns: 290px minmax(0, 1fr); padding-bottom: 36px; border-bottom: 1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a))); }
+        .ig-av-wrap { display: flex; justify-content: center; }
+        .ig-av { width: 150px; height: 150px; border-radius: 50%; overflow: hidden; background: var(--t-surface-hi); display: flex; align-items: center; justify-content: center; }
+        .ig-av.ring { box-shadow: 0 0 0 3px var(--t-bg), 0 0 0 5px var(--t-gold); }
+        .ig-row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .ig-name { font-family: Inter; font-size: 21px; font-weight: 700; margin: 0 6px 0 0; line-height: 1.2; }
+        .ig-no { font-family: Inter; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; color: var(--t-gold); margin-top: 6px; }
+        .ig-stats { display: flex; gap: 34px; margin: 18px 0 16px; font-family: Inter; font-size: 15.5px; }
+        .ig-stats b { font-weight: 700; color: var(--t-fg); }
+        .ig-stats span, .ig-stats button { color: rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a))); background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
+        .ig-stats span { cursor: default; }
+        .ig-cat { font-family: Inter; font-size: 14px; color: rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a))); }
+        .ig-bio { font-family: Inter; font-size: 14.5px; line-height: 1.5; margin: 2px 0 0; white-space: pre-line; }
+        .ig-link { display: flex; align-items: center; gap: 8px; color: var(--t-gold); text-decoration: none; font-family: Inter; font-size: 14px; font-weight: 700; width: fit-content; max-width: 100%; }
+        .ig-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ig-link:hover span { text-decoration: underline; }
+        .ig-m { display: none; }
+        .ig-tabs { display: flex; justify-content: center; gap: 60px; }
+        .ig-tab { display: flex; align-items: center; gap: 7px; background: none; border: none; border-top: 1px solid transparent; margin-top: -1px; padding: 16px 0; font-family: Inter; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a))); cursor: pointer; }
+        .ig-tab.on { color: var(--t-fg); border-top-color: var(--t-fg); }
+        .ig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .ig-about { max-width: 620px; margin: 8px auto 0; font-family: Inter; }
+        .ig-about h3 { font-size: 11px; letter-spacing: 0.12em; color: rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a))); font-weight: 700; margin: 26px 0 8px; }
+        @media (max-width: 768px) {
+          .ig-cover { height: 130px; border-radius: 10px; margin-bottom: 16px; }
+          .ig-head { grid-template-columns: 96px minmax(0, 1fr); column-gap: 18px; padding-bottom: 18px; }
+          .ig-av-wrap { justify-content: flex-start; }
+          .ig-av { width: 86px; height: 86px; }
+          .ig-name { font-size: 17px; }
+          .ig-stats { gap: 18px; margin: 10px 0 0; font-size: 13.5px; }
+          .ig-d { display: none !important; }
+          .ig-m { display: block; }
+          .ig-body { grid-column: 1 / -1; margin-top: 14px; }
+          .ig-mbtns { display: flex; gap: 6px; margin-top: 14px; }
+          .ig-mbtns > * { flex: 1; text-align: center; }
+          .ig-tabs { gap: 0; justify-content: space-around; }
+          .ig-grid { gap: 2px; margin: 0 -16px; }
+        }
+      `}</style>
+
+      <Link href="/account/directory" style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none', marginBottom: 14 }}>← Directory</Link>
+
+      {/* Banner: cover photo (First 100) or chosen color */}
+      {hasBanner && (
+        <div className={`ig-cover${member.cover_url ? '' : ' pc-fill'}`} style={colorVars(member.profile_color)}>
           {member.cover_url && <img src={member.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
         </div>
       )}
 
-      {/* Header — Instagram-style: big photo left, details stacked right */}
-      <style>{`
-        .pf-head { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "av top" "av body"; column-gap: 40px; align-items: start; margin: 22px 0 8px; }
-        .pf-avatar { grid-area: av; }
-        .pf-top { grid-area: top; min-width: 0; }
-        .pf-body { grid-area: body; min-width: 0; }
-        .pf-stats { display: flex; gap: 22px; margin-top: 14px; font-family: Inter; font-size: 15px; }
-        .pf-head.has-banner { margin-top: 0; padding-left: 20px; }
-        .pf-avatar { width: 150px; height: 150px; }
-        .pf-head.has-banner .pf-avatar { margin-top: -56px; }
-        .pf-head.has-banner .pf-top { padding-top: 16px; }
-        .pf-link { display: flex; align-items: center; gap: 9px; color: var(--t-gold); text-decoration: none; font-family: Inter; font-size: 14px; font-weight: 500; padding: 3px 0; width: fit-content; max-width: 100%; }
-        .pf-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pf-link:hover span { text-decoration: underline; }
-        .pf-link svg { flex-shrink: 0; opacity: 0.85; }
-        /* Phones: Instagram layout — photo + name/stats side by side, then
-           roles, bio, links and buttons full width underneath. */
-        @media (max-width: 640px) {
-          .pf-head { grid-template-areas: "av top" "body body"; column-gap: 16px; }
-          .pf-head.has-banner { padding-left: 12px; padding-right: 12px; }
-          .pf-avatar { width: 88px; height: 88px; }
-          .pf-head.has-banner .pf-avatar { margin-top: -34px; }
-          .pf-head.has-banner .pf-top { padding-top: 8px; }
-          .pf-top h1 { font-size: 26px !important; }
-          .pf-stats { gap: 16px; font-size: 13.5px; margin-top: 10px; }
-          .pf-stats button { font-size: 13.5px !important; }
-          .pf-body { margin-top: 6px; }
-          .pf-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 2px !important; margin-left: -24px; margin-right: -24px; }
-          .pf-grid > div { border-radius: 0 !important; border: none !important; }
-        }
-      `}</style>
-      <div className={`pf-head${(member.cover_url || colorByKey(member.profile_color)) ? ' has-banner' : ''}`}>
-        <div className="pf-avatar" style={{ borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: (member.cover_url || colorByKey(member.profile_color)) ? '4px solid var(--t-bg)' : '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {member.avatar_url
-            ? <img src={member.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{(member.full_name || '?').charAt(0).toUpperCase()}</span>}
-        </div>
-
-        <div className="pf-top">
-          {/* Name + First 100 crest, like a verified mark */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: 0, lineHeight: 1.05 }}>{member.full_name}</h1>
-            {member.founding_number ? <HexCrest size={26} title={`First 100 · No. ${String(member.founding_number).padStart(2, '0')}`} /> : null}
-          </div>
-          {member.founding_number ? (
-            <div style={{ fontFamily: 'Inter', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--t-gold)', marginTop: 6 }}>
-              FIRST 100 · NO. {String(member.founding_number).padStart(2, '0')}
-            </div>
-          ) : null}
-
-          {/* Stats */}
-          <div className="pf-stats">
-            <span style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))' }}><strong style={{ color: 'var(--t-fg)' }}>{member.portfolio.length}</strong> photo{member.portfolio.length === 1 ? '' : 's'}</span>
-            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', fontFamily: 'Inter', fontSize: 15, cursor: 'pointer' }}>
-              <strong style={{ color: 'var(--t-fg)' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}
-            </button>
-            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', fontFamily: 'Inter', fontSize: 15, cursor: 'pointer' }}>
-              <strong style={{ color: 'var(--t-fg)' }}>{member.following}</strong> following
-            </button>
+      <div className="ig-head" style={{ marginTop: hasBanner ? 0 : 16 }}>
+        <div className="ig-av-wrap">
+          <div className={`ig-av${no ? ' ring' : ''}`}>
+            {member.avatar_url
+              ? <img src={member.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 40, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{(member.full_name || '?').charAt(0).toUpperCase()}</span>}
           </div>
         </div>
 
-        <div className="pf-body">
-
-          {/* Roles — a quiet category line, like Instagram's */}
-          {(member.roles.length > 0 || member.account_type === 'brand') && (
-            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', marginTop: 14 }}>
-              {[member.account_type === 'brand' ? 'Brand' : null, ...member.roles].filter(Boolean).join(' · ')}
-            </div>
-          )}
-
-          {member.bio && (
-            <p style={{ fontFamily: 'Inter', fontSize: 15, color: 'var(--t-fg)', lineHeight: 1.55, margin: '6px 0 0', whiteSpace: 'pre-line' }}>{member.bio}</p>
-          )}
-
-          {/* Links — stacked, no borders */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12 }}>
-            {member.instagram && (
-              <a className="pf-link" href={`https://instagram.com/${member.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
-                onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'instagram' } })}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>
-                <span>@{member.instagram.replace('@', '')}</span>
-              </a>
-            )}
-            {member.email && (
-              <a className="pf-link" href={`mailto:${member.email}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'email' } })}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
-                <span>{member.email}</span>
-              </a>
-            )}
-            {member.phone && (
-              <a className="pf-link" href={`tel:${member.phone}`} onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'phone' } })}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg>
-                <span>{member.phone}</span>
-              </a>
-            )}
-            {member.links.map((l, i) => {
-              let host = l.url
-              try { host = new URL(withProtocol(l.url)).hostname.replace('www.', '') } catch { /* keep raw */ }
-              return (
-                <a key={i} className="pf-link" href={withProtocol(l.url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'link' } })}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
-                  <span>{l.label || host}</span>
-                </a>
-              )
-            })}
+        <div style={{ minWidth: 0 }}>
+          <div className="ig-row1">
+            <h1 className="ig-name">{member.full_name}</h1>
+            {no ? <HexCrest size={22} title={`First 100 · No. ${no}`} /> : null}
+            <div className="ig-d" style={{ display: 'flex', gap: 8, marginLeft: 8 }}>{actions}</div>
           </div>
+          {no ? <div className="ig-no">FIRST 100 · NO. {no}</div> : null}
+          {stats}
+          {/* Desktop: details sit here beside the photo */}
+          <div className="ig-d">
+            {category && <div className="ig-cat">{category}</div>}
+            {member.bio && <p className="ig-bio">{member.bio}</p>}
+            {links}
+          </div>
+        </div>
 
-      {!member.is_self && (
-            <div style={{ margin: '18px 0 4px' }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button type="button" onClick={toggleFollow} disabled={followBusy}
-                  style={following
-                    ? { background: 'transparent', color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
-                    : { background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
-                  {following ? 'Following' : 'Follow'}
-                </button>
-                <button type="button" onClick={startChat} disabled={starting}
-                  style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
-                  {starting ? 'Opening…' : 'Message'}
-                </button>
-                {myCastings.length > 0 && (
-                  <button type="button" onClick={() => setInviteOpen(o => !o)}
-                    style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
-                    Invite {inviteOpen ? '▴' : '▾'}
-                  </button>
-                )}
-              </div>
-              {inviteOpen && myCastings.length > 0 && (
-                <div style={{ marginTop: 10, border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>
-                  <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
-                  {myCastings.map(c => {
-                    const done = invitedIds.includes(c.id)
-                    return (
-                      <button key={c.id} type="button" onClick={() => invite(c.id)} disabled={done}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', fontFamily: 'Inter', fontSize: 13, color: done ? 'var(--t-ok)' : 'var(--t-fg)', cursor: done ? 'default' : 'pointer' }}>
-                        {done ? '✓ Invited — ' : ''}{c.title}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
+        {/* Phone: details run full width under the photo row */}
+        <div className="ig-body ig-m">
+          {category && <div className="ig-cat">{category}</div>}
+          {member.bio && <p className="ig-bio">{member.bio}</p>}
+          {links}
+          <div className="ig-mbtns">{actions}</div>
         </div>
       </div>
 
-      {/* Video */}
-      {member.video_url && (
-        <div style={{ margin: '24px 0' }}>
-          {embed ? (
-            <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))' }}>
-              <iframe src={embed} title="Reel" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} />
-            </div>
-          ) : (
-            <a href={withProtocol(member.video_url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'reel' } })} style={pillLink}>▶ Watch reel</a>
-          )}
-        </div>
-      )}
-
-      {/* Portfolio */}
-      {member.portfolio.length > 0 && (
-        <div ref={portfolioRef} style={{ marginTop: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.04em', margin: 0 }}>PORTFOLIO</h2>
-            {hasMature && !revealMature && (
-              <button type="button" onClick={() => setRevealMature(true)}
-                style={{ background: 'transparent', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', color: 'var(--t-gold)', borderRadius: 4, padding: '7px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
-                Reveal 18+ work — I&apos;m over 18
+      {inviteOpen && myCastings.length > 0 && (
+        <div style={{ margin: '12px 0 0', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
+          {myCastings.map(c => {
+            const done = invitedIds.includes(c.id)
+            return (
+              <button key={c.id} type="button" onClick={() => invite(c.id)} disabled={done}
+                style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', fontFamily: 'Inter', fontSize: 13, color: done ? 'var(--t-ok)' : 'var(--t-fg)', cursor: done ? 'default' : 'pointer' }}>
+                {done ? '✓ Invited: ' : ''}{c.title}
               </button>
-            )}
-          </div>
-          <div className="pf-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
-            {member.portfolio.map((img, idx) => {
-              const hidden = img.is_mature && !revealMature
-              return (
-                <div key={img.id}
-                  onClick={() => { if (!hidden) { setLightbox(img.url); track('portfolio_open', { target_id: member.id, meta: { index: idx + 1, of: member.portfolio.length } }) } }}
-                  style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
-                  <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: hidden ? 'blur(18px)' : 'none' }} />
-                  {hidden && (
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
-                      <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', borderRadius: 4, padding: '4px 8px' }}>18+</span>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+            )
+          })}
         </div>
       )}
 
-      {member.portfolio.length === 0 && !member.bio && member.links.length === 0 && !member.video_url && (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginTop: 24 }}>
-          {member.is_self ? 'Your profile is looking empty — add a bio and some work.' : 'This member hasn’t added work yet.'}
+      {/* Tabs */}
+      <div className="ig-tabs">
+        <button type="button" className={`ig-tab${tab === 'portfolio' ? ' on' : ''}`} onClick={() => setTab('portfolio')}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+          PORTFOLIO
+        </button>
+        <button type="button" className={`ig-tab${tab === 'about' ? ' on' : ''}`} onClick={() => setTab('about')}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+          ABOUT
+        </button>
+      </div>
+
+      {tab === 'portfolio' ? (
+        member.portfolio.length > 0 ? (
+          <div ref={portfolioRef}>
+            {hasMature && !revealMature && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                <button type="button" onClick={() => setRevealMature(true)}
+                  style={{ background: 'transparent', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', color: 'var(--t-gold)', borderRadius: 6, padding: '6px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                  Reveal 18+ work (I&apos;m over 18)
+                </button>
+              </div>
+            )}
+            <div className="ig-grid">
+              {member.portfolio.map((img, idx) => {
+                const hidden = img.is_mature && !revealMature
+                return (
+                  <div key={img.id}
+                    onClick={() => { if (!hidden) { setLightbox(img.url); track('portfolio_open', { target_id: member.id, meta: { index: idx + 1, of: member.portfolio.length } }) } }}
+                    style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
+                    <img src={img.url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: hidden ? 'blur(18px)' : 'none' }} />
+                    {hidden && (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
+                        <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#e6c07a', border: '1px solid rgba(230,192,122,0.5)', borderRadius: 4, padding: '4px 8px' }}>18+</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', textAlign: 'center', padding: '48px 0' }}>
+            {member.is_self ? 'No photos yet. Add some from your profile editor.' : 'No photos yet.'}
+          </div>
+        )
+      ) : (
+        <div className="ig-about">
+          {no && (<><h3>FIRST 100</h3><div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}><HexCrest size={26} /> Member No. {no} of the first 100 in the Made Kulture directory.</div></>)}
+          {category && (<><h3>{member.account_type === 'brand' ? 'TYPE' : 'ROLES'}</h3><div style={{ fontSize: 14.5 }}>{category}</div></>)}
+          {member.bio && (<><h3>BIO</h3><p style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-line' }}>{member.bio}</p></>)}
+          {linkRows.length > 0 && (<><h3>CONTACT &amp; LINKS</h3>{links}</>)}
+          {member.video_url && (
+            <>
+              <h3>REEL</h3>
+              {embed ? (
+                <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))' }}>
+                  <iframe src={embed} title="Reel" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} />
+                </div>
+              ) : (
+                <a className="ig-link" href={withProtocol(member.video_url)} target="_blank" rel="noopener noreferrer" onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: 'reel' } })}><span>▶ Watch reel</span></a>
+              )}
+            </>
+          )}
+          {!category && !member.bio && linkRows.length === 0 && !member.video_url && !no && (
+            <div style={{ fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', textAlign: 'center', padding: '32px 0' }}>Nothing here yet.</div>
+          )}
         </div>
       )}
 

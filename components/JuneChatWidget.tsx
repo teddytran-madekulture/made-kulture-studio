@@ -197,7 +197,7 @@ export default function JuneChatWidget() {
         onClick={() => setOpen(o => !o)}
         aria-label="Chat with June"
         style={{
-          position: 'fixed', bottom: 'calc(20px + var(--mk-mobilebar-h, 0px))', right: 20, zIndex: 9000,
+          position: 'fixed', bottom: 'calc(20px + var(--mk-mobilebar-h, 0px) + var(--mk-acctbar-h, 0px))', right: 20, zIndex: 9000,
           width: 56, height: 56, borderRadius: '50%', border: `1px solid ${GOLD}`,
           background: '#080808', color: GOLD, cursor: 'pointer',
           fontFamily: 'Inter, sans-serif', fontSize: 20, fontWeight: 700,
@@ -214,7 +214,7 @@ export default function JuneChatWidget() {
       {/* Panel */}
       {open && (
         <div style={{
-          position: 'fixed', bottom: 'calc(88px + var(--mk-mobilebar-h, 0px))', right: 20, zIndex: 9000,
+          position: 'fixed', bottom: 'calc(88px + var(--mk-mobilebar-h, 0px) + var(--mk-acctbar-h, 0px))', right: 20, zIndex: 9000,
           width: 'min(360px, calc(100vw - 32px))', height: 'min(520px, calc(100vh - 120px))',
           background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.12)',
           display: 'flex', flexDirection: 'column',

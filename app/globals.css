@@ -116,6 +116,15 @@ html[data-acct-theme="light"] .acct-theme {
 }
 html[data-acct-theme="light"] .acct-theme select option { background: #ffffff; color: #1c1814; }
 
+/* Account area frame: icon rail is 72px wide on desktop (components/AccountRail);
+   phones get a top bar + a 62px bottom bar instead. */
+.acct-main { padding-left: 72px; }
+.acct-content { max-width: 1800px; margin: 0 auto; padding: 36px 48px 60px; }
+@media (max-width: 768px) {
+  .acct-main { padding-left: 0; }
+  .acct-content { padding: 18px 16px calc(84px + env(safe-area-inset-bottom)); }
+}
+
 /* Account area responsive shell */
 .acct-shell { display: flex; gap: 48px; }
 .acct-nav { width: 180px; flex-shrink: 0; }
