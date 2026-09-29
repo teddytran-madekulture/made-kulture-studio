@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { colorByKey } from '@/lib/profile-colors'
 
 // Service role client — needed to read the customers table (RLS restricts to service_role only)
 const serviceSupabase = createServiceClient(
@@ -54,6 +55,13 @@ export async function PUT(req: NextRequest) {
   if (['customer', 'creative', 'brand'].includes(body.account_type)) patch.account_type = body.account_type
   if (typeof body.notify_email === 'boolean') patch.notify_email = body.notify_email
   if (typeof body.notify_sms === 'boolean') patch.notify_sms = body.notify_sms
+  // Banner color: a palette key or '' to clear (migration 121).
+  if (typeof body.profile_color === 'string') patch.profile_color = colorByKey(body.profile_color) ? body.profile_color : null
+  // Cover photo: Founding Creatives only (the DB trigger enforces this too).
+  if (typeof body.cover_url === 'string') {
+    const { data: f } = await serviceSupabase.from('customer_profiles').select('founding_number').eq('id', user.id).maybeSingle()
+    if (f?.founding_number) patch.cover_url = body.cover_url.trim().slice(0, 500) || null
+  }
   if (Array.isArray(body.links)) {
     patch.links = body.links
       .filter((l: unknown): l is { label?: unknown; url?: unknown } =>

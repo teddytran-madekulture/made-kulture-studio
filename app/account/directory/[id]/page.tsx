@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { track, trackNow } from '@/lib/track'
 import FoundingBadge from '@/components/FoundingBadge'
+import { colorVars, colorByKey } from '@/lib/profile-colors'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -11,6 +12,8 @@ type Member = {
   full_name: string
   account_type?: string
   founding_number?: number | null
+  profile_color?: string | null
+  cover_url?: string | null
   roles: string[]
   instagram: string | null
   avatar_url: string | null
@@ -181,14 +184,22 @@ export default function MemberProfilePage() {
     <div style={{ maxWidth: 760 }}>
       <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Back to directory</Link>
 
+      {/* Banner: cover photo (Founding) or chosen color (migration 121) */}
+      {(member.cover_url || colorByKey(member.profile_color)) && (
+        <div className={member.cover_url ? undefined : 'pc-fill'}
+          style={{ ...colorVars(member.profile_color), marginTop: 20, height: member.cover_url ? 'clamp(140px, 26vw, 240px)' : 110, borderRadius: 12, overflow: 'hidden', background: member.cover_url ? 'var(--t-surface-hi)' : undefined }}>
+          {member.cover_url && <img src={member.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+        </div>
+      )}
+
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, margin: '20px 0 8px' }}>
-        <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: (member.cover_url || colorByKey(member.profile_color)) ? 'flex-start' : 'center', gap: 18, margin: (member.cover_url || colorByKey(member.profile_color)) ? '0 0 8px' : '20px 0 8px', paddingLeft: (member.cover_url || colorByKey(member.profile_color)) ? 20 : 0 }}>
+        <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: (member.cover_url || colorByKey(member.profile_color)) ? '3px solid var(--t-bg)' : '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', marginTop: (member.cover_url || colorByKey(member.profile_color)) ? -42 : 0, position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {member.avatar_url
             ? <img src={member.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))' }}>No photo</span>}
         </div>
-        <div>
+        <div style={{ paddingTop: (member.cover_url || colorByKey(member.profile_color)) ? 12 : 0, minWidth: 0 }}>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '0 0 6px', lineHeight: 1 }}>{member.full_name}</h1>
           {member.founding_number ? <div style={{ margin: '2px 0 8px' }}><FoundingBadge number={member.founding_number} size="lg" brand={member.account_type === 'brand'} /></div> : null}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

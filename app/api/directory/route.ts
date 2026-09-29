@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   let q = service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type, founding_number, founding_blocked, created_at')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type, founding_number, founding_blocked, created_at, profile_color')
     .eq('directory_opt_in', true)
   if (role) q = q.contains('roles', [role])
 
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
   }
 
   const members = listed
-    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative', founding_number: m.founding_number ?? null }))
+    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative', founding_number: m.founding_number ?? null, profile_color: m.profile_color ?? null }))
 
   return NextResponse.json({ members, founding: { cap: FOUNDING_CAP, taken: Math.min(taken, FOUNDING_CAP) } })
 }

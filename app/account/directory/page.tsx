@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { CREATIVE_ROLES } from '@/lib/roles'
 import { track } from '@/lib/track'
 import FoundingBadge from '@/components/FoundingBadge'
+import { colorVars, colorByKey } from '@/lib/profile-colors'
 
 interface Member {
   id: string
@@ -13,6 +14,7 @@ interface Member {
   avatar_url: string | null
   account_type?: string
   founding_number?: number | null
+  profile_color?: string | null
 }
 
 export default function DirectoryPage() {
@@ -219,7 +221,7 @@ export default function DirectoryPage() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {filtered.map(m => (
-                <Link key={m.id} href={`/account/directory/${m.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: m.founding_number ? '1px solid rgba(var(--t-gold-rgb), 0.4)' : '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '18px 20px' }}>
+                <Link key={m.id} href={`/account/directory/${m.id}`} className={colorByKey(m.profile_color) ? 'pc-edge' : undefined} style={{ ...colorVars(m.profile_color), display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: m.founding_number ? '1px solid rgba(var(--t-gold-rgb), 0.4)' : '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '18px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                     <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {m.avatar_url

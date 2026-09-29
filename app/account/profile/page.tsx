@@ -4,12 +4,14 @@ import { CREATIVE_ROLES } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
 import PortfolioManager from '@/components/PortfolioManager'
+import ImageCropper from '@/components/ImageCropper'
+import { PROFILE_COLORS } from '@/lib/profile-colors'
 
 type ProfileLink = { label: string; url: string }
 
 interface Profile {
   id: string
-  account_type: 'creative' | 'brand'
+  account_type: 'customer' | 'creative' | 'brand'
   full_name: string
   email: string
   phone: string
@@ -25,6 +27,8 @@ interface Profile {
   show_phone: boolean
   notify_email: boolean
   notify_sms: boolean
+  profile_color: string | null
+  cover_url: string | null
 }
 
 // Defined at module scope (NOT inside the page component) so its identity is
@@ -43,7 +47,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export default function ProfilePage() {
-  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false })
+  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false , profile_color: null, cover_url: null })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -78,6 +82,8 @@ export default function ProfilePage() {
           show_phone: !!d.profile.show_phone,
           notify_email: d.profile.notify_email !== false,
           notify_sms: !!d.profile.notify_sms,
+          profile_color: d.profile.profile_color ?? null,
+          cover_url: d.profile.cover_url ?? null,
         })
         setLoading(false)
       })
@@ -121,6 +127,29 @@ export default function ProfilePage() {
       img.src = URL.createObjectURL(file)
     })
 
+  // ── Cover photo (Founding Creatives) ──────────────────────────────────────
+  const [coverSrc, setCoverSrc] = useState<string | null>(null)
+  const [coverBusy, setCoverBusy] = useState(false)
+  const pickCover = (file: File) => {
+    if (!file.type.startsWith('image/')) { setError('Please choose an image file.'); return }
+    if (file.size > 40 * 1024 * 1024) { setError('That image is too large (max 40 MB).'); return }
+    setError(''); setCoverSrc(URL.createObjectURL(file))
+  }
+  const closeCover = () => { if (coverSrc) URL.revokeObjectURL(coverSrc); setCoverSrc(null) }
+  const onCoverCropped = async (blob: Blob) => {
+    closeCover(); setCoverBusy(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError('Please sign in again.'); return }
+      const path = `${user.id}/cover.jpg`
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
+      if (upErr) { setError(upErr.message); return }
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      setForm(f => ({ ...f, cover_url: `${data.publicUrl}?t=${Date.now()}` }))
+    } catch { setError('Could not upload the cover photo.') }
+    finally { setCoverBusy(false) }
+  }
+
   const uploadAvatar = async (file: File) => {
     setError(''); setUploading(true)
     try {
@@ -155,7 +184,7 @@ export default function ProfilePage() {
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms }),
+      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '' }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
@@ -275,6 +304,56 @@ export default function ProfilePage() {
             Shown on your directory listing. Click <strong>Save Changes</strong> below to keep it.
           </div>
         </Field>
+
+        {!isCustomer && (
+          <Field label="BANNER COLOR" hint="for directory">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button type="button" onClick={() => setForm(f => ({ ...f, profile_color: null }))} title="None"
+                style={{ width: 34, height: 34, borderRadius: '50%', cursor: 'pointer', background: 'transparent', border: `2px ${form.profile_color ? 'dashed' : 'solid'} ${form.profile_color ? 'rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))' : 'var(--t-fg)'}`, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', fontSize: 14 }}>⌀</button>
+              {PROFILE_COLORS.map(c => {
+                const on = form.profile_color === c.key
+                return (
+                  <button key={c.key} type="button" title={c.label} onClick={() => setForm(f => ({ ...f, profile_color: c.key }))}
+                    className="pc-fill" style={{ ['--pc-d' as string]: c.dark, ['--pc-l' as string]: c.light, width: 34, height: 34, borderRadius: '50%', cursor: 'pointer', border: on ? '2px solid var(--t-fg)' : '2px solid transparent', boxShadow: on ? '0 0 0 2px var(--t-bg) inset' : 'none' } as React.CSSProperties} />
+                )
+              })}
+            </div>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginTop: 8 }}>
+              A color banner across the top of your profile and a stripe on your directory card.
+            </div>
+          </Field>
+        )}
+
+        {!isCustomer && (
+          <Field label="COVER PHOTO" hint="Founding perk">
+            {founding?.mine ? (
+              <>
+                <div style={{ height: 110, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', background: 'var(--t-surface-hi)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                  {form.cover_url
+                    ? <img src={form.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>No cover photo. Your banner color shows instead.</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <label style={{ border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 4, padding: '10px 16px', fontFamily: 'Inter', fontSize: 12, color: 'var(--t-fg)', cursor: coverBusy ? 'default' : 'pointer', opacity: coverBusy ? 0.6 : 1 }}>
+                    {coverBusy ? 'UPLOADING…' : form.cover_url ? 'CHANGE COVER' : 'ADD COVER PHOTO'}
+                    <input type="file" accept="image/*" disabled={coverBusy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) pickCover(f) }} style={{ display: 'none' }} />
+                  </label>
+                  {form.cover_url && (
+                    <button type="button" onClick={() => setForm(f => ({ ...f, cover_url: null }))}
+                      style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 4, padding: '10px 14px', fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', cursor: 'pointer' }}>REMOVE</button>
+                  )}
+                </div>
+                <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginTop: 8 }}>
+                  Wide shots work best (3:1). Click <strong>Save Changes</strong> below to keep it.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', border: '1px dashed rgba(var(--t-gold-rgb), 0.4)', borderRadius: 8, padding: '12px 14px', lineHeight: 1.5 }}>
+                ★ Cover photos are a <strong style={{ color: 'var(--t-gold)' }}>Founding Creative</strong> perk{founding && founding.left > 0 ? ` (${founding.left} spots left)` : ''}. Complete your profile and list yourself in the directory to claim one.
+              </div>
+            )}
+          </Field>
+        )}
 
         <Field label={isBrand ? 'COMPANY NAME' : 'FULL NAME'} hint="for directory">
           <input value={form.full_name} onChange={set('full_name')} placeholder={isBrand ? 'Your company name' : 'Your full name'} style={inputStyle} />
@@ -437,6 +516,7 @@ export default function ProfilePage() {
         </div>
         </div>
       </form>
+      {coverSrc && <ImageCropper src={coverSrc} aspect={3} outWidth={1800} onCancel={closeCover} onCropped={onCoverCropped} />}
     </div>
   )
 }

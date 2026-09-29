@@ -152,6 +152,13 @@ html[data-acct-theme="light"] .acct-theme select option { background: #ffffff; c
 @media (max-width: 1100px) { .cm-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px)  { .cm-tiles { grid-template-columns: 1fr; } }
 
+/* Profile banner colors (lib/profile-colors.ts): dark shade by default,
+   light shade when the account area is in light mode. */
+.pc-fill { background: var(--pc-d); }
+.pc-edge { border-top: 4px solid var(--pc-d) !important; }
+html[data-acct-theme="light"] .acct-theme .pc-fill { background: var(--pc-l); }
+html[data-acct-theme="light"] .acct-theme .pc-edge { border-top-color: var(--pc-l) !important; }
+
 /* Hide an element on phones (used for the desktop-only account sign-out) */
 @media (max-width: 640px) { .acct-hide-mobile { display: none !important; } }
 
