@@ -3,6 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import AccountNav from '@/components/AccountNav'
 import AccountMenu from '@/components/AccountMenu'
+import ThemeToggle from '@/components/ThemeToggle'
+
+// Runs before first paint so a light-mode user never sees a dark flash:
+// saved choice first, otherwise the device's light/dark setting.
+const THEME_BOOT = `try{var t=localStorage.getItem('mk-acct-theme');if(t!=='light'&&t!=='dark')t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.acctTheme=t}catch(e){}`
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -16,16 +21,20 @@ export default async function AccountLayout({ children }: { children: React.Reac
   if (prof && prof.onboarded === false) redirect('/welcome')
 
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fff' }}>
+    <div className="acct-theme" style={{ background: 'var(--t-bg)', minHeight: '100vh', color: 'var(--t-fg)' }}>
+      <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       {/* Top nav */}
-      <div className="acct-bar" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '0 24px' }}>
+      <div className="acct-bar" style={{ borderBottom: '1px solid rgba(var(--t-fg-rgb), 0.08)', padding: '0 24px' }}>
         <div style={{ maxWidth: 1800, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <Link href="/" style={{ textDecoration: 'none' }}>
-            <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: '#fff' }}>
+            <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.05em', color: 'var(--t-fg)' }}>
               MADE KULTURE
             </span>
           </Link>
-          <AccountMenu />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <ThemeToggle />
+            <AccountMenu />
+          </div>
         </div>
       </div>
 

@@ -21,9 +21,9 @@ type Casting = {
 
 const COMP_LABEL: Record<string, string> = { paid: 'Paid', unpaid: 'Unpaid', tfp: 'TFP' }
 const COMP_COLOR: Record<string, { bg: string; fg: string }> = {
-  paid: { bg: 'rgba(60,255,120,0.12)', fg: '#6bffaa' },
-  tfp: { bg: 'rgba(230,192,122,0.15)', fg: '#e6c07a' },
-  unpaid: { bg: 'rgba(255,255,255,0.08)', fg: 'rgba(255,255,255,0.6)' },
+  paid: { bg: 'rgba(60,255,120,0.12)', fg: 'var(--t-ok)' },
+  tfp: { bg: 'rgba(var(--t-gold-rgb), 0.15)', fg: 'var(--t-gold)' },
+  unpaid: { bg: 'rgba(var(--t-fg-rgb), 0.08)', fg: 'rgba(var(--t-fg-rgb), 0.6)' },
 }
 
 export default function CastingsPage() {
@@ -59,20 +59,20 @@ export default function CastingsPage() {
 
   const chip = (label: string, active: boolean, onClick: () => void) => (
     <button onClick={onClick} style={{
-      background: active ? '#fff' : 'transparent', color: active ? '#080808' : 'rgba(255,255,255,0.7)',
-      border: active ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)', borderRadius: 20,
+      background: active ? 'var(--t-fg)' : 'transparent', color: active ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), 0.7)',
+      border: active ? '1px solid var(--t-fg)' : '1px solid rgba(var(--t-fg-rgb), 0.2)', borderRadius: 20,
       padding: '6px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
     }}>{label}</button>
   )
-  const input: React.CSSProperties = { background: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '9px 12px', fontFamily: 'Inter', fontSize: 13, color: '#fff', outline: 'none' }
+  const input: React.CSSProperties = { background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 6, padding: '9px 12px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-fg)', outline: 'none' }
 
   if (optedOut) return (
     <div>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>CASTINGS</h1>
-      <div style={{ background: '#141414', border: '1px solid rgba(212,168,67,0.3)', borderRadius: 8, padding: '24px', maxWidth: 520, marginTop: 16 }}>
-        <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, margin: '0 0 16px' }}>
+      <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '24px', maxWidth: 520, marginTop: 16 }}>
+        <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.6)', lineHeight: 1.6, margin: '0 0 16px' }}>
           The casting board is members-only. Turn on directory visibility in your{' '}
-          <a href="/account/profile" style={{ color: '#e6c07a' }}>profile</a> to browse and post castings.
+          <a href="/account/profile" style={{ color: 'var(--t-gold)' }}>profile</a> to browse and post castings.
         </p>
       </div>
     </div>
@@ -82,9 +82,9 @@ export default function CastingsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>CASTINGS</h1>
-        <Link href="/account/castings/new" style={{ background: '#fff', color: '#080808', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, textDecoration: 'none', padding: '10px 18px', borderRadius: 6 }}>+ Post a casting</Link>
+        <Link href="/account/castings/new" style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, textDecoration: 'none', padding: '10px 18px', borderRadius: 6 }}>+ Post a casting</Link>
       </div>
-      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', margin: '0 0 20px' }}>
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', margin: '0 0 20px' }}>
         Projects members want to shoot at the studio. Find one to join, or post your own.
       </p>
 
@@ -104,9 +104,9 @@ export default function CastingsPage() {
       </div>
 
       {loading ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>Loading…</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)' }}>Loading…</div>
       ) : items.length === 0 ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.35)' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>
           {mine ? "You haven't posted any castings yet." : 'No castings match. Be the first to post one.'}
         </div>
       ) : (
@@ -115,30 +115,30 @@ export default function CastingsPage() {
             const cc = COMP_COLOR[c.compensation_type]
             return (
               <Link key={c.id} href={`/account/castings/${c.id}`}
-                style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '16px 18px' }}>
+                style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.08)', borderRadius: 8, padding: '16px 18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    {c.has_unread_team && <span title="New team messages" style={{ width: 8, height: 8, borderRadius: '50%', background: '#e6c07a', flexShrink: 0 }} />}
-                    <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: '#fff' }}>{c.title}</div>
+                    {c.has_unread_team && <span title="New team messages" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--t-gold)', flexShrink: 0 }} />}
+                    <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: 'var(--t-fg)' }}>{c.title}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    {c.expires_at && new Date(c.expires_at) < new Date() && <span style={{ background: 'rgba(255,120,120,0.12)', color: '#ff9b9b', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>EXPIRED</span>}
-                    {c.mature && <span style={{ background: 'rgba(230,192,122,0.15)', color: '#e6c07a', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>18+</span>}
+                    {c.expires_at && new Date(c.expires_at) < new Date() && <span style={{ background: 'rgba(255,120,120,0.12)', color: 'var(--t-err)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>EXPIRED</span>}
+                    {c.mature && <span style={{ background: 'rgba(var(--t-gold-rgb), 0.15)', color: 'var(--t-gold)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>18+</span>}
                     <span style={{ background: cc.bg, color: cc.fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>{COMP_LABEL[c.compensation_type]}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', background: '#1f1f1f', flexShrink: 0 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', flexShrink: 0 }}>
                     {c.author.avatar_url && <img src={c.author.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                   </div>
-                  <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{c.author.name}</span>
-                  {c.shoot_date && <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>· {new Date(c.shoot_date + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
-                  {c.estimated_cost != null && c.estimated_cost > 0 && <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>· est. ${c.estimated_cost}</span>}
+                  <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>{c.author.name}</span>
+                  {c.shoot_date && <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>· {new Date(c.shoot_date + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                  {c.estimated_cost != null && c.estimated_cost > 0 && <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>· est. ${c.estimated_cost}</span>}
                 </div>
                 {c.roles_needed.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {c.roles_needed.map(r => (
-                      <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '3px 7px' }}>{r}</span>
+                      <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(var(--t-fg-rgb), 0.6)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 4, padding: '3px 7px' }}>{r}</span>
                     ))}
                   </div>
                 )}

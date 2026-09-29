@@ -142,11 +142,11 @@ export default function MemberProfilePage() {
     }).catch(() => {})
   }, [member])
 
-  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', paddingTop: 40 }}>Loading…</div>
+  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 40 }}>Loading…</div>
   if (error || !member) return (
     <div style={{ paddingTop: 20 }}>
-      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>← Back to directory</Link>
-      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', paddingTop: 24 }}>{error || 'Member not found.'}</div>
+      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Back to directory</Link>
+      <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 24 }}>{error || 'Member not found.'}</div>
     </div>
   )
 
@@ -155,14 +155,14 @@ export default function MemberProfilePage() {
 
   return (
     <div style={{ maxWidth: 760 }}>
-      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>← Back to directory</Link>
+      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Back to directory</Link>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, margin: '20px 0 8px' }}>
-        <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {member.avatar_url
             ? <img src={member.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>No photo</span>}
+            : <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)' }}>No photo</span>}
         </div>
         <div>
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '0 0 6px', lineHeight: 1 }}>{member.full_name}</h1>
@@ -171,22 +171,22 @@ export default function MemberProfilePage() {
               <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#8ab4f8', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '3px 8px' }}>BRAND</span>
             )}
             {member.roles.map(r => (
-              <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
+              <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.6)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 4, padding: '3px 8px' }}>{r}</span>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
-            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(255,255,255,0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
-              <strong style={{ color: '#fff' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}
+            <button type="button" onClick={() => openList('followers')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), 0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+              <strong style={{ color: 'var(--t-fg)' }}>{followers}</strong> follower{followers === 1 ? '' : 's'}
             </button>
-            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(255,255,255,0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
-              <strong style={{ color: '#fff' }}>{member.following}</strong> following
+            <button type="button" onClick={() => openList('following')} style={{ background: 'transparent', border: 'none', padding: 0, color: 'rgba(var(--t-fg-rgb), 0.55)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+              <strong style={{ color: 'var(--t-fg)' }}>{member.following}</strong> following
             </button>
           </div>
         </div>
       </div>
 
       {member.bio && (
-        <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, margin: '16px 0' }}>{member.bio}</p>
+        <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.7)', lineHeight: 1.6, margin: '16px 0' }}>{member.bio}</p>
       )}
 
       {!member.is_self && (
@@ -194,29 +194,29 @@ export default function MemberProfilePage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button type="button" onClick={toggleFollow} disabled={followBusy}
               style={following
-                ? { background: 'transparent', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
-                : { background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
+                ? { background: 'transparent', color: 'rgba(var(--t-fg-rgb), 0.75)', border: '1px solid rgba(var(--t-fg-rgb), 0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }
+                : { background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: followBusy ? 'default' : 'pointer', opacity: followBusy ? 0.6 : 1 }}>
               {following ? 'Following' : 'Follow'}
             </button>
             <button type="button" onClick={startChat} disabled={starting}
-              style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
+              style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), 0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: starting ? 'default' : 'pointer', opacity: starting ? 0.6 : 1 }}>
               {starting ? 'Opening…' : 'Message'}
             </button>
             {myCastings.length > 0 && (
               <button type="button" onClick={() => setInviteOpen(o => !o)}
-                style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
+                style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), 0.25)', borderRadius: 6, padding: '11px 22px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', cursor: 'pointer' }}>
                 Invite {inviteOpen ? '▴' : '▾'}
               </button>
             )}
           </div>
           {inviteOpen && myCastings.length > 0 && (
-            <div style={{ marginTop: 10, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: 8, maxWidth: 380, background: '#141414' }}>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.4)', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
+            <div style={{ marginTop: 10, border: '1px solid rgba(var(--t-fg-rgb), 0.15)', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), 0.4)', padding: '4px 6px 8px' }}>INVITE {member.full_name.split(' ')[0].toUpperCase()} TO…</div>
               {myCastings.map(c => {
                 const done = invitedIds.includes(c.id)
                 return (
                   <button key={c.id} type="button" onClick={() => invite(c.id)} disabled={done}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', fontFamily: 'Inter', fontSize: 13, color: done ? '#6bffaa' : '#fff', cursor: done ? 'default' : 'pointer' }}>
+                    style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', fontFamily: 'Inter', fontSize: 13, color: done ? 'var(--t-ok)' : 'var(--t-fg)', cursor: done ? 'default' : 'pointer' }}>
                     {done ? '✓ Invited — ' : ''}{c.title}
                   </button>
                 )
@@ -247,7 +247,7 @@ export default function MemberProfilePage() {
       {member.video_url && (
         <div style={{ margin: '24px 0' }}>
           {embed ? (
-            <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), 0.1)' }}>
               <iframe src={embed} title="Reel" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }} />
             </div>
@@ -264,7 +264,7 @@ export default function MemberProfilePage() {
             <h2 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.04em', margin: 0 }}>PORTFOLIO</h2>
             {hasMature && !revealMature && (
               <button type="button" onClick={() => setRevealMature(true)}
-                style={{ background: 'transparent', border: '1px solid rgba(230,192,122,0.5)', color: '#e6c07a', borderRadius: 4, padding: '7px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                style={{ background: 'transparent', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', color: 'var(--t-gold)', borderRadius: 4, padding: '7px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
                 Reveal 18+ work — I&apos;m over 18
               </button>
             )}
@@ -275,11 +275,11 @@ export default function MemberProfilePage() {
               return (
                 <div key={img.id}
                   onClick={() => { if (!hidden) setLightbox(img.url) }}
-                  style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414', cursor: hidden ? 'default' : 'zoom-in' }}>
+                  style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
                   <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: hidden ? 'blur(18px)' : 'none' }} />
                   {hidden && (
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
-                      <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#e6c07a', border: '1px solid rgba(230,192,122,0.5)', borderRadius: 4, padding: '4px 8px' }}>18+</span>
+                      <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', borderRadius: 4, padding: '4px 8px' }}>18+</span>
                     </div>
                   )}
                 </div>
@@ -290,7 +290,7 @@ export default function MemberProfilePage() {
       )}
 
       {member.portfolio.length === 0 && !member.bio && member.links.length === 0 && !member.video_url && (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.35)', marginTop: 24 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.35)', marginTop: 24 }}>
           {member.is_self ? 'Your profile is looking empty — add a bio and some work.' : 'This member hasn’t added work yet.'}
         </div>
       )}
@@ -306,26 +306,26 @@ export default function MemberProfilePage() {
       {/* Followers / following list */}
       {listOpen && (
         <div onClick={() => setListOpen(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#0e0e0e', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, width: '100%', maxWidth: 380, maxHeight: 'calc(70 * var(--svh))', overflowY: 'auto', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 10, width: '100%', maxWidth: 380, maxHeight: 'calc(70 * var(--svh))', overflowY: 'auto', padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.03em' }}>{listOpen === 'followers' ? 'FOLLOWERS' : 'FOLLOWING'}</div>
-              <button type="button" onClick={() => setListOpen(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+              <button type="button" onClick={() => setListOpen(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.5)', fontSize: 18, cursor: 'pointer' }}>✕</button>
             </div>
             {listLoading ? (
-              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', padding: '12px 0' }}>Loading…</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.4)', padding: '12px 0' }}>Loading…</div>
             ) : listMembers.length === 0 ? (
-              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', padding: '12px 0' }}>{listOpen === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.4)', padding: '12px 0' }}>{listOpen === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {listMembers.map(m => (
                   <Link key={m.id} href={`/account/directory/${m.id}`} onClick={() => setListOpen(null)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', padding: '8px 6px', borderRadius: 6 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: '#1f1f1f', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {m.avatar_url ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>{m.name.charAt(0).toUpperCase()}</span>}
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {m.avatar_url ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.5)' }}>{m.name.charAt(0).toUpperCase()}</span>}
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: '#fff' }}>{m.name}</div>
-                      {m.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.roles.join(' · ')}</div>}
+                      <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>{m.name}</div>
+                      {m.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.roles.join(' · ')}</div>}
                     </div>
                   </Link>
                 ))}
@@ -339,6 +339,6 @@ export default function MemberProfilePage() {
 }
 
 const pillLink: React.CSSProperties = {
-  fontFamily: 'Inter', fontSize: 13, color: '#e8c878', textDecoration: 'none',
+  fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', textDecoration: 'none',
   border: '1px solid rgba(232,200,120,0.3)', borderRadius: 20, padding: '6px 13px',
 }

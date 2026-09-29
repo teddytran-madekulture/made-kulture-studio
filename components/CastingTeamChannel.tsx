@@ -79,32 +79,32 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
   const excerpt = (s: string) => (s.length > 60 ? s.slice(0, 60) + '…' : s)
 
   return (
-    <div style={{ marginTop: 26, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 18 }}>
+    <div style={{ marginTop: 26, borderTop: '1px solid rgba(var(--t-fg-rgb), 0.1)', paddingTop: 18 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: '#e6c07a' }}>TEAM CHANNEL</div>
-        <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>· only the confirmed crew can see this</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'var(--t-gold)' }}>TEAM CHANNEL</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>· only the confirmed crew can see this</div>
       </div>
 
       {loading ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', padding: '12px 0' }}>Loading…</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', padding: '12px 0' }}>Loading…</div>
       ) : (
         <>
           {pinnedId && (() => {
             const pm = messages.find(x => x.id === pinnedId)
             if (!pm) return null
             return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(230,192,122,0.08)', border: '1px solid rgba(230,192,122,0.25)', borderRadius: 6, padding: '8px 10px', marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(var(--t-gold-rgb), 0.08)', border: '1px solid rgba(var(--t-gold-rgb), 0.25)', borderRadius: 6, padding: '8px 10px', marginTop: 10 }}>
                 <span style={{ flexShrink: 0, fontSize: 12 }}>📌</span>
-                <div style={{ minWidth: 0, flex: 1, fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <strong style={{ color: '#fff' }}>{nameOf(pm.sender_id)}:</strong> {pm.body}
+                <div style={{ minWidth: 0, flex: 1, fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <strong style={{ color: 'var(--t-fg)' }}>{nameOf(pm.sender_id)}:</strong> {pm.body}
                 </div>
-                {amAuthor && <button type="button" onClick={() => setPin(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>Unpin</button>}
+                {amAuthor && <button type="button" onClick={() => setPin(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.5)', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>Unpin</button>}
               </div>
             )
           })()}
           <div ref={listRef} style={{ maxHeight: 'min(52vh, 440px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 4px 4px' }}>
             {messages.length === 0 && (
-              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center', margin: '16px 0' }}>
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', textAlign: 'center', margin: '16px 0' }}>
                 Kick things off — this is your crew&apos;s space to plan the shoot.
               </div>
             )}
@@ -113,8 +113,8 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
               const parent = m.reply_to_id ? messages.find(x => x.id === m.reply_to_id) : null
               return (
                 <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start' }}>
-                  {!mine && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.45)', margin: '0 4px 2px' }}>{nameOf(m.sender_id)}{memberMap[m.sender_id]?.is_author ? ' · organizer' : ''}</div>}
-                  <div style={{ background: mine ? '#fff' : '#1c1c1c', color: mine ? '#080808' : '#fff', border: mine ? 'none' : '1px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: '9px 13px', fontFamily: 'Inter', fontSize: 14, lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {!mine && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.45)', margin: '0 4px 2px' }}>{nameOf(m.sender_id)}{memberMap[m.sender_id]?.is_author ? ' · organizer' : ''}</div>}
+                  <div style={{ background: mine ? 'var(--t-fg)' : 'var(--t-surface-hi)', color: mine ? 'var(--t-on-fg)' : 'var(--t-fg)', border: mine ? 'none' : '1px solid rgba(var(--t-fg-rgb), 0.1)', borderRadius: 14, padding: '9px 13px', fontFamily: 'Inter', fontSize: 14, lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {parent && (
                       <div style={{ borderLeft: `2px solid ${mine ? 'rgba(0,0,0,0.25)' : 'rgba(230,192,122,0.6)'}`, paddingLeft: 8, marginBottom: 5, fontSize: 12, opacity: 0.7 }}>
                         <span style={{ fontWeight: 600 }}>{nameOf(parent.sender_id)}</span>: {excerpt(parent.body)}
@@ -123,20 +123,20 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
                     {linkify(m.body, mine ? '#1a56db' : '#8ab4f8')}
                   </div>
                   <div style={{ display: 'flex', gap: 4, margin: '1px 2px 0' }}>
-                    <button type="button" onClick={() => setReplyTo(m)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.35)', fontFamily: 'Inter', fontSize: 10, cursor: 'pointer', padding: '2px 4px' }}>Reply</button>
-                    {amAuthor && <button type="button" onClick={() => setPin(pinnedId === m.id ? null : m.id)} style={{ background: 'transparent', border: 'none', color: pinnedId === m.id ? '#e6c07a' : 'rgba(255,255,255,0.35)', fontFamily: 'Inter', fontSize: 10, cursor: 'pointer', padding: '2px 4px' }}>{pinnedId === m.id ? 'Unpin' : 'Pin'}</button>}
+                    <button type="button" onClick={() => setReplyTo(m)} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.35)', fontFamily: 'Inter', fontSize: 10, cursor: 'pointer', padding: '2px 4px' }}>Reply</button>
+                    {amAuthor && <button type="button" onClick={() => setPin(pinnedId === m.id ? null : m.id)} style={{ background: 'transparent', border: 'none', color: pinnedId === m.id ? 'var(--t-gold)' : 'rgba(var(--t-fg-rgb), 0.35)', fontFamily: 'Inter', fontSize: 10, cursor: 'pointer', padding: '2px 4px' }}>{pinnedId === m.id ? 'Unpin' : 'Pin'}</button>}
                   </div>
                 </div>
               )
             })}
           </div>
 
-          {error && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginTop: 6 }}>{error}</div>}
+          {error && <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-err)', marginTop: 6 }}>{error}</div>}
 
           {replyTo && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'rgba(255,255,255,0.05)', borderLeft: '2px solid #e6c07a', borderRadius: 4, padding: '6px 10px', marginTop: 10, fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
-              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Replying to <strong style={{ color: '#fff' }}>{nameOf(replyTo.sender_id)}</strong>: {excerpt(replyTo.body)}</span>
-              <button type="button" onClick={() => setReplyTo(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>✕</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: 'rgba(var(--t-fg-rgb), 0.05)', borderLeft: '2px solid #e6c07a', borderRadius: 4, padding: '6px 10px', marginTop: 10, fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.6)' }}>
+              <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Replying to <strong style={{ color: 'var(--t-fg)' }}>{nameOf(replyTo.sender_id)}</strong>: {excerpt(replyTo.body)}</span>
+              <button type="button" onClick={() => setReplyTo(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.5)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>✕</button>
             </div>
           )}
 
@@ -144,9 +144,9 @@ export default function CastingTeamChannel({ castingId }: { castingId: string })
             <input value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               placeholder={replyTo ? `Reply to ${nameOf(replyTo.sender_id)}…` : 'Message the team…'} maxLength={2000}
-              style={{ flex: 1, background: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 22, padding: '11px 16px', fontFamily: 'Inter', fontSize: 14, color: '#fff', outline: 'none' }} />
+              style={{ flex: 1, background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 22, padding: '11px 16px', fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)', outline: 'none' }} />
             <button onClick={send} disabled={sending || !input.trim()}
-              style={{ background: '#fff', color: '#080808', border: 'none', borderRadius: 22, padding: '0 20px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: (sending || !input.trim()) ? 'default' : 'pointer', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>Send</button>
+              style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 22, padding: '0 20px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: (sending || !input.trim()) ? 'default' : 'pointer', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>Send</button>
           </div>
         </>
       )}

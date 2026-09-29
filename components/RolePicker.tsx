@@ -51,9 +51,9 @@ export default function RolePicker({
   if (extra.length) groups.push({ label: 'More', roles: extra })
 
   const chip = (on: boolean): React.CSSProperties => ({
-    background: on ? '#fff' : 'transparent',
-    color: on ? '#080808' : 'rgba(255,255,255,0.7)',
-    border: on ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+    background: on ? 'var(--t-fg)' : 'transparent',
+    color: on ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), 0.7)',
+    border: on ? '1px solid var(--t-fg)' : '1px solid rgba(var(--t-fg-rgb), 0.2)',
     borderRadius: 20,
     padding: '7px 13px',
     fontFamily: 'Inter',
@@ -63,9 +63,9 @@ export default function RolePicker({
 
   return (
     <div>
-      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
+      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.4)', marginBottom: 8 }}>
         {label}{' '}
-        <span style={{ color: 'rgba(255,255,255,0.25)' }}>{hint ?? `(optional — pick up to ${max})`}</span>
+        <span style={{ color: 'rgba(var(--t-fg-rgb), 0.25)' }}>{hint ?? `(optional — pick up to ${max})`}</span>
       </div>
 
       {/* Selected roles */}
@@ -86,7 +86,7 @@ export default function RolePicker({
       )}
 
       {atMax ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>
           Max {max} roles — remove one to pick something else.
         </div>
       ) : (
@@ -104,13 +104,13 @@ export default function RolePicker({
             maxLength={40}
             style={{
               width: '100%',
-              background: '#141414',
-              border: '1px solid rgba(255,255,255,0.12)',
+              background: 'var(--t-surface)',
+              border: '1px solid rgba(var(--t-fg-rgb), 0.12)',
               borderRadius: 4,
               padding: '10px 12px',
               fontFamily: 'Inter',
               fontSize: 13,
-              color: '#fff',
+              color: 'var(--t-fg)',
               outline: 'none',
               boxSizing: 'border-box',
               marginBottom: 10,
@@ -120,7 +120,7 @@ export default function RolePicker({
           <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {groups.map(g => (
               <div key={g.label}>
-                <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', marginBottom: 6 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(var(--t-fg-rgb), 0.3)', marginBottom: 6 }}>
                   {g.label}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -134,7 +134,7 @@ export default function RolePicker({
             ))}
 
             {groups.length === 0 && (
-              <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.3)' }}>
                 No matches.
               </div>
             )}

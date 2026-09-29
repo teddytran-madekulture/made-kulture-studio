@@ -118,19 +118,19 @@ export default function NewCastingPage() {
     else setError(d.error ?? 'Could not save.')
   }
 
-  const input: React.CSSProperties = { width: '100%', background: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '12px 14px', fontFamily: 'Inter', fontSize: 14, color: '#fff', outline: 'none', boxSizing: 'border-box' }
-  const label: React.CSSProperties = { display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', margin: '20px 0 8px' }
+  const input: React.CSSProperties = { width: '100%', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 6, padding: '12px 14px', fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)', outline: 'none', boxSizing: 'border-box' }
+  const label: React.CSSProperties = { display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.35)', margin: '20px 0 8px' }
   const modeChip = (m: typeof mode, txt: string) => (
     <button type="button" onClick={() => setMode(m)} style={{
-      background: mode === m ? '#fff' : 'transparent', color: mode === m ? '#080808' : 'rgba(255,255,255,0.7)',
-      border: mode === m ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '7px 14px',
+      background: mode === m ? 'var(--t-fg)' : 'transparent', color: mode === m ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), 0.7)',
+      border: mode === m ? '1px solid var(--t-fg)' : '1px solid rgba(var(--t-fg-rgb), 0.2)', borderRadius: 20, padding: '7px 14px',
       fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
     }}>{txt}</button>
   )
   const compChip = (c: typeof comp, txt: string) => (
     <button type="button" onClick={() => setComp(c)} style={{
-      background: comp === c ? '#fff' : 'transparent', color: comp === c ? '#080808' : 'rgba(255,255,255,0.7)',
-      border: comp === c ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '7px 14px',
+      background: comp === c ? 'var(--t-fg)' : 'transparent', color: comp === c ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), 0.7)',
+      border: comp === c ? '1px solid var(--t-fg)' : '1px solid rgba(var(--t-fg-rgb), 0.2)', borderRadius: 20, padding: '7px 14px',
       fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
     }}>{txt}</button>
   )
@@ -140,11 +140,11 @@ export default function NewCastingPage() {
 
   return (
     <div style={{ maxWidth: 560 }}>
-      <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>← Castings</Link>
+      <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', textDecoration: 'none' }}>← Castings</Link>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '8px 0 4px' }}>{editId ? 'EDIT CASTING' : 'POST A CASTING'}</h1>
-      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)', margin: '0 0 8px' }}>Describe the shoot, who you need, and optionally plan the studio time to see an estimate.</p>
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)', margin: '0 0 8px' }}>Describe the shoot, who you need, and optionally plan the studio time to see an estimate.</p>
 
-      {error && <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 6, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b', marginTop: 16 }}>{error}</div>}
+      {error && <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 6, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-err)', marginTop: 16 }}>{error}</div>}
 
       <label style={label}>TITLE</label>
       <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Neon fashion editorial — need a model + MUA" maxLength={120} style={input} />
@@ -155,26 +155,26 @@ export default function NewCastingPage() {
       <label style={label}>COMPENSATION</label>
       <div style={{ display: 'flex', gap: 8 }}>{compChip('paid', 'Paid')}{compChip('unpaid', 'Unpaid')}{compChip('tfp', 'TFP (trade)')}</div>
 
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginTop: 18, fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginTop: 18, fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.7)', lineHeight: 1.5 }}>
         <input type="checkbox" checked={mature} onChange={e => setMature(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, marginTop: 2 }} />
-        <span>This casting is <strong style={{ color: '#e6c07a' }}>18+ / mature</strong> — adds an 18+ badge and blurs the mood board until viewers confirm they&apos;re over 18.</span>
+        <span>This casting is <strong style={{ color: 'var(--t-gold)' }}>18+ / mature</strong> — adds an 18+ badge and blurs the mood board until viewers confirm they&apos;re over 18.</span>
       </label>
       {mature && (
-        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, background: 'rgba(230,192,122,0.06)', border: '1px solid rgba(230,192,122,0.2)', borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>
-          18+ flags mature themes for collaborators — it does <strong style={{ color: '#e6c07a' }}>not</strong> permit open nudity in a shared session. Nude or boudoir shoots require a solo booking or full buyout, and all content must follow the{' '}
-          <a href="/studio-rules" target="_blank" style={{ color: '#e6c07a' }}>studio rules</a> and{' '}
-          <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }}>content standards</a>.
+        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.55)', lineHeight: 1.5, background: 'rgba(var(--t-gold-rgb), 0.06)', border: '1px solid rgba(var(--t-gold-rgb), 0.2)', borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>
+          18+ flags mature themes for collaborators — it does <strong style={{ color: 'var(--t-gold)' }}>not</strong> permit open nudity in a shared session. Nude or boudoir shoots require a solo booking or full buyout, and all content must follow the{' '}
+          <a href="/studio-rules" target="_blank" style={{ color: 'var(--t-gold)' }}>studio rules</a> and{' '}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t-gold)' }}>content standards</a>.
         </div>
       )}
 
       <label style={label}>ROLES YOU NEED</label>
       <RolePicker value={roles} onChange={setRoles} options={roleOptions} max={8} label="Who do you need?" hint="(pick up to 8)" />
 
-      <label style={label}>STUDIO PLAN <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(255,255,255,0.25)' }}>— optional, drives the estimate</span></label>
+      <label style={label}>STUDIO PLAN <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(var(--t-fg-rgb), 0.25)' }}>— optional, drives the estimate</span></label>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {modeChip('none', 'No studio plan')}{modeChip('set', 'Single set')}{modeChip('buyout', 'Full buyout')}
         {(mode !== 'none' || cart.length > 0 || shootDate || startHour) && (
-          <button type="button" onClick={resetPlan} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Reset plan</button>
+          <button type="button" onClick={resetPlan} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.4)', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Reset plan</button>
         )}
       </div>
 
@@ -188,12 +188,12 @@ export default function NewCastingPage() {
           )}
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>Hours</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 6 }}>Hours</div>
               <input type="number" min={1} value={hours} onChange={e => setHours(e.target.value)} placeholder="e.g. 3" style={input} />
             </div>
             {mode === 'set' && (
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>Total people</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 6 }}>Total people</div>
                 <input type="number" min={1} value={guests} onChange={e => setGuests(e.target.value)} placeholder="e.g. 4" style={input} />
               </div>
             )}
@@ -201,19 +201,19 @@ export default function NewCastingPage() {
           {mode === 'set' && (() => {
             const sel = sets.find(s => s.slug === setSlug)
             return sel && (sel.min_hours ?? 1) > 1
-              ? <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#e6c07a' }}>{sel.name} has a {sel.min_hours}-hour minimum — the estimate bills at least {sel.min_hours} hours.</div>
+              ? <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-gold)' }}>{sel.name} has a {sel.min_hours}-hour minimum — the estimate bills at least {sel.min_hours} hours.</div>
               : null
           })()}
         </div>
       )}
 
-      <label style={label}>EQUIPMENT <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(255,255,255,0.25)' }}>— optional</span></label>
+      <label style={label}>EQUIPMENT <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(var(--t-fg-rgb), 0.25)' }}>— optional</span></label>
       <input value={gearSearch} onChange={e => setGearSearch(e.target.value)} placeholder="Search gear (lights, haze, camera…)" style={input} />
       {gearMatches.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
           {gearMatches.map(g => (
-            <button key={g.id} type="button" onClick={() => addGear(g)} style={{ display: 'flex', justifyContent: 'space-between', background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '9px 12px', fontFamily: 'Inter', fontSize: 13, color: '#fff', cursor: 'pointer' }}>
-              <span>{g.name}</span><span style={{ color: 'rgba(255,255,255,0.4)' }}>+ ${g.rate}</span>
+            <button key={g.id} type="button" onClick={() => addGear(g)} style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', borderRadius: 6, padding: '9px 12px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-fg)', cursor: 'pointer' }}>
+              <span>{g.name}</span><span style={{ color: 'rgba(var(--t-fg-rgb), 0.4)' }}>+ ${g.rate}</span>
             </button>
           ))}
         </div>
@@ -221,17 +221,17 @@ export default function NewCastingPage() {
       {cart.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
           {cart.map(l => (
-            <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>
-              <span>{l.quantity > 1 ? `${l.name} × ${l.quantity}` : l.name} <span style={{ color: 'rgba(255,255,255,0.4)' }}>· ${l.rate * l.quantity}</span></span>
-              <button type="button" onClick={() => removeGear(l.id)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+            <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.8)' }}>
+              <span>{l.quantity > 1 ? `${l.name} × ${l.quantity}` : l.name} <span style={{ color: 'rgba(var(--t-fg-rgb), 0.4)' }}>· ${l.rate * l.quantity}</span></span>
+              <button type="button" onClick={() => removeGear(l.id)} style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), 0.4)', cursor: 'pointer', fontSize: 14 }}>✕</button>
             </div>
           ))}
         </div>
       )}
 
-      <label style={label}>DATE & START <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(255,255,255,0.25)' }}>— optional</span></label>
+      <label style={label}>DATE & START <span style={{ textTransform: 'none', letterSpacing: 0, color: 'rgba(var(--t-fg-rgb), 0.25)' }}>— optional</span></label>
       <div style={{ display: 'flex', gap: 10 }}>
-        <input type="date" value={shootDate} onChange={e => setShootDate(e.target.value)} style={{ ...input, flex: 1, colorScheme: 'dark' }} />
+        <input type="date" value={shootDate} onChange={e => setShootDate(e.target.value)} style={{ ...input, flex: 1, colorScheme: 'var(--t-scheme)' as any }} />
         <select value={startHour} onChange={e => setStartHour(e.target.value)} style={{ ...input, flex: 1, cursor: 'pointer' }}>
           <option value="">Start time</option>
           {Array.from({ length: 14 }, (_, i) => i + 9).map(h => (
@@ -241,21 +241,21 @@ export default function NewCastingPage() {
       </div>
 
       {estimate.total > 0 && (
-        <div style={{ background: 'rgba(230,192,122,0.06)', border: '1px solid rgba(230,192,122,0.25)', borderRadius: 8, padding: '14px 16px', marginTop: 22 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: '#e6c07a', marginBottom: 8 }}>ESTIMATED STUDIO COST</div>
+        <div style={{ background: 'rgba(var(--t-gold-rgb), 0.06)', border: '1px solid rgba(var(--t-gold-rgb), 0.25)', borderRadius: 8, padding: '14px 16px', marginTop: 22 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'var(--t-gold)', marginBottom: 8 }}>ESTIMATED STUDIO COST</div>
           {estimate.lines.map((l, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.6)', marginBottom: 4 }}>
               <span>{l.label}</span><span>${l.amount}</span>
             </div>
           ))}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 15, fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8, marginTop: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Inter', fontSize: 15, fontWeight: 700, color: 'var(--t-fg)', borderTop: '1px solid rgba(var(--t-fg-rgb), 0.1)', paddingTop: 8, marginTop: 6 }}>
             <span>Estimate</span><span>${estimate.total}</span>
           </div>
-          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>Estimate only — the exact total is calculated at checkout.</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(var(--t-fg-rgb), 0.3)', marginTop: 6 }}>Estimate only — the exact total is calculated at checkout.</div>
         </div>
       )}
 
-      <button onClick={submit} disabled={saving} style={{ background: '#fff', color: '#080808', border: 'none', borderRadius: 6, padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', opacity: saving ? 0.6 : 1, marginTop: 24 }}>
+      <button onClick={submit} disabled={saving} style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', opacity: saving ? 0.6 : 1, marginTop: 24 }}>
         {saving ? (editId ? 'SAVING…' : 'POSTING…') : (editId ? 'SAVE CHANGES' : 'POST CASTING')}
       </button>
     </div>

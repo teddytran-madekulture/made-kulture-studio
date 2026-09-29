@@ -87,6 +87,29 @@ h1, h2, h3, .display {
   cursor: pointer;
 }
 
+/* ── Account theme tokens ───────────────────────────────────────────────
+   Dark values live on :root so shared components (booking modals etc.) look
+   the same everywhere. The account layout wraps its pages in .acct-theme, and
+   html[data-acct-theme="light"] (set by the toggle / a no-flash startup
+   script in app/account/layout.tsx) swaps in the light palette there only.
+   Colors are written as rgba(var(--t-fg-rgb), a) so every translucent
+   white-on-black line flips to translucent ink-on-paper automatically. */
+:root {
+  --t-fg-rgb: 255, 255, 255;  --t-fg: #ffffff;   --t-on-fg: #080808;
+  --t-bg: #080808;  --t-surface: #141414;  --t-surface-lo: #0f0f0f;  --t-surface-hi: #1f1f1f;
+  --t-gold: #e6c07a;  --t-gold-rgb: 230, 192, 122;
+  --t-ok: #6bffaa;  --t-err: #ff6b6b;  --t-scheme: dark;
+}
+.acct-theme { color-scheme: dark; transition: background-color .2s ease, color .2s ease; }
+html[data-acct-theme="light"] .acct-theme {
+  --t-fg-rgb: 28, 24, 20;  --t-fg: #1c1814;  --t-on-fg: #ffffff;
+  --t-bg: #f4f1eb;  --t-surface: #ffffff;  --t-surface-lo: #faf8f4;  --t-surface-hi: #ebe6dc;
+  --t-gold: #8a6418;  --t-gold-rgb: 176, 128, 40;
+  --t-ok: #15803d;  --t-err: #c62828;  --t-scheme: light;
+  color-scheme: light;
+}
+html[data-acct-theme="light"] .acct-theme select option { background: #ffffff; color: #1c1814; }
+
 /* Account area responsive shell */
 .acct-shell { display: flex; gap: 48px; }
 .acct-nav { width: 180px; flex-shrink: 0; }
@@ -95,20 +118,24 @@ h1, h2, h3, .display {
   .acct-bar { padding-left: 48px !important; padding-right: 48px !important; }
   .acct-nav { width: 200px; }
 }
-/* Login & Security: cards stack on phones, side by side on desktop */
+/* ── Account two-column layouts ───────────────────────────────────────────
+   Breakpoints look high because desktop renders at zoom 1.25: the layout only
+   has viewport/1.25 px to work with, minus ~360 for the sidebar + padding.
+   Each breakpoint is where BOTH columns still get a usable width. */
+/* Login & Security: side by side from ~1366 laptops up */
 .sec-grid { display: flex; flex-direction: column; gap: 24px; }
-@media (min-width: 1024px) { .sec-grid { flex-direction: row; align-items: flex-start; } .sec-grid > div { flex: 1; max-width: 520px !important; } }
-/* Profile form: one column on phones, two on desktop (details | portfolio + settings) */
+@media (min-width: 1360px) { .sec-grid { flex-direction: row; align-items: flex-start; } .sec-grid > div { flex: 1; max-width: 520px !important; } }
+/* Profile: details | portfolio + settings, from ~1440 up */
 .prof-grid { display: grid; }
 .prof-col { min-width: 0; }
-@media (max-width: 1023px) { .prof-grid { max-width: 560px; } }
-@media (min-width: 1024px) {
-  .prof-grid { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 56px; align-items: start; }
+@media (max-width: 1419px) { .prof-grid { max-width: 560px; } }
+@media (min-width: 1420px) {
+  .prof-grid { grid-template-columns: minmax(340px, 560px) minmax(380px, 1fr); gap: 56px; align-items: start; }
 }
-/* Plus page: benefits left, checkout pinned right on desktop */
+/* Plus: benefits | checkout pinned right, from ~1366 up */
 .plus-grid { display: grid; gap: 24px; }
-@media (min-width: 1024px) {
-  .plus-grid { grid-template-columns: minmax(0, 1fr) 440px; gap: 32px; align-items: start; }
+@media (min-width: 1360px) {
+  .plus-grid { grid-template-columns: minmax(0, 1fr) minmax(360px, 440px); gap: 32px; align-items: start; }
   .plus-grid-pay { position: sticky; top: 24px; }
 }
 @media (max-width: 640px) {

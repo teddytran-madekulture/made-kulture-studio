@@ -36,21 +36,21 @@ export default function AccountNav() {
     <nav className="acct-nav">
       <Link href="/" style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: 'Inter', fontSize: 13,
-        color: 'rgba(255,255,255,0.55)', textDecoration: 'none', marginBottom: 24,
+        color: 'rgba(var(--t-fg-rgb), 0.55)', textDecoration: 'none', marginBottom: 24,
       }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.55)')}
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--t-fg)')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(var(--t-fg-rgb), 0.55)')}
       >← Back to Home</Link>
-      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', marginBottom: 16 }}>ACCOUNT</div>
+      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: 'rgba(var(--t-fg-rgb), 0.3)', marginBottom: 16 }}>ACCOUNT</div>
       {ITEMS.map(({ href, label }) => (
         <Link key={href} href={href} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontFamily: 'Inter', fontSize: 14,
-          color: href === pathname ? '#fff' : 'rgba(255,255,255,0.6)',
-          textDecoration: 'none', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
+          color: href === pathname ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), 0.6)',
+          textDecoration: 'none', padding: '8px 0', borderBottom: '1px solid rgba(var(--t-fg-rgb), 0.05)',
         }}>
           <span>{label}</span>
           {href === '/account/messages' && unread > 0 && (
-            <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: '#e6c07a', color: '#080808', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{unread}</span>
+            <span style={{ minWidth: 18, height: 18, borderRadius: 9, background: 'var(--t-gold)', color: 'var(--t-on-fg)', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{unread}</span>
           )}
         </Link>
       ))}

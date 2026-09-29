@@ -33,9 +33,9 @@ interface Profile {
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
+      <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 8 }}>
         {label}
-        {hint && <span style={{ marginLeft: 8, color: '#e6c07a', fontSize: 10, letterSpacing: '0.04em' }}>· {hint}</span>}
+        {hint && <span style={{ marginLeft: 8, color: 'var(--t-gold)', fontSize: 10, letterSpacing: '0.04em' }}>· {hint}</span>}
       </label>
       {children}
     </div>
@@ -160,12 +160,12 @@ export default function ProfilePage() {
   }
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', background: '#141414', border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 4, padding: '14px 16px', fontFamily: 'Inter', fontSize: 14, color: '#fff',
+    width: '100%', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)',
+    borderRadius: 4, padding: '14px 16px', fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)',
     outline: 'none', boxSizing: 'border-box',
   }
 
-  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.4)', paddingTop: 40 }}>Loading...</div>
+  if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.4)', paddingTop: 40 }}>Loading...</div>
 
   return (
     <div>
@@ -173,38 +173,38 @@ export default function ProfilePage() {
       {form.id && form.directory_opt_in
         ? (
           <a href={`/account/directory/${form.id}`} target="_blank" rel="noopener noreferrer"
-            style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', textDecoration: 'none', marginBottom: 28 }}>
+            style={{ display: 'inline-block', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', textDecoration: 'none', marginBottom: 28 }}>
             View public profile →
           </a>
         ) : (
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 28 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.35)', marginBottom: 28 }}>
             Turn on the directory listing below to get a public profile.
           </div>
         )}
       <form onSubmit={save}>
         {error && (
-          <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b', marginBottom: 20 }}>
+          <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-err)', marginBottom: 20 }}>
             {error}
           </div>
         )}
         {saved && (
-          <div style={{ background: 'rgba(60,255,120,0.1)', border: '1px solid rgba(60,255,120,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#6bffaa', marginBottom: 20 }}>
+          <div style={{ background: 'rgba(60,255,120,0.1)', border: '1px solid rgba(60,255,120,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-ok)', marginBottom: 20 }}>
             Profile saved successfully.
           </div>
         )}
 
         {/* Always-visible directory guidance so people know what to do. */}
         {isCustomer ? (
-          <div style={{ background: 'rgba(230,192,122,0.08)', border: '1px solid rgba(230,192,122,0.3)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', lineHeight: 1.55, marginBottom: 24 }}>
+          <div style={{ background: 'rgba(var(--t-gold-rgb), 0.08)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', lineHeight: 1.55, marginBottom: 24 }}>
             <strong>Want to join the Made Kulture creator directory?</strong> Your account is set to <strong>Customer</strong> (booking only). Switch it to <strong>Creative</strong> or <strong>Brand</strong> below, then fill out the fields marked <span style={{ whiteSpace: 'nowrap' }}>“· for directory”</span> so brands and other creatives can find you.
           </div>
         ) : (form.directory_opt_in && missing.length === 0) ? (
-          <div style={{ background: 'rgba(60,255,120,0.08)', border: '1px solid rgba(60,255,120,0.25)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: '#6bffaa', lineHeight: 1.55, marginBottom: 24 }}>
+          <div style={{ background: 'rgba(60,255,120,0.08)', border: '1px solid rgba(60,255,120,0.25)', borderRadius: 8, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-ok)', lineHeight: 1.55, marginBottom: 24 }}>
             ✓ You&apos;re listed in the creator directory. Other members can find you by role.
           </div>
         ) : (
-          <div style={{ background: 'rgba(230,192,122,0.08)', border: '1px solid rgba(230,192,122,0.3)', borderRadius: 8, padding: '16px 18px', marginBottom: 24 }}>
-            <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', fontWeight: 600, marginBottom: 12 }}>To appear in the creator directory:</div>
+          <div style={{ background: 'rgba(var(--t-gold-rgb), 0.08)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '16px 18px', marginBottom: 24 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', fontWeight: 600, marginBottom: 12 }}>To appear in the creator directory:</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
                 { done: !!(form.full_name ?? '').trim(), label: isBrand ? 'Add your company name' : 'Add your name' },
@@ -213,8 +213,8 @@ export default function ProfilePage() {
                 { done: portfolioCount > 0 || (form.links?.length ?? 0) > 0 || !!(form.instagram ?? '').trim(), label: 'Add a portfolio photo, a link, or Instagram' },
                 { done: form.directory_opt_in, label: 'Turn on “List me in the creative directory” (below)' },
               ].map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'Inter', fontSize: 13, color: s.done ? 'rgba(255,255,255,0.45)' : '#fff' }}>
-                  <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: '50%', border: `1px solid ${s.done ? '#6bffaa' : 'rgba(230,192,122,0.5)'}`, color: '#6bffaa', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>{s.done ? '✓' : ''}</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'Inter', fontSize: 13, color: s.done ? 'rgba(var(--t-fg-rgb), 0.45)' : 'var(--t-fg)' }}>
+                  <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: '50%', border: `1px solid ${s.done ? 'var(--t-ok)' : 'rgba(var(--t-gold-rgb), 0.5)'}`, color: 'var(--t-ok)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>{s.done ? '✓' : ''}</span>
                   <span style={{ textDecoration: s.done ? 'line-through' : 'none' }}>{s.label}</span>
                 </div>
               ))}
@@ -229,32 +229,32 @@ export default function ProfilePage() {
             {([['customer', 'Customer'], ['creative', 'Creative'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
               <button key={t} type="button" onClick={() => setForm(f => ({ ...f, account_type: t }))} style={{
                 flex: 1, padding: '10px 6px', borderRadius: 4, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
-                background: form.account_type === t ? '#fff' : 'transparent',
-                color: form.account_type === t ? '#080808' : 'rgba(255,255,255,0.6)',
-                border: form.account_type === t ? '1px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                background: form.account_type === t ? 'var(--t-fg)' : 'transparent',
+                color: form.account_type === t ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), 0.6)',
+                border: form.account_type === t ? '1px solid var(--t-fg)' : '1px solid rgba(var(--t-fg-rgb), 0.2)',
               }}>{lbl}</button>
             ))}
           </div>
           {isCustomer && (
-            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginTop: 8 }}>
-              A customer account is just for booking and managing your sessions. Switch to <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Creative</strong> or <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Brand</strong> to add a portfolio, roles, and join the directory.
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.35)', lineHeight: 1.5, marginTop: 8 }}>
+              A customer account is just for booking and managing your sessions. Switch to <strong style={{ color: 'rgba(var(--t-fg-rgb), 0.6)' }}>Creative</strong> or <strong style={{ color: 'rgba(var(--t-fg-rgb), 0.6)' }}>Brand</strong> to add a portfolio, roles, and join the directory.
             </div>
           )}
         </Field>
 
         <Field label={isBrand ? 'LOGO' : 'PROFILE PHOTO'} hint="for directory">
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {form.avatar_url
                 ? <img src={form.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>No photo</span>}
+                : <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(var(--t-fg-rgb), 0.3)' }}>No photo</span>}
             </div>
-            <label style={{ border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, padding: '10px 16px', fontFamily: 'Inter', fontSize: 12, color: '#fff', cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
+            <label style={{ border: '1px solid rgba(var(--t-fg-rgb), 0.2)', borderRadius: 4, padding: '10px 16px', fontFamily: 'Inter', fontSize: 12, color: 'var(--t-fg)', cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
               {uploading ? 'UPLOADING…' : (form.avatar_url ? 'CHANGE PHOTO' : 'UPLOAD PHOTO')}
               <input type="file" accept="image/*" disabled={uploading} onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatar(f) }} style={{ display: 'none' }} />
             </label>
           </div>
-          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)', marginTop: 8 }}>
             Shown on your directory listing. Click <strong>Save Changes</strong> below to keep it.
           </div>
         </Field>
@@ -270,8 +270,8 @@ export default function ProfilePage() {
         </Field>
         {!isCustomer && (<>
         <Field label="INSTAGRAM">
-          <div style={{ display: 'flex', alignItems: 'center', background: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, overflow: 'hidden' }}>
-            <span style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.3)', padding: '14px 0 14px 16px' }}>@</span>
+          <div style={{ display: 'flex', alignItems: 'center', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), 0.12)', borderRadius: 4, overflow: 'hidden' }}>
+            <span style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), 0.3)', padding: '14px 0 14px 16px' }}>@</span>
             <input value={form.instagram?.replace('@', '') ?? ''} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder="yourusername" style={{ ...inputStyle, border: 'none', paddingLeft: 4 }} />
           </div>
         </Field>
@@ -295,7 +295,7 @@ export default function ProfilePage() {
             rows={3}
             style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
           />
-          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6, textAlign: 'right' }}>{form.bio.length}/600</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)', marginTop: 6, textAlign: 'right' }}>{form.bio.length}/600</div>
         </Field>
 
         </>)}
@@ -325,12 +325,12 @@ export default function ProfilePage() {
                 />
                 <button type="button" onClick={() => setForm(f => ({ ...f, links: f.links.filter((_, j) => j !== i) }))}
                   title="Remove link"
-                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', borderRadius: 4, width: 40, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                  style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), 0.15)', color: 'rgba(var(--t-fg-rgb), 0.5)', borderRadius: 4, width: 40, cursor: 'pointer', flexShrink: 0 }}>✕</button>
               </div>
             ))}
             {form.links.length < 8 && (
               <button type="button" onClick={() => setForm(f => ({ ...f, links: [...f.links, { label: '', url: '' }] }))}
-                style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px dashed rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', borderRadius: 4, padding: '9px 14px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px dashed rgba(var(--t-fg-rgb), 0.2)', color: 'rgba(var(--t-fg-rgb), 0.6)', borderRadius: 4, padding: '9px 14px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
                 + Add link
               </button>
             )}
@@ -344,7 +344,7 @@ export default function ProfilePage() {
             placeholder="YouTube or Vimeo link (optional)" maxLength={300}
             style={inputStyle}
           />
-          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)', marginTop: 6 }}>
             We don&apos;t host video — paste a link and it&apos;ll embed on your profile.
           </div>
         </Field>
@@ -352,15 +352,15 @@ export default function ProfilePage() {
         {/* Public contact display */}
         <Field label="CONTACT SHOWN ON YOUR PROFILE">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.6)' }}>
               <input type="checkbox" checked={form.show_email} onChange={e => setForm(f => ({ ...f, show_email: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
               Show my email to other members
             </label>
-            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.6)' }}>
               <input type="checkbox" checked={form.show_phone} onChange={e => setForm(f => ({ ...f, show_phone: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
               Show my phone to other members
             </label>
-            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.3)' }}>
               Off by default. These only ever show on your profile to signed-in members.
             </div>
           </div>
@@ -369,15 +369,15 @@ export default function ProfilePage() {
         {/* Directory opt-in */}
         <div
           onClick={() => setForm(f => ({ ...f, directory_opt_in: !f.directory_opt_in }))}
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '16px 18px', marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
+          style={{ background: 'rgba(var(--t-fg-rgb), 0.03)', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', borderRadius: 8, padding: '16px 18px', marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
         >
-          <div style={{ width: 18, height: 18, flexShrink: 0, marginTop: 2, border: `1px solid ${form.directory_opt_in ? '#fff' : 'rgba(255,255,255,0.3)'}`, background: form.directory_opt_in ? '#fff' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {form.directory_opt_in && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
+          <div style={{ width: 18, height: 18, flexShrink: 0, marginTop: 2, border: `1px solid ${form.directory_opt_in ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), 0.3)'}`, background: form.directory_opt_in ? 'var(--t-fg)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {form.directory_opt_in && <span style={{ color: 'var(--t-on-fg)', fontSize: 11, lineHeight: 1 }}>✓</span>}
           </div>
           <div>
-            <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#fff', marginBottom: 2 }}>List me in the creative directory</div>
-            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
-              Let other Made Kulture members find you by role for collaborations. Only your name, roles, and Instagram are shown — never your email or phone. It works both ways: <strong style={{ color: 'rgba(255,255,255,0.7)' }}>if you turn this off, you also won&apos;t be able to browse the directory.</strong>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-fg)', marginBottom: 2 }}>List me in the creative directory</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.45)', lineHeight: 1.5 }}>
+              Let other Made Kulture members find you by role for collaborations. Only your name, roles, and Instagram are shown — never your email or phone. It works both ways: <strong style={{ color: 'rgba(var(--t-fg-rgb), 0.7)' }}>if you turn this off, you also won&apos;t be able to browse the directory.</strong>
             </div>
           </div>
         </div>
@@ -386,7 +386,7 @@ export default function ProfilePage() {
         {!isCustomer && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <input type="checkbox" id="notify_email" checked={!!form.notify_email} onChange={e => setForm(f => ({ ...f, notify_email: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-            <label htmlFor="notify_email" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+            <label htmlFor="notify_email" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', cursor: 'pointer' }}>
               Email me about new messages and casting interest
             </label>
           </div>
@@ -395,23 +395,23 @@ export default function ProfilePage() {
         {!isCustomer && (
           <label htmlFor="notify_sms" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginBottom: 16 }}>
             <input type="checkbox" id="notify_sms" checked={!!form.notify_sms} onChange={e => setForm(f => ({ ...f, notify_sms: e.target.checked }))} style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0, cursor: 'pointer' }} />
-            <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55 }}>
-              Text me about new messages and casting interest. By checking this you agree to receive recurring automated text messages from <strong style={{ color: 'rgba(255,255,255,0.7)' }}>Made Kulture</strong>. Message frequency varies. Message &amp; data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
-              <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Terms</a> and{' '}
-              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>.
+            <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.5)', lineHeight: 1.55 }}>
+              Text me about new messages and casting interest. By checking this you agree to receive recurring automated text messages from <strong style={{ color: 'rgba(var(--t-fg-rgb), 0.7)' }}>Made Kulture</strong>. Message frequency varies. Message &amp; data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t-gold)' }} onClick={e => e.stopPropagation()}>Terms</a> and{' '}
+              <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t-gold)' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>.
             </span>
           </label>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
           <input type="checkbox" id="sms_opt_in" checked={!!form.sms_opt_in} onChange={set('sms_opt_in')} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-          <label htmlFor="sms_opt_in" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+          <label htmlFor="sms_opt_in" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.5)', cursor: 'pointer' }}>
             Send me SMS reminders before my bookings
           </label>
         </div>
 
         <button type="submit" disabled={saving} style={{
-          background: '#fff', color: '#000', border: 'none', borderRadius: 4,
+          background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4,
           padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600,
           letterSpacing: '0.1em', cursor: 'pointer', opacity: saving ? 0.6 : 1,
         }}>

@@ -275,31 +275,31 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>
           Up to {PORTFOLIO_MAX} photos. Add several at once or drop them in, drag to reorder, mark sensitive work 18+.
         </div>
-        <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, color: atMax ? '#e6c07a' : 'rgba(255,255,255,0.4)' }}>
+        <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, color: atMax ? 'var(--t-gold)' : 'rgba(var(--t-fg-rgb), 0.4)' }}>
           {images.length} / {PORTFOLIO_MAX}
         </div>
       </div>
 
       {error && (
-        <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '10px 14px', fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginBottom: 12 }}>
+        <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '10px 14px', fontFamily: 'Inter', fontSize: 12, color: 'var(--t-err)', marginBottom: 12 }}>
           {error}
         </div>
       )}
 
       {!loading && !atMax && !agreed && (
-        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5, marginBottom: 12 }}>
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), 0.6)', lineHeight: 1.5, marginBottom: 12 }}>
           <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
           <span>I own or have the rights to these images, everyone shown is 18 or older and has consented, and this content follows Made Kulture&apos;s{' '}
-            <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#e6c07a' }} onClick={e => e.stopPropagation()}>content standards</a>.
+            <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t-gold)' }} onClick={e => e.stopPropagation()}>content standards</a>.
           </span>
         </label>
       )}
 
       {loading ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>Loading…</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), 0.35)' }}>Loading…</div>
       ) : (
         <>
         <style>{`
@@ -321,7 +321,7 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
             <div key={img.id}
               ref={el => { if (el) tileRefs.current.set(img.id, el); else tileRefs.current.delete(img.id) }}
               className={`pm-tile${active ? ' pm-dragging' : ''}`}
-              style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414', transition: 'transform .12s ease', transform: active ? 'scale(1.04)' : 'none', outline: active ? '2px solid #e6c07a' : 'none', zIndex: active ? 5 : 'auto', opacity: active ? 0.92 : 1 }}>
+              style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', background: 'var(--t-surface)', transition: 'transform .12s ease', transform: active ? 'scale(1.04)' : 'none', outline: active ? '2px solid #e6c07a' : 'none', zIndex: active ? 5 : 'auto', opacity: active ? 0.92 : 1 }}>
               <img src={img.url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: img.is_mature ? 'blur(8px)' : 'none' }} />
               {img.is_mature && (
                 <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: '#e6c07a', fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 5px', borderRadius: 3 }}>18+</div>
@@ -348,10 +348,10 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
 
           {!atMax && (
             <label title={!agreed ? 'Check the box above first' : undefined}
-              style={{ aspectRatio: '4 / 5', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: (uploading || !agreed) ? 'default' : 'pointer', color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.02)', opacity: agreed ? 1 : 0.4 }}>
+              style={{ aspectRatio: '4 / 5', borderRadius: 6, border: '1px dashed rgba(var(--t-fg-rgb), 0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: (uploading || !agreed) ? 'default' : 'pointer', color: 'rgba(var(--t-fg-rgb), 0.45)', background: 'rgba(var(--t-fg-rgb), 0.02)', opacity: agreed ? 1 : 0.4 }}>
               <span style={{ fontSize: 22, lineHeight: 1 }}>{uploading ? '…' : '+'}</span>
               <span style={{ fontFamily: 'Inter', fontSize: 11 }}>{uploading ? (progress ? `Uploading ${progress}` : 'Uploading') : 'Add photos'}</span>
-              {!uploading && <span className="pm-drop-hint" style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>or drop them here</span>}
+              {!uploading && <span className="pm-drop-hint" style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(var(--t-fg-rgb), 0.3)' }}>or drop them here</span>}
               <input type="file" accept="image/*" multiple disabled={uploading || !agreed}
                 onChange={e => { const list = Array.from(e.target.files ?? []); e.target.value = ''; if (list.length) addFiles(list) }}
                 style={{ display: 'none' }} />

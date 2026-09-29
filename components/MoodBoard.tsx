@@ -78,22 +78,22 @@ export default function MoodBoard({ castingId, canEdit, initial, castingMature =
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)' }}>MOOD BOARD</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), 0.35)' }}>MOOD BOARD</div>
         {!canEdit && hasGateable && !revealMature && (
           <button type="button" onClick={() => setRevealMature(true)}
-            style={{ background: 'transparent', border: '1px solid rgba(230,192,122,0.5)', color: '#e6c07a', borderRadius: 4, padding: '5px 10px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer' }}>Reveal 18+ — I&apos;m over 18</button>
+            style={{ background: 'transparent', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', color: 'var(--t-gold)', borderRadius: 4, padding: '5px 10px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer' }}>Reveal 18+ — I&apos;m over 18</button>
         )}
       </div>
-      {error && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-err)', marginBottom: 8 }}>{error}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
         {images.map(img => {
           const isGated = gated(img)
           return (
-          <div key={img.url} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#141414' }}>
+          <div key={img.url} style={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(var(--t-fg-rgb), 0.1)', background: 'var(--t-surface)' }}>
             <img src={img.url} alt="" onClick={() => { if (!isGated) setLightbox(img.url) }} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: isGated ? 'default' : 'zoom-in', filter: isGated ? 'blur(16px)' : 'none' }} />
             {isGated && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', pointerEvents: 'none' }}>
-                <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, color: '#e6c07a', border: '1px solid rgba(230,192,122,0.5)', borderRadius: 4, padding: '3px 6px' }}>18+</span>
+                <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, color: 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', borderRadius: 4, padding: '3px 6px' }}>18+</span>
               </div>
             )}
             {canEdit && (
@@ -108,7 +108,7 @@ export default function MoodBoard({ castingId, canEdit, initial, castingMature =
           )
         })}
         {canEdit && images.length < MAX && (
-          <label style={{ aspectRatio: '1 / 1', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: busy ? 'default' : 'pointer', color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.02)' }}>
+          <label style={{ aspectRatio: '1 / 1', borderRadius: 6, border: '1px dashed rgba(var(--t-fg-rgb), 0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: busy ? 'default' : 'pointer', color: 'rgba(var(--t-fg-rgb), 0.45)', background: 'rgba(var(--t-fg-rgb), 0.02)' }}>
             <span style={{ fontSize: 20, lineHeight: 1 }}>{busy ? '…' : '+'}</span>
             <span style={{ fontFamily: 'Inter', fontSize: 10 }}>{busy ? 'Uploading' : 'Add'}</span>
             <input type="file" accept="image/*" disabled={busy}
