@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import KioskJukeboxBar from '@/components/KioskJukeboxBar'
 import qrcode from 'qrcode-generator'
-import { POSE_CATEGORIES } from '@/lib/pose-categories'
+import { POSE_CATEGORIES, POSE_GUIDE_ENABLED } from '@/lib/pose-categories'
 
 const IDLE_MS = 90_000
 
@@ -814,11 +814,11 @@ export default function KioskPage() {
               {portalItems.length ? `${portalItems.length} picture${portalItems.length === 1 ? '' : 's'} on the board` : 'Pinterest or your camera roll'}
             </span>
           </button>
-          <button style={{ ...card, flex: '1 1 calc(50% - 28px)', minHeight: 170, maxWidth: 420 }} onClick={() => { openPoses(); touch() }}>
+          {POSE_GUIDE_ENABLED && <button style={{ ...card, flex: '1 1 calc(50% - 28px)', minHeight: 170, maxWidth: 420 }} onClick={() => { openPoses(); touch() }}>
             <IconPose />
             <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '0.2em' }}>POSE GUIDE</span>
             <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.42)' }}>Ideas by category</span>
-          </button>
+          </button>}
         </div>
         <button onClick={() => setScreen('home')} style={{ ...backBtn, position: 'static', marginTop: 18 }}>← BACK</button>
       </div>

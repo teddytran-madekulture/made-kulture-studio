@@ -4,7 +4,7 @@
 // first feature; later ones (tethered shots) become more sections here.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { POSE_CATEGORIES } from '@/lib/pose-categories'
+import { POSE_CATEGORIES, POSE_GUIDE_ENABLED } from '@/lib/pose-categories'
 import { shrinkImage } from '@/lib/shrink-image'
 
 interface Item { id: string; kind: 'pin' | 'upload'; src: string }
@@ -178,15 +178,15 @@ export default function PortalPage() {
                 {items.length ? `${items.length} on the wall` : 'Pinterest or your photos, on the set screen'}
               </div>
             </button>
-            <button onClick={() => open('poses')}
+            {POSE_GUIDE_ENABLED && <button onClick={() => open('poses')}
               style={{ textAlign: 'left', background: C.card, border: `1px solid rgba(201,178,126,0.35)`, borderRadius: 14, padding: '18px 16px', color: C.fg, cursor: 'pointer', fontFamily: 'Inter, sans-serif', minHeight: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
               <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.16em' }}>POSE GUIDE</div>
               <div style={{ fontSize: 12, color: C.dim, marginTop: 4, lineHeight: 1.4 }}>Ideas by category — send one to the wall</div>
-            </button>
+            </button>}
           </div>
         )}
 
-        {live && view === 'poses' && (
+        {live && POSE_GUIDE_ENABLED && view === 'poses' && (
           <section style={{ marginTop: 28, background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
             <button onClick={() => { if (cat) { setCat(null); setPose(null) } else open('home') }} style={{ background: 'none', border: 'none', color: C.champ, fontSize: 12, letterSpacing: '0.14em', padding: 0, marginBottom: 12, cursor: 'pointer' }}>
               {cat ? '← CATEGORIES' : '← PORTAL'}

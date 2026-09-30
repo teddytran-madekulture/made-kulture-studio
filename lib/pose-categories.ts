@@ -1,6 +1,11 @@
 // Pose Guide categories. Pure data — imported by the tablet, the phone page,
 // the admin and the API alike, so a category can't exist in one and not another.
 // `search` is the default stock-photo (Unsplash) query used to seed the starter set.
+// ⚠️ OFF (Teddy 2026-09-29): the Unsplash starter set wasn't good enough, so the
+// guest-facing POSE GUIDE tiles are hidden while he researches. The admin page,
+// the API and the saved poses all stay in place — flip this to bring it back.
+export const POSE_GUIDE_ENABLED = false
+
 export interface PoseCategory { key: string; label: string; search: string }
 
 export const POSE_CATEGORIES: PoseCategory[] = [
