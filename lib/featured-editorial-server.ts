@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
-import { parseStored, type FeaturedEditorial } from './featured-editorial'
+import { parseStoredConfig, liveEditorials, centralToday, type FeaturedEditorial } from './featured-editorial'
 
-// Server-side read for the home page. Bypasses Next's Data Cache so a save in
-// the editor shows on the next page load (see site-images.ts / site-settings.ts).
-// Any failure returns the switched-off default — the section then shows the
-// plain studio photo slot, never an error.
-export async function getFeaturedEditorial(): Promise<FeaturedEditorial> {
+// Server-side read: the editorials in rotation TODAY (Central). Bypasses Next's
+// Data Cache so a save in the editor shows on the next page load. Any failure
+// returns [] — the home page then shows the plain studio photo, never an error.
+export async function getLiveEditorials(): Promise<FeaturedEditorial[]> {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,9 +15,15 @@ export async function getFeaturedEditorial(): Promise<FeaturedEditorial> {
       }
     )
     const { data, error } = await supabase.from('site_settings').select('value').eq('key', 'featured_editorial').maybeSingle()
-    if (error) return parseStored(null)
-    return parseStored(data?.value)
+    if (error) return []
+    return liveEditorials(parseStoredConfig(data?.value), centralToday())
   } catch {
-    return parseStored(null)
+    return []
   }
+}
+
+/** One per visit: the home page is force-dynamic, so each request draws again. */
+export async function pickEditorialForVisit(): Promise<FeaturedEditorial | null> {
+  const live = await getLiveEditorials()
+  return live.length ? live[Math.floor(Math.random() * live.length)] : null
 }

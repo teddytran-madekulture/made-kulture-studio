@@ -13,7 +13,11 @@
 export interface EditorialCredit { role: string; handle: string }
 
 export interface FeaturedEditorial {
+  id: string
   enabled: boolean
+  pinned: boolean          // pinned ⇒ this one shows everywhere, rotation paused
+  startDate: string | null // 'YYYY-MM-DD' Central, inclusive (optional)
+  endDate: string | null   // 'YYYY-MM-DD' Central, inclusive (optional)
   title: string            // e.g. SAPEUR EN ROSE
   subtitle: string         // e.g. Dark Grandiose
   setName: string          // optional "Shot on Set D" (display name)
@@ -27,11 +31,13 @@ export interface FeaturedEditorial {
 }
 
 export const EDITORIAL_DEFAULTS: FeaturedEditorial = {
+  id: 'e0', pinned: false, startDate: null, endDate: null,
   enabled: false, title: '', subtitle: '', setName: '', setSlug: '', showInHero: false, postUrl: '',
   credits: [], photos: [], intervalSec: 5, updatedAt: null,
 }
 
 export const EDITORIAL_MAX_PHOTOS = 12
+export const EDITORIAL_MAX_ITEMS = 24
 export const EDITORIAL_MAX_CREDITS = 10
 
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max)
@@ -67,7 +73,13 @@ export function sanitize(input: any): FeaturedEditorial {
         .slice(0, EDITORIAL_MAX_CREDITS)
     : []
   const iv = Number(x.intervalSec)
+  const day = (v: unknown): string | null => { const d = String(v ?? '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null }
+  let startDate = day(x.startDate), endDate = day(x.endDate)
+  if (startDate && endDate && endDate < startDate) [startDate, endDate] = [endDate, startDate]
   return {
+    id: str(x.id, 40).replace(/[^a-zA-Z0-9_-]/g, '') || `e${Math.random().toString(36).slice(2, 9)}`,
+    pinned: !!x.pinned,
+    startDate, endDate,
     enabled: !!x.enabled,
     title: str(x.title, 80),
     subtitle: str(x.subtitle, 80),
@@ -82,18 +94,60 @@ export function sanitize(input: any): FeaturedEditorial {
   }
 }
 
-export function parseStored(raw: unknown): FeaturedEditorial {
-  if (!raw) return { ...EDITORIAL_DEFAULTS }
-  try { return sanitize(typeof raw === 'string' ? JSON.parse(raw) : raw) } catch { return { ...EDITORIAL_DEFAULTS } }
+// ── The list (2026-09-30) ─────────────────────────────────────────────────
+// Stored as { items: [...] } in the same site_settings row. A row saved before
+// the list existed holds ONE editorial object — it is read as a list of one,
+// so nothing needs migrating.
+export interface EditorialsConfig { items: FeaturedEditorial[]; updatedAt: string | null }
+
+export function sanitizeConfig(input: any): EditorialsConfig {
+  const raw: any[] = Array.isArray(input?.items) ? input.items : (input && typeof input === 'object' && !Array.isArray(input) && ('photos' in input || 'title' in input)) ? [input] : []
+  const seen = new Set<string>()
+  const items: FeaturedEditorial[] = []
+  for (const x of raw.slice(0, EDITORIAL_MAX_ITEMS)) {
+    const e = sanitize(x)
+    while (seen.has(e.id)) e.id = `e${Math.random().toString(36).slice(2, 9)}`
+    seen.add(e.id); items.push(e)
+  }
+  // Only one pin can win; keep the first.
+  let pinned = false
+  for (const e of items) { if (e.pinned && !pinned) pinned = true; else e.pinned = false }
+  return { items, updatedAt: typeof input?.updatedAt === 'string' ? input.updatedAt.slice(0, 40) : null }
 }
 
-// What the home page should actually show: null ⇒ fall back to the plain
-// studio photo slot. Switched on but with no photos counts as off.
+export function parseStoredConfig(raw: unknown): EditorialsConfig {
+  if (!raw) return { items: [], updatedAt: null }
+  try { return sanitizeConfig(typeof raw === 'string' ? JSON.parse(raw) : raw) } catch { return { items: [], updatedAt: null } }
+}
+
+/** Today's date in Houston as 'YYYY-MM-DD' — never a UTC day. */
+export function centralToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(now)
+}
+
+export type EditorialStatus = 'live' | 'off' | 'incomplete' | 'scheduled' | 'ended'
+export function editorialStatus(e: FeaturedEditorial, today: string): EditorialStatus {
+  if (!e.enabled) return 'off'
+  if (!e.photos.length) return 'incomplete'
+  if (e.startDate && today < e.startDate) return 'scheduled'
+  if (e.endDate && today > e.endDate) return 'ended'
+  return 'live'
+}
+
+/** What is in rotation right now. A live PINNED editorial replaces the rotation. */
+export function liveEditorials(cfg: EditorialsConfig, today: string): FeaturedEditorial[] {
+  const live = cfg.items.filter(e => editorialStatus(e, today) === 'live')
+  const pin = live.find(e => e.pinned)
+  return pin ? [pin] : live
+}
+
+// Single-editorial guard used by the home page components: null ⇒ fall back
+// to the plain studio photo slot.
+export function liveEditorial(e: FeaturedEditorial | null | undefined): FeaturedEditorial | null {
+  return e && e.enabled && e.photos.length > 0 ? e : null
+}
+
 // The credits after the byline, as one compact line for the hero banner.
 export function creditsLine(e: FeaturedEditorial, max = 3): string {
   return e.credits.slice(1, 1 + max).filter(c => c.handle).map(c => `${c.role ? c.role + ' ' : ''}@${c.handle}`).join('  ·  ')
-}
-
-export function liveEditorial(e: FeaturedEditorial | null | undefined): FeaturedEditorial | null {
-  return e && e.enabled && e.photos.length > 0 ? e : null
 }

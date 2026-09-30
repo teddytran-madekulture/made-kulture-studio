@@ -13,10 +13,11 @@
 // credits band below); a landscape door screen puts the credits beside it.
 // Full brightness, no dimming — Teddy's call: the tablets aren't bright enough
 // to affect a shoot.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import qrcode from 'qrcode-generator'
 
 export interface ShowcaseEditorial {
+  id?: string
   title: string; subtitle: string; setName: string; postUrl: string
   credits: { role: string; handle: string }[]; photos: string[]; intervalSec: number
 }
@@ -24,12 +25,34 @@ export interface ShowcaseEditorial {
 const CHAMP = '#c9b27e'
 const CHAMP_DIM = 'rgba(201,178,126,0.6)'
 
-export default function KioskShowcase({ e, onDismiss, portrait }: { e: ShowcaseEditorial; onDismiss: () => void; portrait: boolean }) {
+// Cycles through EVERY editorial in rotation: each plays through its photos
+// with its own credits, then the next one takes over (the website shows one per
+// visit; an idle tablet has time for all of them).
+export default function KioskShowcase({ items, onDismiss, portrait }: { items: ShowcaseEditorial[]; onDismiss: () => void; portrait: boolean }) {
+  // A running count, not an index: with ONE editorial the index would stay 0,
+  // nothing would remount, and it would freeze on the last photo.
+  const [turn, setTurn] = useState(0)
+  const cur = items[turn % Math.max(items.length, 1)]
+  if (!cur) return null
+  return <One key={turn} e={cur} onDismiss={onDismiss} portrait={portrait}
+    onCycleDone={() => setTurn(x => x + 1)} />
+}
+
+function One({ e, onDismiss, portrait, onCycleDone }: { e: ShowcaseEditorial; onDismiss: () => void; portrait: boolean; onCycleDone: () => void }) {
   const [i, setI] = useState(0)
   const n = e.photos.length
+  // ⚠️ Refs, not deps: the kiosk page re-renders every 5s (its clock tick) and
+  // hands down fresh callbacks each time. With them in the deps the interval
+  // would restart every 5s and a 6s+ step would NEVER fire.
+  const iRef = useRef(0)
+  const doneRef = useRef(onCycleDone)
+  doneRef.current = onCycleDone
   useEffect(() => {
-    if (n < 2) return
-    const t = setInterval(() => setI(x => (x + 1) % n), Math.max(4, e.intervalSec + 2) * 1000)
+    const step = Math.max(4, e.intervalSec + 2) * 1000
+    const t = setInterval(() => {
+      if (iRef.current + 1 >= n) { doneRef.current(); return }   // last photo shown → next editorial
+      iRef.current += 1; setI(iRef.current)
+    }, step)
     return () => clearInterval(t)
   }, [n, e.intervalSec])
 
@@ -71,7 +94,7 @@ export default function KioskShowcase({ e, onDismiss, portrait }: { e: ShowcaseE
         {credits.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: twoCol && portrait ? '1fr 1fr' : '1fr', columnGap: 28, rowGap: 7, marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(201,178,126,0.22)' }}>
             {credits.map((c, k) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, minWidth: 0 }}>
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, minWidth: 0 }}>
                 <span style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.role}</span>
                 {c.handle && <span style={{ fontSize: 16, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>@{c.handle}</span>}
               </div>

@@ -4,7 +4,7 @@
 // Photos upload straight away (shrunk in the browser first — 4.5 MB function
 // ceiling) but nothing changes on the live site until SAVE.
 import { useEffect, useRef, useState } from 'react'
-import { EDITORIAL_DEFAULTS, EDITORIAL_MAX_CREDITS, EDITORIAL_MAX_PHOTOS, cleanHandle, type FeaturedEditorial } from '@/lib/featured-editorial'
+import { EDITORIAL_DEFAULTS, EDITORIAL_MAX_CREDITS, EDITORIAL_MAX_ITEMS, EDITORIAL_MAX_PHOTOS, cleanHandle, centralToday, editorialStatus, type EditorialsConfig, type FeaturedEditorial } from '@/lib/featured-editorial'
 import { shrinkImage } from '@/lib/shrink-image'
 
 const C = { card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
@@ -32,7 +32,8 @@ function parseCaptionCredits(text: string): { role: string; handle: string }[] {
 }
 
 export default function FeaturedEditorialPage() {
-  const [e, setE] = useState<FeaturedEditorial | null>(null)
+  const [cfg, setCfg] = useState<EditorialsConfig | null>(null)
+  const [sel, setSel] = useState<string | null>(null)
   const [saved, setSaved] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -47,7 +48,7 @@ export default function FeaturedEditorialPage() {
       if (r.status === 401) { setUnauth(true); return }
       const d = await r.json()
       if (!r.ok) { setMsg(`⚠️ ${d.error || 'Could not load.'}`); return }
-      setE(d.editorial); setSaved(JSON.stringify(d.editorial))
+      setCfg(d.config); setSaved(JSON.stringify(d.config)); setSel(d.config.items[0]?.id ?? null)
     }).catch(() => setMsg('⚠️ Could not load — check your connection.'))
   }, [])
 
@@ -57,13 +58,44 @@ export default function FeaturedEditorialPage() {
   }, [])
 
   if (unauth) return <div style={{ padding: 40, fontFamily: 'Inter' }}>Sign in to the admin first.</div>
-  if (!e) return <div style={{ padding: 40, fontFamily: 'Inter', color: C.dim }}>{msg ?? 'Loading…'}</div>
+  if (!cfg) return <div style={{ padding: 40, fontFamily: 'Inter', color: C.dim }}>{msg ?? 'Loading…'}</div>
 
-  const set = (x: Partial<FeaturedEditorial>) => setE({ ...e, ...x })
-  const dirty = JSON.stringify(e) !== saved
+  const today = centralToday()
+  const e: FeaturedEditorial | null = cfg.items.find(x => x.id === sel) ?? cfg.items[0] ?? null
+  const eid = e?.id
+  // Edits apply to the SELECTED editorial only. Pinning one unpins the rest —
+  // only one can hold the spot.
+  const set = (x: Partial<FeaturedEditorial>) => setCfg(cur => cur ? {
+    ...cur,
+    items: cur.items.map(it => it.id === eid ? { ...it, ...x } : (x.pinned ? { ...it, pinned: false } : it)),
+  } : cur)
+  const dirty = JSON.stringify(cfg) !== saved
+  const addEditorial = () => {
+    const id = `e${Date.now().toString(36)}`
+    setCfg({ ...cfg, items: [...cfg.items, { ...EDITORIAL_DEFAULTS, id, credits: [], photos: [] }] })
+    setSel(id)
+  }
+  const removeEditorial = () => {
+    if (!e || !confirm(`Remove "${e.title || 'Untitled'}" from the list? (It is gone once you SAVE.)`)) return
+    const items = cfg.items.filter(x => x.id !== e.id)
+    setCfg({ ...cfg, items }); setSel(items[0]?.id ?? null)
+  }
+  const moveEditorial = (d: -1 | 1) => {
+    const k = cfg.items.findIndex(x => x.id === eid), j = k + d
+    if (k < 0 || j < 0 || j >= cfg.items.length) return
+    const items = [...cfg.items]; [items[k], items[j]] = [items[j], items[k]]
+    setCfg({ ...cfg, items })
+  }
+  const STATUS_LABEL: Record<string, [string, string]> = {
+    live: ['LIVE', '#4ade80'], off: ['OFF', C.dim], incomplete: ['NO PHOTOS', '#fbbf24'],
+    scheduled: ['SCHEDULED', '#60a5fa'], ended: ['ENDED', C.dim],
+  }
+  const liveCount = cfg.items.filter(x => editorialStatus(x, today) === 'live').length
+  const pinnedLive = cfg.items.find(x => x.pinned && editorialStatus(x, today) === 'live')
 
   const upload = async (files: FileList | null) => {
-    if (!files?.length) return
+    if (!files?.length || !e) return
+    const target = e.id
     const room = EDITORIAL_MAX_PHOTOS - e.photos.length
     const list = Array.from(files).slice(0, room)
     if (list.length < files.length) setMsg(`Only ${EDITORIAL_MAX_PHOTOS} photos per editorial — the extras were skipped.`)
@@ -81,11 +113,12 @@ export default function FeaturedEditorialPage() {
       finally { setUploading(n => n - 1) }
     }
     // Functional update — the uploads can finish after other edits.
-    setE(cur => cur ? { ...cur, photos: [...cur.photos, ...added].slice(0, EDITORIAL_MAX_PHOTOS) } : cur)
+    setCfg(cur => cur ? { ...cur, items: cur.items.map(it => it.id === target ? { ...it, photos: [...it.photos, ...added].slice(0, EDITORIAL_MAX_PHOTOS) } : it) } : cur)
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const move = (k: number, d: -1 | 1) => {
+    if (!e) return
     const p = [...e.photos]; const j = k + d
     if (j < 0 || j >= p.length) return
     ;[p[k], p[j]] = [p[j], p[k]]; set({ photos: p })
@@ -94,18 +127,24 @@ export default function FeaturedEditorialPage() {
   const save = async () => {
     setBusy(true); setMsg(null)
     try {
-      const r = await fetch('/api/admin/featured-editorial', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(e) })
+      const r = await fetch('/api/admin/featured-editorial', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) })
       const d = await r.json()
       if (!r.ok) { setMsg(`⚠️ ${d.error || 'Not saved.'}`); return }
-      setE(d.editorial); setSaved(JSON.stringify(d.editorial))
-      setMsg(d.editorial.enabled && d.editorial.photos.length ? 'Saved — live on the home page now.' : 'Saved. It is switched off (or has no photos), so the home page shows the plain studio photo.')
+      setCfg(d.config); setSaved(JSON.stringify(d.config))
+      const n = (d.config.items as FeaturedEditorial[]).filter(x => editorialStatus(x, centralToday()) === 'live').length
+      setMsg(n ? `Saved — ${n} editorial${n === 1 ? '' : 's'} in rotation.` : 'Saved. Nothing is live, so the home page shows the plain studio photo.')
     } catch { setMsg('⚠️ Not saved — check your connection.') }
     finally { setBusy(false) }
   }
 
-  const status: [string, string] = !e.enabled ? ['OFF — the home page shows the plain studio photo', C.dim]
-    : e.photos.length === 0 ? ['ON — but no photos yet, nothing shows', '#fbbf24']
-    : ['LIVE on the home page', '#4ade80']
+  const st = e ? editorialStatus(e, today) : 'off'
+  const status: [string, string] = !e ? ['', C.dim]
+    : st === 'off' ? ['OFF — not in rotation', C.dim]
+    : st === 'incomplete' ? ['ON — but no photos yet, so it is skipped', '#fbbf24']
+    : st === 'scheduled' ? [`SCHEDULED — starts ${e.startDate}`, '#60a5fa']
+    : st === 'ended' ? [`ENDED ${e.endDate}`, C.dim]
+    : pinnedLive && pinnedLive.id !== e.id ? ['LIVE — but another editorial is pinned, so this one waits', '#fbbf24']
+    : ['LIVE — in rotation', '#4ade80']
 
   return (
     <div style={{ padding: '32px 24px 120px', maxWidth: 860, color: C.text }}>
@@ -115,9 +154,39 @@ export default function FeaturedEditorialPage() {
         uncropped, with the title, the photographer and a CREDITS button. Only feature work the creators have cleared for us, and credit everyone.
       </p>
 
+      {/* ── The list ── */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+          <h2 style={{ ...h2, margin: 0, flex: 1 }}>EDITORIALS</h2>
+          <span style={small}>{pinnedLive ? `PINNED: ${pinnedLive.title || 'Untitled'}` : `${liveCount} live · the website shows one per visit, tablets cycle through all`}</span>
+        </div>
+        {cfg.items.map(x => {
+          const [lab, col] = STATUS_LABEL[editorialStatus(x, today)]
+          const on = x.id === eid
+          return (
+            <button key={x.id} onClick={() => setSel(x.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer', padding: '8px 10px', marginBottom: 6, background: on ? 'rgba(212,168,67,0.1)' : '#0b0b0d', border: `1px solid ${on ? C.accent : C.line}`, color: C.text }}>
+              {x.photos[0] ? <img src={x.photos[0]} alt="" style={{ width: 36, height: 48, objectFit: 'cover' }} /> : <span style={{ width: 36, height: 48, background: '#1c1c1f' }} />}
+              <span style={{ flex: 1, fontFamily: 'Inter', fontSize: 13, fontWeight: 600 }}>{x.title || 'Untitled'}{x.pinned ? '  📌' : ''}<span style={{ ...small, display: 'block', fontWeight: 400 }}>{x.credits[0]?.handle ? `@${x.credits[0].handle}` : ''}{x.setName ? ` · ${x.setName}` : ''}</span></span>
+              <span style={{ ...small, color: col, fontWeight: 700, letterSpacing: '0.08em' }}>{lab}</span>
+            </button>
+          )
+        })}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          {cfg.items.length < EDITORIAL_MAX_ITEMS && <button onClick={addEditorial} style={{ ...btn, color: C.accent }}>+ Add editorial</button>}
+          {e && cfg.items.length > 1 && <>
+            <button onClick={() => moveEditorial(-1)} style={btn}>↑ Move up</button>
+            <button onClick={() => moveEditorial(1)} style={btn}>↓ Move down</button>
+          </>}
+          {e && <button onClick={removeEditorial} style={{ ...btn, color: '#f87171', marginLeft: 'auto' }}>Remove this editorial</button>}
+        </div>
+      </div>
+
+      {!e ? <p style={small}>No editorials yet — add one above.</p> : <>
+      <div style={{ ...h2, fontSize: 18, margin: '4px 0 12px', color: C.accent }}>EDITING: {e.title || 'Untitled'}</div>
+
       <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ ...h2, margin: 0 }}>SHOW ON HOME PAGE</div>
+          <div style={{ ...h2, margin: 0 }}>IN ROTATION</div>
           <div style={{ ...small, marginTop: 4, color: status[1], fontWeight: 600 }}>{status[0]}</div>
         </div>
         <button onClick={() => set({ enabled: !e.enabled })} aria-pressed={e.enabled} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', background: e.enabled ? C.accent : 'rgba(255,255,255,0.18)' }}>
@@ -138,6 +207,16 @@ export default function FeaturedEditorialPage() {
         </div>
         <button onClick={() => set({ showInHero: !e.showInHero })} aria-pressed={e.showInHero} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, background: e.showInHero ? C.accent : 'rgba(255,255,255,0.18)' }}>
           <span style={{ position: 'absolute', top: 3, left: e.showInHero ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+        </button>
+      </div>
+
+      <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ ...h2, margin: 0 }}>PIN THIS ONE</div>
+          <div style={{ ...small, marginTop: 4 }}>Pause the rotation: every visitor and every tablet sees only this editorial (while it is live). Handy for a launch. Pinning it unpins any other.</div>
+        </div>
+        <button onClick={() => set({ pinned: !e.pinned })} aria-pressed={e.pinned} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, background: e.pinned ? C.accent : 'rgba(255,255,255,0.18)' }}>
+          <span style={{ position: 'absolute', top: 3, left: e.pinned ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
         </button>
       </div>
 
@@ -179,6 +258,8 @@ export default function FeaturedEditorialPage() {
               {sets.map(x => <option key={x.slug} value={x.slug} style={{ background: '#141416', color: '#fff' }}>{x.name}</option>)}
             </select>
           </label>
+          <label><span style={lbl}>Start showing (optional)</span><input type="date" value={e.startDate ?? ''} onChange={ev => set({ startDate: ev.target.value || null })} style={inp} /></label>
+          <label><span style={lbl}>Stop showing after (optional)</span><input type="date" value={e.endDate ?? ''} onChange={ev => set({ endDate: ev.target.value || null })} style={inp} /></label>
           <label><span style={lbl}>Seconds per photo</span><input type="number" min={3} max={15} value={e.intervalSec} onChange={ev => set({ intervalSec: Number(ev.target.value) })} style={inp} /></label>
         </div>
         <label style={{ display: 'block', marginTop: 12 }}><span style={lbl}>Instagram post link</span><input value={e.postUrl} onChange={ev => set({ postUrl: ev.target.value })} placeholder="https://www.instagram.com/p/…" style={inp} /></label>
@@ -204,6 +285,8 @@ export default function FeaturedEditorialPage() {
           <button onClick={() => set({ credits: [...e.credits, { role: '', handle: '' }] })} style={{ ...btn, color: C.accent }}>+ Add credit</button>
         )}
       </div>
+
+      </>}
 
       {/* ── Save bar ── */}
       <div style={{ position: 'sticky', bottom: 0, background: 'rgba(8,8,8,0.95)', borderTop: `1px solid ${C.line}`, padding: '14px 0', display: 'flex', alignItems: 'center', gap: 14 }}>

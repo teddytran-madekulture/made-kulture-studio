@@ -776,11 +776,11 @@ export default function KioskPage() {
   // Editorial takes the screen. Door tablets have no occupancy and use idle only.
   // ⚠️ One fetch an hour, CDN-cached — NOT a poll. The idle check below is a
   // local timer and makes zero network calls.
-  const [showcase, setShowcase] = useState<ShowcaseEditorial | null>(null)
+  const [showcase, setShowcase] = useState<ShowcaseEditorial[]>([])
   const [showcaseOn, setShowcaseOn] = useState(false)
   const lastInteract = useRef(Date.now())
   useEffect(() => {
-    const load = () => fetch('/api/kiosk/showcase').then(r => r.json()).then(d => setShowcase(d?.editorial ?? null)).catch(() => {})
+    const load = () => fetch('/api/kiosk/showcase').then(r => r.json()).then(d => setShowcase(Array.isArray(d?.editorials) ? d.editorials.filter((x: any) => x?.photos?.length) : [])).catch(() => {})
     load()
     const iv = setInterval(load, SHOWCASE_REFRESH_MS)
     return () => clearInterval(iv)
@@ -793,7 +793,7 @@ export default function KioskPage() {
     window.addEventListener('pointerdown', mark, true)
     return () => window.removeEventListener('pointerdown', mark, true)
   }, [])
-  const canShowcase = booted && screen === 'home' && !occLive && !!showcase && showcase.photos.length > 0
+  const canShowcase = booted && screen === 'home' && !occLive && showcase.length > 0
   useEffect(() => {
     if (!canShowcase) { setShowcaseOn(false); return }
     const iv = setInterval(() => {
@@ -1016,8 +1016,8 @@ export default function KioskPage() {
     </main>
   )
 
-  if (screen === 'home' && showcaseOn && canShowcase && showcase) return (
-    <KioskShowcase e={showcase}
+  if (screen === 'home' && showcaseOn && canShowcase) return (
+    <KioskShowcase items={showcase}
       portrait={typeof window === 'undefined' ? true : window.innerHeight >= window.innerWidth}
       onDismiss={() => { lastInteract.current = Date.now(); setShowcaseOn(false); touch() }} />
   )
