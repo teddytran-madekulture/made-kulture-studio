@@ -65,6 +65,13 @@ const IconPortal = () => (
     <path d="M10 7h4v4h-4z" /><path d="M11 18.5h2" />
   </svg>
 )
+// MOOD BOARD — a pinboard of uneven cards.
+const IconBoard = () => (
+  <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
+    <rect x="3.5" y="3.5" width="7" height="10" rx="1.2" /><rect x="13.5" y="3.5" width="7" height="6" rx="1.2" strokeOpacity="0.6" />
+    <rect x="3.5" y="16.5" width="7" height="4" rx="1.2" strokeOpacity="0.6" /><rect x="13.5" y="12.5" width="7" height="8" rx="1.2" />
+  </svg>
+)
 const IconBell = () => (
   <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
     <path d="M4.5 17h15" /><path d="M6 17a6 6 0 0 1 12 0" />
@@ -735,14 +742,17 @@ export default function KioskPage() {
     </div>
   )
 
+  // PORTAL HUB — the QR on top, one tile per Portal feature underneath (same
+  // tile style as the home screen). Mood board is the first; a new feature is a
+  // new tile here plus a new section on the phone page (app/portal/[token]).
   if (screen === 'portal') return (
     <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
       {portalStrip}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px 28px' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '16px 24px', overflowY: 'auto' }}>
         <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP_DIM }}>PORTAL</div>
-        <div style={{ fontSize: 34, fontWeight: 800, margin: '10px 0 22px', lineHeight: 1.2 }}>Scan with your phone</div>
+        <div style={{ fontSize: 30, fontWeight: 800, margin: '8px 0 18px', lineHeight: 1.2 }}>Connect your phone</div>
         {portalQr ? (
-          <div style={{ background: '#f4f1ea', padding: 18, borderRadius: 18, width: 'min(62vw, 380px)' }}>
+          <div style={{ background: '#f4f1ea', padding: 14, borderRadius: 16, width: 'min(46vw, 300px)' }}>
             <svg viewBox={`0 0 ${portalQr.n} ${portalQr.n}`} style={{ display: 'block', width: '100%', height: 'auto' }} shapeRendering="crispEdges">
               <path d={portalQr.d} fill="#0b0b0d" />
             </svg>
@@ -750,14 +760,19 @@ export default function KioskPage() {
         ) : (
           <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', padding: 40 }}>{portalErr || 'Opening…'}</div>
         )}
-        <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.62)', lineHeight: 1.6, marginTop: 24, maxWidth: 520 }}>
-          Build a mood board from a public Pinterest board or your camera roll. It shows up here in a few seconds.
+        <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, marginTop: 16, maxWidth: 520 }}>
+          Scan to use these from your phone. Just for this session — everything clears when your time ends.
         </div>
-        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.38)', marginTop: 10 }}>Just for this session — it clears when your time ends.</div>
-        <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-          {portalItems.length > 0 && <button onClick={() => setScreen('board')} style={champBtn}>VIEW BOARD · {portalItems.length}</button>}
-          <button onClick={() => setScreen('home')} style={{ ...backBtn, position: 'static' }}>← BACK</button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: 680, marginTop: 18 }}>
+          <button style={{ ...card, flex: '1 1 calc(50% - 28px)', minHeight: 170, maxWidth: 420 }} onClick={() => { setZoomIdx(null); setScreen('board'); touch() }}>
+            <IconBoard />
+            <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '0.2em' }}>MOOD BOARD</span>
+            <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.42)' }}>
+              {portalItems.length ? `${portalItems.length} picture${portalItems.length === 1 ? '' : 's'} on the board` : 'Pinterest or your camera roll'}
+            </span>
+          </button>
         </div>
+        <button onClick={() => setScreen('home')} style={{ ...backBtn, position: 'static', marginTop: 18 }}>← BACK</button>
       </div>
     </main>
   )
@@ -800,7 +815,7 @@ export default function KioskPage() {
       })() : (
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 10, WebkitOverflowScrolling: 'touch' as any }}>
         {portalItems.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 18, paddingTop: 80 }}>The board is empty — add pictures from your phone.</div>
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 18, paddingTop: 80 }}>The board is empty. Scan the code on the Portal screen, then add a Pinterest board or photos from your phone.</div>
         ) : (
           // Masonry via CSS columns: Pinterest pins are mostly portrait and
           // keep their own shape. Full brightness (Teddy 2026-09-29).
@@ -817,7 +832,7 @@ export default function KioskPage() {
       <div style={{ flexShrink: 0, display: 'flex', gap: 12, justifyContent: 'center', padding: '12px 14px 18px', borderTop: `1px solid ${HAIR}` }}>
         {zoomIdx !== null
           ? <button onClick={() => setZoomIdx(null)} style={{ ...backBtn, position: 'static' }}>← ALL PICTURES</button>
-          : <button onClick={() => setScreen('portal')} style={{ ...backBtn, position: 'static' }}>+ ADD FROM PHONE</button>}
+          : <button onClick={() => setScreen('portal')} style={{ ...backBtn, position: 'static' }}>← PORTAL</button>}
         <button onClick={() => { setZoomIdx(null); setScreen('home') }} style={{ ...backBtn, position: 'static' }}>✕ CLOSE BOARD</button>
       </div>
     </main>
@@ -922,7 +937,7 @@ export default function KioskPage() {
           </button>
         )}
         {showPortal && (
-          <button style={tile} onClick={() => { setZoomIdx(null); portalCount.current = portalItems.length; setScreen(portalItems.length ? 'board' : 'portal'); touch() }}>
+          <button style={tile} onClick={() => { setZoomIdx(null); portalCount.current = portalItems.length; setScreen('portal'); touch() }}>
             <IconPortal />
             <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>PORTAL</span>
             <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Mood board & more, from your phone</span>

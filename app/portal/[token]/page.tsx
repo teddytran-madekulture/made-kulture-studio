@@ -38,6 +38,15 @@ export default function PortalPage() {
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
   const [invalid, setInvalid] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Which Portal feature is open. Kept in the URL hash so the phone's own BACK
+  // button returns to the Portal home instead of leaving the page.
+  const [view, setView] = useState<'home' | 'mood'>('home')
+  useEffect(() => {
+    const sync = () => setView(window.location.hash === '#mood' ? 'mood' : 'home')
+    sync(); window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
+  const open = (v: 'home' | 'mood') => { window.location.hash = v === 'home' ? '' : v; setView(v); setMsg(null) }
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/portal/${token}`, { cache: 'no-store' })
@@ -110,8 +119,23 @@ export default function PortalPage() {
         {invalid && <p style={{ marginTop: 28, color: C.dim, lineHeight: 1.6 }}>This link isn’t valid. Scan the code on your set’s tablet again.</p>}
         {live === false && !invalid && <p style={{ marginTop: 28, color: C.dim, lineHeight: 1.6 }}>This session has ended, and its board has been cleared. Thanks for shooting with us.</p>}
 
-        {live && (
+        {live && view === 'home' && (
+          // PORTAL HOME — one tile per feature. A new feature = a new tile here,
+          // a new tile on the tablet's Portal screen, and its own section below.
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 28 }}>
+            <button onClick={() => open('mood')}
+              style={{ textAlign: 'left', background: C.card, border: `1px solid rgba(201,178,126,0.35)`, borderRadius: 14, padding: '18px 16px', color: C.fg, cursor: 'pointer', fontFamily: 'Inter, sans-serif', minHeight: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.16em' }}>MOOD BOARD</div>
+              <div style={{ fontSize: 12, color: C.dim, marginTop: 4, lineHeight: 1.4 }}>
+                {items.length ? `${items.length} on the wall` : 'Pinterest or your photos, on the set screen'}
+              </div>
+            </button>
+          </div>
+        )}
+
+        {live && view === 'mood' && (
           <section style={{ marginTop: 28, background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
+            <button onClick={() => open('home')} style={{ background: 'none', border: 'none', color: C.champ, fontSize: 12, letterSpacing: '0.14em', padding: 0, marginBottom: 12, cursor: 'pointer' }}>← PORTAL</button>
             <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.18em' }}>MOOD BOARD</div>
             <p style={{ fontSize: 13, color: C.dim, lineHeight: 1.55, margin: '6px 0 16px' }}>
               Your references on the set’s screen. Only for this session — it clears when your time ends.
