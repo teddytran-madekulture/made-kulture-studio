@@ -227,7 +227,10 @@ export default function KioskPage() {
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
   const [portalItems, setPortalItems] = useState<PortalItem[]>([])
   const [portalErr, setPortalErr] = useState('')
-  const [zoomSrc, setZoomSrc] = useState<string | null>(null)
+  // Index of the picture open full screen (null = the grid). Swipe / arrows
+  // step through; a plain tap goes back to the grid.
+  const [zoomIdx, setZoomIdx] = useState<number | null>(null)
+  const swipeX = useRef<number | null>(null)
   const portalCount = useRef(0)
   const fetchPortal = useCallback(async () => {
     if (!setSlug) return
@@ -708,7 +711,7 @@ export default function KioskPage() {
   // Time's up (or the session vanished) → the board closes itself and the home
   // screen shows TIME IS UP. The server wipes the pictures after the booking ends.
   useEffect(() => {
-    if ((screen === 'portal' || screen === 'board') && !showPortal) { setZoomSrc(null); setScreen('home') }
+    if ((screen === 'portal' || screen === 'board') && !showPortal) { setZoomIdx(null); setScreen('home') }
   }, [screen, showPortal])
 
   // ── PORTAL screens ────────────────────────────────────────────────────────
@@ -762,6 +765,39 @@ export default function KioskPage() {
   if (screen === 'board') return (
     <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
       {portalStrip}
+      {zoomIdx !== null && portalItems.length > 0 ? (() => {
+        const n = portalItems.length
+        const idx = Math.min(zoomIdx, n - 1)
+        const go = (d: number) => setZoomIdx(((idx + d) % n + n) % n)
+        const arrow: React.CSSProperties = {
+          position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 64, height: 64, borderRadius: 999,
+          background: 'rgba(0,0,0,0.55)', border: `1px solid ${HAIR}`, color: '#fff', fontSize: 30, lineHeight: '60px',
+          cursor: 'pointer', zIndex: 2,
+        }
+        return (
+          // Swipe left/right to step, tap to go back to the grid. Pointer events
+          // cover both the tablet's touch and a mouse on a desktop.
+          <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12, touchAction: 'pan-y' }}
+            onPointerDown={e => { swipeX.current = e.clientX }}
+            onPointerUp={e => {
+              if (swipeX.current === null) return
+              const dx = e.clientX - swipeX.current
+              swipeX.current = null
+              if (dx <= -50) go(1)
+              else if (dx >= 50) go(-1)
+              else if (Math.abs(dx) < 10 && (e.target as HTMLElement).tagName === 'IMG') setZoomIdx(null)
+            }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={portalItems[idx].src} alt="" draggable={false}
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8, userSelect: 'none' }} />
+            {n > 1 && <button onPointerUp={e => { e.stopPropagation(); swipeX.current = null; go(-1) }} style={{ ...arrow, left: 14 }} aria-label="Previous">‹</button>}
+            {n > 1 && <button onPointerUp={e => { e.stopPropagation(); swipeX.current = null; go(1) }} style={{ ...arrow, right: 14 }} aria-label="Next">›</button>}
+            <div style={{ position: 'absolute', bottom: 14, left: 0, right: 0, textAlign: 'center', fontSize: 15, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.7)', fontVariantNumeric: 'tabular-nums', pointerEvents: 'none' }}>
+              {idx + 1} / {n}
+            </div>
+          </div>
+        )
+      })() : (
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 10, WebkitOverflowScrolling: 'touch' as any }}>
         {portalItems.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 18, paddingTop: 80 }}>The board is empty — add pictures from your phone.</div>
@@ -769,24 +805,21 @@ export default function KioskPage() {
           // Masonry via CSS columns: Pinterest pins are mostly portrait and
           // keep their own shape. Full brightness (Teddy 2026-09-29).
           <div style={{ columnCount: 3, columnGap: 10 }}>
-            {portalItems.map(it => (
+            {portalItems.map((it, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={it.id} src={it.src} alt="" onClick={() => setZoomSrc(it.src)} draggable={false}
+              <img key={it.id} src={it.src} alt="" onClick={() => setZoomIdx(i)} draggable={false}
                 style={{ width: '100%', display: 'block', marginBottom: 10, borderRadius: 8, breakInside: 'avoid' as any, background: '#111' }} />
             ))}
           </div>
         )}
       </div>
-      <div style={{ flexShrink: 0, display: 'flex', gap: 12, justifyContent: 'center', padding: '12px 14px 18px', borderTop: `1px solid ${HAIR}` }}>
-        <button onClick={() => setScreen('portal')} style={{ ...backBtn, position: 'static' }}>+ ADD FROM PHONE</button>
-        <button onClick={() => { setZoomSrc(null); setScreen('home') }} style={{ ...backBtn, position: 'static' }}>✕ CLOSE BOARD</button>
-      </div>
-      {zoomSrc && (
-        <div onClick={() => setZoomSrc(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.94)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, padding: 16 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={zoomSrc} alt="" draggable={false} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />
-        </div>
       )}
+      <div style={{ flexShrink: 0, display: 'flex', gap: 12, justifyContent: 'center', padding: '12px 14px 18px', borderTop: `1px solid ${HAIR}` }}>
+        {zoomIdx !== null
+          ? <button onClick={() => setZoomIdx(null)} style={{ ...backBtn, position: 'static' }}>← ALL PICTURES</button>
+          : <button onClick={() => setScreen('portal')} style={{ ...backBtn, position: 'static' }}>+ ADD FROM PHONE</button>}
+        <button onClick={() => { setZoomIdx(null); setScreen('home') }} style={{ ...backBtn, position: 'static' }}>✕ CLOSE BOARD</button>
+      </div>
     </main>
   )
 
@@ -889,7 +922,7 @@ export default function KioskPage() {
           </button>
         )}
         {showPortal && (
-          <button style={tile} onClick={() => { setZoomSrc(null); portalCount.current = portalItems.length; setScreen(portalItems.length ? 'board' : 'portal'); touch() }}>
+          <button style={tile} onClick={() => { setZoomIdx(null); portalCount.current = portalItems.length; setScreen(portalItems.length ? 'board' : 'portal'); touch() }}>
             <IconPortal />
             <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>PORTAL</span>
             <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Mood board & more, from your phone</span>
