@@ -18,6 +18,7 @@ import qrcode from 'qrcode-generator'
 
 export interface ShowcaseEditorial {
   id?: string
+  setSlug?: string
   title: string; subtitle: string; setName: string; postUrl: string
   credits: { role: string; handle: string }[]; photos: string[]; intervalSec: number
 }
@@ -28,7 +29,30 @@ const CHAMP_DIM = 'rgba(201,178,126,0.6)'
 // Cycles through EVERY editorial in rotation: each plays through its photos
 // with its own credits, then the next one takes over (the website shows one per
 // visit; an idle tablet has time for all of them).
-export default function KioskShowcase({ items, onDismiss, portrait }: { items: ShowcaseEditorial[]; onDismiss: () => void; portrait: boolean }) {
+// ── Which order THIS tablet plays them in (2026-09-30) ──────────────────────
+// 1. Editorials shot on this tablet's own set come first — standing in Rosé,
+//    you see real work made in Rosé.
+// 2. The rest follow, each tablet starting at a different point so two idle
+//    tablets side by side don't show the same shoot.
+// The stagger is a fixed per-set offset (not random, not a hash): with only a
+// couple of editorials, a hash put Set A and Set C — the two tablets actually
+// mounted — on the SAME one. Order = the order tablets went up; add new sets at
+// the end. A tablet with no ?set= (door) uses offset 0.
+const STAGGER_ORDER = ['set-a', 'set-c', 'set-b', 'set-d', 'concrete', 'vintage', 'cottage', 'studio-one', 'watering-hole', 'the-tank']
+
+export function orderForTablet<T extends { setSlug?: string }>(items: T[], setSlug: string | null): T[] {
+  const own = setSlug ? items.filter(e => e.setSlug === setSlug) : []
+  const rest = setSlug ? items.filter(e => e.setSlug !== setSlug) : items.slice()
+  if (rest.length > 1) {
+    const idx = setSlug ? Math.max(0, STAGGER_ORDER.indexOf(setSlug)) : 0
+    const off = idx % rest.length
+    rest.push(...rest.splice(0, off))
+  }
+  return [...own, ...rest]
+}
+
+export default function KioskShowcase({ items: raw, setSlug = null, onDismiss, portrait }: { items: ShowcaseEditorial[]; setSlug?: string | null; onDismiss: () => void; portrait: boolean }) {
+  const items = useMemo(() => orderForTablet(raw, setSlug), [raw, setSlug])
   // A running count, not an index: with ONE editorial the index would stay 0,
   // nothing would remount, and it would freeze on the last photo.
   const [turn, setTurn] = useState(0)

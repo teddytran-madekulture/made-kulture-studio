@@ -18,7 +18,7 @@ export const fetchCache = 'force-no-store'
 
 export async function GET() {
   const editorials = (await getLiveEditorials()).map(e => ({
-    id: e.id, title: e.title, subtitle: e.subtitle, setName: e.setName, postUrl: e.postUrl,
+    id: e.id, title: e.title, subtitle: e.subtitle, setName: e.setName, setSlug: e.setSlug, postUrl: e.postUrl,
     credits: e.credits, photos: e.photos, intervalSec: e.intervalSec,
   }))
   return NextResponse.json({ editorials }, {

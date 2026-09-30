@@ -1017,7 +1017,7 @@ export default function KioskPage() {
   )
 
   if (screen === 'home' && showcaseOn && canShowcase) return (
-    <KioskShowcase items={showcase}
+    <KioskShowcase items={showcase} setSlug={setSlug}
       portrait={typeof window === 'undefined' ? true : window.innerHeight >= window.innerWidth}
       onDismiss={() => { lastInteract.current = Date.now(); setShowcaseOn(false); touch() }} />
   )
