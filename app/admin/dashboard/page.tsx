@@ -810,6 +810,34 @@ export default function AdminDashboard() {
     setShortReqBusy(null)
   }
 
+  // ── Reschedule requests (Plus members asking for short-notice hours) ──────
+  // ⚠️ SECOND approval surface — the first is /reschedule/approve/[token] (the
+  // link in the owner's text). Both POST the same /api/reschedule-request/[token],
+  // so the behaviour cannot drift. See admin-two-sidebars.
+  const [rrReqs, setRrReqs] = useState<any[]>([])
+  const [rrBusy, setRrBusy] = useState<string | null>(null)
+  const [rrNote, setRrNote] = useState<string | null>(null)
+  const fetchRrReqs = useCallback(async () => {
+    const res = await fetch('/api/admin/reschedule-requests', { cache: 'no-store' })
+    const d = await res.json().catch(() => ({}))
+    setRrReqs(d.requests ?? [])
+  }, [])
+  useEffect(() => { fetchRrReqs() }, [fetchRrReqs])
+  const resolveRr = async (token: string, action: 'approve' | 'decline', reason?: string) => {
+    setRrBusy(token); setRrNote(null)
+    try {
+      const res = await fetch(`/api/reschedule-request/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, reason }) })
+      const d = await res.json().catch(() => ({} as any))
+      if (!res.ok) setRrNote(`⚠️ ${d.error || 'Something went wrong — nothing was moved.'}`)
+      else if (action === 'approve') setRrNote(`✅ Moved to ${d.when} — new door code texted to the member.`)
+      else setRrNote('Declined — the member was texted and keeps their original time.')
+    } catch {
+      setRrNote('⚠️ Something went wrong — check the booking before retrying.')
+    }
+    await fetchRrReqs()
+    setRrBusy(null)
+  }
+
   // ── Customer fetch helpers ───────────────────────────────────────────────
   const fetchCustomers = useCallback(async (search: string, filter: string, page: number) => {
     setCustLoading(true)
@@ -2108,6 +2136,43 @@ export default function AdminDashboard() {
             </div>
           )
         })()}
+
+        {/* ── RESCHEDULE REQUESTS (shown on every view when pending) ───────── */}
+        {(rrReqs.length > 0 || rrNote) && (
+          <div style={{ marginBottom: 32, border: '1px solid rgba(212,168,67,0.35)', background: 'rgba(212,168,67,0.06)' }}>
+            <div style={{ padding: '12px 18px', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: '#e6c07a' }}>
+              🔁 RESCHEDULE REQUESTS ({rrReqs.length})
+            </div>
+            {rrNote && (
+              <div onClick={() => setRrNote(null)}
+                style={{ padding: '10px 18px', fontSize: 13, color: rrNote.startsWith('⚠') ? '#ff8080' : 'rgba(255,255,255,0.75)', borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', lineHeight: 1.5 }}>
+                {rrNote}
+              </div>
+            )}
+            {rrReqs.map(r => (
+              <div key={r.id} style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{r.customer_name || r.customer_email} <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', color: '#080808', background: '#d4a843', padding: '1px 5px' }}>PLUS</span></div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                    {r.set_name ? `${r.set_name} · ` : ''}{r.when_old} → <span style={{ color: '#e6c07a' }}>{r.when_new}</span>
+                  </div>
+                </div>
+                <button disabled={rrBusy === r.token} onClick={() => resolveRr(r.token, 'approve')}
+                  style={{ background: '#d4a843', border: 'none', color: '#080808', padding: '8px 14px', cursor: 'pointer', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' }}>
+                  {rrBusy === r.token ? 'WORKING…' : 'APPROVE MOVE'}
+                </button>
+                <select disabled={rrBusy === r.token} defaultValue=""
+                  onChange={e => { if (e.target.value) resolveRr(r.token, 'decline', e.target.value) }}
+                  style={{ background: '#0d0d0d', border: '1px solid rgba(255,100,100,0.35)', color: '#ff6b6b', colorScheme: 'dark', padding: '8px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.08em' }}>
+                  <option value="" style={{ background: '#0d0d0d', color: '#ff6b6b' }}>DECLINE…</option>
+                  <option value="unavailable" style={{ background: '#0d0d0d', color: '#fff' }}>Can’t be there then</option>
+                  <option value="booked" style={{ background: '#0d0d0d', color: '#fff' }}>Already committed then</option>
+                  <option value="other" style={{ background: '#0d0d0d', color: '#fff' }}>No reason given</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ── SHORT-NOTICE REQUESTS (shown on every view when pending) ──────── */}
         {(shortReqs.length > 0 || shortReqNote) && (

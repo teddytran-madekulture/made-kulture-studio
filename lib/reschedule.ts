@@ -29,6 +29,7 @@ import { notifyCoverageGap } from '@/lib/coverage'
 import { sendSimpleEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
+import { createRescheduleRequest } from '@/lib/reschedule-requests'
 
 // A customer may move a booking freely up to this point; inside it, only Plus.
 export const SELF_SERVE_HOURS = 48
@@ -66,6 +67,22 @@ export interface RescheduleInput {
    * link there is no session, so the caller passes the booking's customer email.
    */
   actorEmail: string | null
+  /**
+   * The member is ASKING for a short-notice slot the instant rules refuse (the
+   * studio isn't already open then). Instead of moving, a reschedule_requests row
+   * is created and the owner decides. Honoured on the 'account' door only — a
+   * manage link is weaker identity. Added 2026-09-29 (Teddy): a member who had a
+   * short-notice session approved must not be able to pull it EARLIER without
+   * him confirming he can be there.
+   */
+  request?: boolean
+  /**
+   * Set ONLY by the owner-approval route (/api/reschedule-request/[token]).
+   * Skips the Plus / 48h / instant gates — the owner has said he'll be there —
+   * but keeps opening hours and availability. `expectOldStartISO` is the booking's
+   * start when the request was made: if it has moved since, the approval refuses.
+   */
+  ownerApproved?: { expectOldStartISO: string }
 }
 
 export interface RescheduleOk {
@@ -75,11 +92,15 @@ export interface RescheduleOk {
   when: string
   doorCode: string | null
   doorCodeBack: string | null
+  /** True when nothing moved: a request was sent to the owner instead. */
+  pending?: boolean
 }
 export interface RescheduleFail {
   ok: false
   error: string
   status: number
+  /** The member could send this as a request for the owner to approve. */
+  requestable?: boolean
 }
 export type RescheduleResult = RescheduleOk | RescheduleFail
 
@@ -145,8 +166,12 @@ export async function rescheduleBooking(
   // another form, so it pauses at Probation too (lib/standing, migration 109).
   const isPlus = plusActive(custRow?.pricing_overrides ?? null)
     && cancelProtectionOn(await standingForEmail(service, plusEmail))
+  const approved = !!input.ownerApproved
+  if (approved && Date.parse(input.ownerApproved!.expectOldStartISO) !== oldStartMs) {
+    return { ok: false, error: 'This booking has changed since the request was made, so nothing was moved.', status: 409 }
+  }
   const hoursUntil = (oldStartMs - now) / 3_600_000
-  if (hoursUntil < SELF_SERVE_HOURS && !isPlus) {
+  if (hoursUntil < SELF_SERVE_HOURS && !isPlus && !approved) {
     return {
       ok: false,
       error: `Inside ${SELF_SERVE_HOURS} hours of your session, changes are handled by the team — text (832) 408-1631 and we’ll sort it out.`,
@@ -174,8 +199,14 @@ export async function rescheduleBooking(
   const newStartMs  = Date.parse(newStartISO)
 
   if (!Number.isFinite(newStartMs)) return { ok: false, error: 'That time didn’t make sense — try again.', status: 400 }
-  if (newStartMs - now < MIN_LEAD_MS) {
+  // ⚠️ The 2-hour floor applies to REQUESTS too (Teddy, 2026-09-29) — a request
+  // 30 minutes out is refused before it ever reaches him. Only an owner approval
+  // may land closer, and then only on a time that hasn't passed.
+  if (!approved && newStartMs - now < MIN_LEAD_MS) {
     return { ok: false, error: 'Please pick a time at least 2 hours from now.', status: 400 }
+  }
+  if (approved && newStartMs <= now) {
+    return { ok: false, error: 'That time has already passed.', status: 400 }
   }
   // ⚠️ Compare INSTANTS, not strings. Supabase returns `2026-08-13T15:00:00+00:00`
   // (UTC) while bookingHourToISO emits `2026-08-13T10:00:00-05:00` (local wall
@@ -195,7 +226,8 @@ export async function rescheduleBooking(
   // new slot and every move inside the window would "fit".
   const minAdvance = new Date(now + SELF_SERVE_HOURS * 3_600_000)
   const movingIntoWindow = newStartMs < minAdvance.getTime()
-  if (movingIntoWindow) {
+  let needsApproval = false
+  if (movingIntoWindow && !approved) {
     if (!isPlus) {
       return {
         ok: false,
@@ -208,7 +240,12 @@ export async function rescheduleBooking(
       [{ setId: booking.set_id, startISO: newStartISO, endISO: newEndISO }],
       booking.id,
     )
-    if (!ok) return { ok: false, error: PLUS_INSTANT_ERROR, status: 400 }
+    if (!ok) {
+      // Not already open then. The member may ASK instead (account door only);
+      // availability is still checked below so nobody requests a taken slot.
+      if (input.request && via === 'account') needsApproval = true
+      else return { ok: false, error: PLUS_INSTANT_ERROR, status: 400, requestable: via === 'account' }
+    }
   }
 
   // ── Is the new window actually free? ────────────────────────────────────
@@ -221,6 +258,28 @@ export async function rescheduleBooking(
   )
   if (!free) {
     return { ok: false, error: conflicts.map(c => c.reason).join(' '), status: 409 }
+  }
+
+  // ── A request, not a move ───────────────────────────────────────────────
+  // Nothing on the booking changes. The owner gets a push + text with an
+  // approve link; approving re-enters this function with ownerApproved.
+  if (needsApproval) {
+    const whenReq = `${formatDateLabel(date)}, ${formatTimeLabel(startHour)} – ${formatTimeLabel(endHour)}`
+    const whenWas = `${formatDateLabel(centralDateStr(booking.start_time))}, ${formatTimeLabel(centralHourDecimal(booking.start_time))}`
+    const made = await createRescheduleRequest(service, {
+      bookingId: booking.id,
+      customerEmail: cust?.email ?? actorEmail ?? null,
+      customerName: cust?.name ?? null,
+      setName: setRow?.name ?? null,
+      oldStartISO: booking.start_time,
+      oldEndISO: booking.end_time,
+      newDate: date,
+      newStartHour: startHour,
+      newStartISO, newEndISO,
+      whenOld: whenWas, whenNew: whenReq,
+    })
+    if (!made.ok) return { ok: false, error: made.error || 'Could not send the request — nothing was changed.', status: 500 }
+    return { ok: true, pending: true, startISO: newStartISO, endISO: newEndISO, when: whenReq, doorCode: null, doorCodeBack: null }
   }
 
   // ── Move it ─────────────────────────────────────────────────────────────
@@ -285,7 +344,7 @@ export async function rescheduleBooking(
 
   await Promise.allSettled([
     cust?.phone ? sendSMS(cust.phone, [
-      `✅ Made Kulture — session moved.`, ``,
+      approved ? `✅ Made Kulture — your new time is approved.` : `✅ Made Kulture — session moved.`, ``,
       `📍 ${setName}`,
       `🗓 ${whenNew}`,
       ...(codeLines.length ? ['', ...codeLines] : []),
@@ -306,7 +365,8 @@ export async function rescheduleBooking(
     }) : Promise.resolve(),
     // ⚠️ The owner has to know. A customer silently moving a session is how
     // somebody ends up opening the building at the wrong hour — or not at all.
-    sendOwnerSMS([
+    // The owner approved this one himself, so he already knows — no echo back.
+    approved ? Promise.resolve() : sendOwnerSMS([
       `🔄 ${cust?.name || 'A customer'} moved a booking`,
       `${setName}: ${whenOld} → ${whenNew}`,
       // Worth knowing which door it came through: a manage-link move was made by
@@ -315,7 +375,7 @@ export async function rescheduleBooking(
       ...(movingIntoWindow ? ['(short notice — inside the 48h window)'] : []),
       ...(doorCode ? [`New front code: ${doorCode}`] : []),
     ].join('\n')).catch(() => {}),
-    sendOwnerPush({
+    approved ? Promise.resolve() : sendOwnerPush({
       title: '🔄 Booking moved',
       body: `${cust?.name || 'A customer'} — ${setName} → ${whenNew}`,
       url: '/admin/dashboard',

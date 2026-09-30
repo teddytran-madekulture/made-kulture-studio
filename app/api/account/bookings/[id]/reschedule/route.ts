@@ -52,10 +52,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // The SESSION email, preserving the identity the Plus / instant-book checks
     // used before this route was split.
     actorEmail: user.email ?? null,
+    // Member chose SEND REQUEST on a slot the studio isn't already open for.
+    request: body.request === true,
   })
 
   // rescheduleFailed, not `!result.ok` — see the note on it in lib/reschedule.ts.
-  if (rescheduleFailed(result)) return NextResponse.json({ error: result.error }, { status: result.status })
+  if (rescheduleFailed(result)) return NextResponse.json({ error: result.error, requestable: !!result.requestable }, { status: result.status })
   return NextResponse.json({
     success: true,
     startISO: result.startISO,
@@ -63,5 +65,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     when: result.when,
     doorCode: result.doorCode,
     doorCodeBack: result.doorCodeBack,
+    pending: !!result.pending,
   })
 }

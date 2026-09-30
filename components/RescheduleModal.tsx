@@ -115,13 +115,18 @@ export default function RescheduleModal({
   const starts: number[] = []
   for (let h = OPEN_HOUR; h + durationHours <= CLOSE_HOUR; h++) starts.push(h)
 
-  const stateOf = (h: number): 'ok' | 'taken' | 'past' | 'closed' => {
+  // A Plus member on their own account (no submitUrl = not the manage link) may
+  // ASK for a short-notice hour the studio isn't already open for. The owner
+  // approves it; nothing moves until then. 2026-09-29.
+  const canRequest = isPlus && !submitUrl
+  const stateOf = (h: number): 'ok' | 'taken' | 'past' | 'closed' | 'request' => {
     const end = h + durationHours
     if (isToday && h <= nowParts.hour + 2) return 'past'   // 2-hour lead, same as the server
     if (booked.some(b => b.start < end && b.end > h)) return 'taken'
-    if (inWindow && !blocks.some(b => h >= b.start && end <= b.end)) return 'closed'
+    if (inWindow && !blocks.some(b => h >= b.start && end <= b.end)) return canRequest ? 'request' : 'closed'
     return 'ok'
   }
+  const pickedIsRequest = picked != null && stateOf(picked) === 'request'
 
   const submit = async () => {
     if (picked == null) return
@@ -129,10 +134,14 @@ export default function RescheduleModal({
     try {
       const res = await fetch(submitUrl ?? `/api/account/bookings/${booking.id}/reschedule`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, startHour: picked }),
+        body: JSON.stringify({ date, startHour: picked, ...(pickedIsRequest ? { request: true } : {}) }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(d.error || 'Could not move that booking.'); setBusy(false); return }
+      if (d.pending) {
+        onDone(`Request sent for ${d.when}. Your session stays at its current time until we approve it — we’ll text you either way.`)
+        return
+      }
       onDone(`Moved to ${d.when}.${d.doorCode ? ' Your new door code is on its way by text.' : ''}`)
     } catch {
       setErr('Something went wrong — nothing was changed.')
@@ -173,7 +182,7 @@ export default function RescheduleModal({
         {inWindow && (
           <div style={{ border: '1px solid rgba(var(--t-gold-rgb), 0.35)', background: 'rgba(var(--t-gold-rgb), 0.06)', padding: '10px 14px', marginBottom: 16, fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', lineHeight: 1.55 }}>
             {isPlus
-              ? 'Short notice — as a Plus member you can move into hours the studio is already open. Anything else, text us and we’ll sort it out.'
+              ? 'Short notice — as a Plus member you can move straight into hours the studio is already open. Gold times need our OK first: send a request and we’ll text you once it’s approved.'
               : 'That’s inside 48 hours. Text (832) 408-1631 and we’ll move it for you.'}
           </div>
         )}
@@ -189,12 +198,12 @@ export default function RescheduleModal({
               const st = stateOf(h)
               const on = picked === h
               return (
-                <button key={h} disabled={st !== 'ok'} onClick={() => setPicked(h)}
-                  title={st === 'taken' ? 'Already booked' : st === 'past' ? 'Too soon' : st === 'closed' ? 'Studio isn’t open then' : undefined}
+                <button key={h} disabled={st !== 'ok' && st !== 'request'} onClick={() => setPicked(h)}
+                  title={st === 'taken' ? 'Already booked' : st === 'past' ? 'Too soon' : st === 'closed' ? 'Studio isn’t open then' : st === 'request' ? 'Needs our OK — sends a request' : undefined}
                   style={{
                     background: on ? 'var(--t-fg)' : '#0d0d0d', border: 'none', padding: '14px 6px',
-                    color: on ? 'var(--t-on-fg)' : st === 'ok' ? 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))' : 'rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))',
-                    cursor: st === 'ok' ? 'pointer' : 'not-allowed',
+                    color: on ? 'var(--t-on-fg)' : st === 'ok' ? 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))' : st === 'request' ? 'var(--t-gold)' : 'rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))',
+                    cursor: st === 'ok' || st === 'request' ? 'pointer' : 'not-allowed',
                     fontFamily: 'Inter', fontSize: 12, fontWeight: on ? 600 : 400,
                   }}>
                   {fmt12(h)}
@@ -206,7 +215,8 @@ export default function RescheduleModal({
 
         {picked != null && (
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', marginBottom: 14 }}>
-            New time: {fmt12(picked)} – {fmt12(picked + durationHours)}
+            {pickedIsRequest ? 'Request' : 'New time'}: {fmt12(picked)} – {fmt12(picked + durationHours)}
+            {pickedIsRequest && <div style={{ fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', marginTop: 4, lineHeight: 1.5 }}>The studio isn’t open then yet, so we’ll confirm we can be there. Your current time stays booked until we approve.</div>}
           </div>
         )}
         {err && <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#f87171', marginBottom: 12, lineHeight: 1.5 }}>{err}</div>}
@@ -214,7 +224,7 @@ export default function RescheduleModal({
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={submit} disabled={picked == null || busy}
             style={{ background: picked == null || busy ? 'rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))' : 'var(--t-fg)', border: 'none', color: picked == null || busy ? 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' : 'var(--t-on-fg)', padding: '12px 20px', cursor: picked == null || busy ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em' }}>
-            {busy ? 'MOVING…' : 'CONFIRM NEW TIME'}
+            {busy ? (pickedIsRequest ? 'SENDING…' : 'MOVING…') : (pickedIsRequest ? 'SEND REQUEST' : 'CONFIRM NEW TIME')}
           </button>
           <button onClick={onClose} disabled={busy}
             style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', padding: '12px 20px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
