@@ -73,9 +73,10 @@ export function AnnouncementBar() {
 }
 
 // ── The pop-up card: "The Cover" (2026-09-30) ───────────────────────────────
-// A photo fills the card and the words sit over its lower part on a SOFT shade —
-// deliberately lighter than the rest of the site (Teddy: "our site is already
-// dark"), so the photo stays bright and the pop-up reads as something new.
+// A photo fills the card; it stays bright at the top and fades to SOLID black
+// behind the words (bottom ~30%), so the text always sits on clean black — the
+// original mockup Teddy picked (2026-09-30). Best photo: landscape ~1600x1200,
+// subject in the top half.
 // No photo ⇒ same layout on a warm dark gradient. Exported so the editor's
 // preview is this exact component, not a look-alike that can drift.
 export type PopupCardData = {
@@ -96,7 +97,7 @@ export function PopupCard({ p, onClose, narrow }: { p: PopupCardData; onClose?: 
       display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 12, padding: narrow ? '26px 22px 24px' : '30px 30px 28px',
       paddingTop: hasImg ? (narrow ? 180 : 220) : (narrow ? 34 : 40),
       background: hasImg
-        ? `linear-gradient(to top, rgba(20,12,12,0.88) 0%, rgba(20,12,12,0.58) 34%, rgba(20,12,12,0) 64%), url("${p.imageUrl}") ${FOCAL[p.focal || 'center']}/cover`
+        ? `linear-gradient(to top, #080808 30%, rgba(8,8,8,0.55) 60%, rgba(8,8,8,0.1)), url("${p.imageUrl}") ${FOCAL[p.focal || 'center']}/cover`
         : 'linear-gradient(160deg, #1d1512 0%, #0f0d0c 60%)',
       border: hasImg ? 'none' : '1px solid rgba(212,168,67,0.3)', boxShadow: '0 30px 90px rgba(0,0,0,0.55)',
     }}>
