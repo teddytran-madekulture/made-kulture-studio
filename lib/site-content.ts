@@ -69,6 +69,12 @@ const HOME_FIELDS: ContentField[] = [
   { key: 'setsHeading', label: 'Heading',         type: 'multiline', group: 'Sets', default: 'MULTIPLE SETS.\nENDLESS POSSIBILITIES.' },
   { key: 'setsNote',    label: 'Note under heading', type: 'text',   group: 'Sets', default: 'Guest rates shown — sign up free for member rates.' },
 
+  // "Built for the Obsessed" — the section beside the Featured Editorial photo
+  { key: 'makersEyebrow',   label: 'Eyebrow',   type: 'text',      group: 'Built for the Obsessed', default: 'FOR THE MAKERS' },
+  { key: 'makersHeading',   label: 'Heading',   type: 'multiline', group: 'Built for the Obsessed', default: 'BUILT FOR\nTHE OBSESSED.' },
+  { key: 'makersParagraph', label: 'Paragraph', type: 'multiline', group: 'Built for the Obsessed', default: "Photographers chasing the right window of light. Directors blocking a one-take scene. Brands shipping a season's campaign in a day. Madekulture is a quiet, considered space that gets out of your way." },
+  { key: 'makersTagLine',   label: 'Call for work (under the boxes)', type: 'text', group: 'Built for the Obsessed', default: 'Shot something here? Tag **@madekulture** to be featured.', hint: 'Links to the Made Kulture Instagram. The MADE HERE line above it fills itself in from the Featured Editorial. Leave blank to hide.' },
+
   // Closing CTA
   { key: 'ctaEyebrow',     label: 'Eyebrow',       type: 'text',      group: 'Closing CTA', default: 'MADEKULTURE / HOUSTON' },
   { key: 'ctaHeading',     label: 'Heading',       type: 'multiline', group: 'Closing CTA', default: "LET'S\nMAKE IT." },

@@ -278,10 +278,10 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
         </div>
         {/* Right: copy */}
         <div style={{ padding:'80px 60px', display:'flex', flexDirection:'column', justifyContent:'center', gap:32 }}>
-          <div className="label">FOR THE MAKERS</div>
-          <h2 style={{ fontSize:'clamp(48px, 5vw, 72px)', color:'#fff' }}>BUILT FOR<br />THE OBSESSED.</h2>
+          <div className="label">{c.makersEyebrow ?? 'FOR THE MAKERS'}</div>
+          <h2 style={{ fontSize:'clamp(48px, 5vw, 72px)', color:'#fff' }}>{nl(c.makersHeading ?? 'BUILT FOR\nTHE OBSESSED.')}</h2>
           <p style={{ fontSize:15, color:'rgba(255,255,255,0.5)', lineHeight:1.8, maxWidth:440 }}>
-            Photographers chasing the right window of light. Directors blocking a one-take scene. Brands shipping a season's campaign in a day. Madekulture is a quiet, considered space that gets out of your way.
+            {nl(c.makersParagraph ?? "Photographers chasing the right window of light. Directors blocking a one-take scene. Brands shipping a season's campaign in a day. Madekulture is a quiet, considered space that gets out of your way.")}
           </p>
           <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:1, background:'rgba(255,255,255,0.08)', marginTop:16 }}>
             {[
@@ -296,6 +296,32 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
               </div>
             ))}
           </div>
+          {/* MADE HERE — ties the copy to the Featured Editorial beside it. Fills
+              itself from the editorial; the call-for-work line is editable
+              (Website Editor → Home → Built for the Obsessed). */}
+          {(() => {
+            const ed = liveEditorial(editorial)
+            const by = ed?.credits[0]
+            const tag = c.makersTagLine ?? 'Shot something here? Tag **@madekulture** to be featured.'
+            if (!ed && !tag) return null
+            return (
+              <div style={{ borderLeft:'1px solid rgba(212,168,67,0.5)', paddingLeft:18, display:'flex', flexDirection:'column', gap:8 }}>
+                {ed && (
+                  <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>
+                    <span className="label" style={{ fontSize:10, color:'#d4a843', marginRight:10 }}>MADE HERE</span>
+                    <a href="#editorial" style={{ color:'#fff', textDecoration:'none' }}>{ed.title}</a>
+                    {ed.setName ? <>, shot on {ed.setSlug ? <Link href={`/sets/${ed.setSlug}`} style={{ color:'#fff', textDecoration:'none', borderBottom:'1px solid rgba(255,255,255,0.3)' }}>{ed.setName}</Link> : ed.setName}</> : null}
+                    {by?.handle ? <> by <a href={`https://www.instagram.com/${by.handle}/`} target="_blank" rel="noopener noreferrer" style={{ color:'#fff', textDecoration:'none' }}>@{by.handle}</a></> : null}.
+                  </div>
+                )}
+                {tag && (
+                  <a href="https://www.instagram.com/madekulture/" target="_blank" rel="noopener noreferrer" style={{ fontSize:13, color:'rgba(255,255,255,0.5)', textDecoration:'none', lineHeight:1.6 }}>
+                    {nl(tag)}
+                  </a>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </section>
 
