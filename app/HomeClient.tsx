@@ -12,7 +12,7 @@ import { useGuestPricing } from '@/lib/use-guest-pricing'
 import HeroCarousel, { type CarouselSlide } from '@/components/HeroCarousel'
 import { FOCAL_POSITION, type HeroSlide } from '@/lib/hero-slides'
 import FeaturedEditorial from '@/components/FeaturedEditorial'
-import { liveEditorial, type FeaturedEditorial as FeaturedEditorialData } from '@/lib/featured-editorial'
+import { liveEditorial, creditsLine, type FeaturedEditorial as FeaturedEditorialData } from '@/lib/featured-editorial'
 
 
 const SETS = [
@@ -77,6 +77,26 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
       secondary: c.heroSecondaryLabel ? { label: c.heroSecondaryLabel, href: c.heroSecondaryHref || '/book?type=studio' } : null,
       finePrint: c.heroFinePrint || '',
     },
+    // Featured Editorial as slide 2, built from the editorial itself so it can
+    // never drift from the section below (Website Editor → Featured Editorial).
+    ...(() => {
+      const ed = liveEditorial(editorial)
+      if (!ed || !ed.showInHero) return []
+      const by = ed.credits[0]
+      return [{
+        key: 'featured-editorial',
+        imageUrl: ed.photos[0],
+        objectPosition: 'center top',
+        eyebrow: `FEATURED EDITORIAL${ed.setName ? ` · ${ed.setName.toUpperCase()}` : ''}`,
+        headline: ed.title,
+        paragraph: [ed.subtitle, by?.handle ? `${by.role || 'By'} @${by.handle}` : ''].filter(Boolean).join('\n'),
+        primary: { label: 'View the editorial', href: '#editorial' },
+        secondary: ed.setSlug ? { label: `Book ${ed.setName || 'this set'}`, href: `/book?type=set&set=${ed.setSlug}` } : null,
+        finePrint: creditsLine(ed),
+        finePrintCase: 'none' as const,
+        spread: ed.photos,
+      } as CarouselSlide]
+    })(),
     ...heroSlides.map((h): CarouselSlide => ({
       key: h.id,
       imageUrl: h.imageUrl || null,
@@ -245,8 +265,8 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
         </div>
       </section>
 
-      {/* BUILT FOR THE OBSESSED */}
-      <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
+      {/* BUILT FOR THE OBSESSED — #editorial is the hero banner's "View the editorial" target */}
+      <section id="editorial" style={{ scrollMarginTop: 80, display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
         {/* Left: the Featured Editorial when one is live (/admin/website/editorial),
             otherwise the plain studio photo slot (slot: studio-photo) */}
         <div style={{ background: liveEditorial(editorial) ? '#050505' : 'rgba(255,255,255,0.03)', minHeight: liveEditorial(editorial) && !isMobile ? 640 : 500, position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>

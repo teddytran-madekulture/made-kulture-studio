@@ -16,7 +16,9 @@ export interface FeaturedEditorial {
   enabled: boolean
   title: string            // e.g. SAPEUR EN ROSE
   subtitle: string         // e.g. Dark Grandiose
-  setName: string          // optional "Shot on Set D"
+  setName: string          // optional "Shot on Set D" (display name)
+  setSlug: string          // the set's slug, for the BOOK button (blank = no button)
+  showInHero: boolean      // also run as a slide in the home hero carousel
   postUrl: string          // the Instagram post
   credits: EditorialCredit[]  // first one is the byline under the title
   photos: string[]         // public URLs in the 'site' bucket, in order
@@ -25,7 +27,7 @@ export interface FeaturedEditorial {
 }
 
 export const EDITORIAL_DEFAULTS: FeaturedEditorial = {
-  enabled: false, title: '', subtitle: '', setName: '', postUrl: '',
+  enabled: false, title: '', subtitle: '', setName: '', setSlug: '', showInHero: false, postUrl: '',
   credits: [], photos: [], intervalSec: 5, updatedAt: null,
 }
 
@@ -70,6 +72,8 @@ export function sanitize(input: any): FeaturedEditorial {
     title: str(x.title, 80),
     subtitle: str(x.subtitle, 80),
     setName: str(x.setName, 40),
+    setSlug: str(x.setSlug, 60).toLowerCase().replace(/[^a-z0-9-]/g, ''),
+    showInHero: !!x.showInHero,
     postUrl: safeLink(x.postUrl),
     credits,
     photos,
@@ -85,6 +89,11 @@ export function parseStored(raw: unknown): FeaturedEditorial {
 
 // What the home page should actually show: null ⇒ fall back to the plain
 // studio photo slot. Switched on but with no photos counts as off.
+// The credits after the byline, as one compact line for the hero banner.
+export function creditsLine(e: FeaturedEditorial, max = 3): string {
+  return e.credits.slice(1, 1 + max).filter(c => c.handle).map(c => `${c.role ? c.role + ' ' : ''}@${c.handle}`).join('  ·  ')
+}
+
 export function liveEditorial(e: FeaturedEditorial | null | undefined): FeaturedEditorial | null {
   return e && e.enabled && e.photos.length > 0 ? e : null
 }

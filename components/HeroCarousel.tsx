@@ -26,6 +26,11 @@ export interface CarouselSlide {
   primary: { label: string; href: string } | null
   secondary: { label: string; href: string } | null
   finePrint: string
+  // Editorial spread: portrait photos shown side by side, uncropped, to the
+  // right of the text on desktop (phones use imageUrl full-bleed as usual).
+  // Set by the Featured Editorial (lib/featured-editorial.ts).
+  spread?: string[]
+  finePrintCase?: 'upper' | 'none'   // handles in credits must keep their case
 }
 
 const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)'
@@ -84,14 +89,14 @@ function SlideContent({ s, isFirst, isMobile, fixedHeight, interactive }: {
   }
 
   return (
-    <div ref={contentRef} style={{ maxWidth: 700, transform: isMobile ? undefined : `scale(${scale})`, transformOrigin: 'left bottom' }}>
+    <div ref={contentRef} style={{ maxWidth: s.spread && !isMobile ? 560 : 700, transform: isMobile ? undefined : `scale(${scale})`, transformOrigin: 'left bottom' }}>
       {s.eyebrow && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
           <div style={{ width: 40, height: 1, background: 'rgba(255,255,255,0.5)' }} />
           <span className="label">{s.eyebrow}</span>
         </div>
       )}
-      <H style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(84px, 17vw, 170px)', color: '#fff', marginBottom: 28, lineHeight: 0.9, letterSpacing: '0.005em', textTransform: 'uppercase' }}>
+      <H style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: s.spread ? (isMobile ? 'clamp(64px, 16vw, 110px)' : 'clamp(72px, 8vw, 132px)') : 'clamp(84px, 17vw, 170px)', color: '#fff', marginBottom: 28, lineHeight: 0.9, letterSpacing: '0.005em', textTransform: 'uppercase' }}>
         {nl(s.headline)}
       </H>
       {s.paragraph && (
@@ -104,8 +109,39 @@ function SlideContent({ s, isFirst, isMobile, fixedHeight, interactive }: {
         </div>
       )}
       {s.finePrint && (
-        <div style={{ marginTop: 20, fontFamily: mono, fontSize: 11, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>{nl(s.finePrint)}</div>
+        <div style={{ marginTop: 20, fontFamily: mono, fontSize: 11, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.4)', textTransform: s.finePrintCase === 'none' ? 'none' : 'uppercase' }}>{nl(s.finePrint)}</div>
       )}
+    </div>
+  )
+}
+
+// Desktop editorial spread: as many 3:4 portraits as fit the right side at
+// full band height (1–3), never cropped. Measured, not guessed, because the
+// band height is a Website Editor setting and the page is zoomed on desktop.
+function Spread({ photos }: { photos: string[] }) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [count, setCount] = useState(Math.min(2, photos.length))
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fit = () => {
+      const h = el.clientHeight, w = el.clientWidth, gap = 14
+      if (!h || !w) return
+      const each = h * 0.75
+      setCount(Math.max(1, Math.min(3, photos.length, Math.floor((w + gap) / (each + gap)))))
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [photos.length])
+  return (
+    <div ref={ref} style={{ position: 'absolute', top: 84, bottom: 60, left: '44%', right: 40, display: 'flex', justifyContent: 'flex-end', gap: 14 }}>
+      {photos.slice(0, count).map((src, k) => (
+        <img key={src} src={src} alt="" decoding="async" fetchPriority="low" draggable={false}
+          style={{ height: '100%', aspectRatio: '3 / 4', objectFit: 'cover', flexShrink: 0, boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
+                   transform: count > 1 && k % 2 === 1 ? 'translateY(28px)' : undefined }} />
+      ))}
     </div>
   )
 }
@@ -224,6 +260,11 @@ export default function HeroCarousel({ slides, intervalSec, isMobile, heightVh, 
               transition: p.animate ? `transform ${SLIDE_MS}ms ${EASE}` : 'none',
               willChange: multi ? 'transform' : undefined,
             }}>
+            {s.spread && !isMobile ? (
+              <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 75% 40%, #1a0d0d 0%, #0b0b0b 55%, #080808 100%)' }}>
+                {loaded.has(i) && <Spread photos={s.spread} />}
+              </div>
+            ) : (
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #1a0a0a 0%, #0d0d0d 40%, #1a1208 100%)' }}>
               {s.imageUrl && loaded.has(i) && (
                 <img src={s.imageUrl} alt="" decoding="async" fetchPriority={i === 0 ? 'high' : 'low'}
@@ -231,6 +272,7 @@ export default function HeroCarousel({ slides, intervalSec, isMobile, heightVh, 
               )}
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #080808 0%, rgba(8,8,8,0.55) 24%, rgba(8,8,8,0.15) 50%, transparent 78%)' }} />
             </div>
+            )}
             <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: pageMax, margin: '0 auto', paddingLeft: isMobile ? 20 : 40, paddingRight: isMobile ? 20 : 40, boxSizing: 'border-box' }}>
               <SlideContent s={s} isFirst={i === 0} isMobile={isMobile} fixedHeight={!isMobile} interactive={p.visible && i === stage.active} />
             </div>

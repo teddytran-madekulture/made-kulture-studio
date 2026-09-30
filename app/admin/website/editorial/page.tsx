@@ -39,6 +39,7 @@ export default function FeaturedEditorialPage() {
   const [uploading, setUploading] = useState(0)
   const [unauth, setUnauth] = useState(false)
   const [paste, setPaste] = useState('')
+  const [sets, setSets] = useState<{ slug: string; name: string }[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -48,6 +49,11 @@ export default function FeaturedEditorialPage() {
       if (!r.ok) { setMsg(`⚠️ ${d.error || 'Could not load.'}`); return }
       setE(d.editorial); setSaved(JSON.stringify(d.editorial))
     }).catch(() => setMsg('⚠️ Could not load — check your connection.'))
+  }, [])
+
+  // Set list for "Shot on" — the slug drives the hero banner's BOOK button.
+  useEffect(() => {
+    fetch('/api/sets').then(r => r.json()).then(d => setSets((d.sets || []).filter((x: any) => x.slug && x.name).map((x: any) => ({ slug: x.slug, name: x.name })))).catch(() => {})
   }, [])
 
   if (unauth) return <div style={{ padding: 40, fontFamily: 'Inter' }}>Sign in to the admin first.</div>
@@ -119,6 +125,22 @@ export default function FeaturedEditorialPage() {
         </button>
       </div>
 
+      <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ ...h2, margin: 0 }}>ALSO SHOW AS A HERO BANNER</div>
+          <div style={{ ...small, marginTop: 4 }}>
+            Adds it as the second slide in the home page&rsquo;s top carousel: title, byline and credits on the left, the photos side by side on the right, uncropped.
+            Buttons: &ldquo;View the editorial&rdquo; (scrolls down to it) and &ldquo;Book&rdquo; the set it was shot on. Follows whatever you save here, so it never needs editing separately.
+          </div>
+          <div style={{ ...small, marginTop: 6, fontWeight: 600, color: e.showInHero ? (e.enabled && e.photos.length ? '#4ade80' : '#fbbf24') : C.dim }}>
+            {e.showInHero ? (e.enabled && e.photos.length ? 'ON' : 'ON — but only shows while the editorial above is live') : 'OFF'}
+          </div>
+        </div>
+        <button onClick={() => set({ showInHero: !e.showInHero })} aria-pressed={e.showInHero} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, background: e.showInHero ? C.accent : 'rgba(255,255,255,0.18)' }}>
+          <span style={{ position: 'absolute', top: 3, left: e.showInHero ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+        </button>
+      </div>
+
       {/* ── Photos ── */}
       <div style={card}>
         <h2 style={h2}>PHOTOS</h2>
@@ -151,7 +173,12 @@ export default function FeaturedEditorialPage() {
         <div style={grid2}>
           <label><span style={lbl}>Title</span><input value={e.title} maxLength={80} onChange={ev => set({ title: ev.target.value })} placeholder="SAPEUR EN ROSE" style={inp} /></label>
           <label><span style={lbl}>Subtitle (optional)</span><input value={e.subtitle} maxLength={80} onChange={ev => set({ subtitle: ev.target.value })} placeholder="Dark Grandiose" style={inp} /></label>
-          <label><span style={lbl}>Shot on (optional)</span><input value={e.setName} maxLength={40} onChange={ev => set({ setName: ev.target.value })} placeholder="Set D" style={inp} /></label>
+          <label><span style={lbl}>Shot on (optional)</span>
+            <select value={e.setSlug} onChange={ev => { const x = sets.find(y => y.slug === ev.target.value); set({ setSlug: x?.slug || '', setName: x?.name || '' }) }} style={inp}>
+              <option value="" style={{ background: '#141416', color: '#fff' }}>{e.setName && !e.setSlug ? `${e.setName} (pick from list)` : 'Not shown'}</option>
+              {sets.map(x => <option key={x.slug} value={x.slug} style={{ background: '#141416', color: '#fff' }}>{x.name}</option>)}
+            </select>
+          </label>
           <label><span style={lbl}>Seconds per photo</span><input type="number" min={3} max={15} value={e.intervalSec} onChange={ev => set({ intervalSec: Number(ev.target.value) })} style={inp} /></label>
         </div>
         <label style={{ display: 'block', marginTop: 12 }}><span style={lbl}>Instagram post link</span><input value={e.postUrl} onChange={ev => set({ postUrl: ev.target.value })} placeholder="https://www.instagram.com/p/…" style={inp} /></label>
