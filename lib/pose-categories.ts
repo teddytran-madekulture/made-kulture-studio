@@ -1,6 +1,6 @@
 // Pose Guide categories. Pure data — imported by the tablet, the phone page,
 // the admin and the API alike, so a category can't exist in one and not another.
-// `search` is the default Pexels query used to seed the starter set.
+// `search` is the default stock-photo (Unsplash) query used to seed the starter set.
 export interface PoseCategory { key: string; label: string; search: string }
 
 export const POSE_CATEGORIES: PoseCategory[] = [

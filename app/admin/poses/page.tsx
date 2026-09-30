@@ -1,6 +1,6 @@
 'use client'
 // Pose Guide — review guest submissions, manage the library, add studio shots,
-// and seed the Pexels starter set. Linked from BOTH admin sidebars.
+// and seed the Unsplash starter set. Linked from BOTH admin sidebars.
 import { useCallback, useEffect, useState } from 'react'
 import { POSE_CATEGORIES, poseCategoryLabel } from '@/lib/pose-categories'
 import { shrinkImage } from '@/lib/shrink-image'
@@ -48,7 +48,7 @@ export default function PosesAdmin() {
     setBusy('seed'); setNote(null)
     const r = await fetch('/api/admin/poses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'seed', category: seedCat, query: seedQ, count: seedN }) })
     const j = await r.json().catch(() => ({}))
-    setNote(r.ok ? `Added ${j.added} poses from Pexels to ${poseCategoryLabel(seedCat)}. Weed out any duds under Live.` : `⚠️ ${j.error}`)
+    setNote(r.ok ? `Added ${j.added} poses from Unsplash to ${poseCategoryLabel(seedCat)}. Weed out any duds under Live.` : `⚠️ ${j.error}`)
     setBusy(null); load()
   }
   const upload = async (files: FileList | null) => {
@@ -87,17 +87,17 @@ export default function PosesAdmin() {
           </label>
         </div>
         <div style={card}>
-          <div style={{ fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', marginBottom: 10 }}>STARTER POSES FROM PEXELS</div>
-          {d && !d.pexelsReady && <div style={{ ...small, color: '#fbbf24', marginBottom: 8 }}>Add PEXELS_API_KEY in Vercel first (free at pexels.com/api).</div>}
+          <div style={{ fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', marginBottom: 10 }}>STARTER POSES FROM UNSPLASH</div>
+          {d && !d.stockReady && <div style={{ ...small, color: '#fbbf24', marginBottom: 8 }}>Add UNSPLASH_ACCESS_KEY in Vercel first (free at unsplash.com/developers).</div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
             <select value={seedCat} onChange={e => { setSeedCat(e.target.value); setSeedQ(POSE_CATEGORIES.find(c => c.key === e.target.value)?.search || '') }} style={inp}>
               {POSE_CATEGORIES.map(c => <option key={c.key} value={c.key} style={opt}>{c.label}</option>)}
             </select>
-            <input value={seedQ} onChange={e => setSeedQ(e.target.value)} style={{ ...inp, flex: 1, minWidth: 160 }} placeholder="Search Pexels for…" />
-            <select value={seedN} onChange={e => setSeedN(Number(e.target.value))} style={inp}>{[10, 20, 40].map(n => <option key={n} value={n} style={opt}>{n}</option>)}</select>
+            <input value={seedQ} onChange={e => setSeedQ(e.target.value)} style={{ ...inp, flex: 1, minWidth: 160 }} placeholder="Search Unsplash for…" />
+            <select value={seedN} onChange={e => setSeedN(Number(e.target.value))} style={inp}>{[10, 20, 30].map(n => <option key={n} value={n} style={opt}>{n}</option>)}</select>
           </div>
-          <button onClick={seed} disabled={busy === 'seed'} style={btn(true)}>{busy === 'seed' ? 'PULLING…' : 'ADD FROM PEXELS'}</button>
-          <div style={{ ...small, marginTop: 8 }}>Each Pexels pose shows “Photo by … on Pexels” — that credit is part of their licence.</div>
+          <button onClick={seed} disabled={busy === 'seed'} style={btn(true)}>{busy === 'seed' ? 'PULLING…' : 'ADD FROM UNSPLASH'}</button>
+          <div style={{ ...small, marginTop: 8 }}>Each Unsplash pose shows “Photo by … on Unsplash” — that credit is part of their licence. Their free tier allows about 50 requests an hour, so add ~20 at a time.</div>
         </div>
       </div>
 

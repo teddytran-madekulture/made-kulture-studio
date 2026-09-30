@@ -3,8 +3,8 @@
 // ⚠️ Guest contributions are 'pending' until the owner approves them in
 // /admin/poses. Nothing a guest uploads is ever shown to anyone else first:
 // review covers nudity, quality and people who didn't agree to be pictured.
-// ⚠️ Pexels images are hotlinked and CREDITED ("Photo by X on Pexels") — that
-// credit is a condition of using their library. Never drop it from a display.
+// ⚠️ Stock images (Unsplash; earlier rows may be Pexels) are hotlinked and
+// CREDITED ("Photo by X on Unsplash") — a condition of their licence. Never drop it.
 import { supabaseAdmin } from '@/lib/supabase'
 import { POSE_CATEGORIES } from '@/lib/pose-categories'
 
@@ -42,8 +42,8 @@ export async function shapePoses(rows: any[]): Promise<PoseOut[]> {
     id: r.id, category: r.category, source: r.source,
     src: r.image_url || signed.get(r.storage_path) || '',
     width: r.width ?? null, height: r.height ?? null,
-    credit: r.source === 'pexels'
-      ? (r.credit_name ? `Photo by ${r.credit_name} on Pexels` : 'Photo from Pexels')
+    credit: (r.source === 'unsplash' || r.source === 'pexels')
+      ? (r.credit_name ? `Photo by ${r.credit_name} on ${r.source === 'unsplash' ? 'Unsplash' : 'Pexels'}` : `Photo from ${r.source === 'unsplash' ? 'Unsplash' : 'Pexels'}`)
       : r.source === 'guest'
         ? (r.credit_name ? `Pose by ${r.credit_name}` : 'Pose by a Made Kulture guest')
         : 'Made Kulture',
@@ -57,9 +57,10 @@ export async function livePoses(category: string): Promise<PoseOut[]> {
     // Our own and guests' shots first — they're the point; stock fills in.
     .order('source', { ascending: false }).order('created_at', { ascending: false }).limit(200)
   if (error) throw new Error(error.message)
-  // 'studio' > 'pexels' > 'guest' alphabetically; put stock last explicitly.
+  // Studio and guest shots first; stock photos last.
   const rows = (data ?? []) as any[]
-  rows.sort((a, b) => Number(a.source === 'pexels') - Number(b.source === 'pexels'))
+  const stock = (x: any) => Number(x.source === 'unsplash' || x.source === 'pexels')
+  rows.sort((a, b) => stock(a) - stock(b))
   return shapePoses(rows)
 }
 
@@ -80,32 +81,43 @@ export async function poseCategorySummary() {
   for (const c of POSE_CATEGORIES) {
     const mine = rows.filter(r => r.category === c.key)
     if (!mine.length) continue
-    const coverRow = mine.find(r => r.source !== 'pexels') ?? mine[0]
+    const coverRow = mine.find(r => r.source !== 'pexels' && r.source !== 'unsplash') ?? mine[0]
     const [cover] = await shapePoses([coverRow])
     out.push({ key: c.key, label: c.label, count: mine.length, cover: cover?.src ?? null })
   }
   return out
 }
 
-// ── Pexels ──────────────────────────────────────────────────────────────────
-export async function seedFromPexels(category: string, query: string, count: number) {
-  const key = process.env.PEXELS_API_KEY
-  if (!key) return { ok: false as const, error: 'PEXELS_API_KEY is not set in Vercel yet.' }
-  const per = Math.max(1, Math.min(80, count))
-  const url = `https://api.pexels.com/v1/search?${new URLSearchParams({ query, per_page: String(per), orientation: 'portrait' })}`
-  const r = await fetch(url, { headers: { Authorization: key }, cache: 'no-store' })
-  if (!r.ok) return { ok: false as const, error: `Pexels answered ${r.status}.` }
+// ── Unsplash (stock starter set) ─────────────────────────────────────────────
+// Pexels paused new API keys (2026-09-29), so the starter set comes from Unsplash.
+// Their rules, all followed here: hotlink their image URLs (never re-host),
+// credit "Photo by X on Unsplash", and ping each photo's download_location when
+// we add it to the library. ⚠️ A new Unsplash app is in DEMO mode = 50 requests
+// an hour, and every photo added costs one ping — keep seeds to ~20 at a time.
+export async function seedFromStock(category: string, query: string, count: number) {
+  const key = process.env.UNSPLASH_ACCESS_KEY
+  if (!key) return { ok: false as const, error: 'UNSPLASH_ACCESS_KEY is not set in Vercel yet.' }
+  const per = Math.max(1, Math.min(30, count))
+  const auth = { Authorization: `Client-ID ${key}`, 'Accept-Version': 'v1' }
+  const url = `https://api.unsplash.com/search/photos?${new URLSearchParams({ query, per_page: String(per), orientation: 'portrait', content_filter: 'high' })}`
+  const r = await fetch(url, { headers: auth, cache: 'no-store' })
+  if (r.status === 403 || r.status === 429) return { ok: false as const, error: 'Unsplash hourly limit reached — try again in an hour.' }
+  if (!r.ok) return { ok: false as const, error: `Unsplash answered ${r.status}.` }
   const d = await r.json()
-  const photos = (d.photos ?? []) as any[]
+  const photos = (d.results ?? []) as any[]
   const rows = photos.map(p => ({
-    category, source: 'pexels', status: 'live',
-    image_url: p.src?.large2x || p.src?.large, width: p.width, height: p.height,
-    pexels_id: p.id, credit_name: p.photographer ?? null, credit_url: p.photographer_url ?? null,
+    category, source: 'unsplash', status: 'live',
+    image_url: p.urls?.regular, width: p.width, height: p.height,
+    stock_id: String(p.id), credit_name: p.user?.name ?? null, credit_url: p.user?.links?.html ?? null,
+    _ping: p.links?.download_location as string | undefined,
   })).filter(x => x.image_url)
   if (!rows.length) return { ok: true as const, added: 0 }
-  // pexels_id is unique: a photo already in the library (any category) is skipped.
+  // stock_id is unique: a photo already in the library (any category) is skipped.
   const { data, error } = await supabaseAdmin().from('poses')
-    .upsert(rows, { onConflict: 'pexels_id', ignoreDuplicates: true }).select('id')
+    .upsert(rows.map(({ _ping, ...row }) => row), { onConflict: 'stock_id', ignoreDuplicates: true }).select('stock_id')
   if (error) return { ok: false as const, error: error.message }
-  return { ok: true as const, added: data?.length ?? 0 }
+  // Unsplash guideline: register a "download" for each photo we actually took in.
+  const added = new Set(((data ?? []) as any[]).map(x => x.stock_id))
+  await Promise.allSettled(rows.filter(x => added.has(x.stock_id) && x._ping).map(x => fetch(x._ping!, { headers: auth, cache: 'no-store' })))
+  return { ok: true as const, added: added.size }
 }

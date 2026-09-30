@@ -2,11 +2,11 @@
 //   GET ?status=pending|live|hidden|rejected&category=
 //   POST { action: 'approve'|'reject'|'hide'|'show'|'delete', id }
 //   POST { action: 'category', id, category }
-//   POST { action: 'seed', category, query, count }   → Pexels starter set
+//   POST { action: 'seed', category, query, count }   → Unsplash starter set
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { shapePoses, seedFromPexels, POSE_BUCKET } from '@/lib/poses'
+import { shapePoses, seedFromStock, POSE_BUCKET } from '@/lib/poses'
 import { POSE_CATEGORY_KEYS } from '@/lib/pose-categories'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     poses: shaped.map(p => ({ ...p, status: byId.get(p.id)?.status, consentRights: byId.get(p.id)?.consent_rights, consentPeople: byId.get(p.id)?.consent_people, createdAt: byId.get(p.id)?.created_at })),
     counts: tally,
-    pexelsReady: !!process.env.PEXELS_API_KEY,
+    stockReady: !!process.env.UNSPLASH_ACCESS_KEY,
   })
 }
 
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     if (!POSE_CATEGORY_KEYS.has(category)) return NextResponse.json({ error: 'Pick a category.' }, { status: 400 })
     const query = String(body.query || '').trim()
     if (!query) return NextResponse.json({ error: 'Enter a search.' }, { status: 400 })
-    const res = await seedFromPexels(category, query, Number(body.count) || 20)
+    const res = await seedFromStock(category, query, Number(body.count) || 20)
     if (!res.ok) return NextResponse.json({ error: (res as any).error }, { status: 400 })
     return NextResponse.json({ ok: true, added: (res as any).added })
   }

@@ -852,7 +852,7 @@ export default function KioskPage() {
           }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={pose.src} alt="" draggable={false} style={{ maxWidth: '100%', maxHeight: 'calc(100% - 56px)', objectFit: 'contain', borderRadius: 8 }} />
-          {/* ⚠️ The credit is a condition of the Pexels licence — never drop it. Plain text, never a link. */}
+          {/* ⚠️ The credit is a condition of the Unsplash/Pexels licence — never drop it. Plain text, never a link. */}
           <div style={{ marginTop: 12, fontSize: 14, color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
             {pose.credit}{pose.setName ? ` · Shot in ${pose.setName}` : ''}{n > 1 ? `   ·   ${idx + 1} / ${n}` : ''}
           </div>
