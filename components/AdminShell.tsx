@@ -67,6 +67,7 @@ function SidebarInner() {
         <Item href="/admin/signups" icon="✉" label="Recent Signups" active={on('/admin/signups')} />
 
         <div style={sectionHdr}>COMMUNITY</div>
+        <Item href="/admin/poses" icon="◐" label="Pose Guide" active={on('/admin/poses')} />
         <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
         <Item href="/admin/directory" icon="✦" label="Creative Directory" active={on('/admin/directory')} />
         <Item href="/admin/community" icon="📈" label="Community" active={on('/admin/community')} />

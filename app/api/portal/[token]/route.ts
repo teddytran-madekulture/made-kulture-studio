@@ -56,6 +56,17 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     return NextResponse.json({ ok: true, items: await listItems(p.portal.id) })
   }
 
+  // Put a pose from the guide up on this set's screen. The tablet picks it up
+  // on its next Portal poll (it only polls while a Portal screen is open).
+  if (action === 'wall') {
+    const poseId = String(body.poseId || '')
+    if (!/^[0-9a-f-]{36}$/i.test(poseId)) return NextResponse.json({ error: 'Unknown pose.' }, { status: 400 })
+    const { data, error } = await supabaseAdmin().from('portal_sessions')
+      .update({ wall_pose_id: poseId, wall_at: new Date().toISOString() }).eq('id', p.portal.id).select('id')
+    if (error || !data?.length) return NextResponse.json({ error: error?.message || 'Could not reach the screen.' }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
   if (action === 'clear') {
     await deleteItems(p.portal.id)
     return NextResponse.json({ ok: true, items: [] })

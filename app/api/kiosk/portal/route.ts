@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { findActiveBookingBySet } from '@/lib/extensions'
 import { getOrCreatePortal, listItems } from '@/lib/portal'
+import { poseById } from '@/lib/poses'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -33,12 +35,16 @@ export async function GET(req: NextRequest) {
   if (!portal) return NextResponse.json({ error: 'Could not open the portal.' }, { status: 500 })
   try {
     const items = await listItems(portal.id)
+    // A pose the guest sent to the wall from their phone (Pose Guide).
+    const { data: w } = await supabaseAdmin().from('portal_sessions').select('wall_pose_id, wall_at').eq('id', portal.id).maybeSingle()
+    const wallPose = (w as any)?.wall_pose_id ? await poseById((w as any).wall_pose_id) : null
     return NextResponse.json({
       live: true,
       // The ORIGIN the tablet loaded from, so the domain move needs no change here.
       url: `${req.nextUrl.origin}/portal/${portal.token}`,
       endISO: occ.endISO,
       items,
+      wall: wallPose ? { at: (w as any).wall_at, pose: wallPose } : null,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Could not load the board.' }, { status: 500 })

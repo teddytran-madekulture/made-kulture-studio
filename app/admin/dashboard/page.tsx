@@ -1874,6 +1874,7 @@ export default function AdminDashboard() {
           {navLink('/admin/signups', '✉', 'Recent Signups')}
 
           {navHdr('COMMUNITY')}
+          {navLink('/admin/poses', '◐', 'Pose Guide')}
           {navLink('/admin/portfolio', '🖼', 'Portfolio')}
           {navLink('/admin/directory', '✦', 'Creative Directory')}
           {navLink('/admin/community', '📈', 'Community')}

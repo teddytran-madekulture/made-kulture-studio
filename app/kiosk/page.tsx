@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import KioskJukeboxBar from '@/components/KioskJukeboxBar'
 import qrcode from 'qrcode-generator'
+import { POSE_CATEGORIES } from '@/lib/pose-categories'
 
 const IDLE_MS = 90_000
 
@@ -24,7 +25,9 @@ const CHAMP_DIM = 'rgba(201,178,126,0.55)'
 const HAIR = 'rgba(201,178,126,0.22)'
 const INK = '#0b0b0d'
 
-type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff' | 'portal' | 'board'
+type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff' | 'portal' | 'board' | 'poses'
+interface Pose { id: string; src: string; credit: string | null; setName: string | null }
+interface PoseCat { key: string; label: string; count: number; cover: string | null }
 interface PortalItem { id: string; kind: string; src: string }
 interface Msg { id?: string; role: string; content: string; created_at?: string }
 
@@ -70,6 +73,14 @@ const IconBoard = () => (
   <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
     <rect x="3.5" y="3.5" width="7" height="10" rx="1.2" /><rect x="13.5" y="3.5" width="7" height="6" rx="1.2" strokeOpacity="0.6" />
     <rect x="3.5" y="16.5" width="7" height="4" rx="1.2" strokeOpacity="0.6" /><rect x="13.5" y="12.5" width="7" height="8" rx="1.2" />
+  </svg>
+)
+// POSE GUIDE — a figure mid-pose.
+const IconPose = () => (
+  <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
+    <circle cx="12" cy="4.5" r="2" />
+    <path d="M12 7v6.5" /><path d="M12 9l-4.5-2.5" /><path d="M12 9l4 3.5" />
+    <path d="M12 13.5l-3 7" /><path d="M12 13.5l3.5 6.5" strokeOpacity="0.6" />
   </svg>
 )
 const IconBell = () => (
@@ -199,7 +210,7 @@ export default function KioskPage() {
     // ⚠️ The mood board is SUPPOSED to stay on the wall for the whole shoot —
     // the 90s idle reset must not take it down. It closes itself when the
     // session ends (see the PORTAL effects below).
-    if (screenRef.current === 'board') return
+    if (screenRef.current === 'board' || screenRef.current === 'poses') return
     setScreen('home'); setPhone(''); setCi(null); setCiError('')
     setMsgs([]); setInput(''); setSummonState(null); setSummonPhone('')
     setExtStep('pick'); setExtReq(null); setExtError(''); setExtUntil('')
@@ -238,6 +249,29 @@ export default function KioskPage() {
   // step through; a plain tap goes back to the grid.
   const [zoomIdx, setZoomIdx] = useState<number | null>(null)
   const swipeX = useRef<number | null>(null)
+  // ── POSE GUIDE (Portal feature #2) ──────────────────────────────────────
+  // Browsed right on the tablet, or sent here from a guest's phone ('wall').
+  // The library barely changes, so there is NO polling for it.
+  const [poseCats, setPoseCats] = useState<PoseCat[] | null>(null)
+  const [poseCat, setPoseCat] = useState<string | null>(null)
+  const [poseList, setPoseList] = useState<Pose[]>([])
+  const [poseIdx, setPoseIdx] = useState<number | null>(null)
+  const [poseErr, setPoseErr] = useState('')
+  const lastWall = useRef<string | null>(null)
+  const openPoses = useCallback(async () => {
+    setPoseCat(null); setPoseIdx(null); setPoseErr(''); setScreen('poses')
+    try {
+      const d = await fetch('/api/poses', { cache: 'no-store' }).then(r => r.json())
+      setPoseCats(d.categories || [])
+    } catch { setPoseErr('Couldn’t load the pose guide.') }
+  }, [])
+  const openPoseCat = useCallback(async (key: string) => {
+    setPoseCat(key); setPoseIdx(null); setPoseList([]); setPoseErr('')
+    try {
+      const d = await fetch(`/api/poses?category=${encodeURIComponent(key)}`, { cache: 'no-store' }).then(r => r.json())
+      setPoseList(d.poses || [])
+    } catch { setPoseErr('Couldn’t load those poses.') }
+  }, [])
   const portalCount = useRef(0)
   const fetchPortal = useCallback(async () => {
     if (!setSlug) return
@@ -247,7 +281,7 @@ export default function KioskPage() {
       const r = await fetch(`/api/kiosk/portal?${q}`, { cache: 'no-store' })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { setPortalErr(d.error || 'Portal is unavailable right now.'); return }
-      if (!d.live) { setPortalUrl(null); setPortalItems([]); setScreen(s => (s === 'portal' || s === 'board') ? 'home' : s); return }
+      if (!d.live) { setPortalUrl(null); setPortalItems([]); setScreen(s => (s === 'portal' || s === 'board' || s === 'poses') ? 'home' : s); return }
       setPortalErr(''); setPortalUrl(d.url)
       const next: PortalItem[] = d.items || []
       // Keep the src we already have for a known picture: signed URLs differ
@@ -256,13 +290,22 @@ export default function KioskPage() {
         const had = new Map(prev.map(i => [i.id, i.src]))
         return next.map(i => ({ ...i, src: had.get(i.id) ?? i.src }))
       })
+      // A pose sent from a guest's phone → put it up full screen.
+      if (d.wall?.at && d.wall.at !== lastWall.current) {
+        const fresh = lastWall.current !== null || Date.now() - Date.parse(d.wall.at) < 120_000
+        lastWall.current = d.wall.at
+        if (fresh && d.wall.pose) {
+          setPoseCat('__wall'); setPoseList([d.wall.pose]); setPoseIdx(0); setScreen('poses')
+          return
+        }
+      }
       // First pictures arriving while the QR is up → show the board.
       if (next.length > portalCount.current && screenRef.current === 'portal') setScreen('board')
       portalCount.current = next.length
     } catch { /* offline — keep what is on screen */ }
   }, [setSlug, kioskKey])
   useEffect(() => {
-    if (screen !== 'portal' && screen !== 'board') return
+    if (screen !== 'portal' && screen !== 'board' && screen !== 'poses') return
     fetchPortal()
     const iv = setInterval(fetchPortal, screen === 'portal' ? 5000 : 30000)
     return () => clearInterval(iv)
@@ -718,7 +761,7 @@ export default function KioskPage() {
   // Time's up (or the session vanished) → the board closes itself and the home
   // screen shows TIME IS UP. The server wipes the pictures after the booking ends.
   useEffect(() => {
-    if ((screen === 'portal' || screen === 'board') && !showPortal) { setZoomIdx(null); setScreen('home') }
+    if ((screen === 'portal' || screen === 'board' || screen === 'poses') && !showPortal) { setZoomIdx(null); setPoseIdx(null); setScreen('home') }
   }, [screen, showPortal])
 
   // ── PORTAL screens ────────────────────────────────────────────────────────
@@ -771,11 +814,108 @@ export default function KioskPage() {
               {portalItems.length ? `${portalItems.length} picture${portalItems.length === 1 ? '' : 's'} on the board` : 'Pinterest or your camera roll'}
             </span>
           </button>
+          <button style={{ ...card, flex: '1 1 calc(50% - 28px)', minHeight: 170, maxWidth: 420 }} onClick={() => { openPoses(); touch() }}>
+            <IconPose />
+            <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '0.2em' }}>POSE GUIDE</span>
+            <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.42)' }}>Ideas by category</span>
+          </button>
         </div>
         <button onClick={() => setScreen('home')} style={{ ...backBtn, position: 'static', marginTop: 18 }}>← BACK</button>
       </div>
     </main>
   )
+
+  // POSE GUIDE screen: categories → poses → one pose full screen (swipe).
+  if (screen === 'poses') {
+    const viewing = poseIdx !== null && poseList.length > 0
+    const catLabel = poseCat === '__wall' ? 'Sent from your phone' : (POSE_CATEGORIES.find(c => c.key === poseCat)?.label ?? '')
+    const bar = (label: string, onClick: () => void) => <button onClick={onClick} style={{ ...backBtn, position: 'static' }}>{label}</button>
+    let body: React.ReactNode
+    if (viewing) {
+      const n = poseList.length
+      const idx = Math.min(poseIdx!, n - 1)
+      const pose = poseList[idx]
+      const go = (d: number) => setPoseIdx(((idx + d) % n + n) % n)
+      const arrow: React.CSSProperties = {
+        position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 64, height: 64, borderRadius: 999,
+        background: 'rgba(0,0,0,0.55)', border: `1px solid ${HAIR}`, color: '#fff', fontSize: 30, lineHeight: '60px', cursor: 'pointer', zIndex: 2,
+      }
+      body = (
+        <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 12, touchAction: 'pan-y' }}
+          onPointerDown={e => { swipeX.current = e.clientX }}
+          onPointerUp={e => {
+            if (swipeX.current === null) return
+            const dx = e.clientX - swipeX.current
+            swipeX.current = null
+            if (dx <= -50) go(1)
+            else if (dx >= 50) go(-1)
+          }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={pose.src} alt="" draggable={false} style={{ maxWidth: '100%', maxHeight: 'calc(100% - 56px)', objectFit: 'contain', borderRadius: 8 }} />
+          {/* ⚠️ The credit is a condition of the Pexels licence — never drop it. Plain text, never a link. */}
+          <div style={{ marginTop: 12, fontSize: 14, color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
+            {pose.credit}{pose.setName ? ` · Shot in ${pose.setName}` : ''}{n > 1 ? `   ·   ${idx + 1} / ${n}` : ''}
+          </div>
+          {n > 1 && <button onPointerUp={e => { e.stopPropagation(); swipeX.current = null; go(-1) }} style={{ ...arrow, left: 14 }} aria-label="Previous">‹</button>}
+          {n > 1 && <button onPointerUp={e => { e.stopPropagation(); swipeX.current = null; go(1) }} style={{ ...arrow, right: 14 }} aria-label="Next">›</button>}
+        </div>
+      )
+    } else if (poseCat) {
+      body = (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 10 }}>
+          <div style={{ fontSize: 14, letterSpacing: '0.3em', color: CHAMP_DIM, textAlign: 'center', margin: '6px 0 12px' }}>{catLabel.toUpperCase()}</div>
+          {poseErr ? <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>{poseErr}</div>
+            : poseList.length === 0 ? <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', paddingTop: 40 }}>Loading…</div>
+            : (
+              <div style={{ columnCount: 3, columnGap: 10 }}>
+                {poseList.map((ps, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={ps.id} src={ps.src} alt="" onClick={() => setPoseIdx(i)} draggable={false}
+                    style={{ width: '100%', display: 'block', marginBottom: 10, borderRadius: 8, breakInside: 'avoid' as any, background: '#111' }} />
+                ))}
+              </div>
+            )}
+        </div>
+      )
+    } else {
+      body = (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
+          <div style={{ fontSize: 14, letterSpacing: '0.3em', color: CHAMP_DIM, textAlign: 'center', margin: '4px 0 14px' }}>POSE GUIDE</div>
+          {poseErr ? <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>{poseErr}</div>
+            : !poseCats ? <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', paddingTop: 40 }}>Loading…</div>
+            : poseCats.length === 0 ? <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', paddingTop: 40 }}>No poses yet — check back soon.</div>
+            : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {poseCats.map(c => (
+                  <button key={c.key} onClick={() => { openPoseCat(c.key); touch() }}
+                    style={{ position: 'relative', height: 200, borderRadius: 16, overflow: 'hidden', border: `1px solid ${HAIR}`, cursor: 'pointer', padding: 0,
+                      background: c.cover ? `center / cover no-repeat url("${c.cover}")` : '#141416' }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,0.8) 100%)' }} />
+                    <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12, textAlign: 'left', color: '#fff' }}>
+                      <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '0.12em' }}>{c.label.toUpperCase()}</div>
+                      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>{c.count} pose{c.count === 1 ? '' : 's'}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+        </div>
+      )
+    }
+    return (
+      <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
+        {portalStrip}
+        {body}
+        <div style={{ flexShrink: 0, display: 'flex', gap: 12, justifyContent: 'center', padding: '12px 14px 18px', borderTop: `1px solid ${HAIR}` }}>
+          {viewing && poseCat !== '__wall' ? bar('← ALL POSES', () => setPoseIdx(null))
+            : poseCat && poseCat !== '__wall' ? bar('← CATEGORIES', () => { setPoseCat(null); setPoseIdx(null) })
+            : poseCat === '__wall' ? bar('POSE GUIDE', () => { openPoses() })
+            : bar('← PORTAL', () => setScreen('portal'))}
+          {bar('✕ CLOSE', () => { setPoseIdx(null); setScreen('home') })}
+        </div>
+      </main>
+    )
+  }
 
   if (screen === 'board') return (
     <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
