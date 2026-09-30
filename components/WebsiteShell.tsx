@@ -56,6 +56,7 @@ function SidebarInner() {
 
         <div style={sectionHdr}>MARKETING TOOLS</div>
         <Item href="/admin/website/marketing" icon="📣" label="Announcements & Pop-Up" active={on('/admin/website/marketing')} />
+        <Item href="/admin/website/editorial" icon="✦" label="Featured Editorial" active={on('/admin/website/editorial')} />
 
         <div style={sectionHdr}>CATALOG</div>
         <Item href="/admin/website/sets" icon="▦" label="Sets" active={on('/admin/website/sets')} />

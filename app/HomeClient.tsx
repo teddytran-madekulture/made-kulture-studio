@@ -11,6 +11,8 @@ import { fmt as nl } from '@/lib/fmt'
 import { useGuestPricing } from '@/lib/use-guest-pricing'
 import HeroCarousel, { type CarouselSlide } from '@/components/HeroCarousel'
 import { FOCAL_POSITION, type HeroSlide } from '@/lib/hero-slides'
+import FeaturedEditorial from '@/components/FeaturedEditorial'
+import { liveEditorial, type FeaturedEditorial as FeaturedEditorialData } from '@/lib/featured-editorial'
 
 
 const SETS = [
@@ -49,7 +51,7 @@ const FEATURE_ICONS = [
   (<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></svg>),
 ]
 
-export default function HomeClient({ images = {}, focals = {}, settings, content = {}, heroSlides = [], heroIntervalSec = 7 }: { images?: SiteImages; focals?: Record<string, string>; settings?: SiteSettings; content?: PageContent; heroSlides?: HeroSlide[]; heroIntervalSec?: number }) {
+export default function HomeClient({ images = {}, focals = {}, settings, content = {}, heroSlides = [], heroIntervalSec = 7, editorial = null }: { images?: SiteImages; focals?: Record<string, string>; settings?: SiteSettings; content?: PageContent; heroSlides?: HeroSlide[]; heroIntervalSec?: number; editorial?: FeaturedEditorialData | null }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [pathHover, setPathHover] = useState<'a' | 'b' | null>(null)
   // ⚠️ The prices in the SETS array below are a FALLBACK for the first paint
@@ -245,9 +247,12 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
 
       {/* BUILT FOR THE OBSESSED */}
       <section style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
-        {/* Left: studio photo — editable at /admin/homepage (slot: studio-photo) */}
-        <div style={{ background:'rgba(255,255,255,0.03)', minHeight:500, position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
-          {images['studio-photo']
+        {/* Left: the Featured Editorial when one is live (/admin/website/editorial),
+            otherwise the plain studio photo slot (slot: studio-photo) */}
+        <div style={{ background: liveEditorial(editorial) ? '#050505' : 'rgba(255,255,255,0.03)', minHeight: liveEditorial(editorial) && !isMobile ? 640 : 500, position:'relative', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          {liveEditorial(editorial)
+            ? <FeaturedEditorial e={liveEditorial(editorial)!} isMobile={isMobile} />
+            : images['studio-photo']
             ? <img src={images['studio-photo']} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition: focals['studio-photo'] || 'center' }} />
             : <span style={{ fontSize:11, color:'rgba(255,255,255,0.15)', letterSpacing:'0.1em' }}>STUDIO PHOTO</span>}
         </div>
