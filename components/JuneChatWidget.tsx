@@ -26,7 +26,7 @@ export default function JuneChatWidget() {
   openRef.current = open
 
   // Hide on admin/desk/checkin surfaces.
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/desk') || pathname?.startsWith('/checkin') || pathname?.startsWith('/kiosk') || pathname?.startsWith('/tour-admin')) {
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/desk') || pathname?.startsWith('/checkin') || pathname?.startsWith('/kiosk') || pathname?.startsWith('/tour-admin') || pathname?.startsWith('/portal') || pathname?.startsWith('/reschedule')) {
     return null
   }
 

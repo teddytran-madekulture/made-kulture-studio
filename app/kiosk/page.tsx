@@ -12,8 +12,9 @@
 // typography, champagne hairlines, thin monotone stroke icons. No emoji.
 // Shared-device privacy: returns HOME + wipes the June chat after 90s idle.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import KioskJukeboxBar from '@/components/KioskJukeboxBar'
+import qrcode from 'qrcode-generator'
 
 const IDLE_MS = 90_000
 
@@ -23,7 +24,8 @@ const CHAMP_DIM = 'rgba(201,178,126,0.55)'
 const HAIR = 'rgba(201,178,126,0.22)'
 const INK = '#0b0b0d'
 
-type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff'
+type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff' | 'portal' | 'board'
+interface PortalItem { id: string; kind: string; src: string }
 interface Msg { id?: string; role: string; content: string; created_at?: string }
 
 const QUICK_QUESTIONS = [
@@ -54,6 +56,13 @@ const IconClock = () => (
   <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
     <circle cx="12" cy="12" r="9" strokeOpacity="0.6" />
     <path d="M12 7v5l3.5 2" />
+  </svg>
+)
+// PORTAL — a phone, because the guest's phone is the doorway.
+const IconPortal = () => (
+  <svg width="54" height="54" viewBox="0 0 24 24" {...ico}>
+    <rect x="7" y="2.5" width="10" height="19" rx="2.2" strokeOpacity="0.6" />
+    <path d="M10 7h4v4h-4z" /><path d="M11 18.5h2" />
   </svg>
 )
 const IconBell = () => (
@@ -180,6 +189,10 @@ export default function KioskPage() {
     // idle reset would fire long before Teddy walked over, and the answer they
     // were waiting for would land on a screen nobody was looking at.
     if (ringOpen.current) return
+    // ⚠️ The mood board is SUPPOSED to stay on the wall for the whole shoot —
+    // the 90s idle reset must not take it down. It closes itself when the
+    // session ends (see the PORTAL effects below).
+    if (screenRef.current === 'board') return
     setScreen('home'); setPhone(''); setCi(null); setCiError('')
     setMsgs([]); setInput(''); setSummonState(null); setSummonPhone('')
     setExtStep('pick'); setExtReq(null); setExtError(''); setExtUntil('')
@@ -204,6 +217,54 @@ export default function KioskPage() {
   // on HOME so we never interrupt a check-in or a June chat. If a new build lands
   // while someone's mid-use, we flag it and reload the moment they return home.
   useEffect(() => { screenRef.current = screen }, [screen])
+
+  // ── PORTAL (2026-09-29) ───────────────────────────────────────────────────
+  // The QR hub: the guest's phone gets /portal/<token> for THIS session and
+  // builds a mood board there; the tablet only ever renders images from it.
+  // ⚠️ POLLED ONLY while the PORTAL screen or board is open — 5s on the QR
+  // screen (short-lived, idle-reset), 30s on the board (it can stay up for
+  // hours; see the jukebox polling note before making this faster).
+  const [portalUrl, setPortalUrl] = useState<string | null>(null)
+  const [portalItems, setPortalItems] = useState<PortalItem[]>([])
+  const [portalErr, setPortalErr] = useState('')
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null)
+  const portalCount = useRef(0)
+  const fetchPortal = useCallback(async () => {
+    if (!setSlug) return
+    try {
+      const q = new URLSearchParams({ set: setSlug })
+      if (kioskKey) q.set('key', kioskKey)
+      const r = await fetch(`/api/kiosk/portal?${q}`, { cache: 'no-store' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setPortalErr(d.error || 'Portal is unavailable right now.'); return }
+      if (!d.live) { setPortalUrl(null); setPortalItems([]); setScreen(s => (s === 'portal' || s === 'board') ? 'home' : s); return }
+      setPortalErr(''); setPortalUrl(d.url)
+      const next: PortalItem[] = d.items || []
+      // Keep the src we already have for a known picture: signed URLs differ
+      // on every fetch, and a changed src re-downloads and flickers the image.
+      setPortalItems(prev => {
+        const had = new Map(prev.map(i => [i.id, i.src]))
+        return next.map(i => ({ ...i, src: had.get(i.id) ?? i.src }))
+      })
+      // First pictures arriving while the QR is up → show the board.
+      if (next.length > portalCount.current && screenRef.current === 'portal') setScreen('board')
+      portalCount.current = next.length
+    } catch { /* offline — keep what is on screen */ }
+  }, [setSlug, kioskKey])
+  useEffect(() => {
+    if (screen !== 'portal' && screen !== 'board') return
+    fetchPortal()
+    const iv = setInterval(fetchPortal, screen === 'portal' ? 5000 : 30000)
+    return () => clearInterval(iv)
+  }, [screen, fetchPortal])
+  const portalQr = useMemo(() => {
+    if (!portalUrl) return null
+    const q = qrcode(0, 'M'); q.addData(portalUrl); q.make()
+    const n = q.getModuleCount()
+    let d = ''
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`
+    return { d, n }
+  }, [portalUrl])
 
   useEffect(() => {
     const check = async () => {
@@ -518,14 +579,19 @@ export default function KioskPage() {
   // SMS can never contradict each other about whether someone is "right after".
   const handoverSoon = !!(nextStart && occLive && Date.parse(nextStart) - Date.parse(occ.endISO) <= 60 * 60_000)
   const canAddTime = !!(occLive && started && occ.extendable && headroom >= 0.5)
+  // PORTAL belongs to whoever is ON the set right now — a started session on a
+  // set tablet, never the door kiosk and never before the booking begins.
+  const showPortal = !!(setSlug && occLive && started && minsLeft > 0)
+  // Three or four tiles use the grid shape (see the four-tile note below).
+  const gridTiles = canAddTime || showPortal
   // ⚠️ Sized from the MEASURED viewport height, not a fixed px and not a CSS
   // `vh` unit. Fixed px clips on a landscape door tablet (~800px of height, three
   // tiles) — the same squeeze the four-tile note below documents — and raw `vh`
   // is unsafe app-wide because globals.css zooms the body 1.25x above 769px.
   // `vh` here is the real visible height this component already measures.
   const clockPx = Math.round(Math.min(
-    canAddTime ? 66 : barOn ? 80 : 118,
-    Math.max(34, (vh ?? 900) * (canAddTime ? 0.075 : 0.13)),
+    gridTiles ? 66 : barOn ? 80 : 118,
+    Math.max(34, (vh ?? 900) * (gridTiles ? 0.075 : 0.13)),
   ))
 
   // ⚠️ FOUR STACKED TILES DO NOT FIT A LANDSCAPE FIRE HD 10. Measured: the
@@ -535,7 +601,7 @@ export default function KioskPage() {
   // fix either — icon + title + subtitle is ~138px on its own. So the fourth
   // tile changes the SHAPE: one column becomes a 2x2 grid, which is the better
   // use of a wide screen anyway.
-  const tile: React.CSSProperties = canAddTime
+  const tile: React.CSSProperties = gridTiles
     ? { ...card, flex: '1 1 calc(50% - 28px)', minHeight: barOn ? 150 : 200 }
     : card
 
@@ -639,6 +705,91 @@ export default function KioskPage() {
   )
 
   // ── Screens ──────────────────────────────────────────────────────────────
+  // Time's up (or the session vanished) → the board closes itself and the home
+  // screen shows TIME IS UP. The server wipes the pictures after the booking ends.
+  useEffect(() => {
+    if ((screen === 'portal' || screen === 'board') && !showPortal) { setZoomSrc(null); setScreen('home') }
+  }, [screen, showPortal])
+
+  // ── PORTAL screens ────────────────────────────────────────────────────────
+  // The session strip is ALWAYS on top of the board, so the countdown, the
+  // amber/red warnings and ADD TIME keep working while references are up.
+  const portalStrip = (
+    <div style={{
+      flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '16px 18px',
+      borderBottom: `1px solid ${urgency ? urgColor : HAIR}`,
+      background: urgency ? (urgency === 'now' ? 'rgba(255,107,107,0.16)' : 'rgba(232,163,61,0.16)') : 'transparent',
+    }}>
+      <div style={{ fontSize: 17, fontWeight: 700, color: CHAMP_DIM, letterSpacing: '0.3em' }}>{ctx?.set?.name?.toUpperCase() ?? setSlug?.toUpperCase()}</div>
+      <div style={{ fontSize: urgency ? 22 : 17, fontWeight: urgency ? 900 : 500, color: urgency ? urgColor : 'rgba(255,255,255,0.6)', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+        {urgency ? (minsLeft > 0 ? `${minsLeft} MIN LEFT` : 'TIME IS UP') : occLive ? `until ${clock(occ.endISO)}` : ''}
+      </div>
+      {urgency && canAddTime && (
+        <button onClick={() => { setExtStep('pick'); setExtReq(null); setExtError(''); setExtUntil(''); setScreen('addtime'); touch() }}
+          style={{ ...champBtn, padding: '12px 20px', fontSize: 12 }}>ADD TIME</button>
+      )}
+      {urgency && <div style={{ flexBasis: '100%', fontSize: 14, color: 'rgba(255,255,255,0.72)' }}>Wrap up and return props · past 15 minutes over is charged an extra hour</div>}
+    </div>
+  )
+
+  if (screen === 'portal') return (
+    <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
+      {portalStrip}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px 28px' }}>
+        <div style={{ fontSize: 13, letterSpacing: '0.34em', color: CHAMP_DIM }}>PORTAL</div>
+        <div style={{ fontSize: 34, fontWeight: 800, margin: '10px 0 22px', lineHeight: 1.2 }}>Scan with your phone</div>
+        {portalQr ? (
+          <div style={{ background: '#f4f1ea', padding: 18, borderRadius: 18, width: 'min(62vw, 380px)' }}>
+            <svg viewBox={`0 0 ${portalQr.n} ${portalQr.n}`} style={{ display: 'block', width: '100%', height: 'auto' }} shapeRendering="crispEdges">
+              <path d={portalQr.d} fill="#0b0b0d" />
+            </svg>
+          </div>
+        ) : (
+          <div style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', padding: 40 }}>{portalErr || 'Opening…'}</div>
+        )}
+        <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.62)', lineHeight: 1.6, marginTop: 24, maxWidth: 520 }}>
+          Build a mood board from a public Pinterest board or your camera roll. It shows up here in a few seconds.
+        </div>
+        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.38)', marginTop: 10 }}>Just for this session — it clears when your time ends.</div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+          {portalItems.length > 0 && <button onClick={() => setScreen('board')} style={champBtn}>VIEW BOARD · {portalItems.length}</button>}
+          <button onClick={() => setScreen('home')} style={{ ...backBtn, position: 'static' }}>← BACK</button>
+        </div>
+      </div>
+    </main>
+  )
+
+  if (screen === 'board') return (
+    <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
+      {portalStrip}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 10, WebkitOverflowScrolling: 'touch' as any }}>
+        {portalItems.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: 18, paddingTop: 80 }}>The board is empty — add pictures from your phone.</div>
+        ) : (
+          // Masonry via CSS columns: Pinterest pins are mostly portrait and
+          // keep their own shape. Full brightness (Teddy 2026-09-29).
+          <div style={{ columnCount: 3, columnGap: 10 }}>
+            {portalItems.map(it => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={it.id} src={it.src} alt="" onClick={() => setZoomSrc(it.src)} draggable={false}
+                style={{ width: '100%', display: 'block', marginBottom: 10, borderRadius: 8, breakInside: 'avoid' as any, background: '#111' }} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ flexShrink: 0, display: 'flex', gap: 12, justifyContent: 'center', padding: '12px 14px 18px', borderTop: `1px solid ${HAIR}` }}>
+        <button onClick={() => setScreen('portal')} style={{ ...backBtn, position: 'static' }}>+ ADD FROM PHONE</button>
+        <button onClick={() => { setZoomSrc(null); setScreen('home') }} style={{ ...backBtn, position: 'static' }}>✕ CLOSE BOARD</button>
+      </div>
+      {zoomSrc && (
+        <div onClick={() => setZoomSrc(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.94)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, padding: 16 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={zoomSrc} alt="" draggable={false} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />
+        </div>
+      )}
+    </main>
+  )
+
   if (screen === 'home') return (
     <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
       {/* STAFF sits bottom-right; while the NOW PLAYING bar is up it moves
@@ -690,10 +841,10 @@ export default function KioskPage() {
       </div>
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center',
-        flexDirection: canAddTime ? 'row' : 'column',
-        flexWrap: canAddTime ? 'wrap' : 'nowrap',
+        flexDirection: gridTiles ? 'row' : 'column',
+        flexWrap: gridTiles ? 'wrap' : 'nowrap',
         alignContent: 'center',
-        padding: '8px 14px 20px', maxWidth: canAddTime ? 980 : 680,
+        padding: '8px 14px 20px', maxWidth: gridTiles ? 980 : 680,
         width: '100%', margin: '0 auto', boxSizing: 'border-box',
       }}>
         {/* ⚠️ CHECK IN is for the DOOR kiosks only (no ?set=). A tablet mounted ON a set
@@ -735,6 +886,13 @@ export default function KioskPage() {
             <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>
               Stay longer — up to {hoursLabel(headroom)}
             </span>
+          </button>
+        )}
+        {showPortal && (
+          <button style={tile} onClick={() => { setZoomSrc(null); portalCount.current = portalItems.length; setScreen(portalItems.length ? 'board' : 'portal'); touch() }}>
+            <IconPortal />
+            <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: '0.2em' }}>PORTAL</span>
+            <span style={{ fontSize: 17, color: 'rgba(255,255,255,0.42)' }}>Mood board & more, from your phone</span>
           </button>
         )}
         <button style={tile} onClick={() => { setScreen('june'); touch() }}>
