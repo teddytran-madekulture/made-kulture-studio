@@ -1,10 +1,14 @@
 // /api/admin/marketing-tools — the Website Editor's Marketing Tools page.
 //   GET → everything as saved (incl. switched-off pieces and schedules)
 //   PUT { announcement, popup, mobileBar } → sanitised, saved, returned
+//   POST multipart { file } → uploads a pop-up photo to the public 'site' bucket
+//        (marketing/) and returns its URL. Nothing goes live until PUT. The
+//        browser shrinks it first — uploads here pass a 4.5 MB function limit.
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { parseStored, sanitize } from '@/lib/marketing-tools'
+import { randomUUID } from 'crypto'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -28,4 +32,19 @@ export async function PUT(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data?.length) return NextResponse.json({ error: 'Not saved (no row written).' }, { status: 500 })
   return NextResponse.json({ tools })
+}
+
+export async function POST(req: NextRequest) {
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let form: FormData
+  try { form = await req.formData() } catch { return NextResponse.json({ error: 'Expected multipart form-data' }, { status: 400 }) }
+  const file = form.get('file')
+  if (!(file instanceof File)) return NextResponse.json({ error: 'No photo attached' }, { status: 400 })
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return NextResponse.json({ error: 'Use a JPG, PNG or WebP photo' }, { status: 400 })
+  const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+  const path = `marketing/${randomUUID()}.${ext}`
+  const sb = supabaseAdmin()
+  const { error } = await sb.storage.from('site').upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, upsert: false })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ url: sb.storage.from('site').getPublicUrl(path).data.publicUrl })
 }

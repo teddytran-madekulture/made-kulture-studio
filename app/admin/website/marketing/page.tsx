@@ -4,6 +4,8 @@
 // Times are entered in the browser's local time (Houston) and stored as UTC.
 import { useEffect, useState } from 'react'
 import { MARKETING_DEFAULTS, THEMES, type MarketingTools, type Theme } from '@/lib/marketing-tools'
+import { PopupCard } from '@/components/MarketingTools'
+import { shrinkImage } from '@/lib/shrink-image'
 
 const C = { card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 const inp: React.CSSProperties = { background: '#0b0b0d', border: `1px solid ${C.line}`, color: C.text, padding: '9px 11px', fontFamily: 'Inter, sans-serif', fontSize: 13, colorScheme: 'dark', width: '100%', boxSizing: 'border-box' }
@@ -63,9 +65,13 @@ function Schedule({ startAt, endAt, onChange }: { startAt: string | null; endAt:
 const LAUNCH: Pick<MarketingTools, 'announcement' | 'popup' | 'mobileBar'> = {
   announcement: { enabled: true, text: 'Our new booking site is live! Create a free account to book at member rates.', linkLabel: 'Sign up', linkUrl: '/signup', theme: 'gold', startAt: null, endAt: null },
   popup: {
-    enabled: true, headline: 'WELCOME TO THE NEW MADE KULTURE',
-    body: 'Booking just got an upgrade. Prices shown without an account are guest rates. Create a free account and you book at member rates, the same prices you have always paid.',
-    buttonLabel: 'Create free account', buttonUrl: '/signup', delaySec: 3, frequency: 'once', pages: 'all', startAt: null, endAt: null,
+    enabled: true, eyebrow: 'NOW LIVE', headline: 'WELCOME TO\nTHE NEW\nMADE KULTURE',
+    body: "Our new site is live. If anything looks off, email info@madekulture.com and we'll fix it fast.",
+    hl1Title: 'FREE ACCOUNT', hl1Text: "Member rates, the same prices you've always paid.",
+    hl2Title: 'PLUS · $99/YR', hl2Text: 'Book on short notice. Cancel for full credit up to your start.',
+    buttonLabel: 'Create free account', buttonUrl: '/signup', link2Label: 'See Plus', link2Url: '/plus',
+    imageUrl: '', focal: 'center',
+    delaySec: 3, frequency: 'once', pages: 'all', startAt: null, endAt: null,
   },
   mobileBar: { enabled: true, text: 'Free account = member rates', buttonLabel: 'Sign up', buttonUrl: '/signup', startAt: null, endAt: null },
 }
@@ -75,6 +81,7 @@ export default function MarketingToolsPage() {
   const [saved, setSaved] = useState<string>('')
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
   const [unauth, setUnauth] = useState(false)
 
   useEffect(() => {
@@ -97,6 +104,21 @@ export default function MarketingToolsPage() {
       setMsg('Saved. The live site picks it up within about a minute.')
     } catch { setMsg('⚠️ Not saved — check your connection.') }
     finally { setBusy(false) }
+  }
+
+  const uploadPhoto = async (f?: File) => {
+    if (!f || !t) return
+    setPhotoBusy(true); setMsg(null)
+    try {
+      const blob = await shrinkImage(f, 1800, 0.85)   // 4.5 MB function ceiling
+      const fd = new FormData(); fd.append('file', new File([blob], 'popup.jpg', { type: 'image/jpeg' }))
+      const r = await fetch('/api/admin/marketing-tools', { method: 'POST', body: fd })
+      const d = await r.json()
+      if (!r.ok) { setMsg(`⚠️ ${d.error || 'Upload failed.'}`); return }
+      setT(cur => cur ? { ...cur, popup: { ...cur.popup, imageUrl: d.url } } : cur)
+      setMsg('Photo added — SAVE to put it live.')
+    } catch { setMsg('⚠️ Could not read that photo.') }
+    finally { setPhotoBusy(false) }
   }
 
   if (unauth) return <div style={{ padding: 40, fontFamily: 'Inter' }}>Sign in to the admin first.</div>
@@ -148,10 +170,44 @@ export default function MarketingToolsPage() {
       <div style={card}>
         <Header title="PROMOTIONAL POP-UP" desc="A box that opens over the page a few seconds after someone arrives."
           on={p.enabled} onToggle={v => setP({ enabled: v })} st={status(p, !!(p.headline || p.body))} />
-        <label><span style={lbl}>Headline</span><input value={p.headline} maxLength={80} onChange={e => setP({ headline: e.target.value })} placeholder="HOLIDAY SPECIAL" style={inp} /></label>
+        {/* Photo — "The Cover": fills the pop-up, words sit over its lower part */}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ width: 96, height: 72, background: p.imageUrl ? `url("${p.imageUrl}") center/cover` : '#0b0b0d', border: `1px solid ${C.line}`, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={lbl}>Photo (optional) — drop in any image. Portrait or landscape both work; the text sits over the bottom.</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <label style={{ ...small, color: C.accent, border: `1px solid ${C.line}`, padding: '7px 12px', cursor: 'pointer' }}>
+                {photoBusy ? 'Uploading…' : p.imageUrl ? 'Replace photo' : 'Upload photo'}
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={photoBusy} onChange={e => uploadPhoto(e.target.files?.[0])} />
+              </label>
+              {p.imageUrl && <button onClick={() => setP({ imageUrl: '' })} style={{ ...small, background: 'none', border: `1px solid ${C.line}`, color: '#f87171', padding: '7px 12px', cursor: 'pointer' }}>Remove</button>}
+              {p.imageUrl && (
+                <select value={p.focal} onChange={e => setP({ focal: e.target.value as any })} style={{ ...inp, width: 'auto' }}>
+                  <option value="top" style={opt}>Keep the top in view</option>
+                  <option value="center" style={opt}>Keep the middle in view</option>
+                  <option value="bottom" style={opt}>Keep the bottom in view</option>
+                </select>
+              )}
+            </div>
+          </div>
+        </div>
+        <div style={grid2}>
+          <label><span style={lbl}>Small line above the headline (optional)</span><input value={p.eyebrow} maxLength={40} onChange={e => setP({ eyebrow: e.target.value })} placeholder="NOW LIVE" style={inp} /></label>
+        </div>
+        <label style={{ display: 'block', marginTop: 12 }}><span style={lbl}>Headline — press Enter to break it into lines</span><textarea value={p.headline} maxLength={80} rows={3} onChange={e => setP({ headline: e.target.value })} placeholder={'WELCOME TO\nTHE NEW\nMADE KULTURE'} style={{ ...inp, resize: 'vertical' }} /></label>
         <label style={{ display: 'block', marginTop: 12 }}><span style={lbl}>Message</span>
           <textarea value={p.body} maxLength={600} rows={4} onChange={e => setP({ body: e.target.value })} style={{ ...inp, resize: 'vertical' }} />
         </label>
+        <div style={{ ...grid2, marginTop: 12 }}>
+          <label><span style={lbl}>Note 1 title (optional)</span><input value={p.hl1Title} maxLength={40} onChange={e => setP({ hl1Title: e.target.value })} placeholder="FREE ACCOUNT" style={inp} /></label>
+          <label><span style={lbl}>Note 1 text</span><input value={p.hl1Text} maxLength={140} onChange={e => setP({ hl1Text: e.target.value })} style={inp} /></label>
+          <label><span style={lbl}>Note 2 title (optional, shown in gold)</span><input value={p.hl2Title} maxLength={40} onChange={e => setP({ hl2Title: e.target.value })} placeholder="PLUS · $99/YR" style={inp} /></label>
+          <label><span style={lbl}>Note 2 text</span><input value={p.hl2Text} maxLength={140} onChange={e => setP({ hl2Text: e.target.value })} style={inp} /></label>
+        </div>
+        <div style={{ ...grid2, marginTop: 12 }}>
+          <label><span style={lbl}>Second link text (optional)</span><input value={p.link2Label} maxLength={40} onChange={e => setP({ link2Label: e.target.value })} placeholder="See Plus" style={inp} /></label>
+          <label><span style={lbl}>Second link goes to</span><input value={p.link2Url} onChange={e => setP({ link2Url: e.target.value })} placeholder="/plus" style={inp} /></label>
+        </div>
         <div style={{ ...grid2, marginTop: 12 }}>
           <label><span style={lbl}>Button text (optional)</span><input value={p.buttonLabel} maxLength={40} onChange={e => setP({ buttonLabel: e.target.value })} placeholder="Create free account" style={inp} /></label>
           <label><span style={lbl}>Button goes to</span><input value={p.buttonUrl} onChange={e => setP({ buttonUrl: e.target.value })} placeholder="/signup or https://…" style={inp} /></label>
@@ -175,11 +231,9 @@ export default function MarketingToolsPage() {
         {(p.headline || p.body) && (
           <div style={{ marginTop: 14 }}>
             <div style={lbl}>Preview</div>
-            <div style={{ background: '#0d0d0d', border: '1px solid rgba(212,168,67,0.35)', padding: '24px 22px', maxWidth: 420 }}>
-              <div style={{ width: 28, height: 2, background: C.accent, marginBottom: 12 }} />
-              {p.headline && <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, lineHeight: 1.05, marginBottom: 10 }}>{p.headline}</div>}
-              {p.body && <div style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 1.55, color: 'rgba(255,255,255,0.8)', whiteSpace: 'pre-wrap' }}>{p.body}</div>}
-              {p.buttonLabel && <div style={{ marginTop: 18, background: C.accent, color: '#080808', textAlign: 'center', padding: '11px', fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{p.buttonLabel}</div>}
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <div style={{ width: 'min(560px, 100%)' }}><PopupCard p={p} /></div>
+              <div style={{ width: 300 }}><div style={{ ...small, marginBottom: 4 }}>On a phone</div><PopupCard p={p} narrow /></div>
             </div>
           </div>
         )}

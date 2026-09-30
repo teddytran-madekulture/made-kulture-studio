@@ -12,8 +12,14 @@ export interface Announcement {
   enabled: boolean; text: string; linkLabel: string; linkUrl: string
   theme: Theme; startAt: string | null; endAt: string | null
 }
+export type PopupFocal = 'top' | 'center' | 'bottom'
 export interface Popup {
   enabled: boolean; headline: string; body: string; buttonLabel: string; buttonUrl: string
+  // "The Cover" layout (2026-09-30): an optional photo fills the pop-up with the
+  // text over its lower part. No photo ⇒ the same layout on a dark gradient.
+  eyebrow: string; imageUrl: string; focal: PopupFocal
+  link2Label: string; link2Url: string          // quiet text link beside the button
+  hl1Title: string; hl1Text: string; hl2Title: string; hl2Text: string   // two small side-by-side notes
   delaySec: number; frequency: 'once' | 'session' | 'always'; pages: 'all' | 'home'
   startAt: string | null; endAt: string | null
 }
@@ -25,7 +31,9 @@ export interface MarketingTools { announcement: Announcement; popup: Popup; mobi
 
 export const MARKETING_DEFAULTS: MarketingTools = {
   announcement: { enabled: false, text: '', linkLabel: '', linkUrl: '', theme: 'gold', startAt: null, endAt: null },
-  popup: { enabled: false, headline: '', body: '', buttonLabel: '', buttonUrl: '', delaySec: 3, frequency: 'once', pages: 'all', startAt: null, endAt: null },
+  popup: { enabled: false, headline: '', body: '', buttonLabel: '', buttonUrl: '',
+    eyebrow: '', imageUrl: '', focal: 'center', link2Label: '', link2Url: '', hl1Title: '', hl1Text: '', hl2Title: '', hl2Text: '',
+    delaySec: 3, frequency: 'once', pages: 'all', startAt: null, endAt: null },
   mobileBar: { enabled: false, text: '', buttonLabel: '', buttonUrl: '', startAt: null, endAt: null },
   updatedAt: null,
 }
@@ -64,6 +72,13 @@ export function safeUrl(u: unknown): string {
   return ''
 }
 
+// Pop-up photos must come from our own Supabase storage (the upload route puts
+// them there) — anything else is dropped rather than hot-linked.
+export function safeImageUrl(u: unknown): string {
+  const s = String(u ?? '').trim().slice(0, 600)
+  return /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\//i.test(s) ? s : ''
+}
+
 const str = (v: unknown, max: number) => String(v ?? '').slice(0, max)
 const iso = (v: unknown): string | null => { const s = String(v ?? '').trim(); if (!s) return null; const t = Date.parse(s); return Number.isFinite(t) ? new Date(t).toISOString() : null }
 
@@ -78,6 +93,10 @@ export function sanitize(input: any): MarketingTools {
     },
     popup: {
       enabled: !!p.enabled, headline: str(p.headline, 80), body: str(p.body, 600), buttonLabel: str(p.buttonLabel, 40), buttonUrl: safeUrl(p.buttonUrl),
+      eyebrow: str(p.eyebrow, 40), imageUrl: safeImageUrl(p.imageUrl),
+      focal: (['top', 'center', 'bottom'] as const).includes(p.focal) ? p.focal : 'center',
+      link2Label: str(p.link2Label, 40), link2Url: safeUrl(p.link2Url),
+      hl1Title: str(p.hl1Title, 40), hl1Text: str(p.hl1Text, 140), hl2Title: str(p.hl2Title, 40), hl2Text: str(p.hl2Text, 140),
       delaySec: Math.min(30, Math.max(0, Math.round(Number(p.delaySec) || 0))),
       frequency: (['once', 'session', 'always'] as const).includes(p.frequency) ? p.frequency : 'once',
       pages: p.pages === 'home' ? 'home' : 'all',
@@ -102,7 +121,9 @@ export function activeOnly(t: MarketingTools, now = Date.now()) {
   return {
     announcement: a.enabled && a.text && inWindow(a, now) ? { text: a.text, linkLabel: a.linkLabel, linkUrl: a.linkUrl, theme: a.theme } : null,
     popup: p.enabled && (p.headline || p.body) && inWindow(p, now)
-      ? { headline: p.headline, body: p.body, buttonLabel: p.buttonLabel, buttonUrl: p.buttonUrl, delaySec: p.delaySec, frequency: p.frequency, pages: p.pages, version: t.updatedAt || '0' }
+      ? { headline: p.headline, body: p.body, buttonLabel: p.buttonLabel, buttonUrl: p.buttonUrl,
+          eyebrow: p.eyebrow, imageUrl: p.imageUrl, focal: p.focal, link2Label: p.link2Label, link2Url: p.link2Url,
+          hl1Title: p.hl1Title, hl1Text: p.hl1Text, hl2Title: p.hl2Title, hl2Text: p.hl2Text, delaySec: p.delaySec, frequency: p.frequency, pages: p.pages, version: t.updatedAt || '0' }
       : null,
     mobileBar: m.enabled && m.text && inWindow(m, now) ? { text: m.text, buttonLabel: m.buttonLabel, buttonUrl: m.buttonUrl, version: t.updatedAt || '0' } : null,
   }

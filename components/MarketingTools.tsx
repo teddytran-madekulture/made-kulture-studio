@@ -72,6 +72,70 @@ export function AnnouncementBar() {
   )
 }
 
+// ── The pop-up card: "The Cover" (2026-09-30) ───────────────────────────────
+// A photo fills the card and the words sit over its lower part on a SOFT shade —
+// deliberately lighter than the rest of the site (Teddy: "our site is already
+// dark"), so the photo stays bright and the pop-up reads as something new.
+// No photo ⇒ same layout on a warm dark gradient. Exported so the editor's
+// preview is this exact component, not a look-alike that can drift.
+export type PopupCardData = {
+  headline: string; body: string; buttonLabel: string; buttonUrl: string
+  eyebrow?: string; imageUrl?: string; focal?: 'top' | 'center' | 'bottom'
+  link2Label?: string; link2Url?: string
+  hl1Title?: string; hl1Text?: string; hl2Title?: string; hl2Text?: string
+}
+const FOCAL: Record<string, string> = { top: 'center 20%', center: 'center 40%', bottom: 'center 75%' }
+
+export function PopupCard({ p, onClose, narrow }: { p: PopupCardData; onClose?: () => void; narrow?: boolean }) {
+  const hasImg = !!p.imageUrl
+  const hls = [[p.hl1Title, p.hl1Text], [p.hl2Title, p.hl2Text]].filter(([t, x]) => t || x) as [string, string][]
+  const mono = '"JetBrains Mono", ui-monospace, monospace'
+  return (
+    <div style={{
+      position: 'relative', width: '100%', minHeight: hasImg ? (narrow ? 480 : 540) : 0, color: '#fff', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 12, padding: narrow ? '26px 22px 24px' : '30px 30px 28px',
+      paddingTop: hasImg ? (narrow ? 180 : 220) : (narrow ? 34 : 40),
+      background: hasImg
+        ? `linear-gradient(to top, rgba(20,12,12,0.88) 0%, rgba(20,12,12,0.58) 34%, rgba(20,12,12,0) 64%), url("${p.imageUrl}") ${FOCAL[p.focal || 'center']}/cover`
+        : 'linear-gradient(160deg, #1d1512 0%, #0f0d0c 60%)',
+      border: hasImg ? 'none' : '1px solid rgba(212,168,67,0.3)', boxShadow: '0 30px 90px rgba(0,0,0,0.55)',
+    }}>
+      {onClose && (
+        <button aria-label="Close" onClick={onClose} style={{ position: 'absolute', top: 8, right: 10, background: 'none', border: 'none', color: '#fff', textShadow: '0 1px 8px rgba(0,0,0,0.6)', fontSize: 26, cursor: 'pointer', padding: 6, lineHeight: 1 }}>×</button>
+      )}
+      {p.eyebrow && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontFamily: mono, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', color: '#f0c96a' }}>
+          <span style={{ width: 36, height: 1, background: 'rgba(255,255,255,0.6)' }} />{p.eyebrow}
+        </div>
+      )}
+      {p.headline && (
+        <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontWeight: 400, fontSize: narrow ? 42 : 'clamp(40px, 7vw, 62px)', lineHeight: 0.92, letterSpacing: '0.01em', margin: 0, textTransform: 'uppercase', whiteSpace: 'pre-line', textShadow: hasImg ? '0 2px 24px rgba(0,0,0,0.35)' : undefined }}>{p.headline}</h2>
+      )}
+      {p.body && <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14.5, lineHeight: 1.6, color: 'rgba(255,255,255,0.88)', margin: 0, whiteSpace: 'pre-wrap' }}>{p.body}</p>}
+      {hls.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: narrow || hls.length === 1 ? '1fr' : '1fr 1fr', gap: 16, borderTop: '1px solid rgba(255,255,255,0.28)', paddingTop: 14 }}>
+          {hls.map(([t, x], k) => (
+            <div key={k}>
+              {t && <div style={{ fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 4, color: k === 1 ? '#f0c96a' : '#fff' }}>{t}</div>}
+              {x && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.5, color: 'rgba(255,255,255,0.85)' }}>{x}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+      {((p.buttonLabel && p.buttonUrl) || (p.link2Label && p.link2Url)) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', marginTop: 6 }}>
+          {p.buttonLabel && p.buttonUrl && (
+            <Linkish href={p.buttonUrl} onClick={onClose} style={{ background: '#d4a843', color: '#080808', textDecoration: 'none', padding: '14px 22px', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>{p.buttonLabel} ↗</Linkish>
+          )}
+          {p.link2Label && p.link2Url && (
+            <Linkish href={p.link2Url} onClick={onClose} style={{ color: '#fff', textDecoration: 'none', borderBottom: '1px solid rgba(255,255,255,0.5)', paddingBottom: 3, fontFamily: mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}>{p.link2Label} →</Linkish>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Pop-up + mobile info bar ─────────────────────────────────────────────────
 export function MarketingOverlays() {
   const m = useMarketing()
@@ -125,20 +189,8 @@ export function MarketingOverlays() {
         <div role="dialog" aria-modal="true" aria-label={p.headline || 'Announcement'} onClick={closePopup} style={{
           position: 'fixed', inset: 0, zIndex: 9500, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
         }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            position: 'relative', width: 'min(460px, 100%)', background: '#0d0d0d', border: '1px solid rgba(212,168,67,0.35)',
-            padding: '36px 28px 28px', color: '#fff', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', maxHeight: 'calc(100% - 32px)', overflowY: 'auto',
-          }}>
-            <button aria-label="Close" onClick={closePopup} style={{ position: 'absolute', top: 8, right: 10, background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: 24, cursor: 'pointer', padding: 6, lineHeight: 1 }}>×</button>
-            <div style={{ width: 28, height: 2, background: '#d4a843', marginBottom: 16 }} />
-            {p.headline && <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, lineHeight: 1.05, letterSpacing: '0.01em', margin: '0 0 14px', fontWeight: 400 }}>{p.headline}</h2>}
-            {p.body && <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, lineHeight: 1.6, color: 'rgba(255,255,255,0.8)', margin: 0, whiteSpace: 'pre-wrap' }}>{p.body}</p>}
-            {p.buttonLabel && p.buttonUrl && (
-              <Linkish href={p.buttonUrl} onClick={closePopup} style={{
-                display: 'block', marginTop: 24, background: '#d4a843', color: '#080808', textAlign: 'center', textDecoration: 'none',
-                padding: '14px 18px', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
-              }}>{p.buttonLabel}</Linkish>
-            )}
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(640px, 100%)', maxHeight: 'calc(100% - 32px)', overflowY: 'auto' }}>
+            <PopupCard p={p} onClose={closePopup} narrow={phone} />
           </div>
         </div>
       )}
