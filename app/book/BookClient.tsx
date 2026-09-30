@@ -545,8 +545,17 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   // If a start hour was pre-filled from the availability chart, begin in 'end' mode
   const [selecting, setSelecting] = useState<'start' | 'end'>(startParam ? 'end' : 'start')
 
+  // ⚠️ A slot is a START or an END, and "booked" means different things for each.
+  // As a start, h is taken if a booking is running at h. As an END, h is fine as
+  // long as nothing runs between the chosen start and h — ending at 4:00 when the
+  // next booking starts at 4:00 is back-to-back, not a clash. Treating the END
+  // like a start made every "ends when the next one begins" session unbookable
+  // (a guest could not pick 3-4 before a 4pm buyout, 2026-10-01).
+  const isEndCandidate = (h: number) => selecting === 'end' && booking.startHour !== null && h > booking.startHour
+  const isBookedAsEnd = (h: number) => bookedSlots.some(b => b.start < h && b.end > (booking.startHour ?? 0))
+
   const handleHourClick = (h: number) => {
-    if (isHourBooked(h)) return
+    if (isEndCandidate(h) ? isBookedAsEnd(h) : isHourBooked(h)) return
     if (selecting === 'start') {
       // Start times are on the hour — the door code activates on the hour, so there's
       // no early entry. Half-hour slots are selectable only as END times.
@@ -976,7 +985,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
               {[...SLOTS, CLOSE_HOUR].map(h => {
                 const isPast    = bookingIsToday && h < nowChiDec
-                const booked    = isHourBooked(h)
+                const booked    = isEndCandidate(h) ? isBookedAsEnd(h) : isHourBooked(h)
                 // While picking a start, disable any slot too late to fit the minimum
                 // before closing (e.g. 9:30pm, and 10pm itself). 10pm stays available
                 // as an END once a start is chosen.
