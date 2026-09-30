@@ -14,10 +14,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import KioskJukeboxBar from '@/components/KioskJukeboxBar'
+import KioskShowcase, { type ShowcaseEditorial } from '@/components/KioskShowcase'
 import qrcode from 'qrcode-generator'
 import { POSE_CATEGORIES, POSE_GUIDE_ENABLED } from '@/lib/pose-categories'
 
 const IDLE_MS = 90_000
+// SHOWCASE: how long the home screen sits untouched, with nobody booked, before
+// the tablet turns into the Featured Editorial gallery. And how often it asks
+// whether the editorial changed (CDN-cached server side; see the route).
+const SHOWCASE_AFTER_MS = 120_000
+const SHOWCASE_REFRESH_MS = 60 * 60_000
 
 // Muted champagne palette (luxury, not loud)
 const CHAMP = '#c9b27e'
@@ -764,6 +770,38 @@ export default function KioskPage() {
     if ((screen === 'portal' || screen === 'board' || screen === 'poses') && !showPortal) { setZoomIdx(null); setPoseIdx(null); setScreen('home') }
   }, [screen, showPortal])
 
+  // ── SHOWCASE (2026-09-30) ─────────────────────────────────────────────────
+  // Idle + nobody booked on this set (occupancy already reaches 30 min ahead,
+  // so it gets out of the way before the next guest arrives) → the Featured
+  // Editorial takes the screen. Door tablets have no occupancy and use idle only.
+  // ⚠️ One fetch an hour, CDN-cached — NOT a poll. The idle check below is a
+  // local timer and makes zero network calls.
+  const [showcase, setShowcase] = useState<ShowcaseEditorial | null>(null)
+  const [showcaseOn, setShowcaseOn] = useState(false)
+  const lastInteract = useRef(Date.now())
+  useEffect(() => {
+    const load = () => fetch('/api/kiosk/showcase').then(r => r.json()).then(d => setShowcase(d?.editorial ?? null)).catch(() => {})
+    load()
+    const iv = setInterval(load, SHOWCASE_REFRESH_MS)
+    return () => clearInterval(iv)
+  }, [])
+  useEffect(() => {
+    // Any touch counts as someone using the tablet. This listener only RECORDS
+    // it — it must not hide the showcase itself, or the tap that dismisses it
+    // would fall through and press whatever tile is underneath.
+    const mark = () => { lastInteract.current = Date.now() }
+    window.addEventListener('pointerdown', mark, true)
+    return () => window.removeEventListener('pointerdown', mark, true)
+  }, [])
+  const canShowcase = booted && screen === 'home' && !occLive && !!showcase && showcase.photos.length > 0
+  useEffect(() => {
+    if (!canShowcase) { setShowcaseOn(false); return }
+    const iv = setInterval(() => {
+      if (!ringOpen.current && Date.now() - lastInteract.current >= SHOWCASE_AFTER_MS) setShowcaseOn(true)
+    }, 10_000)
+    return () => clearInterval(iv)
+  }, [canShowcase])
+
   // ── PORTAL screens ────────────────────────────────────────────────────────
   // The session strip is ALWAYS on top of the board, so the countdown, the
   // amber/red warnings and ADD TIME keep working while references are up.
@@ -976,6 +1014,12 @@ export default function KioskPage() {
         <button onClick={() => { setZoomIdx(null); setScreen('home') }} style={{ ...backBtn, position: 'static' }}>✕ CLOSE BOARD</button>
       </div>
     </main>
+  )
+
+  if (screen === 'home' && showcaseOn && canShowcase && showcase) return (
+    <KioskShowcase e={showcase}
+      portrait={typeof window === 'undefined' ? true : window.innerHeight >= window.innerWidth}
+      onDismiss={() => { lastInteract.current = Date.now(); setShowcaseOn(false); touch() }} />
   )
 
   if (screen === 'home') return (
