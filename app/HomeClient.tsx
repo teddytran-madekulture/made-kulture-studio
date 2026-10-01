@@ -349,9 +349,10 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           </div>
           <div>
             <div className="label" style={{ marginBottom:24 }}>STUDIO</div>
-            {['Sets','Pricing','Book','Contact'].map(l => (
+            {/* Pricing lives on the sets page — there is no /pricing route. */}
+            {[['Sets','/sets'],['Pricing','/sets'],['Book','/book'],['Contact','/contact']].map(([l, href]) => (
               <div key={l} style={{ marginBottom:14 }}>
-                <Link href={`/${l.toLowerCase()}`} style={{ fontSize:14, color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>{l}</Link>
+                <Link href={href} style={{ fontSize:14, color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>{l}</Link>
               </div>
             ))}
           </div>

@@ -42,7 +42,7 @@ const NAV_CLEAR_FALLBACK = 106
 // The full-warehouse buyout is a fixed offering, not a set row — kept here.
 const STUDIO = {
   name: 'Full Studio Takeover', price: 400,
-  photo: '/images/sets/studio-one.jpg',
+  photo: '/images/sets/studio-one.webp',
   gradient: 'linear-gradient(135deg, #0a0806 0%, #161210 100%)',
   desc: 'The entire warehouse is yours. Every set, all equipment, and full creative freedom — with zero other productions on site. Built for large crews, music videos, brand campaigns, and productions that need room to breathe.',
   capacity: '30 people',
