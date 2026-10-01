@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CREATIVE_ROLES } from '@/lib/roles'
+import { cleanIgHandle } from '@/lib/directory-listing'
 import RolePicker from '@/components/RolePicker'
 
 export default function WelcomePage() {
@@ -37,7 +38,7 @@ export default function WelcomePage() {
     await fetch('/api/account/profile', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        full_name: name, instagram: instagram.trim().replace(/^@/, '') || null,
+        full_name: name, instagram: cleanIgHandle(instagram) || null,
         roles, directory_opt_in: directoryOptIn, onboarded: true,
       }),
     })

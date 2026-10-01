@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CREATIVE_ROLES } from '@/lib/roles'
+import { cleanIgHandle } from '@/lib/directory-listing'
 import RolePicker from '@/components/RolePicker'
 
 export default function SignupPage() {
@@ -45,7 +46,7 @@ export default function SignupPage() {
     e.preventDefault()
     if (form.password !== password2) { setError('Passwords do not match'); return }
     setLoading(true); setError('')
-    const igHandle = form.instagram.trim().replace(/^@/, '')
+    const igHandle = cleanIgHandle(form.instagram)
     const { error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,

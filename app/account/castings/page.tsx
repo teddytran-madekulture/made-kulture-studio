@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { track } from '@/lib/track'
 import Link from 'next/link'
 import { CREATIVE_ROLES } from '@/lib/roles'
+import FinishProfileCard from '@/components/FinishProfileCard'
 
 type Casting = {
   id: string
@@ -31,6 +32,7 @@ export default function CastingsPage() {
   const [items, setItems] = useState<Casting[]>([])
   const [loading, setLoading] = useState(true)
   const [optedOut, setOptedOut] = useState(false)
+  const [incomplete, setIncomplete] = useState<string[] | null>(null)
   const [comp, setComp] = useState('')
   const [role, setRole] = useState('')
   const [q, setQ] = useState('')
@@ -51,8 +53,9 @@ export default function CastingsPage() {
     fetch('/api/castings?' + p.toString())
       .then(async r => {
         const d = await r.json().catch(() => ({}))
-        if (r.status === 403 && d.optedOut) { setOptedOut(true); setItems([]) }
-        else { setOptedOut(false); setItems(d.castings ?? []) }
+        if (r.status === 403 && d.incomplete) { setIncomplete(d.blockers ?? []); setItems([]) }
+        else if (r.status === 403 && d.optedOut) { setOptedOut(true); setItems([]) }
+        else { setOptedOut(false); setIncomplete(null); setItems(d.castings ?? []) }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -82,6 +85,13 @@ export default function CastingsPage() {
     }}>{label}</button>
   )
   const input: React.CSSProperties = { background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 6, padding: '9px 12px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-fg)', outline: 'none' }
+
+  if (incomplete) return (
+    <div>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 24px' }}>CASTINGS</h1>
+      <FinishProfileCard blockers={incomplete} what="The casting board" />
+    </div>
+  )
 
   if (optedOut) return (
     <div>

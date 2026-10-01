@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { colorByKey } from '@/lib/profile-colors'
 import { cleanCredits } from '@/lib/profile-credits'
+import { cleanIgHandle } from '@/lib/directory-listing'
 
 // Service role client — needed to read the customers table (RLS restricts to service_role only)
 const serviceSupabase = createServiceClient(
@@ -44,7 +45,9 @@ export async function PUT(req: NextRequest) {
   const body = await req.json()
   const { full_name, phone, instagram, sms_opt_in, roles, directory_opt_in, avatar_url } = body
 
-  const patch: Record<string, unknown> = { id: user.id, full_name, phone, instagram, sms_opt_in }
+  // A pasted Instagram URL is stored as the bare handle (lib/directory-listing).
+  const igClean = typeof instagram === 'string' ? (cleanIgHandle(instagram) || null) : instagram
+  const patch: Record<string, unknown> = { id: user.id, full_name, phone, instagram: igClean, sms_opt_in }
   if (Array.isArray(roles)) patch.roles = roles.map((r: unknown) => String(r)).filter(Boolean)
   if (typeof directory_opt_in === 'boolean') patch.directory_opt_in = directory_opt_in
   if (typeof avatar_url === 'string') patch.avatar_url = avatar_url

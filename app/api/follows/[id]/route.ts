@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,8 +17,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view this.' }, { status: 401 })
 
-  const { data: me } = await service.from('customer_profiles').select('directory_opt_in').eq('id', user.id).maybeSingle()
-  if (!me?.directory_opt_in) return NextResponse.json({ error: 'Join the directory to view this.', optedOut: true }, { status: 403 })
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'view this')
 
   const type = req.nextUrl.searchParams.get('type') === 'following' ? 'following' : 'followers'
 

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,14 +16,13 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: me } = await service.from('customer_profiles').select('directory_opt_in').eq('id', user.id).maybeSingle()
-  if (!me?.directory_opt_in) return NextResponse.json({ error: 'Join the directory to follow members.' }, { status: 403 })
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'follow members')
 
   const { targetId } = await req.json().catch(() => ({}))
   if (!targetId || targetId === user.id) return NextResponse.json({ error: 'Invalid target.' }, { status: 400 })
 
-  const { data: t } = await service.from('customer_profiles').select('directory_opt_in').eq('id', targetId).maybeSingle()
-  if (!t?.directory_opt_in) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
+  if (!(await memberAccess(service, targetId)).listed) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
 
   const { error } = await service.from('follows')
     .upsert({ follower_id: user.id, following_id: targetId }, { onConflict: 'follower_id,following_id' })

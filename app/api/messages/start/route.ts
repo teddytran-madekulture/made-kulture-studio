@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,13 +25,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "You can't message yourself." }, { status: 400 })
   }
 
-  // Members-only: both parties must be listed in the directory.
-  const { data: parts } = await service
-    .from('customer_profiles').select('id, directory_opt_in').in('id', [user.id, toUserId])
-  const me = parts?.find(p => p.id === user.id)
-  const them = parts?.find(p => p.id === toUserId)
-  if (!me?.directory_opt_in) return NextResponse.json({ error: 'Join the directory to message members.' }, { status: 403 })
-  if (!them) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
+  // Members-only: both parties must be LISTED in the directory (opted in AND a
+  // complete profile). Before 2026-10-01 only the sender's toggle was checked.
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'message members')
+  if (!(await memberAccess(service, toUserId)).listed) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
 
   const [a, b] = [user.id, toUserId].sort()
 

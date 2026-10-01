@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,8 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!c) return NextResponse.json({ error: 'Casting not found.' }, { status: 404 })
   if (c.author_id !== user.id) return NextResponse.json({ error: 'Only the author can invite.' }, { status: 403 })
 
-  const { data: t } = await service.from('customer_profiles').select('directory_opt_in').eq('id', toUserId).maybeSingle()
-  if (!t?.directory_opt_in) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
+  if (!(await memberAccess(service, toUserId)).listed) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
 
   const { data: meProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
   const inviterName = meProf?.full_name || 'A member'

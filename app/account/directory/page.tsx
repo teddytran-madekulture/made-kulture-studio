@@ -5,6 +5,7 @@ import { CREATIVE_ROLES } from '@/lib/roles'
 import { track } from '@/lib/track'
 import FoundingBadge, { HexCrest } from '@/components/FoundingBadge'
 import { colorVars, colorByKey } from '@/lib/profile-colors'
+import FinishProfileCard from '@/components/FinishProfileCard'
 
 interface Member {
   id: string
@@ -40,6 +41,8 @@ export default function DirectoryPage() {
   const [members, setMembers]     = useState<Member[]>([])
   const [loading, setLoading]     = useState(true)
   const [optedOut, setOptedOut]   = useState(false)
+  // Opted in but not listed (incomplete profile) — what's missing, or null.
+  const [incomplete, setIncomplete] = useState<string[] | null>(null)
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
 
   const [selected, setSelected]   = useState<string[]>([])
@@ -65,8 +68,9 @@ export default function DirectoryPage() {
     fetch('/api/directory')
       .then(async r => {
         const d = await r.json().catch(() => ({}))
-        if (r.status === 403 && d.optedOut) { setOptedOut(true); setMembers([]) }
-        else { setOptedOut(false); setMembers(d.members ?? []); if (d.founding) setFounding(d.founding) }
+        if (r.status === 403 && d.incomplete) { setIncomplete(d.blockers ?? []); setMembers([]) }
+        else if (r.status === 403 && d.optedOut) { setOptedOut(true); setMembers([]) }
+        else { setOptedOut(false); setIncomplete(null); setMembers(d.members ?? []); if (d.founding) setFounding(d.founding) }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -162,7 +166,9 @@ export default function DirectoryPage() {
         <a href="/account/profile" style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', textDecoration: 'underline' }}>profile</a>.
       </p>
 
-      {optedOut ? (
+      {incomplete ? (
+        <FinishProfileCard blockers={incomplete} what="Browsing the directory" />
+      ) : optedOut ? (
         <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '28px 24px', maxWidth: 520 }}>
           <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: 'var(--t-gold)', marginBottom: 8 }}>You&apos;re not in the directory</div>
           <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', lineHeight: 1.6, margin: '0 0 18px' }}>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -10,11 +11,6 @@ const service = createService(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-async function requireMember(userId: string) {
-  const { data } = await service
-    .from('customer_profiles').select('directory_opt_in').eq('id', userId).maybeSingle()
-  return !!data?.directory_opt_in
-}
 
 // GET /api/castings?role=&comp=&q=&mine= — open castings (members-only), newest
 // first, enriched with author + participant counts.
@@ -22,9 +18,8 @@ export async function GET(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view castings.' }, { status: 401 })
-  if (!(await requireMember(user.id))) {
-    return NextResponse.json({ error: 'Join the directory to view castings.', optedOut: true }, { status: 403 })
-  }
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'view castings')
 
   const sp = req.nextUrl.searchParams
   const role = sp.get('role'), comp = sp.get('comp'), q = sp.get('q'), mine = sp.get('mine')
@@ -107,9 +102,8 @@ export async function POST(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!(await requireMember(user.id))) {
-    return NextResponse.json({ error: 'Join the directory to post castings.' }, { status: 403 })
-  }
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'post castings')
 
   // Cap active castings per member (open + not expired).
   const { count: activeCount } = await service

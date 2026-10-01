@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { sendCastingInterestEmail } from '@/lib/email'
 import { sendCastingInterestSMS } from '@/lib/sms'
 
@@ -18,9 +19,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: me } = await service
-    .from('customer_profiles').select('directory_opt_in').eq('id', user.id).maybeSingle()
-  if (!me?.directory_opt_in) return NextResponse.json({ error: 'Join the directory to respond.' }, { status: 403 })
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'respond to castings')
 
   const { data: c } = await service.from('castings').select('author_id, status').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Casting not found.' }, { status: 404 })

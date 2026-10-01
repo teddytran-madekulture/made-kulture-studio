@@ -45,3 +45,13 @@ export function profileBlockers(p: DirectoryProfile, hasPhoto: boolean): Listing
 export function isProfileComplete(p: DirectoryProfile, hasPhoto: boolean): boolean {
   return profileBlockers(p, hasPhoto).length === 0
 }
+
+/** An Instagram handle as typed, cleaned: a pasted profile URL
+ *  (https://www.instagram.com/name?igsh=…) becomes `name`, and a leading @ is
+ *  dropped. Case is kept. Pure, so signup, welcome and the profile API share it. */
+export function cleanIgHandle(v: unknown): string {
+  let s = String(v ?? '').trim()
+  const m = s.match(/instagram\.com\/([A-Za-z0-9._]+)/i)
+  if (m) s = m[1]
+  return s.replace(/^@+/, '').replace(/[/?#\s].*$/, '').trim()
+}

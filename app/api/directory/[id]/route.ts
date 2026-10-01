@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 
 const service = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,11 +16,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view profiles.' }, { status: 401 })
 
-  const { data: me } = await service
-    .from('customer_profiles').select('directory_opt_in').eq('id', user.id).maybeSingle()
-  if (!me?.directory_opt_in) {
-    return NextResponse.json({ error: 'Join the directory to view members.', optedOut: true }, { status: 403 })
-  }
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'view members')
 
   const { data: p } = await service
     .from('customer_profiles')
@@ -27,8 +25,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq('id', params.id)
     .maybeSingle()
 
-  // Only surface members who are actually listed.
-  if (!p || !p.directory_opt_in) {
+  // Only surface members who are actually listed — opted in AND complete, the
+  // same test the directory grid uses, so a profile the grid hides can't be
+  // reached by URL either.
+  if (!p || !(p.id === user.id || (await memberAccess(service, p.id)).listed)) {
     return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
   }
 

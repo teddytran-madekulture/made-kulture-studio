@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { isProfileComplete } from '@/lib/directory-listing'
 import { claimFoundingSpots, FOUNDING_CAP } from '@/lib/founding'
 
@@ -17,16 +18,10 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view the directory.' }, { status: 401 })
 
-  // Access rule: only members who are themselves visible in the directory may
-  // browse it. Opting out of visibility also opts you out of viewing.
-  const { data: me } = await service
-    .from('customer_profiles').select('directory_opt_in').eq('id', user.id).maybeSingle()
-  if (!me?.directory_opt_in) {
-    return NextResponse.json(
-      { error: 'Join the directory to browse members.', optedOut: true },
-      { status: 403 }
-    )
-  }
+  // Access rule: only members who are themselves LISTED (opted in AND a
+  // complete profile) may browse it. See lib/directory-access.ts.
+  const me = await memberAccess(service, user.id)
+  if (!me.listed) return notListedResponse(me, 'browse members')
 
   const role = req.nextUrl.searchParams.get('role')
 
