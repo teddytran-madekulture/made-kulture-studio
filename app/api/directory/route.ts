@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Members with at least one portfolio image (one query, built into a Set).
-  const { data: pics } = await service.from('portfolio_images').select('user_id, url, is_mature, hidden, sort_order')
+  const { data: pics } = await service.from('portfolio_images').select('user_id, url, is_mature, hidden, explore_hidden, sort_order')
   const withPhotos = new Set((pics ?? []).map((p: { user_id: string }) => p.user_id))
   // Explore feed candidates: every photo a member could show in Explore —
   // never 18+ or archived (the grid has no over-18 reveal). The page shows ONE
@@ -43,7 +43,9 @@ export async function GET(req: NextRequest) {
   // over time without taking over the grid.
   const feedPhotos = new Map<string, string[]>()
   for (const p of [...(pics ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
-    if (p.is_mature || p.hidden) continue
+    // explore_hidden: Teddy (or 3 member reports) took it off Explore — it still
+    // shows on the member's own profile. See migration 131.
+    if (p.is_mature || p.hidden || p.explore_hidden) continue
     const list = feedPhotos.get(p.user_id) ?? []
     if (list.length < 15) { list.push(p.url); feedPhotos.set(p.user_id, list) }
   }

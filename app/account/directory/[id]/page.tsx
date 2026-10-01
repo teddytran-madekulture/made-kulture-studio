@@ -70,7 +70,31 @@ export default function MemberProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [revealMature, setRevealMature] = useState(false)
-  const [lightbox, setLightbox] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState<PortfolioImg | null>(null)
+  // Anonymous report flow inside the lightbox (migration 131).
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportNote, setReportNote] = useState('')
+  const [reportBusy, setReportBusy] = useState(false)
+  const [reportMsg, setReportMsg] = useState('')
+  const [reported, setReported] = useState<Set<string>>(new Set())
+  const closeLightbox = () => { setLightbox(null); setReportOpen(false); setReportReason(''); setReportNote(''); setReportMsg('') }
+  const sendReport = async () => {
+    if (!lightbox || !reportReason) return
+    setReportBusy(true); setReportMsg('')
+    const res = await fetch('/api/directory/report', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageId: lightbox.id, reason: reportReason, note: reportNote }),
+    }).catch(() => null)
+    const d = res ? await res.json().catch(() => ({})) : {}
+    setReportBusy(false)
+    if (res?.ok) {
+      setReported(prev => new Set(prev).add(lightbox.id))
+      setReportOpen(false)
+    } else {
+      setReportMsg((d as any).error || 'Could not send that. Try again.')
+    }
+  }
   const [tab, setTab] = useState<'portfolio' | 'credits'>('portfolio')
   const [starting, setStarting] = useState(false)
   const [following, setFollowing] = useState(false)
@@ -360,7 +384,7 @@ export default function MemberProfilePage() {
                 const hidden = img.is_mature && !revealMature
                 return (
                   <div key={img.id}
-                    onClick={() => { if (!hidden) { setLightbox(img.url); track('portfolio_open', { target_id: member.id, meta: { index: idx + 1, of: member.portfolio.length } }) } }}
+                    onClick={() => { if (!hidden) { setLightbox(img); track('portfolio_open', { target_id: member.id, meta: { index: idx + 1, of: member.portfolio.length } }) } }}
                     style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
                     <img src={img.url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: hidden ? 'blur(18px)' : 'none' }} />
                     {hidden && (
@@ -437,9 +461,47 @@ export default function MemberProfilePage() {
 
       {/* Lightbox */}
       {lightbox && (
-        <div onClick={() => setLightbox(null)}
+        <div onClick={closeLightbox}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100, cursor: 'zoom-out' }}>
-          <img src={lightbox} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 6 }} />
+          <img src={lightbox.url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 6 }} />
+          {!member.is_self && (
+            <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 18, left: 0, right: 0, display: 'flex', justifyContent: 'center', padding: '0 16px', cursor: 'default' }}>
+              {reported.has(lightbox.id) ? (
+                <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.75)', background: 'rgba(20,20,20,0.92)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                  Thanks — the studio will take a look. Reports are anonymous.
+                </div>
+              ) : !reportOpen ? (
+                <button type="button" onClick={() => setReportOpen(true)}
+                  style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.7)', background: 'rgba(20,20,20,0.85)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 20, padding: '7px 14px', cursor: 'pointer' }}>
+                  ⚑ Report
+                </button>
+              ) : (
+                <div style={{ width: '100%', maxWidth: 360, background: 'rgba(20,20,20,0.97)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: 14, fontFamily: 'Inter' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>Report this photo</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 10, lineHeight: 1.45 }}>Anonymous — the member is never told who reported it.</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {([['nudity', 'Nudity'], ['sexual', 'Sexual content'], ['harassment', 'Harassment or hate'], ['not_theirs', "Not their work"], ['spam', 'Spam'], ['other', 'Something else']] as const).map(([k, label]) => (
+                      <button key={k} type="button" onClick={() => setReportReason(k)}
+                        style={{ fontSize: 12, borderRadius: 16, padding: '6px 11px', cursor: 'pointer', background: reportReason === k ? '#fff' : 'transparent', color: reportReason === k ? '#080808' : 'rgba(255,255,255,0.8)', border: `1px solid ${reportReason === k ? '#fff' : 'rgba(255,255,255,0.22)'}` }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <input value={reportNote} onChange={e => setReportNote(e.target.value)} maxLength={300} placeholder="Anything else? (optional)"
+                    style={{ width: '100%', boxSizing: 'border-box', marginTop: 10, background: '#0e0e0e', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '9px 10px', fontSize: 12, color: '#fff', outline: 'none' }} />
+                  {reportMsg && <div style={{ fontSize: 11, color: '#ff8080', marginTop: 8 }}>{reportMsg}</div>}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button type="button" onClick={() => { setReportOpen(false); setReportReason(''); setReportNote(''); setReportMsg('') }}
+                      style={{ flex: 1, fontSize: 12, background: 'transparent', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 6, padding: '9px 0', cursor: 'pointer' }}>Cancel</button>
+                    <button type="button" onClick={sendReport} disabled={!reportReason || reportBusy}
+                      style={{ flex: 1, fontSize: 12, fontWeight: 600, background: reportReason ? '#fff' : 'rgba(255,255,255,0.15)', color: reportReason ? '#080808' : 'rgba(255,255,255,0.4)', border: 'none', borderRadius: 6, padding: '9px 0', cursor: reportReason && !reportBusy ? 'pointer' : 'default' }}>
+                      {reportBusy ? 'Sending…' : 'Send report'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
