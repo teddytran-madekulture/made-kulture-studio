@@ -64,8 +64,11 @@ export default function SiteNav({ active }: { active?: string }) {
           opacity: (scrolled || (isMobile && menuOpen)) ? 0 : 1,
           transition: 'opacity 0.3s ease', pointerEvents: 'none', zIndex: -1,
         }} />
-        <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.04em', color: '#fff', lineHeight: 1 }}>
+        {/* Logo and right actions get EQUAL flex columns on desktop so the link
+            group sits at the true page centre, not the centre of the leftover gap
+            (the right side is much wider than the logo). */}
+        <Link href="/" style={{ textDecoration: 'none', ...(isMobile ? {} : { flex: '1 1 0', minWidth: 'max-content' }) }}>
+          <div style={{ width: 'max-content', fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.04em', color: '#fff', lineHeight: 1 }}>
             MADE<br />KULTURE
           </div>
         </Link>
@@ -91,9 +94,9 @@ export default function SiteNav({ active }: { active?: string }) {
           </div>
         ) : (
           <>
-            {/* Centered nav links — in-flow (flex:1) so they always reserve
+            {/* Centered nav links — in-flow between two equal-width sides, so they reserve
                 their own space and can't overlap the logo or the right actions. */}
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', gap: 30, alignItems: 'center' }}>
+            <div style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'center', gap: 30, alignItems: 'center', padding: '0 24px' }}>
               {LINKS.map(l => (
                 <Link key={l.label} href={l.href}
                   style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.6)', textDecoration: 'none', transition: 'color 0.2s', whiteSpace: 'nowrap' }}
@@ -103,7 +106,7 @@ export default function SiteNav({ active }: { active?: string }) {
               ))}
             </div>
             {/* Right-side actions */}
-            <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexShrink: 0 }}>
+            <div style={{ flex: '1 1 0', minWidth: 'max-content', display: 'flex', justifyContent: 'flex-end', gap: 24, alignItems: 'center' }}>
               <NavAuthLink />
               <Link href="/book" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 16,
