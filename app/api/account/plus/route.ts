@@ -28,13 +28,22 @@ function isoPlusMonths(from: Date, months: number): string {
 }
 
 // The customers row (by email) holds pricing_overrides where Plus state lives.
+// ⚠️ customers.name and customers.phone are NOT NULL. A Google sign-up has no
+// phone on its profile, so inserting `phone: null` failed SILENTLY and returned
+// null — and checkout used to run this AFTER charging the card. Result
+// (2026-10-01, Sandra Mobee): $99 taken, Plus never switched on. Phone now falls
+// back to '' and the insert error is surfaced, and checkout calls this BEFORE
+// any money moves.
 async function ensureCustomerRow(email: string, name: string | null, phone: string | null) {
   const { data: rows } = await service
     .from('customers').select('id, pricing_overrides, square_customer_id').eq('email', email).order('created_at', { ascending: true }).limit(1)
   const existing = (rows ?? [])[0]
   if (existing) return existing
-  const { data: created } = await service
-    .from('customers').insert({ email, name, phone }).select('id, pricing_overrides, square_customer_id').maybeSingle()
+  const { data: created, error } = await service
+    .from('customers')
+    .insert({ email, name: (name || email.split('@')[0]), phone: (phone || '').trim() })
+    .select('id, pricing_overrides, square_customer_id').maybeSingle()
+  if (error) console.error('[account/plus] could not create customers row:', error)
   return created
 }
 
@@ -98,6 +107,13 @@ export async function POST(req: NextRequest) {
 
   const cents = (await getPlusPricing(service)).currentCents
 
+  // The customers row is where Plus is switched on. Make sure it exists BEFORE
+  // charging — if it can't be created, stop here with nothing charged.
+  const cust = await ensureCustomerRow(email, name, profile?.phone ?? null)
+  if (!cust) {
+    return NextResponse.json({ error: 'We couldn\'t set up your membership. You have not been charged. Please try again or text (832) 408-1631.' }, { status: 500 })
+  }
+
   try {
     const square = getSquare()
 
@@ -126,8 +142,7 @@ export async function POST(req: NextRequest) {
     })
     const squarePaymentId = pay.result.payment?.id ?? null
 
-    // Activate membership on the customers row.
-    const cust = await ensureCustomerRow(email, name, profile?.phone ?? null)
+    // Activate membership on the customers row (created above, before the charge).
     const now = new Date()
     const startIso = now.toISOString()
     const expiresIso = isoPlusMonths(now, 12)
@@ -137,15 +152,28 @@ export async function POST(req: NextRequest) {
     po.plus_expires_at = expiresIso
     po.plus_auto_renew = true
     po.plus_comp = false
-    if (cust) {
-      const upd: any = { pricing_overrides: po }
-      if (!cust.square_customer_id) upd.square_customer_id = sqCustId
-      await service.from('customers').update(upd).eq('id', cust.id)
-      await service.from('plus_payments').insert({
-        customer_id: cust.id, customer_email: email, amount_cents: cents,
-        square_payment_id: squarePaymentId, kind: 'signup', period_start: startIso, period_end: expiresIso,
-      })
+    const upd: any = { pricing_overrides: po }
+    if (!cust.square_customer_id) upd.square_customer_id = sqCustId
+    // A claim, not a fire-and-forget: if the row didn't actually change, the card
+    // was charged and the member has no Plus — tell the owner loudly.
+    const { data: activated, error: actErr } = await service
+      .from('customers').update(upd).eq('id', cust.id).select('id')
+    if (actErr || !activated?.length) {
+      console.error('[account/plus] CRITICAL: charged but Plus not activated', actErr)
+      try {
+        await sendOwnerPush({
+          title: 'Plus charged but NOT activated',
+          body:  `${name} (${email}) paid $${(cents / 100).toFixed(2)} but Plus did not switch on. Square payment ${squarePaymentId}.`,
+          url:   '/admin/plus',
+          tag:   `plus-activate-fail-${cust.id}`,
+        })
+      } catch {}
+      return NextResponse.json({ error: 'Your payment went through but your membership did not activate. We have been alerted and will fix it shortly.' }, { status: 500 })
     }
+    await service.from('plus_payments').insert({
+      customer_id: cust.id, customer_email: email, amount_cents: cents,
+      square_payment_id: squarePaymentId, kind: 'signup', period_start: startIso, period_end: expiresIso,
+    })
 
     try { await sendPlusReceiptEmail({ customerName: name, customerEmail: email, amountCents: cents, expiresAt: expiresIso }) } catch {}
 
@@ -159,7 +187,7 @@ export async function POST(req: NextRequest) {
         title: '⭐ New Plus member',
         body: `${name} · $${(cents / 100).toFixed(cents % 100 ? 2 : 0)}/yr${why}`,
         url: '/admin/plus',
-        tag: `plus-signup-${cust?.id ?? email}`,
+        tag: `plus-signup-${cust.id}`,
       })
     } catch (e) { console.error('[account/plus] owner push failed (non-fatal):', e) }
 

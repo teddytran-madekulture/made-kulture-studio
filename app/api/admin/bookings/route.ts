@@ -280,6 +280,10 @@ export async function POST(req: NextRequest) {
       startISO,
       endISO,
       manageToken:   booking?.manage_token || undefined,
+      // Without these the email dropped its "check in & get your door code"
+      // block and the calendar link (showDoorBlock needs the token).
+      hasDoorCode:   !!(doorCode || doorCodeBack),
+      checkInToken:  (booking as any)?.check_in_token || undefined,
     }).catch(e => console.error('Email confirmation error:', e))
 
     sendNewBookingAlert({
