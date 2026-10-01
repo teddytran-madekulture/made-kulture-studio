@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
+import ChangeEmailButton from '@/components/admin/ChangeEmailButton'
 
 // The Creative Directory as a roster Teddy can act on.
 //
@@ -233,6 +234,8 @@ export default function AdminDirectoryPage() {
                   {busy === m.id ? '…' : 'MAKE FIRST 100'}
                 </button>
               ))}
+              <ChangeEmailButton authUserId={m.id} current={m.email} style={{ ...btn(), padding: undefined }}
+                onChanged={email => setMembers(list => list.map(x => x.id === m.id ? { ...x, email, emailConfirmed: true } : x))} />
               {m.photos.visible + m.photos.hidden > 0 && (
                 <a href="/admin/portfolio" style={{ ...btn(), textDecoration: 'none', textAlign: 'center' }}>PORTFOLIO →</a>
               )}

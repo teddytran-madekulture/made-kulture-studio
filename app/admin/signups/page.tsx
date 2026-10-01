@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import ChangeEmailButton from '@/components/admin/ChangeEmailButton'
 
 interface Signup {
   id: string
@@ -83,6 +84,8 @@ export default function AdminSignupsPage() {
                 {s.inDirectory && pill('rgba(212,168,67,0.15)', '#e6c07a', 'DIRECTORY')}
                 {!s.onboarded && pill('rgba(255,150,60,0.15)', '#ffb066', 'NEEDS SETUP')}
                 {!s.confirmed && pill('rgba(255,90,90,0.12)', '#ff8080', 'UNCONFIRMED')}
+                <ChangeEmailButton authUserId={s.id} current={s.email}
+                  onChanged={email => setItems(list => list.map(x => x.id === s.id ? { ...x, email, confirmed: true } : x))} />
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', minWidth: 64, textAlign: 'right' }}>{when(s.createdAt)}</span>
               </div>
             </a>

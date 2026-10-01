@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
+import { adminChangeEmail } from '@/lib/email-change'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -66,21 +67,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const patch: Record<string, any> = {}
 
   if (body.name  !== undefined) patch.name   = body.name
-  if (body.email !== undefined) patch.email  = body.email.toLowerCase().trim()
+  // ⚠️ The email is NOT a plain column edit: the login and everything keyed on
+  // the address must move with it (lib/email-change.ts). Done first, and the
+  // whole save stops if it can't be done cleanly.
+  if (body.email !== undefined && body.email !== null) {
+    const r = await adminChangeEmail(supabase, { customerId: params.id }, String(body.email))
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+  }
   if (body.phone !== undefined) patch.phone  = body.phone
   if (body.status !== undefined) patch.status = body.status
   if (body.banned !== undefined) patch.banned = body.banned
   if (body.pricingOverrides !== undefined) patch.pricing_overrides = body.pricingOverrides
 
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && body.email === undefined) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
-  const { data, error } = await supabase
-    .from('customers')
-    .update(patch)
-    .eq('id', params.id)
+  // Email (if any) is already moved above; now the plain columns, then read back.
+  if (Object.keys(patch).length) {
+    const { error: upErr } = await supabase.from('customers').update(patch).eq('id', params.id)
+    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+  }
+  const { data, error } = await supabase.from('customers')
     .select('id, name, email, phone, status, banned')
+    .eq('id', params.id)
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

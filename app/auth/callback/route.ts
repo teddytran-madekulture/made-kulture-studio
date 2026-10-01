@@ -1,5 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase'
+import { reconcileEmailChange } from '@/lib/email-change'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -33,8 +35,13 @@ export async function GET(request: NextRequest) {
         },
       }
     )
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) return redirectResponse
+    const { data: ex, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      // A confirmed email change lands here: move the customer record (Plus,
+      // saved card, history) to the new address too. Never blocks sign-in.
+      if (ex?.user) await reconcileEmailChange(supabaseAdmin(), ex.user)
+      return redirectResponse
+    }
     return NextResponse.redirect(`${origin}/login?error=auth`)
   }
 

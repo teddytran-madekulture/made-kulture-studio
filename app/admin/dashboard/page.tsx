@@ -4002,6 +4002,15 @@ export default function AdminDashboard() {
                         setCustDetail(d => d ? { ...d, ...data.customer } : d)
                         setCustList(list => list.map(c => c.id === custDetail.id ? { ...c, name: data.customer.name, email: data.customer.email, phone: data.customer.phone } : c))
                         setCustEditMode(false)
+                        // An email change also moves the login and keeps the old
+                        // address on file — refresh so ALSO EMAIL shows it.
+                        if (data.customer.email !== custDetail.email) {
+                          fetch(`/api/admin/customers/${custDetail.id}`).then(r => r.ok ? r.json() : null)
+                            .then(d => { if (d?.customer?.altEmails) setCustDetail(x => x ? { ...x, altEmails: d.customer.altEmails } : x) }).catch(() => {})
+                        }
+                      } else {
+                        const d = await res.json().catch(() => ({}))
+                        window.alert(d.error || 'Could not save — nothing was changed.')
                       }
                       setCustEditSaving(false)
                     }} style={{ background: '#fff', border: 'none', padding: '8px 16px', cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#000' }}>

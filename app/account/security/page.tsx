@@ -49,10 +49,11 @@ export default function SecurityPage() {
     e.preventDefault(); setEmMsg(''); setEmErr('')
     if (!email.trim()) { setEmErr('Enter a new email.'); return }
     setEmSaving(true)
-    const { error } = await supabase.auth.updateUser(
-      { email: email.trim() },
-      { emailRedirectTo: `${window.location.origin}/auth/callback?next=/account` }
-    )
+    // Goes through the server so the customer record (Plus, saved card,
+    // history) follows the login once the link is clicked — lib/email-change.ts.
+    const r = await fetch('/api/account/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim() }) })
+    const d = await r.json().catch(() => ({}))
+    const error = r.ok ? null : { message: d.error || 'Could not change your email.' }
     if (error) setEmErr(error.message)
     else { setEmMsg(`We sent a confirmation link to ${email.trim()}. Click it to finish switching your email — it won't change until you confirm.`); setEmail('') }
     setEmSaving(false)
