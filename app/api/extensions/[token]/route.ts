@@ -20,7 +20,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { planExtension, durationLabel, type ExtensionKind } from '@/lib/extensions'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { patchCalendarEvent } from '@/lib/gcal'
-import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin, checkInUrl } from '@/lib/igloohome'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { notifyCoverageGap } from '@/lib/coverage'
@@ -369,9 +369,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       await sendSMS(
         p.customerPhone,
         `✅ Done! ${p.setName} is yours until ${untilLabel}. $${amountDollars.toFixed(2)} charged${keyedSourceId ? '' : ' to your card on file'}.` +
-        (newDoorCode ? `\n🔑 Updated front-door code (valid to ${untilLabel}): ${newDoorCode}` : '') +
-        (newDoorCodeBack ? `\n🔑 Updated back-door code (valid to ${untilLabel}): ${newDoorCodeBack}` : '') +
-        (newDoorCode || newDoorCodeBack ? `\n${DOOR_CODE_HOWTO}` : '') +
+        // The refreshed code is not texted (2026-10-01): the check-in page always
+        // shows the CURRENT code, so step out and back in with the same link.
+        (newDoorCode || newDoorCodeBack ? `\nYour door code was updated to ${untilLabel}. It is on your check-in page${b.check_in_token ? `: ${checkInUrl(b.check_in_token)}` : '.'}` : '') +
         `\n— Made Kulture`
       ).catch(e => console.error('[extension] receipt SMS error:', e))
     }

@@ -17,6 +17,33 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const READY = '#43c97f'
 const INUSE = '#c9b27e'
 const DIRTY = '#ff5c5c'
+
+// Visit tag + arrival signals under a guest's name (2026-10-01). The arrival
+// row is the point of ATLAS as a monitor: PHONE = they revealed their code,
+// DOOR = their code opened a lock, KIOSK = a tablet/desk check-in. Several can
+// be lit at once; none lit after start time is the one to look at.
+function GuestChips({ r, nowMs, compact }: { r: AgendaRow; nowMs: number; compact?: boolean }) {
+  const t = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })
+  const chip = (text: string, color: string, border: string, title?: string) => (
+    <span key={text} title={title} style={{ fontSize: compact ? 9 : 10, fontWeight: 800, letterSpacing: '.1em', color, border: `1px solid ${border}`,
+      borderRadius: 4, padding: compact ? '1px 5px' : '2px 6px', whiteSpace: 'nowrap', lineHeight: 1.4 }}>{text}</span>
+  )
+  const v = r.visit
+  const vc = v?.kind === 'first' ? ['#e6c07a', 'rgba(230,192,122,.55)'] : v?.kind === 'regular' ? ['#8fe0ae', 'rgba(143,224,174,.45)'] : ['rgba(255,255,255,.55)', 'rgba(255,255,255,.2)']
+  const a = r.arrival ?? { phone: null, door: null, kiosk: null, checkedInAt: null, checkedOutAt: null }
+  const started = Date.parse(r.startISO) <= nowMs
+  const none = started && !a.checkedInAt && !a.phone && !a.door && Date.parse(r.endISO) > nowMs
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 4, alignItems: 'center' }}>
+      {v && chip(v.label, vc[0], vc[1])}
+      {a.phone && chip('PHONE', READY, 'rgba(67,201,127,.5)', `Code revealed on their phone at ${t(a.phone)}`)}
+      {a.door && chip('DOOR', READY, 'rgba(67,201,127,.5)', `Door opened with their code at ${t(a.door)}`)}
+      {a.kiosk && chip('KIOSK', READY, 'rgba(67,201,127,.5)', `Checked in at a tablet at ${t(a.kiosk)}`)}
+      {a.checkedOutAt && chip('OUT', 'rgba(255,255,255,.5)', 'rgba(255,255,255,.2)', `Checked out at ${t(a.checkedOutAt)}`)}
+      {none && chip('NOT CHECKED IN', DIRTY, 'rgba(255,92,92,.5)', 'Session has started and no check-in signal yet')}
+    </div>
+  )
+}
 const LINE: Record<string, string> = { ready: READY, inuse: INUSE, dirty: DIRTY }
 const FILL: Record<string, string> = {
   ready: 'rgba(67,201,127,.16)', inuse: 'rgba(201,178,126,.18)', dirty: 'rgba(255,92,92,.17)',
@@ -96,6 +123,9 @@ export interface AgendaRow {
   guestName: string | null; guestPhone: string | null; buyout: boolean
   /** Checkout note; null when locked or none. */
   note?: string | null
+  /** Visit tag + arrival signals (lib/floor-status.ts, 2026-10-01). */
+  visit?: { label: string; kind: 'first' | 'nth' | 'regular' } | null
+  arrival?: { phone: string | null; door: string | null; kiosk: string | null; checkedInAt: string | null; checkedOutAt: string | null }
 }
 
 export default function FloorBoard({
@@ -678,6 +708,7 @@ function DayColumn({ agenda, nowMs, showNow }: { agenda: AgendaRow[]; nowMs: num
                 {r.guestName}
               </div>
             )}
+            <GuestChips r={r} nowMs={nowMs} compact />
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,.5)', whiteSpace: 'nowrap' }}>
               {clock(r.startISO)}–{clock(r.endISO)}
             </div>
@@ -730,7 +761,7 @@ function AgendaList({ agenda, nowMs, showNow }: { agenda: AgendaRow[]; nowMs: nu
         return (
           // Rows share the free height so the list fills its column, but they
           // stop growing before a two-booking day turns into three giant slabs.
-          <div key={r.id} style={{ flex: '1 1 0', minHeight: 58, maxHeight: 108, display: 'flex', flexDirection: 'column' }}>
+          <div key={r.id} style={{ flex: '1 1 0', minHeight: 58, maxHeight: 132, display: 'flex', flexDirection: 'column' }}>
             {lineHere && nowLine}
             <div style={{
               flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
@@ -744,6 +775,7 @@ function AgendaList({ agenda, nowMs, showNow }: { agenda: AgendaRow[]; nowMs: nu
                 </span>
               </div>
               {r.guestName && <div style={{ fontSize: 16, fontWeight: 600, marginTop: 3 }}>{r.guestName}</div>}
+              <GuestChips r={r} nowMs={nowMs} />
               {r.note && (
                 <div style={{ fontSize: 13, color: '#8ec5ff', marginTop: 3, lineHeight: 1.3,
                               overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>

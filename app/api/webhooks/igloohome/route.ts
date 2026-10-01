@@ -36,6 +36,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, createPublicKey, verify as cryptoVerify } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { sendOwnerPush } from '@/lib/push'
+import { recordArrival } from '@/lib/arrival'
 
 // Service role: this writes bookings and door_events, and door_events has RLS
 // on with no policies by design. See user-scoped-write-sweep for why a
@@ -358,29 +359,18 @@ export async function POST(req: NextRequest) {
       const booking = await findBookingForPin(pin, entryAtMs)
       if (booking) {
         bookingId = booking.id
-        // CLAIM on the null. Three things this handles at once: a redelivered
-        // webhook, a re-entry (logType 19) later in the same session, and a
-        // guest who already checked in at the desk or kiosk — none of which
-        // should move an arrival time that is already recorded.
-        // .select() because a blocked write returns no error, just no rows.
-        const { data: claimed, error: upErr } = await supabase
-          .from('bookings')
-          .update({ checked_in_at: new Date(entryAtMs).toISOString() })
-          .eq('id', booking.id)
-          .is('checked_in_at', null)
-          .select('id')
-
-        if (upErr) console.error('[igloohome webhook] check-in write failed:', upErr)
-        else if (claimed?.length) {
-          didCheckIn = true; checkedIn++
-          // `sets: null` is a full-warehouse buyout, not missing data.
-          const who = relName((booking as any).customers) ?? 'Someone'
-          const where = relName((booking as any).sets) ?? 'Full studio'
-          arrivals.push({
-            who, where, when: centralTime(entryAtMs), door: doorLabel(deviceId), id: booking.id,
+        // 2026-10-01: lib/arrival.ts owns the rule. It stamps checked_in_at
+        // only if nothing did yet (a phone/kiosk/desk check-in is never moved),
+        // stamps door_entered_at on the first door use, and sends the ONE
+        // arrival push for this booking if the kiosk hasn't already — a
+        // redelivered webhook or a re-entry (logType 19) can't push twice.
+        try {
+          const r = await recordArrival(supabase, booking as any, 'door', {
+            at: new Date(entryAtMs).toISOString(), detail: doorLabel(deviceId).toLowerCase(),
           })
-          console.log(`[igloohome webhook] checked in ${booking.id} (${who}, ${where})`)
-        }
+          didCheckIn = true; checkedIn++
+          if (r.pushed) console.log(`[igloohome webhook] arrival push for ${booking.id}`)
+        } catch (e) { console.error('[igloohome webhook] arrival write failed:', e) }
       } else {
         // Not an error. A staff master PIN, or a code whose booking has moved.
         console.log(`[igloohome webhook] logType ${logType} at ${new Date(entryAtMs).toISOString()} matched no booking`)
@@ -421,16 +411,8 @@ export async function POST(req: NextRequest) {
   // notification -- it renders on a lock screen, and these are live door codes.
   const pushes: Promise<void>[] = []
 
-  for (const a of arrivals) {
-    pushes.push(sendOwnerPush({
-      title: `${a.who} checked in`,
-      body: `${a.where} \u00b7 ${a.when} \u00b7 ${a.door}`,
-      url: '/admin/dashboard',
-      // Keyed on the BOOKING, so a redelivered webhook replaces the same
-      // notification instead of stacking a second one.
-      tag: `door-checkin-${a.id}`,
-    }))
-  }
+  // Arrival pushes are sent inside recordArrival (one per booking).
+  void arrivals
 
   if (unmatched.length) {
     pushes.push(sendOwnerPush({

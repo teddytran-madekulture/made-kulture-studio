@@ -9,7 +9,7 @@ import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
-import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin, doorCodeLinkLine } from '@/lib/igloohome'
 import { bookingHourToISO, largestVisitGap, VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'
 import { violatesAdvanceWindow, sessionMayBookShortNotice, ADVANCE_WINDOW_ERROR, shortNoticeScopeOf, lineMatchesScope } from '@/lib/short-notice'
 import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
@@ -180,15 +180,10 @@ async function sendConfirmationSMS(
   const guestLine = body.guests
     ? `👥 ${formatGuestLine(body.guests, body.type === 'studio' ? null : guestCapacity)}`
     : null
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
-  const checkInLine = checkInToken ? `📲 Check in when you arrive: ${appUrl}/checkin/${checkInToken}` : null
-  const doorDisplay = doorCode ? doorCode.replace(/(\d{3})(?=\d)/g, '$1 ') : null
-  const doorBackDisplay = doorCodeBack ? doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ') : null
-  const codeLines = [
-    doorCode ? `🔑 Front-door code: ${doorDisplay}` : null,
-    doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
-  ].filter(Boolean) as string[]
-  if (codeLines.length) codeLines.push(DOOR_CODE_HOWTO, '(each works during your booked time only)')
+  // The code itself is NOT texted (2026-10-01) — it appears on the check-in
+  // page when the guest taps CHECK IN at the studio. One line, shared.
+  const codeLines = (doorCode || doorCodeBack) ? [doorCodeLinkLine(checkInToken)] : []
+  const checkInLine = null
 
   const message = [
     `✅ Made Kulture — Booking Confirmed!`,
@@ -935,8 +930,7 @@ export async function POST(req: NextRequest) {
           notes: body.notes || undefined, scheduleLines,
           guestCount: guestCount || undefined,
           guestCapacity: body.type === 'studio' ? undefined : guestCapacity,
-          doorCode: doorCode || undefined,
-          doorCodeBack: doorCodeBack || undefined,
+          hasDoorCode: !!(doorCode || doorCodeBack),
           startISO: primary.startISO, endISO: primary.endISO,
           checkInToken: checkInToken || undefined,
           manageToken: manageToken || undefined,

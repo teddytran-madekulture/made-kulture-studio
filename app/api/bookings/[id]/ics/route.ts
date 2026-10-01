@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { icsContent, STUDIO_ADDRESS, type CalEvent } from '@/lib/calendar'
-import { DOOR_CODE_HOWTO } from '@/lib/igloohome'
+import { checkInUrl } from '@/lib/igloohome'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,9 +28,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const setName = (b as any).sets?.name || 'Full Studio Takeover'
   const details = [
     `Your Made Kulture session: ${setName}.`,
-    (b as any).door_code ? `Front-door code: ${(b as any).door_code} (works during your booked time).` : '',
-    (b as any).door_code_back ? `Back-door code: ${(b as any).door_code_back} (works during your booked time).` : '',
-    ((b as any).door_code || (b as any).door_code_back) ? DOOR_CODE_HOWTO : '',
+    // No code in the calendar file (2026-10-01) — it is revealed on the check-in page.
+    ((b as any).door_code || (b as any).door_code_back) ? `Door code: check in at ${checkInUrl(token)} when you arrive and it appears there.` : '',
     `Manage your booking at ${(process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')}/account`,
   ].filter(Boolean).join('\n')
 

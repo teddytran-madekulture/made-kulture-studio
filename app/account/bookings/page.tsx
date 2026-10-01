@@ -14,6 +14,7 @@ interface Booking {
   total_price: number
   customer_name: string
   acuity_appointment_id: string | null
+  check_in_token?: string | null
   sets: { name: string; slug?: string | null } | null
   booking_add_ons?: { quantity: number; rate: number; paid?: boolean; equipment: { name: string } | null }[]
 }
@@ -238,6 +239,13 @@ export default function BookingsPage() {
               <span style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', textAlign: 'right', lineHeight: 1.5, maxWidth: 180 }}>
                 Inside 48 hours — text (832) 408-1631 and we’ll change it for you.
               </span>
+            )}
+            {isUpcoming && !isCancelled && b.check_in_token && (
+              <a href={`/checkin/${b.check_in_token}`}
+                title="Your door code appears here when you check in at the studio (opens 30 min before your session)"
+                style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'var(--t-gold)', textDecoration: 'none', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', borderRadius: 4, padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                CHECK IN · DOOR CODE
+              </a>
             )}
             {isUpcoming && !isCancelled && (
               <a href={googleCalUrl({ title: `Made Kulture — ${b.sets?.name ?? 'Studio'}`, startISO: b.start_time, endISO: b.end_time, location: STUDIO_ADDRESS, details: 'Your Made Kulture session.' })}

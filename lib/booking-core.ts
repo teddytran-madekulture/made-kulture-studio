@@ -15,7 +15,7 @@ import { checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
-import { createBookingPin, createBackDoorPin, DOOR_CODE_HOWTO } from '@/lib/igloohome'
+import { createBookingPin, createBackDoorPin, doorCodeLinkLine } from '@/lib/igloohome'
 import { largestVisitGap, VISIT_GAP_GRACE_HOURS, bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
@@ -501,15 +501,10 @@ export async function finalizeBooking(
   if (custPhone) {
     const dollars = totalAmount.toFixed(2)
     const sched = lines.map(l => `📍 ${l.setName} — ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join('\n')
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app'
-    const checkInLine = first.check_in_token ? `📲 Check in when you arrive: ${appUrl}/checkin/${first.check_in_token}` : null
-    const doorDisplay = doorCode ? doorCode.replace(/(\d{3})(?=\d)/g, '$1 ') : null
-    const doorBackDisplay = doorCodeBack ? doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ') : null
-    const codeLines = [
-      doorCode ? `🔑 Front-door code: ${doorDisplay}` : null,
-      doorCodeBack ? `🔑 Back-door code: ${doorBackDisplay}` : null,
-    ].filter(Boolean) as string[]
-    if (codeLines.length) codeLines.push(DOOR_CODE_HOWTO, '(your codes are for this session only)')
+    // The code itself is NOT texted (2026-10-01) — it appears on the check-in
+    // page when the guest taps CHECK IN at the studio. One line, shared.
+    const codeLines = (doorCode || doorCodeBack) ? [doorCodeLinkLine(first.check_in_token)] : []
+    const checkInLine = null
     const arrivalLine = '⏰ No early arrivals. No studio access before your booked time.'
     const guestLine = guestCount ? `👥 ${formatGuestLine(guestCount, guestCapacity)}` : null
     const message = [
@@ -544,8 +539,8 @@ export async function finalizeBooking(
         notes: notes || undefined, scheduleLines,
         guestCount: guestCount || undefined,
         guestCapacity: guestCapacity ?? undefined,
-        doorCode: doorCode || undefined,
-        doorCodeBack: doorCodeBack || undefined,
+        // doorCode is deliberately NOT passed — the email points at the check-in page.
+        hasDoorCode: !!(doorCode || doorCodeBack),
         startISO: primary.startISO, endISO: primary.endISO,
         checkInToken: first.check_in_token || undefined,
         // The guest's way back to this booking — see migration 101. Delegated

@@ -50,7 +50,7 @@ const TOKEN_RE = /^[0-9a-f]{32}$/i
 
 const SELECT = `
   id, start_time, end_time, status, set_id, acuity_appointment_id, total_amount,
-  door_code, door_code_back,
+  door_code, door_code_back, checked_in_at, code_revealed_at, check_in_token,
   customers ( name, email, phone ),
   sets ( name, slug )
 `
@@ -133,12 +133,14 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       endHour: centralHourDecimal(b.end_time),
       total: b.total_amount,
       customerName: cust.name ?? null,
-      // ⚠️ Door codes are returned because this page is reached only by someone
-      // holding the link that was emailed to the booking's own address — the
-      // same channel the codes were sent through. Nothing else identifying is
-      // exposed: no card, no email, no phone, no other booking.
-      doorCode: b.door_code ?? null,
-      doorCodeBack: b.door_code_back ?? null,
+      // ⚠️ Door codes show here ONLY once the booking is checked in (2026-10-01).
+      // Before that the page sends the guest to the check-in link, where the
+      // code is revealed by tapping CHECK IN at the studio — so a link that was
+      // forwarded weeks ago never hands out a live code on its own.
+      doorCode: (b.checked_in_at || b.code_revealed_at) ? (b.door_code ?? null) : null,
+      doorCodeBack: (b.checked_in_at || b.code_revealed_at) ? (b.door_code_back ?? null) : null,
+      hasDoorCode: !!(b.door_code || b.door_code_back),
+      checkInToken: b.check_in_token ?? null,
     },
     isPlus,
     canReschedule: lockedReason === null,

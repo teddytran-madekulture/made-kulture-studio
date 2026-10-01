@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
+import { CODE_REVEAL_MINUTES, checkInUrl } from '@/lib/igloohome'
 import { createClient } from '@supabase/supabase-js'
 
 // Lazy-initialize so the build doesn't fail when env var isn't available at compile time
@@ -115,8 +116,9 @@ interface BookingConfirmationData {
   scheduleLines?: string[] // multi-set orders: one line per set, e.g. "Set A — Sat Jul 12, 2pm–5pm"
   guestCount?: number      // declared party size
   guestCapacity?: number   // people allowed on a set; omitted for a full-studio buyout
-  doorCode?: string        // per-booking front-door code (igloohome algoPIN)
-  doorCodeBack?: string    // per-booking back-door code (igloohome algoPIN; when a back-door lock is configured)
+  doorCode?: string        // ⚠️ 2026-10-01: NO LONGER RENDERED — the code lives on the check-in page. Kept so old callers type-check.
+  doorCodeBack?: string    // (same)
+  hasDoorCode?: boolean    // show the "your door code appears on your check-in page" block
   startISO?: string        // primary window start/end (raw ISO) for calendar links
   endISO?: string
   checkInToken?: string    // gates the downloadable .ics link
@@ -135,13 +137,16 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_confirmation')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, guestCapacity, doorCode, doorCodeBack, startISO, endISO, checkInToken, manageToken, receiptUrl, rewardCents } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, notes, scheduleLines, guestCount, guestCapacity, doorCode, doorCodeBack, hasDoorCode, startISO, endISO, checkInToken, manageToken, receiptUrl, rewardCents } = data
+  const showDoorBlock = !!(hasDoorCode || doorCode || doorCodeBack) && !!checkInToken
+  const checkIn = checkInToken ? checkInUrl(checkInToken) : null
   const isBuyout = /full studio takeover/i.test(setName) // buyouts are private — skip the shared-studio note
 
   const manageLink = manageToken ? `${APP_URL}/manage/${manageToken}` : null
   // ⚠️ This used to point unconditionally at /account, which a GUEST cannot open
   // — no account, no session, nothing to see. The manage link works for both.
-  const calDetails = [`Your Made Kulture session: ${setName}.`, doorCode ? `Front-door code: ${doorCode}.` : '', doorCodeBack ? `Back-door code: ${doorCodeBack}.` : '', `Manage: ${manageLink ?? `${APP_URL}/account`}`].filter(Boolean).join(' ')
+  // No code in the calendar entry either — it is revealed on the check-in page.
+  const calDetails = [`Your Made Kulture session: ${setName}.`, checkIn ? `Door code: check in at ${checkIn} when you arrive.` : '', `Manage: ${manageLink ?? `${APP_URL}/account`}`].filter(Boolean).join(' ')
   const gCalLink = (startISO && endISO)
     ? googleCalUrl({ title: `Made Kulture — ${setName}`, startISO, endISO, location: STUDIO_ADDRESS, details: calDetails })
     : null
@@ -224,26 +229,17 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
       </tr>
     </table>
 
-    ${doorCode ? `
-    <!-- Door Code -->
+    ${showDoorBlock ? `
+    <!-- Door code: REVEALED on the check-in page, never printed here (2026-10-01).
+         One place for the code means a reschedule or extension can never leave
+         a stale one in this inbox, and every arrival checks in. -->
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid ${ACCENT_COLOR};border-radius:6px;padding:20px 24px;margin-bottom:16px;">
       <tr>
         <td align="center">
-          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Front-Door Code</p>
-          <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCode.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
-          <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">front-door</strong> keypad, then press the unlock button. It only works during your booked time. Don't share it.</p>
-        </td>
-      </tr>
-    </table>` : ''}
-
-    ${doorCodeBack ? `
-    <!-- Back Door Code -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid ${ACCENT_COLOR};border-radius:6px;padding:20px 24px;margin-bottom:16px;">
-      <tr>
-        <td align="center">
-          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Back-Door Code</p>
-          <p style="margin:0 0 6px;font-size:34px;font-weight:700;color:#fff;letter-spacing:0.18em;font-family:monospace;">${doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ')}</p>
-          <p style="margin:0;font-size:12px;color:#999;">Enter this on the <strong style="color:#ccc;">back-door</strong> keypad, then press the unlock button. It only works during your booked time. Don't share it.</p>
+          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Door Code</p>
+          <p style="margin:0 0 14px;font-size:14px;color:#ccc;line-height:1.6;">When you arrive, open your check-in page and tap <strong style="color:#fff;">Check in</strong>. Your front-door and back-door codes appear right there. Check-in opens ${CODE_REVEAL_MINUTES} minutes before your session.</p>
+          <a href="${checkIn}" style="display:inline-block;background:${ACCENT_COLOR};color:#0b0b0d;font-size:13px;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:4px;letter-spacing:0.06em;text-transform:uppercase;">Check in &amp; get my code</a>
+          <p style="margin:12px 0 0;font-size:12px;color:#888;">Save this email — this link is your key. No signal at the door? Reply <strong style="color:#ccc;">CODE</strong> to your confirmation text and we&rsquo;ll text it back.</p>
         </td>
       </tr>
     </table>` : ''}

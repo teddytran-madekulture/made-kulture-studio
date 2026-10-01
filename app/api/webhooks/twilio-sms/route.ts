@@ -19,6 +19,7 @@ import { sendOwnerPush } from '@/lib/push'
 import { sendSimpleEmail } from '@/lib/email'
 import { toE164 } from '@/lib/sms'
 import { customersForPhone, nearestBookingLine } from '@/lib/sms-inbox'
+import { codeTextFor } from '@/lib/door-code-fallback'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,21 @@ export async function POST(req: NextRequest) {
 
   // Opt-out/in words: carriers already acted; logged above, nothing to alert.
   if (OPT_WORDS.includes(word)) return twiml()
+  // CODE → text the door code back. The safety net for a phone with no signal
+  // at the door (2026-10-01): answers only from the phone on a booking that is
+  // live or starts within CODE_REVEAL_MINUTES, and counts as a check-in.
+  if (word === 'CODE') {
+    let reply = 'Made Kulture: no session found for this number starting in the next 30 minutes. Text us here and we will help.'
+    try {
+      const custs = await customersForPhone(db, from)
+      const r = await codeTextFor(db, custs.map(c => c.id), 'sms-code-reply')
+      if (r) reply = r
+    } catch (e) { console.error('[twilio-sms] CODE reply failed', e) }
+    const { error } = await db.from('sms_messages').insert({ phone: from, direction: 'out', body: reply, sent_by: 'system' })
+    if (error) console.error('[twilio-sms] CODE reply log failed', error)
+    return twiml(reply)
+  }
+
   if (word === 'HELP' || word === 'INFO') {
     const { error } = await db.from('sms_messages').insert({ phone: from, direction: 'out', body: HELP_REPLY, sent_by: 'system' })
     if (error) console.error('[twilio-sms] help log failed', error)

@@ -7,6 +7,7 @@
 // requests without the right key are rejected. Unset = open (fine for launch).
 
 import { NextRequest, NextResponse } from 'next/server'
+import { recordArrival } from '@/lib/arrival'
 import { createClient } from '@supabase/supabase-js'
 import { toE164 } from '@/lib/sms'
 import { findActiveBookingBySet } from '@/lib/extensions'
@@ -54,17 +55,10 @@ export async function POST(req: NextRequest) {
     if (bkErr || !bk) return NextResponse.json({ error: 'Something glitched — try again.' }, { status: 500 })
 
     const already = !!bk.checked_in_at
-    if (!already) {
-      // ⚠️ Written as a CLAIM on the null, so two taps can't both "check in"
-      // and .select() proves a row actually changed — supabase-js never throws.
-      const { data: done, error: upErr } = await supabase
-        .from('bookings')
-        .update({ checked_in_at: new Date().toISOString() })
-        .eq('id', bk.id).is('checked_in_at', null)
-        .select('id')
-      if (upErr) return NextResponse.json({ error: 'Something glitched — try again.' }, { status: 500 })
-      if (!done?.length) { /* someone tapped a beat earlier — that's a success, not an error */ }
-    }
+    // lib/arrival.ts: claims checked_in_at (two taps can't both win) and sends
+    // the one arrival push only if the door hasn't already (2026-10-01).
+    try { await recordArrival(supabase, bk as any, 'kiosk') }
+    catch { return NextResponse.json({ error: 'Something glitched — try again.' }, { status: 500 }) }
     const c: any = Array.isArray(bk.customers) ? bk.customers[0] : bk.customers
     const st: any = Array.isArray(bk.sets) ? bk.sets[0] : bk.sets
     const nowMs = Date.now()
@@ -115,11 +109,7 @@ export async function POST(req: NextRequest) {
   const set: any = Array.isArray(active.sets) ? active.sets[0] : active.sets
 
   const alreadyIn = !!active.checked_in_at
-  if (!alreadyIn) {
-    await supabase.from('bookings')
-      .update({ checked_in_at: new Date().toISOString() })
-      .eq('id', active.id)
-  }
+  await recordArrival(supabase, active as any, 'kiosk').catch(() => {})
 
   return NextResponse.json({
     success: true,

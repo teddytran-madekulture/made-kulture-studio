@@ -172,6 +172,25 @@ export async function createBackDoorPin(opts: {
 // ten places that print a code cannot drift apart.
 export const DOOR_CODE_HOWTO = 'Enter the code, then press the unlock button to open.'
 
+// ── 2026-10-01: the code lives on the CHECK-IN PAGE, not in texts or email ──
+// Teddy's call: one place for the code (so a reschedule or extension can never
+// leave a stale code sitting in someone's inbox), shorter and cheaper texts,
+// and every arrival checks in. The guest taps CHECK IN on /checkin/<token>
+// (no login — the link IS the key, same as the manage link) once they're at
+// the studio, up to CODE_REVEAL_MINUTES before start, and the code appears.
+// Every text and email that used to print the code prints this line instead.
+// The ONLY surfaces that still print a code: the check-in page, the manage
+// page AFTER check-in, the "CODE" text-back, the start-time fallback text, and
+// the owner's manual SEND DOOR CODE button — all in lib/door-code-fallback.ts
+// or behind an explicit owner action.
+export const CODE_REVEAL_MINUTES = 30
+export const checkInUrl = (token: string) =>
+  `${(process.env.NEXT_PUBLIC_APP_URL || 'https://madekulture.com').replace(/\/$/, '')}/checkin/${token}`
+/** The one sentence for texts (GSM-7 safe: no emoji, no typographic dashes). */
+export const doorCodeLinkLine = (checkInToken?: string | null) => checkInToken
+  ? `Door code: when you arrive, tap CHECK IN here and your code appears (opens ${CODE_REVEAL_MINUTES} min before your session): ${checkInUrl(checkInToken)}\nNo signal? Reply CODE to this text.`
+  : `Door code: it appears on your check-in page when you arrive, ${CODE_REVEAL_MINUTES} min before your session.`
+
 export function doorCodesEnabled(): boolean {
   return apiCreds() !== null && frontDeviceId() !== null
 }

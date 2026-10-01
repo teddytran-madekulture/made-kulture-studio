@@ -20,6 +20,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { bookingHourToISO, centralDateStr, nextDay } from '@/lib/booking-times'
+import { computeVisits, fetchVisitRows, fetchPrior } from '@/lib/visits'
 
 export type FloorState = 'inuse' | 'ready' | 'dirty'
 
@@ -215,7 +216,14 @@ export interface AgendaRow {
    *  viewer, same as the name — a note can carry names and details. 2026-09-26. */
   note: string | null
   buyout: boolean
+  /** FIRST VISIT / 3RD VISIT / REGULAR · 7TH — same rule as the admin calendar
+   *  (lib/visits.ts + studio_settings.regular_visit_threshold). 2026-10-01. */
+  visit: { label: string; kind: 'first' | 'nth' | 'regular' } | null
+  /** Every arrival signal, side by side — see lib/arrival.ts. */
+  arrival: { phone: string | null; door: string | null; kiosk: string | null; checkedInAt: string | null; checkedOutAt: string | null }
 }
+
+const ord = (n: number) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]) }
 
 export async function readAgenda(opts: { withGuest?: boolean; date?: string } = {}): Promise<AgendaRow[]> {
   const db = supabaseAdmin()
@@ -230,16 +238,31 @@ export async function readAgenda(opts: { withGuest?: boolean; date?: string } = 
 
   const { data, error } = await db
     .from('bookings')
-    .select('id, start_time, end_time, set_id, notes, sets ( name ), customers ( name, phone )')
+    .select('id, start_time, end_time, set_id, notes, checked_in_at, checked_in_via, code_revealed_at, door_entered_at, checked_out_at, sets ( name ), customers ( name, phone )')
     .eq('status', 'confirmed')
     .gte('start_time', dayStart)
     .lt('start_time', dayEnd)
     .order('start_time', { ascending: true })
   if (error) { console.error('[floor] agenda read failed:', error.message); return [] }
 
+  // Visit tags: the same arithmetic the admin calendar uses. Non-fatal — a
+  // failed read means no tags, never no agenda.
+  let visits: Record<string, { n: number }> = {}
+  let regularAt = 5
+  try {
+    const [rows, prior, { data: th }] = await Promise.all([
+      fetchVisitRows(db), fetchPrior(db),
+      db.from('studio_settings').select('value').eq('key', 'regular_visit_threshold').maybeSingle(),
+    ])
+    visits = computeVisits(rows, prior)
+    regularAt = Number(th?.value) || 5
+  } catch (e) { console.warn('[floor] visit tags unavailable:', e) }
+
   interface Row {
     id: string; start_time: string; end_time: string; set_id: string | null
     notes: string | null
+    checked_in_at: string | null; checked_in_via: string | null; code_revealed_at: string | null
+    door_entered_at: string | null; checked_out_at: string | null
     sets: { name: string | null } | { name: string | null }[] | null
     customers: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null
   }
@@ -257,6 +280,21 @@ export async function readAgenda(opts: { withGuest?: boolean; date?: string } = 
       guestPhone: opts.withGuest ? c?.phone ?? null : null,
       note: opts.withGuest ? (r.notes ?? '').replace(/\s+/g, ' ').trim() || null : null,
       buyout,
+      visit: (() => {
+        const v = visits[r.id]; if (!v) return null
+        if (v.n === 1) return { label: 'FIRST VISIT', kind: 'first' as const }
+        if (v.n >= regularAt) return { label: `REGULAR · ${ord(v.n).toUpperCase()}`, kind: 'regular' as const }
+        return { label: `${ord(v.n).toUpperCase()} VISIT`, kind: 'nth' as const }
+      })(),
+      arrival: {
+        phone: r.code_revealed_at ?? null,
+        door: r.door_entered_at ?? null,
+        // A kiosk/desk check-in has no column of its own: it is the first check-in
+        // when neither the phone nor the door was.
+        kiosk: (r.checked_in_via === 'kiosk' || r.checked_in_via === 'desk') ? r.checked_in_at : null,
+        checkedInAt: r.checked_in_at ?? null,
+        checkedOutAt: r.checked_out_at ?? null,
+      },
     }
   })
 }

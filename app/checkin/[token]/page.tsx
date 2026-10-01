@@ -13,8 +13,20 @@ interface CheckinData {
   guestLimit: number
   arrivedGuests: number | null
   checkedInAt: string | null
+  codeRevealedAt?: string | null
   checkedOutAt: string | null
+  // Door code (2026-10-01): revealed by CHECK IN, never sent. Null until then.
+  codeOpensAt?: string
+  doorCode?: string | null
+  doorCodeBack?: string | null
+  hasDoorCode?: boolean
+  doorHowTo?: string
 }
+
+// The revealed code is kept on THIS phone so a dropped signal between the car
+// and the keypad can't take it away. Per booking token; cleared on check-out.
+const codeKey = (token: string) => `mk_door_code_${token}`
+const spaced = (c: string) => c.replace(/(\d{3})(?=\d)/g, '$1 ')
 
 const fmt = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -31,6 +43,7 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   const [checkedOut, setCheckedOut] = useState(false)
   const [justActed, setJustActed]   = useState(false)
   const [kiosk, setKiosk]           = useState(false)
+  const [codes, setCodes] = useState<{ front: string | null; back: string | null } | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -50,10 +63,20 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
       .then((d: CheckinData) => {
         setData(d)
         setGuests(d.declaredGuests ?? 1)
-        setCheckedIn(!!d.checkedInAt)
+        setCheckedIn(!!d.checkedInAt || !!d.codeRevealedAt)
         setCheckedOut(!!d.checkedOutAt)
+        if (d.doorCode || d.doorCodeBack) {
+          setCodes({ front: d.doorCode ?? null, back: d.doorCodeBack ?? null })
+          try { localStorage.setItem(codeKey(params.token), JSON.stringify({ front: d.doorCode ?? null, back: d.doorCodeBack ?? null })) } catch {}
+        } else if ((d.checkedInAt || d.codeRevealedAt) && !d.checkedOutAt) {
+          try { const c = localStorage.getItem(codeKey(params.token)); if (c) setCodes(JSON.parse(c)) } catch {}
+        }
       })
-      .catch(() => setNotFound(true))
+      .catch(() => {
+        // Offline at the door: fall back to the code this phone already saw.
+        try { const c = localStorage.getItem(codeKey(params.token)); if (c) { setCodes(JSON.parse(c)); setCheckedIn(true); return } } catch {}
+        setNotFound(true)
+      })
   }
   useEffect(load, [params.token])
 
@@ -79,12 +102,21 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
           action,
           guests: action === 'check_in' && !data?.isBuyout ? guests : undefined,
           lat: coords?.lat, lng: coords?.lng,
+          kiosk,
         }),
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'Something went wrong.'); setBusy(false); return }
-      if (action === 'check_in') setCheckedIn(true)
-      else setCheckedOut(true)
+      if (action === 'check_in') {
+        setCheckedIn(true)
+        if (d.doorCode || d.doorCodeBack) {
+          setCodes({ front: d.doorCode ?? null, back: d.doorCodeBack ?? null })
+          try { localStorage.setItem(codeKey(params.token), JSON.stringify({ front: d.doorCode ?? null, back: d.doorCodeBack ?? null })) } catch {}
+        }
+      } else {
+        setCheckedOut(true)
+        try { localStorage.removeItem(codeKey(params.token)) } catch {}
+      }
       setJustActed(true)
       setBusy(false)
       scheduleReset()
@@ -112,7 +144,29 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   ) : null
 
   if (notFound) return wrap(<p style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter' }}>We couldn’t find that booking. Text us at (832) 408-1631.</p>)
-  if (!data) return wrap(<p style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter' }}>Loading…</p>)
+
+  // The door-code panel — the whole reason the guest opened this page.
+  const codePanel = codes && (codes.front || codes.back) ? (
+    <div style={{ border: '1px solid #c9b27e', background: '#111', padding: '22px 20px', marginBottom: 24 }}>
+      <div style={{ ...label, color: '#c9b27e', marginBottom: 12 }}>YOUR DOOR CODE</div>
+      {codes.front && <>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)' }}>FRONT DOOR</div>
+        <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 40, fontWeight: 700, letterSpacing: '0.18em', margin: '2px 0 12px' }}>{spaced(codes.front)}</div>
+      </>}
+      {codes.back && <>
+        <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)' }}>BACK DOOR</div>
+        <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 40, fontWeight: 700, letterSpacing: '0.18em', margin: '2px 0 12px' }}>{spaced(codes.back)}</div>
+      </>}
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: 0, lineHeight: 1.5 }}>
+        {data?.doorHowTo ?? 'Enter the code, then press the unlock button to open.'} It only works during your booked time.
+      </p>
+    </div>
+  ) : null
+
+  if (!data) {
+    // Offline but we have a cached code: still show it.
+    return wrap(codePanel ?? <p style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter' }}>Loading…</p>)
+  }
 
   const summary = (
     <div style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '18px 20px', marginBottom: 28, textAlign: 'left' }}>
@@ -141,6 +195,7 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   if (checkedIn) return wrap(<>
     <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>YOU’RE IN.</h1>
     <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.55)', marginBottom: 28 }}>{data.name ? `Enjoy your session, ${data.name.split(' ')[0]}. ` : 'Enjoy your session. '}When you’re done and packed up, check out below.</p>
+    {codePanel}
     {summary}
     <div style={{ ...label, marginBottom: 10, textAlign: 'left' }}>BEFORE YOU CHECK OUT</div>
     <ul style={{ textAlign: 'left', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.8, margin: '0 0 28px', paddingLeft: 18 }}>
@@ -158,6 +213,16 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   return wrap(<>
     <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>WELCOME{data.name ? `,\n${data.name.split(' ')[0].toUpperCase()}` : ''}</h1>
     {summary}
+    {data.hasDoorCode && !kiosk && (
+      <div style={{ border: '1px solid rgba(201,178,126,0.45)', padding: '14px 16px', marginBottom: 24, textAlign: 'left' }}>
+        <div style={{ ...label, color: '#c9b27e', marginBottom: 6 }}>YOUR DOOR CODE</div>
+        <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0, lineHeight: 1.55 }}>
+          {data.codeOpensAt && new Date(data.codeOpensAt).getTime() > Date.now()
+            ? <>Appears here when you check in. Check-in opens at <strong style={{ color: '#fff' }}>{fmt(data.codeOpensAt)}</strong>, once you’re at the studio.</>
+            : <>Tap <strong style={{ color: '#fff' }}>CHECK IN</strong> once you’re at the studio and your code appears here.</>}
+        </p>
+      </div>
+    )}
     {!data.isBuyout && <>
       <div style={{ ...label, marginBottom: 6, textAlign: 'left' }}>CONFIRM THE GUESTS IN YOUR PARTY</div>
       <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'left', margin: '0 0 14px' }}>Your total party size for this booking — not everyone has to be here yet.</p>
@@ -173,7 +238,7 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
     <div style={{ height: 16 }} />
     {err && <p style={{ color: '#f0a0a0', fontFamily: 'Inter', fontSize: 13, marginBottom: 12 }}>{err}</p>}
     <button onClick={() => act('check_in')} disabled={busy} style={bigBtn('#fff', '#080808')}>
-      {busy ? 'CHECKING IN…' : 'CHECK IN'}
+      {busy ? 'CHECKING IN…' : (data.hasDoorCode && !kiosk ? 'CHECK IN — SHOW MY CODE' : 'CHECK IN')}
     </button>
   </>)
 }

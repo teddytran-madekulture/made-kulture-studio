@@ -23,7 +23,7 @@ import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-bo
 import { standingForEmail, cancelProtectionOn } from '@/lib/standing'
 import { checkSetWindows } from '@/lib/set-availability'
 import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
-import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
+import { issueDoorCodes, doorCodeLinkLine, checkInUrl } from '@/lib/igloohome'
 import { patchCalendarEvent } from '@/lib/gcal'
 import { notifyCoverageGap } from '@/lib/coverage'
 import { sendSimpleEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
@@ -128,7 +128,7 @@ export async function rescheduleBooking(
 
   const { data: booking, error: fetchErr } = await service
     .from('bookings')
-    .select('id, start_time, end_time, status, set_id, auth_user_id, gcal_event_id, acuity_appointment_id, total_amount, customers(name, email, phone), sets(name)')
+    .select('id, start_time, end_time, status, set_id, auth_user_id, gcal_event_id, acuity_appointment_id, total_amount, check_in_token, customers(name, email, phone), sets(name)')
     .eq('id', bookingId)
     .maybeSingle()
   if (fetchErr) return { ok: false, error: fetchErr.message, status: 500 }
@@ -336,11 +336,10 @@ export async function rescheduleBooking(
   // gsmSafe() on every body, so they are folded before Twilio sees them and cost
   // nothing. Changing the customer-visible wording during an extraction would
   // mean a later bug report couldn't be pinned on the new path vs the move.
-  const codeLines = [
-    doorCode ? `🔑 Front-door code: ${doorCode.replace(/(\d{3})(?=\d)/g, '$1 ')}` : null,
-    doorCodeBack ? `🔑 Back-door code: ${doorCodeBack.replace(/(\d{3})(?=\d)/g, '$1 ')}` : null,
-  ].filter(Boolean) as string[]
-  if (codeLines.length) codeLines.push(DOOR_CODE_HOWTO, '(your previous codes no longer apply)')
+  // A fresh code was minted for the new window. It is NOT texted (2026-10-01):
+  // the check-in page always shows the CURRENT code, so a moved session can't
+  // leave a stale one in the guest's messages.
+  const codeLines = (doorCode || doorCodeBack) ? [doorCodeLinkLine((booking as any).check_in_token)] : []
 
   await Promise.allSettled([
     cust?.phone ? sendSMS(cust.phone, [
@@ -358,7 +357,7 @@ export async function rescheduleBooking(
         `<strong style="color:#fff;">${setName}</strong>`,
         `New time: <strong style="color:#fff;">${whenNew}</strong>`,
         `Previously: ${whenOld}`,
-        ...(doorCode ? [`Your new front-door code is <strong style="color:#fff;">${doorCode}</strong>${doorCodeBack ? ` and the back door is <strong style="color:#fff;">${doorCodeBack}</strong>` : ''}. Your previous codes no longer apply.`] : []),
+        ...(doorCode ? [`Your door code was refreshed for the new time. It appears on your check-in page when you arrive${(booking as any).check_in_token ? `: <a href="${checkInUrl((booking as any).check_in_token)}" style="color:#c9b27e;">check in &amp; get my code</a>` : ''}.`] : []),
         `Nothing was charged — your session is the same length and the same price.`,
       ],
       label: 'booking_rescheduled',

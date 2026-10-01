@@ -28,7 +28,7 @@ export async function GET() {
   const { data, error } = await service
     .from('bookings')
     .select(`
-      id, set_id, start_time, end_time, status, total_amount, acuity_appointment_id, door_code,
+      id, set_id, start_time, end_time, status, total_amount, acuity_appointment_id, check_in_token,
       sets ( name, slug ),
       customers ( name ),
       booking_add_ons ( quantity, rate, paid, equipment ( name ) )
@@ -41,6 +41,8 @@ export async function GET() {
   // Map DB columns to the shape the account page expects.
   const bookings = (data ?? []).map((b: any) => ({
     ...b,
+    // 2026-10-01: the door code is revealed on the check-in page, never listed here.
+    check_in_token: b.check_in_token ?? null,
     total_price:   b.total_amount,
     customer_name: b.customers?.name ?? null,
   }))

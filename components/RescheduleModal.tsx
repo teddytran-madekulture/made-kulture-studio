@@ -142,7 +142,7 @@ export default function RescheduleModal({
         onDone(`Request sent for ${d.when}. Your session stays at its current time until we approve it — we’ll text you either way.`)
         return
       }
-      onDone(`Moved to ${d.when}.${d.doorCode ? ' Your new door code is on its way by text.' : ''}`)
+      onDone(`Moved to ${d.when}.${d.doorCode ? ' Your door code is refreshed — it shows on your check-in page when you arrive.' : ''}`)
     } catch {
       setErr('Something went wrong — nothing was changed.')
       setBusy(false)

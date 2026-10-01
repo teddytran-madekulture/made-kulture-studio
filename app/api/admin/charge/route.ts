@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { bookingHourToISO, bookingEndISO, bookingSpanHours } from '@/lib/booking-times'
-import { issueDoorCodes, DOOR_CODE_HOWTO } from '@/lib/igloohome'
+import { issueDoorCodes, doorCodeLinkLine } from '@/lib/igloohome'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
         notes,
         ...(await adminRewardFields(email, totalAmount)),
       })
-      .select('id')
+      .select('id, check_in_token')
       .single()
 
     if (bookingError) console.error('Supabase error:', bookingError)
@@ -187,9 +187,7 @@ export async function POST(req: NextRequest) {
         `⏰ ${fmt12(startHour)} – ${fmt12(endHour)} (${hours}hr)`,
         `📍 ${setName}`,
         `💳 $${dollars} charged`,
-        ...(doorCode ? [`🔑 Front-door code: ${doorCode}`] : []),
-        ...(doorCodeBack ? [`🔑 Back-door code: ${doorCodeBack}`] : []),
-        ...(doorCode || doorCodeBack ? [DOOR_CODE_HOWTO] : []),
+        ...(doorCode || doorCodeBack ? [``, doorCodeLinkLine((booking as any)?.check_in_token)] : []),
         ``,
         `4825 Gulf Freeway, Houston TX 77023`,
         `Questions? Text (832) 408-1631.`,

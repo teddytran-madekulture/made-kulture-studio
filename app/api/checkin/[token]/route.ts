@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendOwnerSMS } from '@/lib/sms'
+import { recordArrival } from '@/lib/arrival'
+import { CODE_REVEAL_MINUTES, DOOR_CODE_HOWTO } from '@/lib/igloohome'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,7 +27,7 @@ export const dynamic = 'force-dynamic'
 
 const BOOKING_SELECT = `
   id, start_time, end_time, status, guest_count, arrived_guest_count,
-  checked_in_at, checked_out_at,
+  checked_in_at, checked_out_at, door_code, door_code_back, code_revealed_at,
   sets ( name, capacity ),
   customers ( name, phone )
 `
@@ -40,6 +42,26 @@ function fmtTime(iso: string) {
 }
 function setNameOf(b: any) {
   return b.sets?.name ?? 'Full Studio Takeover'
+}
+
+// ── The door code is REVEALED, not sent (2026-10-01) ────────────────────────
+// Tapping CHECK IN here stamps code_revealed_at and checks the booking in
+// (lib/arrival.ts, via 'phone') — silently: the owner's ONE arrival push comes
+// from the door, or the kiosk if the door was never used. The code shows while
+// the session is live-ish once revealed OR once the door/tablet checked in.
+const REVEAL_BEFORE_MS = CODE_REVEAL_MINUTES * 60 * 1000
+const LINGER_AFTER_MS  = 60 * 60 * 1000
+function codePayload(b: any, now = Date.now()) {
+  const start = new Date(b.start_time).getTime(), end = new Date(b.end_time).getTime()
+  const live = now >= start - REVEAL_BEFORE_MS && now <= end + LINGER_AFTER_MS
+  const revealed = !!(b.checked_in_at || b.code_revealed_at) && live
+  return {
+    codeOpensAt: new Date(start - REVEAL_BEFORE_MS).toISOString(),
+    doorCode:     revealed ? (b.door_code ?? null) : null,
+    doorCodeBack: revealed ? (b.door_code_back ?? null) : null,
+    hasDoorCode:  !!(b.door_code || b.door_code_back),
+    doorHowTo:    DOOR_CODE_HOWTO,
+  }
 }
 
 // GET /api/checkin/[token] — booking details for the check-in screen.
@@ -58,14 +80,17 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     guestLimit:     guestLimitOf(b),
     arrivedGuests:  b.arrived_guest_count ?? null,
     checkedInAt:    b.checked_in_at ?? null,
+    codeRevealedAt: b.code_revealed_at ?? null,
     checkedOutAt:   b.checked_out_at ?? null,
+    ...codePayload(b),
   })
 }
 
 // POST /api/checkin/[token] — { action: 'check_in' | 'check_out', guests?: number }
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
-    const { action, guests, lat, lng } = await req.json()
+    const { action, guests, lat, lng, kiosk } = await req.json()
+    const kioskMode = kiosk === true
     const { data: b } = await supabase.from('bookings').select(BOOKING_SELECT).eq('check_in_token', params.token).maybeSingle()
     if (!b) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 })
     if (b.status === 'cancelled') return NextResponse.json({ error: 'This booking was cancelled.' }, { status: 400 })
@@ -77,10 +102,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     const setName = setNameOf(b)
 
     if (action === 'check_in') {
-      // Window: 15 min before start (matches "arrive 15 min early") through 60
-      // min after end.
-      if (now < start - 15 * 60 * 1000) {
-        return NextResponse.json({ error: `Check-in opens at ${fmtTime(new Date(start - 15 * 60 * 1000).toISOString())}.` }, { status: 400 })
+      // Window: CODE_REVEAL_MINUTES before start (wide enough to open it in the
+      // car — this is now how the guest gets their door code) through 60 min
+      // after end.
+      if (now < start - REVEAL_BEFORE_MS) {
+        return NextResponse.json({ error: `Check-in opens at ${fmtTime(new Date(start - REVEAL_BEFORE_MS).toISOString())}.` }, { status: 400 })
       }
       if (now > end + 60 * 60 * 1000) {
         return NextResponse.json({ error: 'This booking has ended. Text (832) 408-1631 for help.' }, { status: 400 })
@@ -99,10 +125,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       }
 
       const arrived = Math.floor(Number(guests) || 0) || null
-      await supabase.from('bookings').update({
-        checked_in_at: new Date().toISOString(),
+      // Reveal the code and check in — silently from a phone, with the one
+      // arrival push if this is the shared tablet. lib/arrival.ts.
+      const revealedAt = b.code_revealed_at ?? new Date().toISOString()
+      const { error: upErr } = await supabase.from('bookings').update({
+        code_revealed_at: revealedAt,
         ...(arrived ? { arrived_guest_count: arrived } : {}),
       }).eq('id', b.id)
+      if (upErr) return NextResponse.json({ error: 'Could not check you in — please try again.' }, { status: 500 })
+      await recordArrival(supabase, b as any, kioskMode ? 'kiosk' : 'phone')
 
       const limit = guestLimitOf(b)
       const over = arrived && arrived > limit
@@ -113,13 +144,14 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // function suspends after responding — the same reason the booking route
       // collects its notifications and allSettles them. A dropped arrival alert
       // means you don't know someone walked in.
-      await sendOwnerSMS(`✅ ARRIVED — ${customer?.name ?? 'Guest'}\n📍 ${setName} · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}${guestLine}\n${locNote}`)
+      void locNote; void guestLine; void setName; void customer
 
-      return NextResponse.json({ success: true, checkedIn: true })
+      // The code comes back in the response — this is the reveal.
+      return NextResponse.json({ success: true, checkedIn: true, ...codePayload({ ...b, code_revealed_at: revealedAt }, now) })
     }
 
     if (action === 'check_out') {
-      if (!b.checked_in_at) return NextResponse.json({ error: 'Please check in first.' }, { status: 400 })
+      if (!b.checked_in_at && !b.code_revealed_at) return NextResponse.json({ error: 'Please check in first.' }, { status: 400 })
       await supabase.from('bookings').update({ checked_out_at: new Date().toISOString() }).eq('id', b.id)
 
       await sendOwnerSMS(`👋 CHECKED OUT — ${customer?.name ?? 'Guest'}\n📍 ${setName} is now free.`)
