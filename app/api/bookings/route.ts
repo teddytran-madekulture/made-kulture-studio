@@ -706,6 +706,19 @@ export async function POST(req: NextRequest) {
         .eq('id', authUserId).is('square_customer_id', null)
     }
 
+    // A Google sign-up arrives with no phone on the account, and the phone typed
+    // at checkout used to stay on the booking only. Fill it in — only for the
+    // SIGNED-IN member (never by typed email) and only when the profile has none,
+    // so an existing number is never overwritten.
+    const checkoutPhone = String(body.phone || '').replace(/[^\d]/g, '')
+    if (sessionUser?.id && checkoutPhone.length >= 10) {
+      const { error: phoneErr } = await supabase.from('customer_profiles')
+        .update({ phone: checkoutPhone })
+        .eq('id', sessionUser.id)
+        .or('phone.is.null,phone.eq.')
+      if (phoneErr) console.error('[bookings] could not save checkout phone to profile (non-fatal):', phoneErr)
+    }
+
     // ── 11. Insert one booking row per line (shared order_group) ────────────
     const orderGroup = lines.length > 1 ? randomUUID() : null
     const equipDollars = equipCustom
