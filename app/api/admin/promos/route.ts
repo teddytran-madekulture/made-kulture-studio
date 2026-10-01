@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data } = await supabaseAdmin()
     .from('promo_codes')
-    .select('id, code, kind, value, min_cents, max_uses, uses, per_customer_limit, starts_at, expires_at, active, label, created_at')
+    .select('id, code, kind, value, min_cents, max_uses, uses, per_customer_limit, starts_at, expires_at, active, label, created_at, recipients_only')
     .order('created_at', { ascending: false })
   return NextResponse.json({ promos: data ?? [] })
 }
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
     expires_at:         b.expires_at || null,
     label:              b.label || null,
     active:             true,
+    recipients_only:    b.recipients_only === true,
   })
   if (error) {
     const dup = /duplicate|unique/i.test(error.message)

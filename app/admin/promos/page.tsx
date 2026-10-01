@@ -5,7 +5,7 @@ import Link from 'next/link'
 interface Promo {
   id: string; code: string; kind: 'percent' | 'fixed'; value: number
   min_cents: number | null; max_uses: number | null; uses: number
-  per_customer_limit: number | null; starts_at: string | null; expires_at: string | null
+  per_customer_limit: number | null; starts_at: string | null; expires_at: string | null; recipients_only?: boolean
   active: boolean; label: string | null; created_at: string
 }
 
@@ -21,7 +21,7 @@ export default function PromosPage() {
   const [unauth, setUnauth] = useState(false)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const [f, setF] = useState({ code: '', kind: 'percent' as 'percent' | 'fixed', amount: '', minDollars: '', maxUses: '', perCustomer: '1', expires: '', label: '' })
+  const [f, setF] = useState({ code: '', kind: 'percent' as 'percent' | 'fixed', amount: '', minDollars: '', maxUses: '', perCustomer: '1', expires: '', label: '', inviteOnly: false })
 
   const load = async () => {
     const r = await fetch('/api/admin/promos')
@@ -38,13 +38,16 @@ export default function PromosPage() {
       min_cents: f.minDollars ? Math.round(Number(f.minDollars) * 100) : null,
       max_uses: f.maxUses || null,
       per_customer_limit: f.perCustomer || null,
-      expires_at: f.expires ? new Date(f.expires).toISOString() : null,
+      // End of the chosen day in the admin's own (Central) time. new Date('YYYY-MM-DD')
+      // alone is UTC midnight = 7 PM Central the DAY BEFORE.
+      expires_at: f.expires ? new Date(`${f.expires}T23:59:59`).toISOString() : null,
       label: f.label || null,
+      recipients_only: f.inviteOnly,
     }
     const r = await fetch('/api/admin/promos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const d = await r.json(); setBusy(false)
     if (!r.ok) { setErr(d.error || 'Could not create code.'); return }
-    setF({ code: '', kind: 'percent', amount: '', minDollars: '', maxUses: '', perCustomer: '1', expires: '', label: '' })
+    setF({ code: '', kind: 'percent', amount: '', minDollars: '', maxUses: '', perCustomer: '1', expires: '', label: '', inviteOnly: false })
     load()
   }
 
@@ -88,6 +91,10 @@ export default function PromosPage() {
                 <div><span style={lbl}>Expires (opt)</span><input style={inp} type="date" value={f.expires} onChange={e => setF({ ...f, expires: e.target.value })} /></div>
                 <div><span style={lbl}>Label (internal)</span><input style={inp} value={f.label} onChange={e => setF({ ...f, label: e.target.value })} placeholder="Holiday 2026" /></div>
               </div>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 14, fontSize: 13, color: C.dim, cursor: 'pointer', lineHeight: 1.5 }}>
+                <input type="checkbox" checked={f.inviteOnly} onChange={e => setF({ ...f, inviteOnly: e.target.checked })} style={{ marginTop: 3 }} />
+                <span><strong style={{ color: '#fff' }}>Invite-only</strong> — works only for people a marketing email sends it to, signed in with that same email. A forwarded code won&apos;t work for anyone else.</span>
+              </label>
               {err && <div style={{ color: '#ff6b6b', fontSize: 13, marginTop: 12 }}>{err}</div>}
               <button onClick={create} disabled={busy} style={{ marginTop: 16, background: C.accent, color: '#0b0b0d', border: 'none', borderRadius: 6, padding: '11px 22px', fontWeight: 700, fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer' }}>
                 {busy ? 'CREATING…' : '+ CREATE CODE'}
@@ -110,6 +117,7 @@ export default function PromosPage() {
                         {p.per_customer_limit ? ` · ${p.per_customer_limit}/customer` : ''}
                         {p.expires_at ? ` · exp ${new Date(p.expires_at).toLocaleDateString()}` : ''}
                         {p.label ? ` · ${p.label}` : ''}
+                        {p.recipients_only ? ' · invite-only' : ''}
                       </div>
                     </div>
                     <button onClick={() => toggle(p)} style={{ background: 'none', border: `1px solid ${p.active ? 'rgba(255,80,80,0.4)' : C.line}`, color: p.active ? '#ff6b6b' : C.dim, borderRadius: 6, padding: '7px 14px', fontSize: 11, letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap' }}>

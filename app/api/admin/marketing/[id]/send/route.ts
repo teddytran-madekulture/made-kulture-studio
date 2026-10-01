@@ -21,9 +21,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Resolve the attached promo code (rendered inside the template's promo block).
   let promoCode: string | undefined
+  let promoInviteOnly = false
   if (c.promo_id) {
-    const { data: p } = await db.from('promo_codes').select('code').eq('id', c.promo_id).maybeSingle()
+    const { data: p } = await db.from('promo_codes').select('code, recipients_only').eq('id', c.promo_id).maybeSingle()
     promoCode = p?.code || undefined
+    promoInviteOnly = !!p?.recipients_only
+  }
+
+  // Invite-only promo (migration 128): put these addresses on the code's guest
+  // list. Runs BEFORE any email leaves — a recipient must never receive a code
+  // that refuses them at checkout. Returns an error message or null.
+  const inviteRecipients = async (emails: string[]): Promise<string | null> => {
+    if (!c.promo_id || !promoInviteOnly) return null
+    const rows = Array.from(new Set(emails.map(e => e.toLowerCase().trim()).filter(Boolean)))
+      .map(email => ({ promo_id: c.promo_id, email, campaign_id: c.id }))
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await db.from('promo_code_recipients')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'promo_id,email', ignoreDuplicates: true })
+      if (error) return `Could not save the promo guest list: ${error.message}`
+    }
+    return null
   }
 
   // Template campaign → render branded HTML; legacy campaign → raw body_html (+ promo line).
@@ -39,6 +56,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (b.test) {
     const to = (b.testEmail || '').trim()
     if (!to) return NextResponse.json({ error: 'Enter a test email.' }, { status: 400 })
+    // The test address joins the guest list too, so the owner can try the code.
+    const invErr = await inviteRecipients([to])
+    if (invErr) return NextResponse.json({ error: invErr }, { status: 500 })
     const r = await sendCampaignEmails(c.subject, body, [{ email: to, name: 'Test' }])
     if (r.error) return NextResponse.json({ error: r.error }, { status: 502 })
     return NextResponse.json({ success: true, test: true, sent: r.sent })
@@ -66,6 +86,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (claimErr) return NextResponse.json({ error: claimErr.message }, { status: 500 })
   if (!claimed || claimed.length === 0) {
     return NextResponse.json({ error: 'This campaign is already sending or was already sent.' }, { status: 409 })
+  }
+
+  const invErr = await inviteRecipients(recipients.map(r => r.email))
+  if (invErr) {
+    await db.from('marketing_campaigns').update({ status: 'draft' }).eq('id', params.id)
+    return NextResponse.json({ error: invErr }, { status: 500 })
   }
 
   const r = await sendCampaignEmails(c.subject, body, recipients, c.id)

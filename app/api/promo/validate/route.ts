@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validatePromo } from '@/lib/promo'
+import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,9 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() } catch { return NextResponse.json({ ok: false, error: 'Bad request.' }, { status: 400 }) }
 
   const subtotalCents = Math.max(0, Math.round(Number(body.subtotalCents) || 0))
-  const r = await validatePromo(body.code ?? '', { subtotalCents, email: body.email })
+  // Invite-only codes check the SIGNED-IN account, never the typed email.
+  const { data: { user } } = await createClient().auth.getUser()
+  const r = await validatePromo(body.code ?? '', { subtotalCents, email: body.email, sessionEmail: user?.email ?? null })
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error })
   return NextResponse.json({ ok: true, code: r.code, discountCents: r.discountCents, label: r.label })
 }

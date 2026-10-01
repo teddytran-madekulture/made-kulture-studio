@@ -554,11 +554,13 @@ export async function POST(req: NextRequest) {
     //     server owns the discount so it can't be faked.
     let promoId: string | null = null
     let promoDiscountCents = 0
+    let promoCountEmail: string | null = null
     if (body.promoCode) {
-      const pr = await validatePromo(body.promoCode, { subtotalCents: verifiedCents, email: body.email })
+      const pr = await validatePromo(body.promoCode, { subtotalCents: verifiedCents, email: body.email, sessionEmail: sessionUser?.email })
       if (!pr.ok) return NextResponse.json({ error: pr.error }, { status: 400 })
       promoId = pr.promoId
       promoDiscountCents = pr.discountCents
+      promoCountEmail = pr.countEmail
     }
     const afterPromoCents = verifiedCents - promoDiscountCents
 
@@ -831,7 +833,7 @@ export async function POST(req: NextRequest) {
 
     // Record the promo redemption (bumps the use count + logs it).
     if (promoId && promoDiscountCents > 0) {
-      await recordPromoRedemption(promoId, { email: body.email, bookingId: firstBookingId, amountCents: promoDiscountCents })
+      await recordPromoRedemption(promoId, { email: promoCountEmail || body.email, bookingId: firstBookingId, amountCents: promoDiscountCents })
     }
 
     // ── 11b. Front-door code (igloohome algoPIN) ───────────────────────────
