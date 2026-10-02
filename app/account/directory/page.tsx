@@ -87,9 +87,14 @@ export default function DirectoryHome() {
 
       {/* FEATURED EDITORIAL */}
       {e && e.photos.length > 0 && (
-        <section style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', border: hair, borderRadius: 10, overflow: 'hidden', background: 'var(--t-surface)', marginBottom: 8 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={e.photos[0]} alt={e.title} style={{ width: '100%', height: isMobile ? 380 : 560, objectFit: 'cover', display: 'block' }} />
+        <section style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (e.photos.length > 1 ? '1.25fr 1fr' : 'minmax(0, 520px) 1fr'), border: hair, borderRadius: 10, overflow: 'hidden', background: 'var(--t-surface)', marginBottom: 8 }}>
+          {/* Portrait frames (4:5) so editorial photos show whole instead of a wide crop; two side by side on desktop when there are two. */}
+          <div style={{ display: 'grid', gridTemplateColumns: !isMobile && e.photos.length > 1 ? '1fr 1fr' : '1fr', gap: 2, background: 'var(--t-surface-hi)' }}>
+            {(isMobile ? e.photos.slice(0, 1) : e.photos.slice(0, 2)).map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={src} alt={i === 0 ? e.title : ''} style={{ width: '100%', aspectRatio: '4/5', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
+            ))}
+          </div>
           <div style={{ padding: isMobile ? '28px 22px' : '48px 44px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
             <div style={{ ...mono, color: 'var(--t-gold)' }}>Featured editorial{e.setName ? ` · Shot on ${e.setName}` : ' · Shot at Made Kulture'}</div>
             <h1 className={serif.className} style={{ fontSize: isMobile ? 48 : 68, lineHeight: 0.95, fontStyle: 'italic', fontWeight: 400, margin: 0 }}>{titleCase(e.title)}</h1>
