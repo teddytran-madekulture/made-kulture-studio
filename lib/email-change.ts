@@ -154,10 +154,17 @@ export async function adminChangeEmail(
   } else return { ok: false, status: 400, error: 'Nothing to change.' }
   if (o === n) return { ok: true, email: n }
 
-  const { data: clash } = await db.from('customers').select('id').eq('email', n).maybeSingle()
-  if (clash && clash.id !== custId) return { ok: false, status: 409, error: `Another customer record already uses ${n}. Merge the two records instead.` }
   const other = idByEmail.get(n)
   if (other && other !== uid) return { ok: false, status: 409, error: `${n} already has its own login — that’s a different account. Ask the customer which one to keep.` }
+  const { data: clash, error: clashErr } = await db.from('customers').select('id, alt_emails').eq('email', n).maybeSingle()
+  if (clashErr) return { ok: false, status: 500, error: clashErr.message }
+  // 2026-10-02 (Wellspool): a returning customer signs up with a NEW address, then
+  // asks to use the address their old booking history is under. The login has NO
+  // customer record of its own and the history record has NO login (checked
+  // above), so there is nothing to merge — the login simply ADOPTS that record by
+  // moving onto its address. Only refuse when BOTH sides carry a customer record.
+  if (clash && custId && clash.id !== custId) return { ok: false, status: 409, error: `Another customer record already uses ${n}, and this account has its own record too. Merge the two records instead.` }
+  const adopting = !!clash && !custId
 
   if (uid) {
     const { error: aErr } = await db.auth.admin.updateUserById(uid, { email: n, email_confirm: true })
@@ -173,6 +180,13 @@ export async function adminChangeEmail(
   await log(db, { auth_user_id: uid, customer_id: r.customerId ?? custId, old_email: o, new_email: n, changed_by: 'admin',
     status: r.status, applied_at: new Date().toISOString(), note: r.ok ? null : r.error })
   if (!r.ok) return { ok: false, status: 500, error: r.error }
+  // Adopted an existing record: keep the signup address on it too, so a ban
+  // check or a lookup by the old address still finds this person. Non-fatal.
+  if (adopting && o) {
+    const alt = Array.from(new Set([...(clash.alt_emails ?? []).map(normEmail), o])).filter(e => e && e !== n)
+    const { error: altErr } = await db.from('customers').update({ alt_emails: alt }).eq('id', clash.id)
+    if (altErr) console.warn('[email-change] alt_emails on adopted record:', altErr.message)
+  }
 
   // Heads-up to the NEW address so they aren't left guessing. Non-fatal.
   if (uid) {
