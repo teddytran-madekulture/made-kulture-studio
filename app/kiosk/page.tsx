@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import KioskJukeboxBar from '@/components/KioskJukeboxBar'
 import KioskShowcase, { type ShowcaseEditorial } from '@/components/KioskShowcase'
+import ZoomableImage from '@/components/ZoomableImage'
 import qrcode from 'qrcode-generator'
 import { POSE_CATEGORIES, POSE_GUIDE_ENABLED } from '@/lib/pose-categories'
 
@@ -968,21 +969,11 @@ export default function KioskPage() {
           cursor: 'pointer', zIndex: 2,
         }
         return (
-          // Swipe left/right to step, tap to go back to the grid. Pointer events
-          // cover both the tablet's touch and a mouse on a desktop.
-          <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12, touchAction: 'pan-y' }}
-            onPointerDown={e => { swipeX.current = e.clientX }}
-            onPointerUp={e => {
-              if (swipeX.current === null) return
-              const dx = e.clientX - swipeX.current
-              swipeX.current = null
-              if (dx <= -50) go(1)
-              else if (dx >= 50) go(-1)
-              else if (Math.abs(dx) < 10 && (e.target as HTMLElement).tagName === 'IMG') setZoomIdx(null)
-            }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={portalItems[idx].src} alt="" draggable={false}
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8, userSelect: 'none' }} />
+          // Swipe left/right to step, tap to go back to the grid, pinch or
+          // double-tap to zoom (2026-10-02). ZoomableImage owns every gesture so
+          // a pan can't turn into a swipe; key={idx} resets zoom per picture.
+          <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+            <ZoomableImage key={idx} src={portalItems[idx].src} onSwipe={d => go(d)} onTap={() => setZoomIdx(null)} />
             {n > 1 && <button onPointerUp={e => { e.stopPropagation(); swipeX.current = null; go(-1) }} style={{ ...arrow, left: 14 }} aria-label="Previous">‹</button>}
             {n > 1 && <button onPointerUp={e => { e.stopPropagation(); swipeX.current = null; go(1) }} style={{ ...arrow, right: 14 }} aria-label="Next">›</button>}
             <div style={{ position: 'absolute', bottom: 14, left: 0, right: 0, textAlign: 'center', fontSize: 15, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.7)', fontVariantNumeric: 'tabular-nums', pointerEvents: 'none' }}>
