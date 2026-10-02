@@ -561,6 +561,12 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   const isHourBooked = (h: number) =>
     bookedSlots.some(b => h >= b.start && h < b.end)
+  // A free hour can still be a useless START: the minimum length (4hr for a
+  // buyout) would run into the next booking. Grey those out too, so the grid only
+  // offers starts that can actually become a booking (2026-10-02 — a buyout grid
+  // offered 10am–1pm starts with a 1:30 booking ahead of them).
+  const noRoomFromStart = (h: number) =>
+    bookedSlots.some(b => b.start > h && b.start < h + minHours)
 
   // For time grid: clicking selects start, second click selects end
   // If a start hour was pre-filled from the availability chart, begin in 'end' mode
@@ -577,6 +583,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   const handleHourClick = (h: number) => {
     if (isEndCandidate(h) ? isBookedAsEnd(h) : isHourBooked(h)) return
+    if (!isEndCandidate(h) && h % 1 === 0 && noRoomFromStart(h)) return
     if (selecting === 'start') {
       // Start times are on the hour — the door code activates on the hour, so there's
       // no early entry. Half-hour slots are selectable only as END times.
@@ -1011,6 +1018,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // before closing (e.g. 9:30pm, and 10pm itself). 10pm stays available
                 // as an END once a start is chosen.
                 const closeAsStart = booking.startHour === null && h > CLOSE_HOUR - minHours
+                // Free, but the minimum session would run into the next booking.
+                const blockedAsStart = !booked && !isEndCandidate(h) && h % 1 === 0 && noRoomFromStart(h)
                 // When picking end time, allow 30-min increments at or above the
                 // set's minimum length (standard 1hr; The Watering Hole / The Tank 2hr).
                 const isInvalidEnd = selecting === 'end' && booking.startHour !== null
@@ -1064,13 +1073,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 const requestable = (notOpenForPlus || (needsApproval && booking.type !== 'studio')) && !booked && !isPast
                   && setCart.length === 0
                   && booking.startHour === null && h % 1 === 0 && h <= CLOSE_HOUR - minHours
+                  && !blockedAsStart
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)
                 const isPending = booking.startHour === h && booking.endHour === null
 
                 let bg = '#0d0d0d'
-                let color = (isInvalidEnd || isInvalidStart || closeAsStart || opensGap) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                let color = (isInvalidEnd || isInvalidStart || closeAsStart || opensGap || blockedAsStart) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
                 if (notOpenForPlus) { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (requestable)  { bg = 'rgba(201,178,126,0.07)'; color = 'rgba(201,178,126,0.75)' }
                 if (requestHour === h) { bg = 'rgba(201,178,126,0.28)'; color = '#fff' }
@@ -1086,10 +1096,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       ? (setRequestHour(h), setRequestHours(minHours), setRequestConsent(false), setRequestDone(null), setRequestErr(null))
                       : handleHourClick(h)}
                     title={requestable ? 'Not open this early/late — tap to ask' : undefined}
-                    disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || (notOpenForPlus && !requestable)}
+                    disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || (notOpenForPlus && !requestable)}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: requestable ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart) ? 'default' : 'pointer',
+                      cursor: requestable ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart || blockedAsStart) ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
