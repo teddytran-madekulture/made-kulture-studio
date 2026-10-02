@@ -5,7 +5,7 @@ import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { plusActive, plusExpiresAtMs } from '@/lib/short-notice'
-import { getPlusPricing } from '@/lib/plus-pricing'
+import { getPlusPricing, plusIntroEligible, plusCardUsedBefore } from '@/lib/plus-pricing'
 import { sendPlusReceiptEmail } from '@/lib/email'
 import { sendOwnerPush } from '@/lib/push'
 
@@ -56,16 +56,26 @@ export async function GET() {
   const { data: grows } = await service.from('customers').select('pricing_overrides').eq('email', email).limit(1)
   const po: any = (grows ?? [])[0]?.pricing_overrides ?? null
   const pricing = await getPlusPricing(service)
+  // The intro price is for people who have never had Plus. A returning member
+  // sees the standard price and no "intro" banner (isIntro is reported false
+  // for them so every page that shows the banner hides it).
+  let eligible = true
+  if (pricing.isIntro) {
+    const { data: prof } = await service.from('customer_profiles').select('phone').eq('id', user.id).maybeSingle()
+    eligible = await plusIntroEligible(service, { email, phones: [prof?.phone] })
+  }
+  const introNow = pricing.isIntro && eligible
   return NextResponse.json({
     active:    plusActive(po),
     expiresAt: plusExpiresAtMs(po),
     autoRenew: !!po?.plus_auto_renew,
     comp:      !!po?.plus_comp,
-    priceCents:    pricing.currentCents,
+    priceCents:    introNow ? pricing.introCents : pricing.standardCents,
     standardCents: pricing.standardCents,
     introCents:    pricing.introCents,
     introUntil:    pricing.introUntil,
-    isIntro:       pricing.isIntro,
+    isIntro:       introNow,
+    returning:     pricing.isIntro && !eligible,
   })
 }
 
@@ -94,8 +104,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Checkout: charge the annual fee, save the card on file, activate 1 year.
+  // Either a fresh card nonce (sourceId) or — after a "this card has had Plus
+  // before" answer — the card we already saved for them plus acceptStandard.
   const sourceId = String(body.sourceId || '')
-  if (!sourceId) return NextResponse.json({ error: 'Card details are required.' }, { status: 400 })
+  const retryCardId = String(body.savedCardId || '')
+  const acceptStandard = body.acceptStandard === true
+  if (!sourceId && !(retryCardId && acceptStandard)) {
+    return NextResponse.json({ error: 'Card details are required.' }, { status: 400 })
+  }
 
   // Already active? Don't double-charge.
   {
@@ -105,7 +121,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const cents = (await getPlusPricing(service)).currentCents
+  // Price: intro only inside the window AND only for someone who has never had
+  // Plus (account + phone here; the card is checked once Square has it, below).
+  const pricing = await getPlusPricing(service)
+  const accountEligible = pricing.isIntro && !acceptStandard &&
+    await plusIntroEligible(service, { email, phones: [profile?.phone] })
+  const cents = accountEligible ? pricing.introCents : pricing.standardCents
 
   // The customers row is where Plus is switched on. Make sure it exists BEFORE
   // charging — if it can't be created, stop here with nothing charged.
@@ -126,10 +147,32 @@ export async function POST(req: NextRequest) {
     if (!sqCustId) return NextResponse.json({ error: 'Could not set up your payment profile.' }, { status: 500 })
 
     // Save the card (consumes the single-use nonce) so renewals can charge it,
-    // then charge the stored card.
-    const cardRes = await square.cardsApi.createCard({ idempotencyKey: randomUUID(), sourceId, card: { customerId: sqCustId } })
-    const savedCardId = cardRes.result.card?.id
+    // then charge the stored card. On the accept-standard retry the card is
+    // already saved — it must belong to THIS member's Square customer.
+    let savedCardId: string | undefined
+    let fingerprint: string | null = null
+    if (sourceId) {
+      const cardRes = await square.cardsApi.createCard({ idempotencyKey: randomUUID(), sourceId, card: { customerId: sqCustId } })
+      savedCardId = cardRes.result.card?.id
+      fingerprint = cardRes.result.card?.fingerprint ?? null
+    } else {
+      const got = await square.cardsApi.retrieveCard(retryCardId).catch(() => null)
+      const c = got?.result.card
+      if (c && c.customerId === sqCustId && c.enabled !== false) { savedCardId = c.id; fingerprint = c.fingerprint ?? null }
+    }
     if (!savedCardId) return NextResponse.json({ error: 'Could not save your card.' }, { status: 400 })
+
+    // Same physical card already paid for Plus on another account → standard
+    // price. Never charge more than the page showed without asking: stop and
+    // let them confirm.
+    if (cents === pricing.introCents && cents !== pricing.standardCents && await plusCardUsedBefore(service, fingerprint)) {
+      return NextResponse.json({
+        code: 'returning_card',
+        error: `This card has had Plus before, so the new-member price doesn't apply. Plus is $${(pricing.standardCents / 100).toFixed(0)}/year.`,
+        priceCents: pricing.standardCents,
+        savedCardId,
+      }, { status: 409 })
+    }
 
     const pay = await square.paymentsApi.createPayment({
       sourceId:       savedCardId,
@@ -173,6 +216,7 @@ export async function POST(req: NextRequest) {
     await service.from('plus_payments').insert({
       customer_id: cust.id, customer_email: email, amount_cents: cents,
       square_payment_id: squarePaymentId, kind: 'signup', period_start: startIso, period_end: expiresIso,
+      card_fingerprint: fingerprint,
     })
 
     try { await sendPlusReceiptEmail({ customerName: name, customerEmail: email, amountCents: cents, expiresAt: expiresIso }) } catch {}

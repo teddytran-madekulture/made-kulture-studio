@@ -93,7 +93,7 @@ export default function TermsPage() {
           <Section title="MEMBERSHIP (MADE KULTURE PLUS)" id="plus">
             <div style={subHead}>Billing</div>
             <UL items={[
-              <>Made Kulture Plus is an <strong style={{ color: '#fff' }}>annual membership</strong> charged to the card on file. It <strong style={{ color: '#fff' }}>renews automatically</strong> each year at the then-current price unless auto-renew is turned off before the renewal date.</>,
+              <>Made Kulture Plus is an <strong style={{ color: '#fff' }}>annual membership</strong> charged to the card on file. It <strong style={{ color: '#fff' }}>renews automatically</strong> each year at the <strong style={{ color: '#fff' }}>standard annual rate</strong> (currently $149) unless auto-renew is turned off before the renewal date. Any promotional or introductory price applies to a member&apos;s first year only and is available only to people who have not had Plus before.</>,
               <>You can <strong style={{ color: '#fff' }}>cancel auto-renew at any time</strong> from your account. Your benefits continue through the end of the paid term; the membership simply does not renew, and you are not charged again.</>,
               <><strong style={{ color: '#fff' }}>Membership fees are non-refundable</strong>, including for partial or unused terms.</>,
               'Plus does not change your per-session booking rate. Introductory pricing applies to sign-ups during the intro period; renewals are billed at the price in effect at the time of renewal.',

@@ -11,6 +11,10 @@ export default function PlusCheckout({ priceLabel, onSuccess, reason }: { priceL
   const [card, setCard] = useState<unknown>(null)
   const [paying, setPaying] = useState(false)
   const [error, setError] = useState('')
+  // Set when the server says this card already paid for Plus on another account:
+  // the price becomes standard and we ask before charging it.
+  const [returning, setReturning] = useState<{ savedCardId: string; priceCents: number; message: string } | null>(null)
+  const label = returning ? `$${(returning.priceCents / 100).toFixed(0)}` : priceLabel
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -50,16 +54,27 @@ export default function PlusCheckout({ priceLabel, onSuccess, reason }: { priceL
   }, [])
 
   const pay = async () => {
-    if (!card) return
+    if (!card && !returning) return
     setPaying(true); setError('')
     try {
-      const result = await (card as any).tokenize()
-      if (result.status !== 'OK') throw new Error(result.errors?.[0]?.message ?? 'Card error')
+      let payload: Record<string, unknown>
+      if (returning) {
+        payload = { action: 'checkout', savedCardId: returning.savedCardId, acceptStandard: true }
+      } else {
+        const result = await (card as any).tokenize()
+        if (result.status !== 'OK') throw new Error(result.errors?.[0]?.message ?? 'Card error')
+        payload = { action: 'checkout', sourceId: result.token }
+      }
       const res = await fetch('/api/account/plus', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'checkout', sourceId: result.token, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({ ...payload, ...(reason ? { reason } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
+      if (res.status === 409 && data.code === 'returning_card' && data.savedCardId) {
+        setReturning({ savedCardId: data.savedCardId, priceCents: data.priceCents, message: data.error })
+        setPaying(false)
+        return
+      }
       if (!res.ok) throw new Error(data.error ?? 'Payment failed.')
       onSuccess()
     } catch (e: any) {
@@ -69,16 +84,21 @@ export default function PlusCheckout({ priceLabel, onSuccess, reason }: { priceL
 
   return (
     <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', borderRadius: 10, padding: 24 }}>
-      <div style={{ fontFamily: 'Inter', fontSize: 13, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginBottom: 16 }}>PAY {priceLabel} · 1 YEAR</div>
+      <div style={{ fontFamily: 'Inter', fontSize: 13, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginBottom: 16 }}>PAY {label} · 1 YEAR</div>
+      {returning && (
+        <div style={{ background: 'rgba(230,192,122,0.1)', border: '1px solid rgba(230,192,122,0.3)', borderRadius: 4, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-fg)', marginBottom: 16, lineHeight: 1.5 }}>
+          {returning.message} Nothing has been charged — tap below to continue at {label}.
+        </div>
+      )}
       {error && (
         <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-err)', marginBottom: 16 }}>{error}</div>
       )}
       <div ref={containerRef} style={{ minHeight: 60, marginBottom: 16 }} />
-      <button onClick={pay} disabled={paying || !card} style={{ background: 'var(--t-gold)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4, padding: '13px 26px', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', cursor: paying || !card ? 'default' : 'pointer', opacity: paying || !card ? 0.6 : 1 }}>
-        {paying ? 'PROCESSING…' : `GO PLUS · ${priceLabel}`}
+      <button onClick={pay} disabled={paying || (!card && !returning)} style={{ background: 'var(--t-gold)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4, padding: '13px 26px', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', cursor: paying || (!card && !returning) ? 'default' : 'pointer', opacity: paying || (!card && !returning) ? 0.6 : 1 }}>
+        {paying ? 'PROCESSING…' : `GO PLUS · ${label}`}
       </button>
       <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', marginTop: 14, lineHeight: 1.5 }}>
-        Your card is saved and your membership renews automatically each year at the then-current price. Cancel auto-renew anytime from your account — your benefits continue through the end of your paid year. Membership fees are non-refundable. See <Link href="/terms" style={{ color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'underline' }}>terms</Link>.
+        Your card is saved and your membership renews automatically each year at the standard rate ($149/year). Cancel auto-renew anytime from your account — your benefits continue through the end of your paid year. Membership fees are non-refundable. See <Link href="/terms" style={{ color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'underline' }}>terms</Link>.
       </div>
     </div>
   )

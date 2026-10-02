@@ -36,8 +36,10 @@ export async function GET(req: NextRequest) {
     .from('studio_settings').select('key, value').in('key', ['plus_renew_reminder_days'])
   const sm: Record<string, string> = {}; for (const r of settingRows ?? []) sm[r.key] = r.value
   const reminderDays = Number(sm['plus_renew_reminder_days']) > 0 ? Number(sm['plus_renew_reminder_days']) : 7
-  // Renewals charge the CURRENT price tier at renewal time (intro or standard).
-  const priceCents = (await getPlusPricing(supabase)).currentCents
+  // Renewals ALWAYS charge the standard price — the intro price is a first-year,
+  // new-member promo only (Teddy, 2026-10-01). Before this, a renewal that fell
+  // inside a promo window would have gone through at the promo price.
+  const priceCents = (await getPlusPricing(supabase)).standardCents
 
   const now = Date.now()
   const { data: customers } = await supabase
