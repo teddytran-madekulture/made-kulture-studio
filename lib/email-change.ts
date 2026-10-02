@@ -46,7 +46,7 @@ export async function moveCustomerEmail(db: any, opts: { oldEmail: string; newEm
 
   const [{ data: oldRow, error: e1 }, { data: newRow, error: e2 }] = await Promise.all([
     db.from('customers').select('id, alt_emails').eq('email', o).maybeSingle(),
-    db.from('customers').select('id').eq('email', n).maybeSingle(),
+    db.from('customers').select('id, alt_emails').eq('email', n).maybeSingle(),
   ])
   if (e1 || e2) return { ok: false, status: 'error', error: (e1 ?? e2).message, customerId: null }
 
@@ -62,6 +62,14 @@ export async function moveCustomerEmail(db: any, opts: { oldEmail: string; newEm
     const { data: upd, error } = await db.from('customers').update({ email: n, alt_emails: alt }).eq('id', oldRow.id).select('id')
     if (error) return { ok: false, status: 'error', error: error.message, customerId: oldRow.id }
     if (!upd?.length) return { ok: false, status: 'error', error: 'Customer update matched no row.', customerId: oldRow.id }
+  }
+  // ADOPTING (2026-10-02): no record at the old address, but one at the new
+  // address — the login takes over that record. Keep the old address on it too,
+  // so both doors (self-serve and admin) leave the same trail. Non-fatal.
+  if (!oldRow && newRow) {
+    const alt = Array.from(new Set([...(newRow.alt_emails ?? []).map(normEmail), o])).filter(e => e && e !== n)
+    const { error } = await db.from('customers').update({ alt_emails: alt }).eq('id', newRow.id)
+    if (error) console.warn('[email-change] alt_emails on adopted record:', error.message)
   }
   const customerId: string | null = oldRow?.id ?? newRow?.id ?? null
 
@@ -164,7 +172,7 @@ export async function adminChangeEmail(
   // above), so there is nothing to merge — the login simply ADOPTS that record by
   // moving onto its address. Only refuse when BOTH sides carry a customer record.
   if (clash && custId && clash.id !== custId) return { ok: false, status: 409, error: `Another customer record already uses ${n}, and this account has its own record too. Merge the two records instead.` }
-  const adopting = !!clash && !custId
+  // (When clash && !custId the login ADOPTS that record — moveCustomerEmail keeps the old address on it.)
 
   if (uid) {
     const { error: aErr } = await db.auth.admin.updateUserById(uid, { email: n, email_confirm: true })
@@ -180,13 +188,6 @@ export async function adminChangeEmail(
   await log(db, { auth_user_id: uid, customer_id: r.customerId ?? custId, old_email: o, new_email: n, changed_by: 'admin',
     status: r.status, applied_at: new Date().toISOString(), note: r.ok ? null : r.error })
   if (!r.ok) return { ok: false, status: 500, error: r.error }
-  // Adopted an existing record: keep the signup address on it too, so a ban
-  // check or a lookup by the old address still finds this person. Non-fatal.
-  if (adopting && o) {
-    const alt = Array.from(new Set([...(clash.alt_emails ?? []).map(normEmail), o])).filter(e => e && e !== n)
-    const { error: altErr } = await db.from('customers').update({ alt_emails: alt }).eq('id', clash.id)
-    if (altErr) console.warn('[email-change] alt_emails on adopted record:', altErr.message)
-  }
 
   // Heads-up to the NEW address so they aren't left guessing. Non-fatal.
   if (uid) {
