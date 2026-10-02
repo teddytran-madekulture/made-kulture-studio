@@ -130,7 +130,10 @@ export async function POST(req: NextRequest) {
   // ⚠️ One live request per person — but a SECOND ask REPLACES the first rather
   // than being swallowed. It used to return ok and record nothing, so a customer
   // who changed their mind from 3pm to 7pm was silently still asking for 3pm.
-  const dupQ = service.from('short_notice_requests').select('id, approve_token').eq('status', 'pending').limit(1)
+  // Shared-floor takeover requests live in the same table but are a different
+  // ask — a short-notice request must not overwrite one.
+  const dupQ = service.from('short_notice_requests').select('id, approve_token').eq('status', 'pending')
+    .or('reason.is.null,reason.neq.shared_buyout').limit(1)
   const { data: dup } = c.id ? await dupQ.eq('customer_id', c.id) : await dupQ.eq('customer_email', c.email)
   const existing = dup && dup.length ? dup[0] : null
 

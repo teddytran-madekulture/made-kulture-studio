@@ -362,6 +362,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   // figure shown here is the figure charged on approval, and two independent
   // calculations of one number is how they end up disagreeing.
   const [requestCents,   setRequestCents]   = useState<number | null>(null)
+  // Full-warehouse grid only: other TAKEOVERS (which block outright) kept apart
+  // from SET bookings (which a shared-floor request can sit alongside).
+  const [buyoutSlots, setBuyoutSlots] = useState<{ start: number; end: number }[]>([])
+  const [floorSets,   setFloorSets]   = useState<{ slug: string; start: number; end: number }[]>([])
 
   // Plus instant-book blocks for the selected date (only inside the window).
   useEffect(() => {
@@ -400,14 +404,16 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   // Live price for the chosen length.
   useEffect(() => {
-    if (requestHour === null || !booking.setId || !requestHours) { setRequestCents(null); return }
+    if (requestHour === null || !requestHours || (booking.type !== 'studio' && !booking.setId)) { setRequestCents(null); return }
     let dead = false
-    fetch(`/api/account/short-notice-request?set=${booking.setId}&hours=${requestHours}`, { cache: 'no-store' })
+    fetch(booking.type === 'studio'
+      ? `/api/bookings/shared-buyout-request?hours=${requestHours}`
+      : `/api/account/short-notice-request?set=${booking.setId}&hours=${requestHours}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { if (!dead) setRequestCents(typeof d?.cents === 'number' ? d.cents : null) })
       .catch(() => { if (!dead) setRequestCents(null) })
     return () => { dead = true }
-  }, [requestHour, requestHours, booking.setId])
+  }, [requestHour, requestHours, booking.setId, booking.type])
 
   // Fetch availability when set + date change
   useEffect(() => {
@@ -423,10 +429,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
         .then(r => r.json())
         .then(d => {
           const all: { start: number; end: number }[] = [...(d.fullStudioSlots || [])]
-          for (const v of Object.values(d.sets || {}) as { bookedSlots?: { start: number; end: number }[] }[]) {
+          const perSet: { slug: string; start: number; end: number }[] = []
+          for (const [slug, v] of Object.entries(d.sets || {}) as [string, { bookedSlots?: { start: number; end: number }[] }][]) {
             all.push(...(v.bookedSlots || []))
+            for (const b of v.bookedSlots || []) perSet.push({ slug, start: b.start, end: b.end })
           }
           setBookedSlots(all)
+          setBuyoutSlots(d.fullStudioSlots || [])
+          setFloorSets(perSet)
           setLoadingSlots(false)
         })
         .catch(() => setLoadingSlots(false))
@@ -568,6 +578,23 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   const noRoomFromStart = (h: number) =>
     bookedSlots.some(b => b.start > h && b.start < h + minHours)
 
+  // ── Shared-floor takeover ──────────────────────────────────────────────────
+  // A takeover window that only collides with SET bookings can still be ASKED
+  // for: the other session keeps its set for its time, the takeover gets the
+  // rest of the floor. Teddy approves it and the card is charged the full
+  // takeover rate (app/api/bookings/shared-buyout-request). Another takeover in
+  // the window is a hard no.
+  const setsInWindow = (h: number, n: number) => floorSets.filter(b => b.start < h + n && b.end > h)
+  const sharedFits = (h: number, n: number) =>
+    h + n <= CLOSE_HOUR
+    && !buyoutSlots.some(b => b.start < h + n && b.end > h)
+    && setsInWindow(h, n).length > 0
+  const sharedAskAt = (h: number) =>
+    booking.type === 'studio' && booking.startHour === null && h % 1 === 0
+    && h <= CLOSE_HOUR - minHours && !(bookingIsToday && h < nowChiDec)
+    && (isHourBooked(h) || noRoomFromStart(h)) && sharedFits(h, minHours)
+  const setLabel = (slug: string) => sets.find(x => x.id === slug)?.name ?? slug
+
   // For time grid: clicking selects start, second click selects end
   // If a start hour was pre-filled from the availability chart, begin in 'end' mode
   const [selecting, setSelecting] = useState<'start' | 'end'>(startParam ? 'end' : 'start')
@@ -621,13 +648,21 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
     if (requestBusy) return
     setRequestBusy(true); setRequestErr(null)
     try {
-      const res = await fetch('/api/account/short-notice-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          desiredSet: booking.setId, desiredDate: booking.date, desiredStart: h,
-          desiredHours: requestHours, squareCardId: requestCardId || null, consent: true,
-        }),
-      })
+      const res = booking.type === 'studio'
+        ? await fetch('/api/bookings/shared-buyout-request', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              date: booking.date, start: h, hours: requestHours,
+              squareCardId: requestCardId || null, consent: true,
+            }),
+          })
+        : await fetch('/api/account/short-notice-request', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              desiredSet: booking.setId, desiredDate: booking.date, desiredStart: h,
+              desiredHours: requestHours, squareCardId: requestCardId || null, consent: true,
+            }),
+          })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setRequestErr(d.error || 'Could not send that request.'); setRequestBusy(false); return }
       setRequestDone({ replaced: !!d.replaced })
@@ -1019,7 +1054,9 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               <div style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.03)', padding: '14px 16px', marginBottom: 20 }}>
                 <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 1.55 }}>
                   {booking.type === 'studio'
-                    ? `No ${minHours}-hour window is open for a full takeover on this date. Try another day, or text the studio at (832) 408-1631 and we'll see what we can do.`
+                    ? (SLOTS.some(sharedAskAt)
+                        ? `No ${minHours}-hour window is completely empty on this date. The gold times have a set booked during them — tap one to ask for the takeover while sharing the floor with that session.`
+                        : `No ${minHours}-hour window is open for a full takeover on this date. Try another day, or text the studio at (832) 408-1631 and we'll see what we can do.`)
                     : `No ${minHours}-hour window is open on this set on this date. Try another day or another set.`}
                 </div>
               </div>
@@ -1088,10 +1125,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // a box promising "same booking · one payment · one door code", and
                 // the member gets a second charge and a second door code they never
                 // agreed to. They can ask for the gold hour once this booking is done.
-                const requestable = (notOpenForPlus || (needsApproval && booking.type !== 'studio')) && !booked && !isPast
+                const sharedAsk = sharedAskAt(h)
+                const requestable = sharedAsk || ((notOpenForPlus || (needsApproval && booking.type !== 'studio')) && !booked && !isPast
                   && setCart.length === 0
                   && booking.startHour === null && h % 1 === 0 && h <= CLOSE_HOUR - minHours
-                  && !blockedAsStart
+                  && !blockedAsStart)
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)
@@ -1104,6 +1142,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 if (requestHour === h) { bg = 'rgba(201,178,126,0.28)'; color = '#fff' }
                 if (isPast)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
+                if (sharedAsk)    { bg = requestHour === h ? 'rgba(201,178,126,0.28)' : 'rgba(201,178,126,0.07)'; color = requestHour === h ? '#fff' : 'rgba(201,178,126,0.75)' }
                 if (inRange)      { bg = '#fff'; color = '#080808' }
                 if (start || end) { bg = '#fff'; color = '#080808' }
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
@@ -1113,8 +1152,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                     onClick={() => requestable
                       ? (setRequestHour(h), setRequestHours(minHours), setRequestConsent(false), setRequestDone(null), setRequestErr(null))
                       : handleHourClick(h)}
-                    title={requestable ? 'Not open this early/late — tap to ask' : undefined}
-                    disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || beforeStartWhilePickingEnd || (notOpenForPlus && !requestable)}
+                    title={sharedAsk ? 'A set is booked during this window — tap to ask to share the floor' : requestable ? 'Not open this early/late — tap to ask' : undefined}
+                    disabled={!requestable && (booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || beforeStartWhilePickingEnd || !!notOpenForPlus)}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
                       cursor: requestable ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart || blockedAsStart || beforeStartWhilePickingEnd) ? 'default' : 'pointer',
@@ -1125,8 +1164,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       {fmt12(h)}
                     </div>
                     {booked && (
-                      <div style={{ fontFamily: 'Inter', fontSize: 9, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', marginTop: 4 }}>
-                        BOOKED
+                      <div style={{ fontFamily: 'Inter', fontSize: 9, color: sharedAsk ? 'rgba(201,178,126,0.6)' : 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', marginTop: 4 }}>
+                        {sharedAsk ? 'SET BOOKED' : 'BOOKED'}
                       </div>
                     )}
                   </button>
@@ -1164,10 +1203,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                         /account, which already renders a live "Request sent · pending" card
                         (ShortNoticeRequest). Anyone who can tap a gold hour has Plus, and
                         shortNoticeViewActive() is true for Plus, so that card WILL render. */}
-                    <a href="/account"
+                    {booking.type !== 'studio' && <a href="/account"
                       style={{ display: 'inline-block', marginTop: 14, background: '#c9b27e', border: '1px solid #c9b27e', color: '#0a0a0a', padding: '11px 18px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textDecoration: 'none' }}>
                       VIEW MY REQUEST →
-                    </a>
+                    </a>}
                     <button onClick={() => { setRequestHour(null); setRequestDone(null) }}
                       style={{ marginTop: 14, marginLeft: 10, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.12em' }}>
                       KEEP BROWSING
@@ -1176,19 +1215,43 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 ) : (
                   <>
                     <div style={{ fontFamily: 'Inter', fontSize: 14, color: '#fff', marginBottom: 6 }}>
-                      Ask for {fmt12(requestHour)}?
+                      {booking.type === 'studio' ? `Share the floor from ${fmt12(requestHour)}?` : `Ask for ${fmt12(requestHour)}?`}
                     </div>
-                    <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 16 }}>
-                      The studio isn&rsquo;t already open then, so we have to confirm it. Set it up here and we&rsquo;ll do the rest &mdash; you won&rsquo;t need to come back and book.
-                    </div>
+                    {booking.type === 'studio' ? (
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 16 }}>
+                        Someone already has a set booked during this window. You can still request the full warehouse &mdash; you&rsquo;d have the rest of the floor, and they keep their set for their booked time:
+                        <div style={{ margin: '10px 0 0', color: 'rgba(255,255,255,0.8)' }}>
+                          {setsInWindow(requestHour, requestHours).map((b, i) => (
+                            <div key={i}>&bull; {setLabel(b.slug)} &middot; {fmt12(b.start)}&ndash;{fmt12(b.end)}</div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 10 }}>Send the request and we&rsquo;ll confirm with you &mdash; you won&rsquo;t need to come back and book.</div>
+                      </div>
+                    ) : (
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 16 }}>
+                        The studio isn&rsquo;t already open then, so we have to confirm it. Set it up here and we&rsquo;ll do the rest &mdash; you won&rsquo;t need to come back and book.
+                      </div>
+                    )}
+                    {booking.type === 'studio' && !loggedIn ? (
+                      <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55, marginBottom: 12 }}>
+                        <a href={`/login?next=${encodeURIComponent('/book?type=studio')}`} style={{ color: '#c9b27e', textDecoration: 'underline' }}>Sign in</a> or <a href="/signup" style={{ color: '#c9b27e', textDecoration: 'underline' }}>create a free account</a> to send a shared-floor request.
+                        <div style={{ marginTop: 12 }}>
+                          <button onClick={() => { setRequestHour(null); setRequestErr(null) }}
+                            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.14em' }}>
+                            CANCEL
+                          </button>
+                        </div>
+                      </div>
+                    ) : (<>
 
                     {/* Length. Capped at 4 hours on purpose: a member who needs
                         longer extends once they're on site, the same way every
                         other session does. */}
                     <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>HOW LONG?</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-                      {[1, 1.5, 2, 2.5, 3, 3.5, 4]
-                        .filter(n => n >= minHours && requestHour + n <= CLOSE_HOUR)
+                      {(booking.type === 'studio' ? [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8] : [1, 1.5, 2, 2.5, 3, 3.5, 4])
+                        .filter(n => n >= minHours && requestHour + n <= CLOSE_HOUR
+                          && (booking.type !== 'studio' || sharedFits(requestHour, n)))
                         .map(n => (
                           <button key={n} onClick={() => setRequestHours(n)}
                             style={{
@@ -1241,10 +1304,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       <input type="checkbox" checked={requestConsent} onChange={e => setRequestConsent(e.target.checked)}
                         style={{ marginTop: 2, width: 16, height: 16, accentColor: '#c9b27e', flexShrink: 0 }} />
                       <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.55 }}>
-                        {requestCards.length > 0 && requestCents != null
+                        {booking.type === 'studio'
+                          ? (requestCards.length > 0 && requestCents != null
+                              ? `If Made Kulture approves this, charge my card $${(requestCents / 100).toFixed(2)} for the full-warehouse takeover. I understand the set booking(s) listed above will be on the floor during their times.`
+                              : 'If Made Kulture approves this, confirm the takeover at the price above. I understand the set booking(s) listed above will be on the floor during their times.')
+                          : requestCards.length > 0 && requestCents != null
                           ? `If Made Kulture approves this, charge my card $${(requestCents / 100).toFixed(2)} and confirm the booking.`
                           : 'If Made Kulture approves this, confirm the booking at the price above.'}
-                        {' '}You can cancel for full studio credit.
+                        {booking.type !== 'studio' && ' You can cancel for full studio credit.'}
                       </span>
                     </label>
 
@@ -1261,6 +1328,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                         CANCEL
                       </button>
                     </div>
+                    </>)}
                   </>
                 )}
               </div>

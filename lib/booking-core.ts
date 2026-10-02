@@ -147,7 +147,7 @@ export type ValidateResult =
 export async function validateAndPriceOrder(
   supabase: SupabaseClient,
   body: BookingCoreInput,
-  opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean; payerContacts?: string[] } = {}
+  opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean; payerContacts?: string[]; sharedFloor?: boolean } = {}
 ): Promise<ValidateResult> {
   // 1. Customer pricing overrides
   let customerPricingOverrides: any = null
@@ -322,8 +322,10 @@ export async function validateAndPriceOrder(
     // confirmed sessions. The set-booking direction was blind too — see the
     // note at the top of lib/set-availability.ts.
     const l = lines[0]
-    const { ok, conflicts } = await checkBuyoutWindow(supabase, l.startISO, l.endISO)
-    if (!ok) return { ok: false, error: conflicts.map(c => c.reason).join(' '), status: 409 }
+    // sharedFloor = a studio-approved takeover that runs alongside the set
+    // bookings already there; only another buyout can block it.
+    const { ok, conflicts } = await checkBuyoutWindow(supabase, l.startISO, l.endISO, undefined, { buyoutsOnly: !!opts.sharedFloor })
+    if (!ok) return { ok: false, error: opts.sharedFloor ? 'Another full-warehouse takeover is already booked during that window.' : conflicts.map(c => c.reason).join(' '), status: 409 }
   }
 
   // 6b. Non-member (guest) surcharge — per set-hour, members exempt. Studio

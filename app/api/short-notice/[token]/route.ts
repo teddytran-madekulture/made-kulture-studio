@@ -7,6 +7,7 @@ import { sendShortNoticeApprovedEmail, sendSimpleEmail, formatDateLabel } from '
 import { sendSMS, toE164 } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { bookingHourToISO } from '@/lib/booking-times'
+import { sharedFloorSets } from '@/lib/shared-floor'
 import {
   validateAndPriceOrder, insertBookingRows, finalizeBooking, fmt12,
   SLUG_TO_NAME, type BookingCoreInput,
@@ -121,7 +122,25 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 
   // Resolve a readable set name for display (falls back to the slug).
   let desiredSetName: string | null = null
-  if (data.desired_set) {
+  // A shared-floor takeover request (desired_set 'studio'): show what it would
+  // share the floor with, as it stands NOW — a set booking may have moved or
+  // cancelled since the ask.
+  const shared = data.desired_set === 'studio'
+  let sharedWith: { setName: string; startHour: number; endHour: number }[] | null = null
+  let sharedBuyoutConflict = false
+  if (shared) {
+    desiredSetName = 'Full warehouse — shared floor'
+    if (data.desired_date && data.desired_start != null && data.desired_hours != null) {
+      try {
+        const f = await sharedFloorSets(service,
+          bookingHourToISO(data.desired_date, Number(data.desired_start)),
+          bookingHourToISO(data.desired_date, Number(data.desired_start) + Number(data.desired_hours)),
+          data.booking_id ?? undefined)
+        sharedWith = f.sets
+        sharedBuyoutConflict = f.buyoutConflict
+      } catch (e) { console.error('[short-notice] shared-floor lookup failed (non-fatal):', e) }
+    }
+  } else if (data.desired_set) {
     const { data: setRow } = await service.from('sets').select('name').eq('slug', data.desired_set).maybeSingle()
     desiredSetName = setRow?.name || data.desired_set
   }
@@ -155,6 +174,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   return NextResponse.json({
     request: { ...data, desired_set_name: desiredSetName, card_label: cardLabel },
     chargeable: isChargeable(data),
+    shared, sharedWith, sharedBuyoutConflict,
     bookingStatus,
     grantMinutes: await grantMinutes(),
   })
@@ -218,6 +238,13 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
   // ── Approve AND take the money ────────────────────────────────────────────
   if (action === 'approve_charge') return approveAndCharge(reqRow)
+
+  // A shared-floor takeover can only be approved by charging it. "Unlocking"
+  // them to book it themselves would do nothing — checkout refuses a takeover
+  // over a booked set by design.
+  if (reqRow.desired_set === 'studio') {
+    return NextResponse.json({ error: 'A shared-floor takeover can only be approved with the charge (or denied).' }, { status: 400 })
+  }
 
   if (action !== 'approve_1h' && action !== 'approve_48h' && action !== 'approve_until') {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -316,12 +343,13 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   }
 
   const setSlug   = String(reqRow.desired_set)
+  const isShared  = setSlug === 'studio'
   const date      = String(reqRow.desired_date)
   const startHour = Number(reqRow.desired_start)
   const hours     = Number(reqRow.desired_hours)
   const endHour   = startHour + hours
   const cents     = Number(reqRow.quoted_cents)
-  const setName   = SLUG_TO_NAME[setSlug] ?? setSlug
+  const setName   = isShared ? 'Full Studio Takeover' : (SLUG_TO_NAME[setSlug] ?? setSlug)
   const startISO  = bookingHourToISO(date, startHour)
 
   // Consent is valid until the session STARTS — past that there is nothing left
@@ -362,15 +390,27 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   // Someone may have taken it between the ask and the answer. This must back
   // out cleanly and charge nothing — validateAndPriceOrder re-runs the same
   // availability, minimum-length and price checks checkout runs.
-  const input: BookingCoreInput = {
-    type: 'set', setSlug, date, startHour, endHour,
-    sets: [{ setSlug, date, startHour, endHour }],
-    equipment: [], guests: null,
-    name, email, phone: phone || '',
-    notes: reqRow.note || '',
-    totalCents: cents,
-  }
-  const v = await validateAndPriceOrder(service, input, { isMember: true, allowShortNotice: true, approved: true })
+  // A shared-floor takeover is priced and checked as a buyout, except that the
+  // set bookings already on the floor don't block it (sharedFloor) — only
+  // another takeover does.
+  const sharedNote = isShared ? `Shared-floor takeover (approved). ${reqRow.note || ''}`.trim() : (reqRow.note || '')
+  const input: BookingCoreInput = isShared
+    ? {
+        type: 'studio', setSlug: null, date, startHour, endHour,
+        equipment: [], guests: null,
+        name, email, phone: phone || '',
+        notes: sharedNote,
+        totalCents: cents,
+      }
+    : {
+        type: 'set', setSlug, date, startHour, endHour,
+        sets: [{ setSlug, date, startHour, endHour }],
+        equipment: [], guests: null,
+        name, email, phone: phone || '',
+        notes: reqRow.note || '',
+        totalCents: cents,
+      }
+  const v = await validateAndPriceOrder(service, input, { isMember: true, allowShortNotice: true, approved: true, sharedFloor: isShared })
   if (!v.ok) {
     // A price mismatch here means a rate moved between the quote and now. Say so
     // plainly rather than silently charging either number — the quote is what
@@ -381,10 +421,10 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   // ── Hold the slot BEFORE talking to Square ───────────────────────────────
   const ins = await insertBookingRows(service, v.order, {
     status:     'pending_payment',
-    source:     'short-notice-autopay',
+    source:     'short-notice-autopay',  // also shared-floor takeovers — bookings_source_check (migration 097)
     customerId: cust.id,
     authUserId,
-    notes:      reqRow.note || null,
+    notes:      sharedNote || null,
     squareCardOnFileId: reqRow.square_card_id ?? null,
     // Earns like any member booking, but only if they have an account.
     rewardEmail: authUserId ? email : null,
@@ -409,7 +449,7 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
         amountMoney:    { amount: BigInt(cents), currency: 'USD' },
         customerId:     squareCustomerId,
         locationId:     process.env.SQUARE_LOCATION_ID!,
-        note:           `Made Kulture — short notice ${setName} ${date} ${fmt12(startHour)}–${fmt12(endHour)}`,
+        note:           `Made Kulture — ${isShared ? 'shared-floor' : 'short notice'} ${setName} ${date} ${fmt12(startHour)}–${fmt12(endHour)}`,
         buyerEmailAddress: email,
       })
       paymentId = result.payment?.id ?? null
@@ -512,12 +552,12 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   try {
     if (channel === 'sms') {
       await sendSMS(payerContact,
-        `✅ Made Kulture: your short-notice session is approved!\n${sched}\n$${dollars(cents)}\n\nWe couldn't charge your card on file, so finish here to lock it in — held ${minsHeld} min: ${payUrl}\nReply STOP to opt out.`)
+        `✅ Made Kulture: your ${isShared ? 'full-warehouse takeover' : 'short-notice session'} is approved!\n${sched}\n$${dollars(cents)}\n\nWe couldn't charge your card on file, so finish here to lock it in — held ${minsHeld} min: ${payUrl}\nReply STOP to opt out.`)
     } else {
       await sendSimpleEmail({
         to: email,
         subject: `Approved — finish your Made Kulture booking ($${dollars(cents)})`,
-        heading: 'Your short-notice session is approved',
+        heading: isShared ? 'Your takeover is approved' : 'Your short-notice session is approved',
         paragraphs: [
           `<strong style="color:#fff;">${sched}</strong>`,
           `Amount: <strong style="color:#fff;">$${dollars(cents)}</strong>`,

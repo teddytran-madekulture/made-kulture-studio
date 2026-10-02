@@ -146,14 +146,20 @@ export async function checkBuyoutWindow(
   supabase: SupabaseClient,
   startISO: string,
   endISO: string,
-  excludeBookingId?: string
+  excludeBookingId?: string,
+  opts: { buyoutsOnly?: boolean } = {}
 ): Promise<{ ok: boolean; conflicts: SetConflict[] }> {
-  const { data, error } = await supabase
+  // buyoutsOnly: a SHARED-FLOOR takeover (approved by the studio, see
+  // app/api/bookings/shared-buyout-request) knowingly runs alongside set
+  // bookings already on the floor, so only another buyout can block it.
+  let q = supabase
     .from('bookings')
     .select('id, start_time, end_time')
     .in('status', ACTIVE_STATUSES)
     .lt('start_time', endISO)
     .gt('end_time', startISO)
+  if (opts.buyoutsOnly) q = q.is('set_id', null)
+  const { data, error } = await q
 
   if (error) throw new Error(`buyout floor-check failed: ${error.message}`)
 

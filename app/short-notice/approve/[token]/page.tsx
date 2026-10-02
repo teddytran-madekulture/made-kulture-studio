@@ -37,6 +37,11 @@ export default function ApprovePage() {
   const token = String(params.token)
   const [req, setReq]       = useState<Req | null>(null)
   const [chargeable, setChargeable] = useState(false)
+  // Shared-floor takeover request: full warehouse alongside set bookings
+  // already on the floor. Charge-or-deny only.
+  const [shared, setShared] = useState(false)
+  const [sharedWith, setSharedWith] = useState<{ setName: string; startHour: number; endHour: number }[]>([])
+  const [sharedConflict, setSharedConflict] = useState(false)
   const [loading, setLoad]  = useState(true)
   const [busy, setBusy]     = useState<string | null>(null)
   const [done, setDone]     = useState<Outcome | null>(null)
@@ -55,6 +60,9 @@ export default function ApprovePage() {
         if (d.request) {
           setReq(d.request)
           setChargeable(!!d.chargeable)
+          setShared(!!d.shared)
+          setSharedWith(Array.isArray(d.sharedWith) ? d.sharedWith : [])
+          setSharedConflict(!!d.sharedBuyoutConflict)
           if (typeof d.grantMinutes === 'number') setGrantMins(d.grantMinutes)
           if (d.request.status !== 'pending') {
             // ⚠️ Derive what actually happened — never assume "unlocked". A
@@ -134,13 +142,24 @@ export default function ApprovePage() {
 
   return (
     <div style={wrap}><div style={box}>
-      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>SHORT-NOTICE REQUEST</div>
+      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 10 }}>{shared ? 'SHARED-FLOOR TAKEOVER REQUEST' : 'SHORT-NOTICE REQUEST'}</div>
       <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, letterSpacing: '0.02em', marginBottom: 4 }}>{req?.customer_name}</div>
       <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 20 }}>{req?.customer_email}</div>
 
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '14px 0', marginBottom: 22, fontSize: 14 }}>
         {req?.desired_set_name && (
-          <div style={rowStyle}><span style={labelStyle}>Set</span><span>{req.desired_set_name}</span></div>
+          <div style={rowStyle}><span style={labelStyle}>{shared ? 'Space' : 'Set'}</span><span>{req.desired_set_name}</span></div>
+        )}
+        {shared && (
+          <div style={{ ...rowStyle, alignItems: 'flex-start' }}>
+            <span style={labelStyle}>Sharing with</span>
+            <span style={{ textAlign: 'right' }}>
+              {sharedWith.length
+                ? sharedWith.map((x, i) => <div key={i}>{x.setName} · {fmt12(x.startHour)}–{fmt12(x.endHour)}</div>)
+                : 'Nobody now — the floor is clear'}
+              {sharedConflict && <div style={{ color: '#ff6b6b' }}>Another takeover is booked in this window</div>}
+            </span>
+          </div>
         )}
         <div style={rowStyle}>
           <span style={labelStyle}>When</span>
@@ -183,6 +202,7 @@ export default function ApprovePage() {
               : 'No card on file, so this holds the slot and sends them a payment link. The door code is only issued once they pay.'}
           </div>
 
+          {!shared && <>
           <button onClick={() => resolve('approve_1h')} disabled={!!busy}
             style={{ width: '100%', background: 'transparent', border: '1px solid rgba(212,168,67,0.5)', color: '#d4a843', padding: '13px', cursor: busy ? 'default' : 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', marginBottom: 6 }}>
             {busy === 'approve_1h' ? 'APPROVING…' : 'APPROVE WITHOUT CHARGING'}
@@ -190,6 +210,7 @@ export default function ApprovePage() {
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginBottom: 18, lineHeight: 1.5 }}>
             Takes no money. Opens booking for {grantMins === 60 ? 'one hour' : `${grantMins} minutes`} so they can book it themselves — for a comp, a different price, or a second look.
           </div>
+          </>}
         </>
       ) : (
         <>
@@ -203,14 +224,14 @@ export default function ApprovePage() {
         </>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      {!shared && <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <input type="date" value={until} min={plusDays(0)} onChange={e => setUntil(e.target.value)}
           style={{ flex: 1, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', colorScheme: 'dark', padding: '12px', fontFamily: 'Inter', fontSize: 14, boxSizing: 'border-box' }} />
         <button onClick={() => until ? resolve('approve_until', until) : setErr('Pick a date first.')} disabled={!!busy}
           style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '12px 16px', cursor: busy ? 'default' : 'pointer', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
           ALLOW UNTIL
         </button>
-      </div>
+      </div>}
 
       {!denying ? (
         <button onClick={() => setDenying(true)} disabled={!!busy}
