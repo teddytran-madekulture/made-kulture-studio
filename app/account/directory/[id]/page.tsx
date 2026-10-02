@@ -7,7 +7,11 @@ import { groupCredits, type Credit } from '@/lib/profile-credits'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-type PortfolioImg = { id: string; url: string; is_mature: boolean }
+type PhotoCredit = { id: string; role: string; member: { id: string; name: string; avatar_url: string | null } | null; name: string | null; instagram: string | null; pending: boolean }
+// creditId / role / by are set when the photo is from ANOTHER member's portfolio
+// and credits this profile (the TAGGED tab).
+type PortfolioImg = { id: string; url: string; is_mature: boolean; credits?: PhotoCredit[]; creditId?: string; role?: string; by?: { id: string; name: string } | null }
+type TaggedImg = { creditId: string; imageId: string; url: string; is_mature: boolean; role: string; by: { id: string; name: string } | null }
 type Member = {
   id: string
   full_name: string
@@ -26,6 +30,7 @@ type Member = {
   email: string | null
   phone: string | null
   portfolio: PortfolioImg[]
+  tagged?: TaggedImg[]
   is_self: boolean
   followers: number
   following: number
@@ -95,7 +100,21 @@ export default function MemberProfilePage() {
       setReportMsg((d as any).error || 'Could not send that. Try again.')
     }
   }
-  const [tab, setTab] = useState<'portfolio' | 'credits'>('portfolio')
+  const [tab, setTab] = useState<'portfolio' | 'tagged' | 'credits'>('portfolio')
+  // ?tab=tagged — the "you were credited" email lands here.
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get('tab') === 'tagged') setTab('tagged') } catch {}
+  }, [])
+  const [untagBusy, setUntagBusy] = useState(false)
+  const removeMe = async (creditId: string) => {
+    if (!confirm('Remove yourself from this photo? It will come off your Tagged tab.')) return
+    setUntagBusy(true)
+    const res = await fetch(`/api/directory/credits?id=${encodeURIComponent(creditId)}`, { method: 'DELETE' })
+    setUntagBusy(false)
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert((d as any).error || 'Could not remove that.'); return }
+    setMember(m => m ? { ...m, tagged: (m.tagged ?? []).filter(t => t.creditId !== creditId) } : m)
+    setLightbox(null)
+  }
   const [starting, setStarting] = useState(false)
   const [following, setFollowing] = useState(false)
   const [followers, setFollowers] = useState(0)
@@ -362,13 +381,41 @@ export default function MemberProfilePage() {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
           PORTFOLIO
         </button>
+        {((member.tagged ?? []).length > 0 || member.is_self) && (
+          <button type="button" className={`ig-tab${tab === 'tagged' ? ' on' : ''}`} onClick={() => setTab('tagged')}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="9" r="3.5" /><path d="M5.5 20c1.2-3.3 3.6-5 6.5-5s5.3 1.7 6.5 5" /><rect x="2.5" y="2.5" width="19" height="19" rx="3" /></svg>
+            TAGGED
+          </button>
+        )}
         <button type="button" className={`ig-tab${tab === 'credits' ? ' on' : ''}`} onClick={() => setTab('credits')}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
           CREDITS
         </button>
       </div>
 
-      {tab === 'portfolio' ? (
+      {tab === 'tagged' ? (
+        (member.tagged ?? []).length > 0 ? (
+          <div className="ig-grid">
+            {(member.tagged ?? []).map(t => {
+              const hidden = t.is_mature && !revealMature
+              return (
+                <div key={t.creditId}
+                  onClick={() => { if (!hidden) setLightbox({ id: t.imageId, url: t.url, is_mature: t.is_mature, creditId: t.creditId, role: t.role, by: t.by }) }}
+                  style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', background: 'var(--t-surface)', cursor: hidden ? 'default' : 'zoom-in' }}>
+                  <img src={t.url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: hidden ? 'blur(18px)' : 'none' }} />
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '18px 8px 6px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)', fontFamily: 'Inter', fontSize: 10.5, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.role}{t.by ? ` · by ${t.by.name}` : ''}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', textAlign: 'center', padding: '48px 0', lineHeight: 1.6 }}>
+            No tagged photos yet. When another member credits you on a photo, it shows up here.
+          </div>
+        )
+      ) : tab === 'portfolio' ? (
         member.portfolio.length > 0 ? (
           <div ref={portfolioRef}>
             {hasMature && !revealMature && (
@@ -464,6 +511,35 @@ export default function MemberProfilePage() {
         <div onClick={closeLightbox}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100, cursor: 'zoom-out' }}>
           <img src={lightbox.url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 6 }} />
+          {/* Who's credited on this photo (or, on the TAGGED tab, who posted it). */}
+          {(lightbox.creditId || (lightbox.credits ?? []).length > 0) && (
+            <div onClick={e => e.stopPropagation()}
+              style={{ position: 'absolute', top: 16, left: 16, right: 16, display: 'flex', justifyContent: 'center', cursor: 'default' }}>
+              <div style={{ maxWidth: 520, background: 'rgba(20,20,20,0.9)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '10px 14px', fontFamily: 'Inter', fontSize: 12.5, color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, display: 'flex', flexWrap: 'wrap', gap: '2px 14px', alignItems: 'center' }}>
+                {lightbox.creditId ? (
+                  <>
+                    <span>{member.is_self ? 'You' : member.full_name.split(' ')[0]} · <b style={{ color: '#fff' }}>{lightbox.role}</b></span>
+                    {lightbox.by && <span>Photo from <Link href={`/account/directory/${lightbox.by.id}`} onClick={closeLightbox} style={{ color: 'var(--t-gold)', textDecoration: 'none' }}>{lightbox.by.name}</Link></span>}
+                    {member.is_self && (
+                      <button type="button" disabled={untagBusy} onClick={() => removeMe(lightbox.creditId!)}
+                        style={{ fontFamily: 'Inter', fontSize: 11.5, color: 'rgba(255,255,255,0.75)', background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 14, padding: '3px 10px', cursor: 'pointer' }}>
+                        {untagBusy ? 'Removing…' : 'Remove me'}
+                      </button>
+                    )}
+                  </>
+                ) : (lightbox.credits ?? []).map(c => (
+                  <span key={c.id}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>{c.role}</span>{' '}
+                    {c.member
+                      ? <Link href={`/account/directory/${c.member.id}`} onClick={closeLightbox} style={{ color: 'var(--t-gold)', textDecoration: 'none', fontWeight: 600 }}>{c.member.name}</Link>
+                      : c.instagram
+                        ? <a href={`https://instagram.com/${c.instagram}`} target="_blank" rel="noopener noreferrer" style={{ color: '#fff', textDecoration: 'none', fontWeight: 600 }}>{c.name && !c.name.startsWith('@') ? c.name : `@${c.instagram}`}</a>
+                        : <b style={{ color: '#fff' }}>{c.name}</b>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {!member.is_self && (
             <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 18, left: 0, right: 0, display: 'flex', justifyContent: 'center', padding: '0 16px', cursor: 'default' }}>
               {reported.has(lightbox.id) ? (

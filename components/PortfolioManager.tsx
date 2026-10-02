@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import PhotoCreditsEditor from '@/components/PhotoCreditsEditor'
 import { createClient } from '@/lib/supabase/client'
 import ImageCropper from '@/components/ImageCropper'
 import { stampCopyright } from '@/lib/jpeg-copyright'
@@ -35,6 +36,8 @@ export default function PortfolioManager({ onCountChange, ownerName = '' }: { on
   // Drag-to-reorder state. dragId drives the visual "lifted" tile; refs hold the
   // live values the pointer handlers need without stale closures.
   const [dragId, setDragId] = useState<string | null>(null)
+  // Photo whose credits editor is open (migration 133).
+  const [creditFor, setCreditFor] = useState<Img | null>(null)
   const dragIdRef = useRef<string | null>(null)
   const imagesRef = useRef<Img[]>([])
   const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -351,6 +354,8 @@ export default function PortfolioManager({ onCountChange, ownerName = '' }: { on
                     onPointerUp={endDrag}
                     onPointerCancel={endDrag}
                     style={{ ...iconBtn, width: 30, height: 22, cursor: active ? 'grabbing' : 'grab', touchAction: 'none', letterSpacing: '1px' }}>⠿</button>
+                  <button type="button" onClick={() => setCreditFor(img)} title="Credit the people in this photo"
+                    style={{ ...iconBtn, width: 'auto', padding: '0 6px', height: 22, fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em' }}>@ TAG</button>
                   <button type="button" onClick={() => toggleMature(img)} title="Toggle 18+"
                     style={{ background: img.is_mature ? '#e6c07a' : 'rgba(0,0,0,0.65)', color: img.is_mature ? '#080808' : '#fff', border: 'none', borderRadius: 4, padding: '0 6px', height: 22, cursor: 'pointer', fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.04em' }}>18+</button>
                 </div>
@@ -372,6 +377,10 @@ export default function PortfolioManager({ onCountChange, ownerName = '' }: { on
           )}
         </div>
         </>
+      )}
+
+      {creditFor && (
+        <PhotoCreditsEditor imageId={creditFor.id} imageUrl={creditFor.url} onClose={() => setCreditFor(null)} />
       )}
 
       {cropSrc && (

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
+import { creditsForImages, photosTaggingMember } from '@/lib/photo-credits'
 
 const service = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,6 +40,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq('hidden', false)
     .order('sort_order', { ascending: true })
 
+  // Photo credits (migration 133): who's credited on each photo, and photos in
+  // OTHER members' portfolios that credit this member (the TAGGED tab).
+  const credits = await creditsForImages(service, (images ?? []).map(i => i.id))
+  const tagged = await photosTaggingMember(service, params.id, p.instagram ?? null)
+
   // Email lives in auth, not the profile row — fetch it only when shown.
   let email: string | null = null
   if (p.show_email) {
@@ -66,7 +72,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       video_url: p.video_url ?? null,
       email,
       phone: p.show_phone ? (p.phone ?? null) : null,
-      portfolio: (images ?? []).map(i => ({ id: i.id, url: i.url, is_mature: i.is_mature })),
+      portfolio: (images ?? []).map(i => ({ id: i.id, url: i.url, is_mature: i.is_mature, credits: credits.get(i.id) ?? [] })),
+      tagged,
       founding_number: p.founding_number ?? null,
       profile_color: p.profile_color ?? null,
       credits: Array.isArray(p.credits) ? p.credits : [],
