@@ -328,6 +328,12 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
             </div>
           ))}
           <div style={{ borderTop:'1px solid rgba(255,255,255,0.1)' }} />
+          <div style={{ textAlign:'center', marginTop:48 }}>
+            <Link href="/studio-rules"
+              style={{ fontFamily:'JetBrains Mono, monospace', fontSize:12, color:'#c9b27e', letterSpacing:'0.18em', textDecoration:'none' }}>
+              READ THE FULL STUDIO RULES →
+            </Link>
+          </div>
         </div>
       </section>
 
