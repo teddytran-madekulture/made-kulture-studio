@@ -26,16 +26,19 @@ export const metadata: Metadata = {
     default: 'Made Kulture — Photography Studio Rental in Houston, TX',
     template: '%s | Made Kulture — Houston Studio Rental',
   },
-  description: 'Rent a photography or video studio in Houston. 9 distinct sets under one warehouse — cyc-style walls, vintage, concrete, even a shallow pool. From $40/hr, book online.',
+  description: 'Rent a photography or video studio in Houston. 10 distinct sets under one warehouse — cyc-style walls, vintage, concrete, even a shallow pool. From $40/hr, book online.',
   keywords: ['photography studio rental Houston', 'photo studio Houston', 'video studio rental Houston', 'creative studio Houston', 'studio with pool Houston', 'warehouse studio rental'],
   openGraph: {
     title: 'Made Kulture — Photography Studio Rental in Houston',
-    description: 'Create without limits. 9 distinct sets, props and lighting included, from $40/hr. 4825 Gulf Freeway, Houston TX.',
+    description: 'Create without limits. 10 distinct sets, props and lighting included, from $40/hr. 4825 Gulf Freeway, Houston TX.',
     url: APP_URL,
     siteName: 'Made Kulture',
     locale: 'en_US',
     type: 'website',
   },
+  // Share image itself comes from app/opengraph-image.jpg + twitter-image.jpg
+  // (Next file convention). This just asks X/Twitter for the big-photo card.
+  twitter: { card: 'summary_large_image' },
 }
 
 // LocalBusiness structured data — how Google understands who/where we are.

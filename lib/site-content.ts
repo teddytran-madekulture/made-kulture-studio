@@ -222,7 +222,7 @@ const BOOK_FIELDS: ContentField[] = [
 // ── Tour page fields ──────────────────────────────────────────────────────────
 const TOUR_FIELDS: ContentField[] = [
   { key: 'headline', label: 'Headline',        type: 'text',      group: 'Header', default: 'TOUR THE STUDIO' },
-  { key: 'intro',    label: 'Intro paragraph', type: 'multiline', group: 'Header', default: 'Free 30-minute walkthrough of all nine sets. Pick a time below \u2014 we confirm every tour by text, usually fast.' },
+  { key: 'intro',    label: 'Intro paragraph', type: 'multiline', group: 'Header', default: 'Free 30-minute walkthrough of all 10 sets. Pick a time below \u2014 we confirm every tour by text, usually fast.' },
   { key: 'footnote', label: 'Fine print under the button', type: 'text', group: 'Header', default: 'Tours are confirmed by text. Questions? Text (832) 408-1631.' },
 ]
 

@@ -4,7 +4,7 @@ import { getPageContent } from '@/lib/site-content'
 
 export const metadata: Metadata = {
   title: 'Book a Free Studio Tour',
-  description: 'Free 30-minute walkthrough of all nine sets at Made Kulture, Houston. Pick a time online — confirmed by text.',
+  description: 'Free 30-minute walkthrough of all 10 sets at Made Kulture, Houston. Pick a time online — confirmed by text.',
 }
 
 // Server wrapper: fetch editable copy (Website workspace) and render the
