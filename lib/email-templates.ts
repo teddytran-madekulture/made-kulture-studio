@@ -92,6 +92,37 @@ export const TEMPLATES: EmailTemplate[] = [
     </div>`,
   },
   {
+    // Two messages in one email: the main announcement up top, then a boxed
+    // offer with its OWN button (e.g. "create a free account" + "get Plus").
+    // Added 2026-10-01 for the launch email.
+    id: 'hero_offer',
+    name: 'Announcement + Offer',
+    blurb: 'Hero image and announcement with a button, then a gold-boxed offer below with its own button. Two calls to action in one email.',
+    fields: [
+      { key: 'imageUrl', label: 'Hero image URL', type: 'image', placeholder: 'https://…/your-photo.jpg' },
+      { key: 'eyebrow', label: 'Eyebrow (small label)', type: 'text', placeholder: 'NOW LIVE' },
+      { key: 'heading', label: 'Headline', type: 'text', placeholder: 'The new Made Kulture' },
+      { key: 'body', label: 'Body', type: 'textarea', placeholder: 'Our new site is live…' },
+      { key: 'ctaText', label: 'Button text', type: 'text', placeholder: 'CREATE YOUR FREE ACCOUNT' },
+      { key: 'ctaUrl', label: 'Button link', type: 'url', placeholder: 'https://madekulture.com/signup' },
+      { key: 'offerEyebrow', label: 'Offer eyebrow', type: 'text', placeholder: 'MADE KULTURE PLUS' },
+      { key: 'offerHeading', label: 'Offer headline', type: 'text', placeholder: '$99 for your first year' },
+      { key: 'offerBody', label: 'Offer body', type: 'textarea', placeholder: 'For people who shoot often…' },
+      { key: 'offerCtaText', label: 'Offer button text', type: 'text', placeholder: 'GET PLUS FOR $99' },
+      { key: 'offerCtaUrl', label: 'Offer button link', type: 'url', placeholder: 'https://madekulture.com/plus' },
+    ],
+    defaults: { imageUrl: '', eyebrow: 'NOW LIVE', heading: 'Big news', body: '', ctaText: 'LEARN MORE', ctaUrl: 'https://madekulture.com',
+      offerEyebrow: 'MADE KULTURE PLUS', offerHeading: '', offerBody: '', offerCtaText: '', offerCtaUrl: 'https://madekulture.com/plus' },
+    render: (v, promo) => `${img(v.imageUrl)}<div style="padding:32px 28px 8px;">
+      ${eyebrow(v.eyebrow)}${heading(v.heading)}${bodyText(v.body)}${promoBlock(promo)}${button(v.ctaText, v.ctaUrl)}
+    </div>
+    ${(v.offerHeading || v.offerBody) ? `<div style="padding:20px 28px 32px;">
+      <div style="border:1px solid ${GOLD};border-radius:10px;padding:24px 22px;background:#1a1812;">
+        ${eyebrow(v.offerEyebrow)}${heading(v.offerHeading, 'left', 24)}${bodyText(v.offerBody)}${button(v.offerCtaText, v.offerCtaUrl)}
+      </div>
+    </div>` : '<div style="height:24px;"></div>'}`,
+  },
+  {
     id: 'feature',
     name: 'Feature (image + text)',
     blurb: 'Headline first, an image in the middle, then your story and a button. Clean and editorial.',

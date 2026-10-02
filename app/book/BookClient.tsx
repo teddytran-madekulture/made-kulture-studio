@@ -411,7 +411,28 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   // Fetch availability when set + date change
   useEffect(() => {
-    if (booking.type === 'studio' || !booking.setId || !booking.date) return
+    // ⚠️ Full-warehouse buyout: the WHOLE floor must be free, so every booking on
+    // every set (plus any other buyout) blocks those hours. Before 2026-10-02 this
+    // effect simply returned for buyouts, so the picker showed every hour as open
+    // and the customer only found out at checkout (checkBuyoutWindow refuses it
+    // server-side) — a customer asked whether he'd "schedule over" Oct 11 bookings.
+    if (booking.type === 'studio') {
+      if (!booking.date) return
+      setLoadingSlots(true)
+      fetch(`/api/availability?date=${booking.date}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(d => {
+          const all: { start: number; end: number }[] = [...(d.fullStudioSlots || [])]
+          for (const v of Object.values(d.sets || {}) as { bookedSlots?: { start: number; end: number }[] }[]) {
+            all.push(...(v.bookedSlots || []))
+          }
+          setBookedSlots(all)
+          setLoadingSlots(false)
+        })
+        .catch(() => setLoadingSlots(false))
+      return
+    }
+    if (!booking.setId || !booking.date) return
     setLoadingSlots(true)
     fetch(`/api/availability?set_id=${booking.setId}&date=${booking.date}`)
       .then(r => r.json())
