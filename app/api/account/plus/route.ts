@@ -48,10 +48,27 @@ async function ensureCustomerRow(email: string, name: string | null, phone: stri
 }
 
 // GET — membership status for the logged-in customer (drives the account card).
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user?.email) {
+    // ?public=1 (the /plus page): a signed-out visitor still needs the price
+    // and the promo. Everything else keeps the 401 — several callers read
+    // r.ok as "signed in".
+    if (req.nextUrl.searchParams.get('public') === '1') {
+      const pricing = await getPlusPricing(service)
+      return NextResponse.json({
+        signedOut: true, active: false,
+        priceCents:    pricing.isIntro ? pricing.introCents : pricing.standardCents,
+        standardCents: pricing.standardCents,
+        introCents:    pricing.introCents,
+        introUntil:    pricing.introUntil,
+        isIntro:       pricing.isIntro,
+        returning:     false,
+      })
+    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const email = user.email.toLowerCase()
   const { data: grows } = await service.from('customers').select('pricing_overrides').eq('email', email).limit(1)
   const po: any = (grows ?? [])[0]?.pricing_overrides ?? null

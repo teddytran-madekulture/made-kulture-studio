@@ -6,7 +6,7 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 
 const PAGE_MAX = 1480
 
-interface Pricing { priceCents: number; standardCents?: number; introUntil?: string; isIntro?: boolean; active?: boolean }
+interface Pricing { priceCents: number; standardCents?: number; introCents?: number; introUntil?: string; isIntro?: boolean; active?: boolean; returning?: boolean }
 
 function fmtDay(d: string) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -45,7 +45,7 @@ export default function MembershipPage() {
   const [p, setP] = useState<Pricing | null>(null)
 
   useEffect(() => {
-    fetch('/api/account/plus').then(r => r.ok ? r.json() : null).then(d => setP(d)).catch(() => {})
+    fetch('/api/account/plus?public=1', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => setP(d)).catch(() => {})
   }, [])
   // Made Kulture Rewards rows appear only while the program is on (migration 109).
   const [rw, setRw] = useState<{ enabled: boolean; memberRate: number; plusRate: number } | null>(null)
@@ -152,6 +152,7 @@ export default function MembershipPage() {
               <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: isMobile ? 40 : 52, color: '#fff', lineHeight: 0.9, letterSpacing: '0.01em', margin: '0 0 6px' }}>Plus</h2>
               <div style={{ fontFamily: 'Inter', fontSize: 15, color: 'rgba(255,255,255,0.6)', marginBottom: 28 }}>
                 <strong style={{ color: '#fff' }}>{priceLabel}</strong>/year{isIntro ? <span style={{ color: '#c9b27e' }}> · intro rate{p?.introUntil ? ` through ${fmtDay(p.introUntil)}` : ''}</span> : null}
+                {p?.returning && !member && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 6 }}>Welcome back — the {p?.introCents ? `$${(p.introCents / 100).toFixed(0)}` : 'intro'} first-year rate is for first-time members, so renewing is the standard rate.</div>}
               </div>
               <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>Everything in Member, plus:</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px' }}>
