@@ -370,7 +370,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           <div>
             <div className="label" style={{ marginBottom:24 }}>CONTACT</div>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', lineHeight:1.8 }}>
-              <a href={`mailto:${c.footerEmail}`} style={{ color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>{c.footerEmail}</a><br />{c.footerPhone}<br /><span style={{fontSize:12}}>Text only</span>
+              <a href={`mailto:${c.footerEmail}`} style={{ color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>{c.footerEmail}</a>{c.footerPhone?.trim() ? (<><br />{c.footerPhone}<br /><span style={{fontSize:12}}>Text only</span></>) : null}
             </p>
             <div style={{ display:'flex', gap:16, marginTop:24 }}>
               <a href="https://www.instagram.com/madekulture/" target="_blank" rel="noreferrer"
