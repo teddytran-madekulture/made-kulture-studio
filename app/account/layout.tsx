@@ -4,8 +4,10 @@ import AccountRail from '@/components/AccountRail'
 import SettingsShell from '@/components/SettingsShell'
 
 // Runs before first paint so a light-mode user never sees a dark flash:
-// saved choice first, otherwise the device's light/dark setting.
-const THEME_BOOT = `try{var t=localStorage.getItem('mk-acct-theme');if(t!=='light'&&t!=='dark')t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.acctTheme=t}catch(e){}`
+// saved choice first, otherwise LIGHT. 2026-10-02 (Teddy): the account area is
+// the directory's world, and light keeps it fresh and visibly separate from the
+// dark studio site. It used to follow the device's light/dark setting.
+const THEME_BOOT = `try{var t=localStorage.getItem('mk-acct-theme');if(t!=='light'&&t!=='dark')t='light';document.documentElement.dataset.acctTheme=t}catch(e){}`
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()

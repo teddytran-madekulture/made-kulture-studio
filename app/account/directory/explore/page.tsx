@@ -1,0 +1,358 @@
+'use client'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { CREATIVE_ROLES } from '@/lib/roles'
+import { track } from '@/lib/track'
+import FoundingBadge, { HexCrest } from '@/components/FoundingBadge'
+import { colorVars, colorByKey } from '@/lib/profile-colors'
+import FinishProfileCard from '@/components/FinishProfileCard'
+import DirectoryHeader from '@/components/DirectoryHeader'
+
+interface Member {
+  id: string
+  full_name: string
+  roles: string[]
+  instagram: string | null
+  avatar_url: string | null
+  account_type?: string
+  founding_number?: number | null
+  profile_color?: string | null
+  photos?: string[]
+}
+
+// ── Fair ordering ─────────────────────────────────────────────────────────
+// No alphabetical head start: members are ordered by a hash of (visit seed +
+// id). The seed lives for the browser-tab session, so the order holds steady
+// while someone browses and hits Back, and changes on the next visit.
+function visitSeed(): string {
+  try {
+    let s = sessionStorage.getItem('mk-dir-seed')
+    if (!s) { s = Math.random().toString(36).slice(2); sessionStorage.setItem('mk-dir-seed', s) }
+    return s
+  } catch { return 'mk' }
+}
+function rank(seed: string, id: string): number {
+  let h = 2166136261 // FNV-1a
+  const str = seed + id
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) }
+  return h >>> 0
+}
+
+// 2026-10-02: this grid moved here from /account/directory, which is now the
+// directory HOME. ?view=people opens straight on the People tab.
+export default function DirectoryExplorePage() {
+  const [members, setMembers]     = useState<Member[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [optedOut, setOptedOut]   = useState(false)
+  // Opted in but not listed (incomplete profile) — what's missing, or null.
+  const [incomplete, setIncomplete] = useState<string[] | null>(null)
+  const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
+
+  const [selected, setSelected]   = useState<string[]>([])
+  const [open, setOpen]           = useState(false)
+  const [roleQuery, setRoleQuery] = useState('')
+  const [sortMode, setSortMode]   = useState<'common' | 'az'>('common')
+  const [peopleQuery, setPeople]  = useState('')
+  const [foundingOnly, setFoundingOnly] = useState(false)
+  const [view, setView] = useState<'explore' | 'people'>('explore')
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get('view') === 'people') setView('people') } catch {}
+  }, [])
+  const [seed, setSeed] = useState('mk')
+  useEffect(() => { setSeed(visitSeed()) }, [])
+  const [founding, setFounding] = useState<{ cap: number; taken: number } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/roles').then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
+  }, [])
+
+  // Fetch the whole directory once; filtering happens client-side so multi-select
+  // + search are instant.
+  useEffect(() => {
+    setLoading(true)
+    fetch('/api/directory')
+      .then(async r => {
+        const d = await r.json().catch(() => ({}))
+        if (r.status === 403 && d.incomplete) { setIncomplete(d.blockers ?? []); setMembers([]) }
+        else if (r.status === 403 && d.optedOut) { setOptedOut(true); setMembers([]) }
+        else { setOptedOut(false); setIncomplete(null); setMembers(d.members ?? []); if (d.founding) setFounding(d.founding) }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  // How many listed creatives hold each role (drives the "most common" sort + counts).
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const m of members) for (const r of m.roles) c[r] = (c[r] || 0) + 1
+    return c
+  }, [members])
+
+  const displayRoles = useMemo(() => {
+    const q = roleQuery.trim().toLowerCase()
+    const list = roleOptions.filter(r => !q || r.toLowerCase().includes(q))
+    return [...list].sort((a, b) =>
+      sortMode === 'az'
+        ? a.localeCompare(b)
+        : (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b)
+    )
+  }, [roleOptions, roleQuery, sortMode, counts])
+
+  const filtered = useMemo(() => {
+    const pq = peopleQuery.trim().toLowerCase()
+    return members.filter(m => {
+      if (foundingOnly && !m.founding_number) return false
+      const roleMatch = selected.length === 0 || m.roles.some(r => selected.includes(r))
+      const peopleMatch = !pq
+        || (m.full_name || '').toLowerCase().includes(pq)
+        || (m.instagram || '').toLowerCase().includes(pq)
+      return roleMatch && peopleMatch
+    }).sort((a, b) => rank(seed, a.id) - rank(seed, b.id))
+  }, [members, selected, peopleQuery, foundingOnly, seed])
+
+  // Explore feed: ONE photo per member, in shuffled member order. Which photo
+  // rotates with the visit seed, so each visit shows a different piece of
+  // their portfolio while nobody gets more space than anyone else.
+  const feed = useMemo(() => {
+    const out: { m: Member; url: string }[] = []
+    for (const m of filtered) {
+      const ps = m.photos ?? []
+      if (ps.length) out.push({ m, url: ps[rank(seed + ':photo', m.id) % ps.length] })
+    }
+    return out
+  }, [filtered, seed])
+  // Typing a name means "find this person": show people, not photos.
+  const showPeople = view === 'people' || peopleQuery.trim().length > 0
+
+  const toggleRole = (r: string) => {
+    // Analytics: which roles people filter for (demand), vs who is listed (supply).
+    if (!selected.includes(r)) track('filter', { meta: { role: r, results: members.filter(m => m.roles.includes(r)).length } })
+    setSelected(s => s.includes(r) ? s.filter(x => x !== r) : [...s, r])
+  }
+
+  // ── Analytics (Admin → Community): what people search for ─────────────────
+  // Logged once the member stops typing for 1.2s, so "photographer" is one
+  // event, not twelve. Zero-result searches are the most useful signal: they
+  // name the creatives the directory doesn't have yet.
+  const lastPeopleQ = useRef('')
+  useEffect(() => {
+    const q = peopleQuery.trim().toLowerCase()
+    if (q.length < 2 || loading) return
+    const t = setTimeout(() => {
+      if (q === lastPeopleQ.current) return
+      lastPeopleQ.current = q
+      track('search', { query: q, meta: { kind: 'people', results: filtered.length } })
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [peopleQuery, filtered.length, loading])
+
+  const lastRoleQ = useRef('')
+  useEffect(() => {
+    const q = roleQuery.trim().toLowerCase()
+    if (q.length < 2) return
+    const t = setTimeout(() => {
+      if (q === lastRoleQ.current) return
+      lastRoleQ.current = q
+      track('search', { query: q, meta: { kind: 'role', results: displayRoles.length } })
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [roleQuery, displayRoles.length])
+
+  const input: React.CSSProperties = {
+    background: 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))', color: 'var(--t-fg)',
+    fontFamily: 'Inter', fontSize: 14, padding: '10px 13px', borderRadius: 8, outline: 'none', width: '100%', boxSizing: 'border-box',
+  }
+
+  return (
+    <div>
+      <DirectoryHeader active={view} onView={setView} />
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 24 }}>
+        Find collaborators in the Made Kulture community. Want to be listed? Turn on the directory toggle in your{' '}
+        <a href="/account/profile" style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', textDecoration: 'underline' }}>profile</a>.
+      </p>
+
+      {incomplete ? (
+        <FinishProfileCard blockers={incomplete} what="Browsing the directory" />
+      ) : optedOut ? (
+        <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '28px 24px', maxWidth: 520 }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: 'var(--t-gold)', marginBottom: 8 }}>You&apos;re not in the directory</div>
+          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', lineHeight: 1.6, margin: '0 0 18px' }}>
+            The creative directory is members-only both ways — to browse other creatives, you need to be listed yourself.
+            Turn on directory visibility in your profile to join and unlock browsing. Only your name, roles, and Instagram are ever shown.
+          </p>
+          <a href="/account/profile" style={{ display: 'inline-block', background: 'var(--t-fg)', color: 'var(--t-on-fg)', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textDecoration: 'none', padding: '11px 20px', borderRadius: 4 }}>
+            JOIN THE DIRECTORY →
+          </a>
+        </div>
+      ) : (<>
+      {/* ── Filter bar ─────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
+          <input value={peopleQuery} onChange={e => setPeople(e.target.value)} placeholder="Search by name or @handle" style={input} />
+        </div>
+        <button onClick={() => setOpen(o => !o)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: selected.length ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', color: selected.length ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))', borderRadius: 8, padding: '10px 16px', fontFamily: 'Inter', fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          {selected.length ? `Roles · ${selected.length}` : 'Filter by role'}
+          <span style={{ fontSize: 10, opacity: 0.7 }}>{open ? '▲' : '▼'}</span>
+        </button>
+        {members.some(m => m.founding_number) && (
+          <button onClick={() => { setFoundingOnly(f => !f); if (!foundingOnly) track('filter', { meta: { role: 'Founding', results: members.filter(m => m.founding_number).length } }) }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: foundingOnly ? 'var(--t-gold)' : 'rgba(var(--t-gold-rgb), 0.08)', color: foundingOnly ? 'var(--t-on-fg)' : 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <HexCrest size={16} /> First 100
+          </button>
+        )}
+        {(selected.length > 0 || peopleQuery || foundingOnly) && (
+          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false) }}
+            style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Selected role chips */}
+      {selected.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {selected.map(r => (
+            <button key={r} onClick={() => toggleRole(r)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 20, padding: '6px 8px 6px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+              {r}<span style={{ fontSize: 14, lineHeight: 1 }}>×</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Role dropdown */}
+      {open && (
+        <div style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))', borderRadius: 10, padding: 12, marginBottom: 20, maxWidth: 460 }}>
+          <input value={roleQuery} onChange={e => setRoleQuery(e.target.value)} placeholder="Search roles…" style={{ ...input, marginBottom: 10 }} autoFocus />
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            {([['common', 'Most common'], ['az', 'A–Z']] as const).map(([v, label]) => (
+              <button key={v} onClick={() => setSortMode(v)}
+                style={{ background: sortMode === v ? 'rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))' : 'transparent', color: sortMode === v ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 6, padding: '5px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ maxHeight: 300, overflowY: 'auto', margin: '0 -4px' }}>
+            {displayRoles.length === 0 ? (
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', padding: '10px 4px' }}>No roles match.</div>
+            ) : displayRoles.map(r => {
+              const on = selected.includes(r)
+              return (
+                <button key={r} onClick={() => toggleRole(r)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: on ? 'rgba(var(--t-fg-rgb), calc(0.07 * var(--t-a)))' : 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', cursor: 'pointer' }}>
+                  <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: 4, border: `1.5px solid ${on ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))'}`, background: on ? 'var(--t-fg)' : 'transparent', color: 'var(--t-on-fg)', fontSize: 12, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{on ? '✓' : ''}</span>
+                  <span style={{ flex: 1, fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)' }}>{r}</span>
+                  {counts[r] ? <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{counts[r]}</span> : null}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>Loading…</div>
+      ) : (
+        <>
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 14 }}>
+            {filtered.length} {filtered.length === 1 ? 'creative' : 'creatives'}
+            {founding && founding.taken < founding.cap && (
+              <span style={{ color: 'var(--t-gold)', marginLeft: 12 }}>{founding.cap - founding.taken} of {founding.cap} First 100 spots left</span>
+            )}
+          </div>
+          <div style={{ display: 'inline-flex', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 3, marginBottom: 16, gap: 2 }}>
+            {(['explore', 'people'] as const).map(v => {
+              const on = (v === 'people') === showPeople
+              return (
+                <button key={v} type="button" onClick={() => { setView(v); if (v === 'explore') setPeople('') }}
+                  style={{ padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', background: on ? 'var(--t-fg)' : 'transparent', color: on ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>
+                  {v === 'explore' ? 'Explore' : 'People'}
+                </button>
+              )
+            })}
+          </div>
+          {filtered.length === 0 ? (
+            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
+              {members.length === 0 ? 'No one has joined the directory yet.' : 'No matches — try clearing a filter.'}
+            </div>
+          ) : !showPeople ? (
+            feed.length === 0 ? (
+              <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
+                No portfolio photos to explore yet. Switch to People to see everyone.
+              </div>
+            ) : (
+              <>
+                <style>{`
+                  .dx-tile .dx-cap { opacity: 0; transition: opacity .15s; }
+                  .dx-tile:hover .dx-cap { opacity: 1; }
+                  .dx-tile img { transition: transform .35s ease; }
+                  .dx-tile:hover img { transform: scale(1.03); }
+                  /* Phones: a tight 3-across grid like Instagram Explore; names
+                     appear on the profile you open, so tiles stay clean. */
+                  .dx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+                  @media (max-width: 640px) {
+                    .dx-grid { grid-template-columns: repeat(3, 1fr); gap: 2px; }
+                    .dx-tile { border-radius: 0 !important; }
+                    .dx-tile .dx-cap { display: none !important; }
+                    .dx-tile .dx-star { display: block !important; }
+                  }
+                  @media (hover: none) and (min-width: 641px) { .dx-tile .dx-cap { opacity: 1; } }
+                `}</style>
+                <div className="dx-grid">
+                  {feed.map(({ m, url }, i) => (
+                    <Link key={m.id + i} href={`/account/directory/${m.id}`} className="dx-tile"
+                      style={{ position: 'relative', display: 'block', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
+                      <img src={url} alt={m.full_name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      {m.founding_number ? <span className="dx-star" style={{ display: 'none', position: 'absolute', top: 5, right: 5, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.7))' }}><HexCrest size={16} /></span> : null}
+                      <div className="dx-cap" style={{ position: 'absolute', inset: 'auto 0 0 0', padding: '28px 10px 9px', background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)', color: '#fff', display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 15, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.full_name}</span>
+                        {m.founding_number ? <HexCrest size={15} title="First 100" /> : null}
+                        {m.roles[0] && <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.7)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>{m.roles[0]}</span>}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+              {filtered.map(m => (
+                <Link key={m.id} href={`/account/directory/${m.id}`} className={colorByKey(m.profile_color) ? 'pc-edge' : undefined} style={{ ...colorVars(m.profile_color), display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: m.founding_number ? '1px solid rgba(var(--t-gold-rgb), 0.4)' : '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '18px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {m.avatar_url
+                        ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{(m.full_name || '?').charAt(0).toUpperCase()}</span>}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                    <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {m.full_name}
+                      {m.account_type === 'brand' && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>BRAND</span>}
+                    </div>
+                    {m.founding_number ? <div style={{ marginTop: 5 }}><FoundingBadge number={m.founding_number} /></div> : null}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: m.instagram ? 12 : 0 }}>
+                    {m.roles.map(r => (
+                      <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 4, padding: '3px 8px' }}>
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                  {m.instagram && (
+                    <span style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)' }}>
+                      @{m.instagram.replace('@', '')}
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      </>)}
+    </div>
+  )
+}

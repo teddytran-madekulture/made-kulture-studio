@@ -1,352 +1,209 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+// THE DIRECTORY — home (2026-10-02, Directory Plan). The grid that used to live
+// here is now /account/directory/explore. Light by default (see the THEME_BOOT
+// note in app/account/layout.tsx) so the network reads as its own place, not
+// the dark studio site. All colours are theme tokens, so dark mode still works.
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CREATIVE_ROLES } from '@/lib/roles'
-import { track } from '@/lib/track'
-import FoundingBadge, { HexCrest } from '@/components/FoundingBadge'
-import { colorVars, colorByKey } from '@/lib/profile-colors'
+import { Instrument_Serif } from 'next/font/google'
+import DirectoryHeader from '@/components/DirectoryHeader'
 import FinishProfileCard from '@/components/FinishProfileCard'
+import { useIsMobile } from '@/lib/use-is-mobile'
 
-interface Member {
-  id: string
-  full_name: string
-  roles: string[]
-  instagram: string | null
-  avatar_url: string | null
-  account_type?: string
-  founding_number?: number | null
-  profile_color?: string | null
-  photos?: string[]
+const serif = Instrument_Serif({ subsets: ['latin'], weight: '400', style: ['normal', 'italic'] })
+
+type Credit = { role: string; handle: string; memberId: string | null }
+type Home = {
+  me: { name: string | null; avatar: string | null; foundingNumber: number | null; optedIn: boolean; listed: boolean; blockers: string[]; photos: number }
+  editorial: { title: string; subtitle: string; setName: string; setSlug: string; postUrl: string; photos: string[]; credits: Credit[] } | null
+  total: number
+  newMembers?: { id: string; name: string; roles: string[]; account_type?: string; photo: string | null; isNew: boolean }[]
+  fresh?: { id: string; url: string; memberId: string; name: string }[]
+  castings?: { id: string; title: string; compensation_type: string; roles_needed: string[]; set_slug: string | null; plan_mode: string; shoot_date: string | null; mature: boolean }[]
 }
 
-// ── Fair ordering ─────────────────────────────────────────────────────────
-// No alphabetical head start: members are ordered by a hash of (visit seed +
-// id). The seed lives for the browser-tab session, so the order holds steady
-// while someone browses and hits Back, and changes on the next visit.
-function visitSeed(): string {
-  try {
-    let s = sessionStorage.getItem('mk-dir-seed')
-    if (!s) { s = Math.random().toString(36).slice(2); sessionStorage.setItem('mk-dir-seed', s) }
-    return s
-  } catch { return 'mk' }
-}
-function rank(seed: string, id: string): number {
-  let h = 2166136261 // FNV-1a
-  const str = seed + id
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) }
-  return h >>> 0
+const muted = 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))'
+const hair = '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))'
+const mono: React.CSSProperties = { fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase' }
+const btn = (filled: boolean): React.CSSProperties => ({
+  ...mono, display: 'inline-block', padding: '13px 20px', textDecoration: 'none', textAlign: 'center',
+  border: '1px solid var(--t-fg)', background: filled ? 'var(--t-fg)' : 'transparent', color: filled ? 'var(--t-on-fg)' : 'var(--t-fg)',
+})
+
+// "SAPEUR EN ROSE" → "Sapeur En Rose" — the serif reads better in title case.
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, m => m.toUpperCase())
+const setLabel = (slug: string | null) => slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, m => m.toUpperCase()) : ''
+const day = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''
+const comp = (c: string) => c === 'paid' ? 'Paid' : c === 'tfp' ? 'TFP / collab' : c === 'unpaid' ? 'Unpaid' : c
+
+function SectionHead({ title, href, link }: { title: string; href?: string; link?: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '0 0 22px' }}>
+      <h2 className={serif.className} style={{ fontSize: 40, lineHeight: 1, margin: 0, fontWeight: 400 }}>{title}</h2>
+      {href && <Link href={href} style={{ fontFamily: 'Inter', fontSize: 13, color: muted, textDecoration: 'none' }}>{link} →</Link>}
+    </div>
+  )
 }
 
-export default function DirectoryPage() {
-  const [members, setMembers]     = useState<Member[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [optedOut, setOptedOut]   = useState(false)
-  // Opted in but not listed (incomplete profile) — what's missing, or null.
-  const [incomplete, setIncomplete] = useState<string[] | null>(null)
-  const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
-
-  const [selected, setSelected]   = useState<string[]>([])
-  const [open, setOpen]           = useState(false)
-  const [roleQuery, setRoleQuery] = useState('')
-  const [sortMode, setSortMode]   = useState<'common' | 'az'>('common')
-  const [peopleQuery, setPeople]  = useState('')
-  const [foundingOnly, setFoundingOnly] = useState(false)
-  const [view, setView] = useState<'explore' | 'people'>('explore')
-  const [seed, setSeed] = useState('mk')
-  useEffect(() => { setSeed(visitSeed()) }, [])
-  const [founding, setFounding] = useState<{ cap: number; taken: number } | null>(null)
+export default function DirectoryHome() {
+  const isMobile = useIsMobile()
+  const [d, setD] = useState<Home | null>(null)
+  const [err, setErr] = useState('')
 
   useEffect(() => {
-    fetch('/api/roles').then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d?.roles?.length) setRoleOptions(d.roles) }).catch(() => {})
+    fetch('/api/directory/home').then(async r => {
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) setErr(j.error || 'Could not load the directory.')
+      else setD(j)
+    }).catch(() => setErr('Could not load the directory.'))
   }, [])
 
-  // Fetch the whole directory once; filtering happens client-side so multi-select
-  // + search are instant.
-  useEffect(() => {
-    setLoading(true)
-    fetch('/api/directory')
-      .then(async r => {
-        const d = await r.json().catch(() => ({}))
-        if (r.status === 403 && d.incomplete) { setIncomplete(d.blockers ?? []); setMembers([]) }
-        else if (r.status === 403 && d.optedOut) { setOptedOut(true); setMembers([]) }
-        else { setOptedOut(false); setIncomplete(null); setMembers(d.members ?? []); if (d.founding) setFounding(d.founding) }
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+  if (err) return <div><DirectoryHeader active="home" /><p style={{ fontFamily: 'Inter', color: muted }}>{err}</p></div>
+  if (!d) return <div><DirectoryHeader active="home" /><p style={{ fontFamily: 'Inter', color: muted }}>Loading…</p></div>
 
-  // How many listed creatives hold each role (drives the "most common" sort + counts).
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {}
-    for (const m of members) for (const r of m.roles) c[r] = (c[r] || 0) + 1
-    return c
-  }, [members])
-
-  const displayRoles = useMemo(() => {
-    const q = roleQuery.trim().toLowerCase()
-    const list = roleOptions.filter(r => !q || r.toLowerCase().includes(q))
-    return [...list].sort((a, b) =>
-      sortMode === 'az'
-        ? a.localeCompare(b)
-        : (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b)
-    )
-  }, [roleOptions, roleQuery, sortMode, counts])
-
-  const filtered = useMemo(() => {
-    const pq = peopleQuery.trim().toLowerCase()
-    return members.filter(m => {
-      if (foundingOnly && !m.founding_number) return false
-      const roleMatch = selected.length === 0 || m.roles.some(r => selected.includes(r))
-      const peopleMatch = !pq
-        || (m.full_name || '').toLowerCase().includes(pq)
-        || (m.instagram || '').toLowerCase().includes(pq)
-      return roleMatch && peopleMatch
-    }).sort((a, b) => rank(seed, a.id) - rank(seed, b.id))
-  }, [members, selected, peopleQuery, foundingOnly, seed])
-
-  // Explore feed: ONE photo per member, in shuffled member order. Which photo
-  // rotates with the visit seed, so each visit shows a different piece of
-  // their portfolio while nobody gets more space than anyone else.
-  const feed = useMemo(() => {
-    const out: { m: Member; url: string }[] = []
-    for (const m of filtered) {
-      const ps = m.photos ?? []
-      if (ps.length) out.push({ m, url: ps[rank(seed + ':photo', m.id) % ps.length] })
-    }
-    return out
-  }, [filtered, seed])
-  // Typing a name means "find this person": show people, not photos.
-  const showPeople = view === 'people' || peopleQuery.trim().length > 0
-
-  const toggleRole = (r: string) => {
-    // Analytics: which roles people filter for (demand), vs who is listed (supply).
-    if (!selected.includes(r)) track('filter', { meta: { role: r, results: members.filter(m => m.roles.includes(r)).length } })
-    setSelected(s => s.includes(r) ? s.filter(x => x !== r) : [...s, r])
-  }
-
-  // ── Analytics (Admin → Community): what people search for ─────────────────
-  // Logged once the member stops typing for 1.2s, so "photographer" is one
-  // event, not twelve. Zero-result searches are the most useful signal: they
-  // name the creatives the directory doesn't have yet.
-  const lastPeopleQ = useRef('')
-  useEffect(() => {
-    const q = peopleQuery.trim().toLowerCase()
-    if (q.length < 2 || loading) return
-    const t = setTimeout(() => {
-      if (q === lastPeopleQ.current) return
-      lastPeopleQ.current = q
-      track('search', { query: q, meta: { kind: 'people', results: filtered.length } })
-    }, 1200)
-    return () => clearTimeout(t)
-  }, [peopleQuery, filtered.length, loading])
-
-  const lastRoleQ = useRef('')
-  useEffect(() => {
-    const q = roleQuery.trim().toLowerCase()
-    if (q.length < 2) return
-    const t = setTimeout(() => {
-      if (q === lastRoleQ.current) return
-      lastRoleQ.current = q
-      track('search', { query: q, meta: { kind: 'role', results: displayRoles.length } })
-    }, 1200)
-    return () => clearTimeout(t)
-  }, [roleQuery, displayRoles.length])
-
-  const input: React.CSSProperties = {
-    background: 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))', color: 'var(--t-fg)',
-    fontFamily: 'Inter', fontSize: 14, padding: '10px 13px', borderRadius: 8, outline: 'none', width: '100%', boxSizing: 'border-box',
-  }
+  const e = d.editorial
+  const section: React.CSSProperties = { padding: isMobile ? '36px 0' : '52px 0', borderBottom: hair }
 
   return (
-    <div>
-      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>CREATIVE DIRECTORY</h1>
-      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 24 }}>
-        Find collaborators in the Made Kulture community. Want to be listed? Turn on the directory toggle in your{' '}
-        <a href="/account/profile" style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))', textDecoration: 'underline' }}>profile</a>.
-      </p>
+    <div style={{ fontFamily: 'Inter' }}>
+      <DirectoryHeader active="home" />
 
-      {incomplete ? (
-        <FinishProfileCard blockers={incomplete} what="Browsing the directory" />
-      ) : optedOut ? (
-        <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '28px 24px', maxWidth: 520 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: 'var(--t-gold)', marginBottom: 8 }}>You&apos;re not in the directory</div>
-          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', lineHeight: 1.6, margin: '0 0 18px' }}>
-            The creative directory is members-only both ways — to browse other creatives, you need to be listed yourself.
-            Turn on directory visibility in your profile to join and unlock browsing. Only your name, roles, and Instagram are ever shown.
-          </p>
-          <a href="/account/profile" style={{ display: 'inline-block', background: 'var(--t-fg)', color: 'var(--t-on-fg)', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textDecoration: 'none', padding: '11px 20px', borderRadius: 4 }}>
-            JOIN THE DIRECTORY →
-          </a>
-        </div>
-      ) : (<>
-      {/* ── Filter bar ─────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
-          <input value={peopleQuery} onChange={e => setPeople(e.target.value)} placeholder="Search by name or @handle" style={input} />
-        </div>
-        <button onClick={() => setOpen(o => !o)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: selected.length ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', color: selected.length ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))', borderRadius: 8, padding: '10px 16px', fontFamily: 'Inter', fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          {selected.length ? `Roles · ${selected.length}` : 'Filter by role'}
-          <span style={{ fontSize: 10, opacity: 0.7 }}>{open ? '▲' : '▼'}</span>
-        </button>
-        {members.some(m => m.founding_number) && (
-          <button onClick={() => { setFoundingOnly(f => !f); if (!foundingOnly) track('filter', { meta: { role: 'Founding', results: members.filter(m => m.founding_number).length } }) }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: foundingOnly ? 'var(--t-gold)' : 'rgba(var(--t-gold-rgb), 0.08)', color: foundingOnly ? 'var(--t-on-fg)' : 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <HexCrest size={16} /> First 100
-          </button>
-        )}
-        {(selected.length > 0 || peopleQuery || foundingOnly) && (
-          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false) }}
-            style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
-            Clear
-          </button>
-        )}
-      </div>
-
-      {/* Selected role chips */}
-      {selected.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-          {selected.map(r => (
-            <button key={r} onClick={() => toggleRole(r)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 20, padding: '6px 8px 6px 13px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
-              {r}<span style={{ fontSize: 14, lineHeight: 1 }}>×</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Role dropdown */}
-      {open && (
-        <div style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))', borderRadius: 10, padding: 12, marginBottom: 20, maxWidth: 460 }}>
-          <input value={roleQuery} onChange={e => setRoleQuery(e.target.value)} placeholder="Search roles…" style={{ ...input, marginBottom: 10 }} autoFocus />
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-            {([['common', 'Most common'], ['az', 'A–Z']] as const).map(([v, label]) => (
-              <button key={v} onClick={() => setSortMode(v)}
-                style={{ background: sortMode === v ? 'rgba(var(--t-fg-rgb), calc(0.14 * var(--t-a)))' : 'transparent', color: sortMode === v ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 6, padding: '5px 12px', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div style={{ maxHeight: 300, overflowY: 'auto', margin: '0 -4px' }}>
-            {displayRoles.length === 0 ? (
-              <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', padding: '10px 4px' }}>No roles match.</div>
-            ) : displayRoles.map(r => {
-              const on = selected.includes(r)
-              return (
-                <button key={r} onClick={() => toggleRole(r)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: on ? 'rgba(var(--t-fg-rgb), calc(0.07 * var(--t-a)))' : 'transparent', border: 'none', borderRadius: 6, padding: '9px 10px', cursor: 'pointer' }}>
-                  <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: 4, border: `1.5px solid ${on ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))'}`, background: on ? 'var(--t-fg)' : 'transparent', color: 'var(--t-on-fg)', fontSize: 12, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{on ? '✓' : ''}</span>
-                  <span style={{ flex: 1, fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)' }}>{r}</span>
-                  {counts[r] ? <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))' }}>{counts[r]}</span> : null}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>Loading…</div>
-      ) : (
-        <>
-          <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 14 }}>
-            {filtered.length} {filtered.length === 1 ? 'creative' : 'creatives'}
-            {founding && founding.taken < founding.cap && (
-              <span style={{ color: 'var(--t-gold)', marginLeft: 12 }}>{founding.cap - founding.taken} of {founding.cap} First 100 spots left</span>
-            )}
-          </div>
-          <div style={{ display: 'inline-flex', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 3, marginBottom: 16, gap: 2 }}>
-            {(['explore', 'people'] as const).map(v => {
-              const on = (v === 'people') === showPeople
-              return (
-                <button key={v} type="button" onClick={() => { setView(v); if (v === 'explore') setPeople('') }}
-                  style={{ padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', background: on ? 'var(--t-fg)' : 'transparent', color: on ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>
-                  {v === 'explore' ? 'Explore' : 'People'}
-                </button>
-              )
-            })}
-          </div>
-          {filtered.length === 0 ? (
-            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
-              {members.length === 0 ? 'No one has joined the directory yet.' : 'No matches — try clearing a filter.'}
-            </div>
-          ) : !showPeople ? (
-            feed.length === 0 ? (
-              <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>
-                No portfolio photos to explore yet. Switch to People to see everyone.
-              </div>
-            ) : (
-              <>
-                <style>{`
-                  .dx-tile .dx-cap { opacity: 0; transition: opacity .15s; }
-                  .dx-tile:hover .dx-cap { opacity: 1; }
-                  .dx-tile img { transition: transform .35s ease; }
-                  .dx-tile:hover img { transform: scale(1.03); }
-                  /* Phones: a tight 3-across grid like Instagram Explore; names
-                     appear on the profile you open, so tiles stay clean. */
-                  .dx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
-                  @media (max-width: 640px) {
-                    .dx-grid { grid-template-columns: repeat(3, 1fr); gap: 2px; }
-                    .dx-tile { border-radius: 0 !important; }
-                    .dx-tile .dx-cap { display: none !important; }
-                    .dx-tile .dx-star { display: block !important; }
-                  }
-                  @media (hover: none) and (min-width: 641px) { .dx-tile .dx-cap { opacity: 1; } }
-                `}</style>
-                <div className="dx-grid">
-                  {feed.map(({ m, url }, i) => (
-                    <Link key={m.id + i} href={`/account/directory/${m.id}`} className="dx-tile"
-                      style={{ position: 'relative', display: 'block', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
-                      <img src={url} alt={m.full_name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      {m.founding_number ? <span className="dx-star" style={{ display: 'none', position: 'absolute', top: 5, right: 5, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.7))' }}><HexCrest size={16} /></span> : null}
-                      <div className="dx-cap" style={{ position: 'absolute', inset: 'auto 0 0 0', padding: '28px 10px 9px', background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)', color: '#fff', display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 15, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.full_name}</span>
-                        {m.founding_number ? <HexCrest size={15} title="First 100" /> : null}
-                        {m.roles[0] && <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.7)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>{m.roles[0]}</span>}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </>
-            )
+      {/* Not listed yet — the one thing to do, above everything else */}
+      {!d.me.listed && (
+        <div style={{ marginBottom: 32 }}>
+          {d.me.optedIn ? (
+            <FinishProfileCard blockers={d.me.blockers as any} what="Seeing who's in the directory" />
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-              {filtered.map(m => (
-                <Link key={m.id} href={`/account/directory/${m.id}`} className={colorByKey(m.profile_color) ? 'pc-edge' : undefined} style={{ ...colorVars(m.profile_color), display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: m.founding_number ? '1px solid rgba(var(--t-gold-rgb), 0.4)' : '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '18px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'var(--t-surface-hi)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {m.avatar_url
-                        ? <img src={m.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{(m.full_name || '?').charAt(0).toUpperCase()}</span>}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                    <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {m.full_name}
-                      {m.account_type === 'brand' && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>BRAND</span>}
-                    </div>
-                    {m.founding_number ? <div style={{ marginTop: 5 }}><FoundingBadge number={m.founding_number} /></div> : null}
-                    </div>
+            <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: '24px 24px', maxWidth: 620 }}>
+              <div style={{ ...mono, color: 'var(--t-gold)', marginBottom: 8 }}>Your listing is off</div>
+              <p style={{ fontSize: 15, lineHeight: 1.6, margin: '0 0 16px', color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))' }}>
+                {d.total} members are in the directory. Turn on your listing to see who&apos;s here, get found, and answer castings.
+              </p>
+              <Link href="/account/profile" style={btn(true)}>Turn on my listing</Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* FEATURED EDITORIAL */}
+      {e && e.photos.length > 0 && (
+        <section style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', border: hair, borderRadius: 10, overflow: 'hidden', background: 'var(--t-surface)', marginBottom: 8 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={e.photos[0]} alt={e.title} style={{ width: '100%', height: isMobile ? 380 : 560, objectFit: 'cover', display: 'block' }} />
+          <div style={{ padding: isMobile ? '28px 22px' : '48px 44px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
+            <div style={{ ...mono, color: 'var(--t-gold)' }}>Featured editorial{e.setName ? ` · Shot on ${e.setName}` : ' · Shot at Made Kulture'}</div>
+            <h1 className={serif.className} style={{ fontSize: isMobile ? 48 : 68, lineHeight: 0.95, fontStyle: 'italic', fontWeight: 400, margin: 0 }}>{titleCase(e.title)}</h1>
+            {e.subtitle && <p style={{ color: muted, fontSize: 16, margin: 0 }}>{e.subtitle}</p>}
+            {e.credits.length > 0 && (
+              <div style={{ borderTop: hair }}>
+                {e.credits.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '11px 0', borderBottom: hair, fontSize: 15 }}>
+                    <span style={{ color: muted, fontSize: 13 }}>{c.role || 'Credit'}</span>
+                    {c.memberId
+                      ? <Link href={`/account/directory/${c.memberId}`} style={{ color: 'var(--t-fg)', textDecoration: 'none', borderBottom: '1px solid var(--t-gold)' }}>@{c.handle}</Link>
+                      : c.handle ? <a href={`https://www.instagram.com/${c.handle}/`} target="_blank" rel="noreferrer" style={{ color: 'var(--t-fg)', textDecoration: 'none' }}>@{c.handle}</a> : null}
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: m.instagram ? 12 : 0 }}>
-                    {m.roles.map(r => (
-                      <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 4, padding: '3px 8px' }}>
-                        {r}
-                      </span>
-                    ))}
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {e.postUrl && <a href={e.postUrl} target="_blank" rel="noreferrer" style={btn(true)}>View the editorial</a>}
+              {e.setSlug && <Link href={`/sets/${e.setSlug}`} style={btn(false)}>Shoot on {e.setName || 'this set'}</Link>}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {d.me.listed && <>
+        {/* NEW THIS WEEK */}
+        {!!d.newMembers?.length && (
+          <section style={section}>
+            <SectionHead title="New in the directory" href="/account/directory/explore?view=people" link="See everyone" />
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 16 }}>
+              {d.newMembers.map(m => (
+                <Link key={m.id} href={`/account/directory/${m.id}`} style={{ textDecoration: 'none', color: 'var(--t-fg)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ aspectRatio: '4/5', borderRadius: 6, overflow: 'hidden', background: 'var(--t-surface-hi)' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {m.photo
+                      ? <img src={m.photo} alt={m.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(var(--t-gold-rgb), 0.12)' }}>
+                          <span className={serif.className} style={{ fontSize: 64, fontStyle: 'italic', color: 'var(--t-gold)' }}>{(m.name || '?').trim().charAt(0).toUpperCase()}</span>
+                        </div>}
                   </div>
-                  {m.instagram && (
-                    <span style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)' }}>
-                      @{m.instagram.replace('@', '')}
-                    </span>
-                  )}
+                  <div style={{ fontSize: 15, fontWeight: 500 }}>
+                    {m.name}
+                    {m.isNew && <span style={{ ...mono, fontSize: 9, letterSpacing: '0.15em', color: 'var(--t-gold)', border: '1px solid var(--t-gold)', padding: '2px 5px', marginLeft: 6, verticalAlign: 2 }}>New</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: muted }}>{m.account_type === 'brand' ? 'Brand' : (m.roles[0] ?? '')}</div>
                 </Link>
               ))}
             </div>
-          )}
-        </>
-      )}
-      </>)}
+          </section>
+        )}
+
+        {/* CASTINGS + YOU */}
+        <section style={{ ...section, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.6fr 1fr', gap: 28 }}>
+          <div>
+            <SectionHead title="Open castings" href="/account/castings" link="All castings" />
+            {d.castings?.length ? d.castings.map(c => (
+              <Link key={c.id} href={`/account/castings/${c.id}`} style={{ display: 'block', textDecoration: 'none', color: 'var(--t-fg)', background: 'var(--t-surface)', border: hair, borderRadius: 8, padding: '18px 20px', marginBottom: 10 }}>
+                <div className={serif.className} style={{ fontSize: 26, fontStyle: 'italic', lineHeight: 1.05 }}>{c.title}</div>
+                <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>
+                  {[day(c.shoot_date), c.plan_mode === 'buyout' ? 'Full studio' : setLabel(c.set_slug), comp(c.compensation_type), c.mature ? '18+' : ''].filter(Boolean).join(' · ')}
+                </div>
+                {c.roles_needed?.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                    {c.roles_needed.map(r => <span key={r} style={{ fontSize: 11, border: hair, borderRadius: 999, padding: '4px 10px', background: 'var(--t-bg)' }}>{r}</span>)}
+                  </div>
+                )}
+              </Link>
+            )) : (
+              <div style={{ fontSize: 14, color: muted, background: 'var(--t-surface)', border: hair, borderRadius: 8, padding: '20px' }}>
+                No open castings right now. <Link href="/account/castings/new" style={{ color: 'var(--t-fg)' }}>Post one →</Link>
+              </div>
+            )}
+          </div>
+
+          {/* YOU */}
+          <aside style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', borderRadius: 10, padding: 26, display: 'flex', flexDirection: 'column', gap: 16, alignSelf: 'start' }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', background: 'rgba(127,127,127,0.4)', flexShrink: 0 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {d.me.avatar && <img src={d.me.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+              </div>
+              <div>
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 24, letterSpacing: '0.02em', lineHeight: 1.05 }}>{(d.me.name || 'You').toUpperCase()}</div>
+                {d.me.foundingNumber && <div style={{ ...mono, fontSize: 10, color: '#d9be86', marginTop: 4 }}>◆ First 100 · #{d.me.foundingNumber}</div>}
+              </div>
+            </div>
+            <p style={{ fontSize: 13, lineHeight: 1.55, margin: 0, opacity: 0.72 }}>
+              {d.me.photos < 3
+                ? `Your listing is live. Add ${3 - d.me.photos} more portfolio photo${3 - d.me.photos === 1 ? '' : 's'} so people booking can see more of your work.`
+                : 'Your listing is live. Keep your portfolio fresh. New work shows up on this page for everyone.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Link href="/account/profile" style={{ ...btn(false), borderColor: 'var(--t-on-fg)', color: 'var(--t-on-fg)', flex: 1 }}>Edit profile</Link>
+              <Link href="/account/me" style={{ ...btn(false), borderColor: 'var(--t-on-fg)', color: 'var(--t-on-fg)', flex: 1 }}>View profile</Link>
+            </div>
+          </aside>
+        </section>
+
+        {/* FRESH WORK */}
+        {!!d.fresh?.length && (
+          <section style={{ ...section, borderBottom: 'none' }}>
+            <SectionHead title="Fresh work" href="/account/directory/explore" link="Explore all" />
+            <div style={{ columns: isMobile ? 2 : 4, columnGap: 12 }}>
+              {d.fresh.map(f => (
+                <Link key={f.id} href={`/account/directory/${f.memberId}`} style={{ display: 'block', breakInside: 'avoid', marginBottom: 12, position: 'relative', borderRadius: 6, overflow: 'hidden' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={f.url} alt={f.name} loading="lazy" style={{ width: '100%', display: 'block' }} />
+                  <span style={{ position: 'absolute', left: 8, bottom: 8, fontFamily: 'Inter', fontSize: 11, color: '#fff', background: 'rgba(0,0,0,0.45)', padding: '3px 9px', borderRadius: 999 }}>{f.name}</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+      </>}
     </div>
   )
 }
