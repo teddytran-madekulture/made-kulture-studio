@@ -1010,6 +1010,20 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 CHECKING AVAILABILITY...
               </p>
             )}
+            {/* Nothing fits this day (e.g. a buyout on a busy day). Say so instead of
+                showing a silent all-grey grid. Only on the plain path — the Plus /
+                short-notice paths have their own gold "ask for it" options. */}
+            {!loadingSlots && !plusWindowDate && !needsApproval && booking.startHour === null && setCart.length === 0 && booking.date
+              && !SLOTS.some(h => h % 1 === 0 && h <= CLOSE_HOUR - minHours && !(bookingIsToday && h < nowChiDec)
+                                  && !isHourBooked(h) && !noRoomFromStart(h)) && (
+              <div style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.03)', padding: '14px 16px', marginBottom: 20 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 1.55 }}>
+                  {booking.type === 'studio'
+                    ? `No ${minHours}-hour window is open for a full takeover on this date. Try another day, or text the studio at (832) 408-1631 and we'll see what we can do.`
+                    : `No ${minHours}-hour window is open on this set on this date. Try another day or another set.`}
+                </div>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
               {[...SLOTS, CLOSE_HOUR].map(h => {
                 const isPast    = bookingIsToday && h < nowChiDec
@@ -1031,6 +1045,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // absolutely nothing when clicked. Same family as the at-or-before-start
                 // rule that bit the Plus containment check on 2026-08-12.
                 const isInvalidStart = (selecting === 'start' || (booking.startHour !== null && h <= booking.startHour)) && h % 1 !== 0
+                // While picking an END, earlier hours used to stay lit (tapping one
+                // re-picked the start), which read as "open as an end time". Dim them;
+                // tapping the chosen start again or RESET TIME changes the start.
+                const beforeStartWhilePickingEnd = selecting === 'end' && booking.startHour !== null && booking.endHour === null && h < booking.startHour
                 // ⚠️ One booking = one VISIT. A gap wider than the grace window would
                 // mean the single front-door algoPIN (min start → max end, valid
                 // CONTINUOUSLY, non-revocable) covers hours the customer never paid
@@ -1080,7 +1098,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 const isPending = booking.startHour === h && booking.endHour === null
 
                 let bg = '#0d0d0d'
-                let color = (isInvalidEnd || isInvalidStart || closeAsStart || opensGap || blockedAsStart) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
+                let color = (isInvalidEnd || isInvalidStart || closeAsStart || opensGap || blockedAsStart || beforeStartWhilePickingEnd) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)'
                 if (notOpenForPlus) { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (requestable)  { bg = 'rgba(201,178,126,0.07)'; color = 'rgba(201,178,126,0.75)' }
                 if (requestHour === h) { bg = 'rgba(201,178,126,0.28)'; color = '#fff' }
@@ -1096,10 +1114,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       ? (setRequestHour(h), setRequestHours(minHours), setRequestConsent(false), setRequestDone(null), setRequestErr(null))
                       : handleHourClick(h)}
                     title={requestable ? 'Not open this early/late — tap to ask' : undefined}
-                    disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || (notOpenForPlus && !requestable)}
+                    disabled={booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || beforeStartWhilePickingEnd || (notOpenForPlus && !requestable)}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: requestable ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart || blockedAsStart) ? 'default' : 'pointer',
+                      cursor: requestable ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart || blockedAsStart || beforeStartWhilePickingEnd) ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
