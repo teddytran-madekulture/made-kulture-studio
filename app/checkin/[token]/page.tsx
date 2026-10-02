@@ -158,7 +158,10 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
         <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 40, fontWeight: 700, letterSpacing: '0.18em', margin: '2px 0 12px' }}>{spaced(codes.back)}</div>
       </>}
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: 0, lineHeight: 1.5 }}>
-        {data?.doorHowTo ?? 'Enter the code, then press the unlock button to open.'} It only works during your booked time.
+        {data?.doorHowTo ?? 'Enter the code, then press the unlock button to open.'}{' '}
+        {data && new Date(data.startTime).getTime() > Date.now()
+          ? <><strong style={{ color: '#c9b27e' }}>Works from {fmt(data.startTime)}.</strong> Your set unlocks at your start time. Codes won’t open the door early.</>
+          : <>It only works during your booked time.</>}
       </p>
     </div>
   ) : null
@@ -220,6 +223,11 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
           {data.codeOpensAt && new Date(data.codeOpensAt).getTime() > Date.now()
             ? <>Appears here when you check in. Check-in opens at <strong style={{ color: '#fff' }}>{fmt(data.codeOpensAt)}</strong>, once you’re at the studio.</>
             : <>Tap <strong style={{ color: '#fff' }}>CHECK IN</strong> once you’re at the studio and your code appears here.</>}
+          {/* 2026-10-02: the algoPIN is not live before the booking starts, so an early check-in
+              used to hand out a code that silently failed at the keypad. Say so up front. */}
+          {new Date(data.startTime).getTime() > Date.now() && <>
+            {' '}<strong style={{ color: '#c9b27e' }}>Your code works from {fmt(data.startTime)}</strong>, your booked start time.
+          </>}
         </p>
       </div>
     )}
