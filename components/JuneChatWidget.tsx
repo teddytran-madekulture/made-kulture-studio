@@ -196,6 +196,7 @@ export default function JuneChatWidget() {
       <button
         onClick={() => setOpen(o => !o)}
         aria-label="Chat with June"
+        className="mk-june-launcher"
         style={{
           position: 'fixed', bottom: 'calc(20px + var(--mk-mobilebar-h, 0px) + var(--mk-acctbar-h, 0px))', right: 20, zIndex: 9000,
           width: 56, height: 56, borderRadius: '50%', border: `1px solid ${GOLD}`,

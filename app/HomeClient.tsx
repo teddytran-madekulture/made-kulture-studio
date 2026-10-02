@@ -12,6 +12,7 @@ import { useGuestPricing } from '@/lib/use-guest-pricing'
 import HeroCarousel, { type CarouselSlide } from '@/components/HeroCarousel'
 import { FOCAL_POSITION, type HeroSlide } from '@/lib/hero-slides'
 import FeaturedEditorial from '@/components/FeaturedEditorial'
+import DirectoryTeaser from '@/components/DirectoryTeaser'
 import { liveEditorial, creditsLine, type FeaturedEditorial as FeaturedEditorialData } from '@/lib/featured-editorial'
 
 
@@ -265,6 +266,9 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
         </div>
       </section>
 
+      {/* THE DIRECTORY — counts + a blurred wall, no names (2026-10-02). See components/DirectoryTeaser.tsx */}
+      <DirectoryTeaser isMobile={isMobile} />
+
       {/* BUILT FOR THE OBSESSED — #editorial is the hero banner's "View the editorial" target */}
       <section id="editorial" style={{ scrollMarginTop: 80, display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' }}>
         {/* Left: the Featured Editorial when one is live (/admin/website/editorial),
@@ -350,7 +354,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           <div>
             <div className="label" style={{ marginBottom:24 }}>STUDIO</div>
             {/* Pricing lives on the sets page — there is no /pricing route. */}
-            {[['Sets','/sets'],['Pricing','/sets'],['Book','/book'],['Contact','/contact']].map(([l, href]) => (
+            {[['Sets','/sets'],['Pricing','/sets'],['Book','/book'],['Directory','/directory'],['Contact','/contact']].map(([l, href]) => (
               <div key={l} style={{ marginBottom:14 }}>
                 <Link href={href} style={{ fontSize:14, color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>{l}</Link>
               </div>

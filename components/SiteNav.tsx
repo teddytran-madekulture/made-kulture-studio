@@ -19,9 +19,10 @@ const LINKS: { label: string; href: string }[] = [
 // Shared site navigation: transparent at the top, solid on scroll, with a
 // full-screen bold menu on mobile. `active` highlights the current page.
 export default function SiteNav({ active }: { active?: string }) {
-  // Use the compact/hamburger nav below 1024px so the full desktop row (logo +
-  // 6 links + login/signup + book) never has to cram or overlap.
-  const isMobile = useIsMobile(1180)
+  // Compact/hamburger nav below 1280px so the full desktop row (logo + 7 links +
+  // login/signup + DIRECTORY + book) never has to cram or overlap. Was 1180
+  // before the DIRECTORY button joined the right side (2026-10-02).
+  const isMobile = useIsMobile(1280)
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [authed, setAuthed] = useState<boolean | null>(null)
@@ -108,6 +109,22 @@ export default function SiteNav({ active }: { active?: string }) {
             {/* Right-side actions */}
             <div style={{ flex: '1 1 0', minWidth: 'max-content', display: 'flex', justifyContent: 'flex-end', gap: 24, alignItems: 'center' }}>
               <NavAuthLink />
+              {/* THE DIRECTORY (2026-10-02): deliberately NOT one of the centre
+                  links — those are the studio. Gold outline = the network, white
+                  fill (BOOK NOW) = the studio, so the two never read as one. */}
+              <Link href="/directory" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10,
+                background: isActive('directory') ? 'rgba(201,178,126,0.16)' : 'transparent',
+                color: '#c9b27e', border: '1px solid rgba(201,178,126,0.7)', padding: '9px 16px', textDecoration: 'none',
+                fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.2em', whiteSpace: 'nowrap',
+                transition: 'background 0.2s ease',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,178,126,0.16)')}
+                onMouseLeave={e => (e.currentTarget.style.background = isActive('directory') ? 'rgba(201,178,126,0.16)' : 'transparent')}
+              >
+                <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden><path d="M5 0L10 5L5 10L0 5Z" fill="currentColor"/></svg>
+                DIRECTORY
+              </Link>
               <Link href="/book" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 16,
                 background: '#fff', color: '#080808', padding: '10px 18px', textDecoration: 'none',
@@ -121,34 +138,47 @@ export default function SiteNav({ active }: { active?: string }) {
         )}
       </nav>
 
+      {/* June's chat bubble (zIndex 9000) would float over the open menu's
+          last rows on a short phone — hide it while the menu is open. */}
+      {isMobile && menuOpen && <style>{'.mk-june-launcher{display:none !important}'}</style>}
+
       {/* Mobile full-screen menu */}
       {isMobile && menuOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99, background: '#080808', display: 'flex', flexDirection: 'column', padding: 'calc(104px + var(--mk-announce-h, 0px)) 24px 40px' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99, background: '#080808', display: 'flex', flexDirection: 'column', padding: 'calc(88px + var(--mk-announce-h, 0px)) 24px 32px', overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
           {[...LINKS, { label: 'BOOK', href: '/book' }].map(l => (
             <Link key={l.label} href={l.href} onClick={() => setMenuOpen(false)}
-              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
+              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(28px, min(9.5vw, 4.6vh), 64px)', letterSpacing: '0.02em', lineHeight: 1.04, color: isActive(l.label) ? '#fff' : 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
               {l.label}
             </Link>
           ))}
+          {/* THE DIRECTORY — set apart from the studio links, in gold */}
+          <Link href="/directory" onClick={() => setMenuOpen(false)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, margin: '12px 0 8px', padding: '12px 16px', border: '1px solid rgba(201,178,126,0.6)', background: isActive('directory') ? 'rgba(201,178,126,0.14)' : 'transparent', textDecoration: 'none' }}>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(24px, min(7vw, 4vh), 40px)', letterSpacing: '0.02em', lineHeight: 1, color: '#c9b27e' }}>THE DIRECTORY</span>
+              <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.5)' }}>HOUSTON&apos;S CREATIVE NETWORK</span>
+            </span>
+            <svg width="14" height="14" viewBox="0 0 10 10" aria-hidden style={{ color: '#c9b27e', flexShrink: 0 }}><path d="M5 0L10 5L5 10L0 5Z" fill="currentColor"/></svg>
+          </Link>
           {authed === true && (
             <Link href="/account" onClick={() => setMenuOpen(false)}
-              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
+              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(28px, min(9.5vw, 4.6vh), 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
               ACCOUNT
             </Link>
           )}
           {authed === false && (
             <>
               <Link href="/login" onClick={() => setMenuOpen(false)}
-                style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
+                style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(28px, min(9.5vw, 4.6vh), 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
                 LOG IN
               </Link>
               <Link href="/signup" onClick={() => setMenuOpen(false)}
-                style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(38px, 11vw, 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: '#fff', textDecoration: 'none', padding: '6px 0' }}>
+                style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(28px, min(9.5vw, 4.6vh), 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: '#fff', textDecoration: 'none', padding: '6px 0' }}>
                 SIGN UP
               </Link>
             </>
           )}
-          <div style={{ marginTop: 'auto', paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="label" style={{ marginBottom: 6 }}>MADE KULTURE / HOUSTON</div>
             <div style={{ fontFamily: 'Inter Tight, Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>4825 Gulf Fwy, Houston TX · (832) 408-1631</div>
           </div>
