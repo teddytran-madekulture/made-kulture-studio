@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { SLUG_TO_NAME } from '@/lib/booking-core'
 import { shortCodeFor } from '@/lib/kiosk-links'
+import { PROJECTOR_SLUG } from '@/lib/projector'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,13 @@ export async function GET(_req: NextRequest, { params }: { params: { code: strin
   }
 
   const code = String(params.code || '').toLowerCase()
+  // The wall projector laptop has its own short link (2026-10-03).
+  if (sameCode(shortCodeFor(PROJECTOR_SLUG, key), code)) {
+    const p = new URL('/projector', process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app')
+    p.searchParams.set('key', key)
+    return NextResponse.redirect(p.toString(), 307)
+  }
+
   const slug = Object.keys(SLUG_TO_NAME).find(s => sameCode(shortCodeFor(s, key), code))
   if (!slug) return new NextResponse('Not found', { status: 404 })
 

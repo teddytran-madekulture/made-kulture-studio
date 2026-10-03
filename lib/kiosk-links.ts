@@ -24,5 +24,5 @@ export function kioskLinks(key: string, baseUrl?: string): KioskLink[] {
   return Object.entries(SLUG_TO_NAME).map(([slug, name]) => {
     const code = shortCodeFor(slug, key)
     return { slug, name, code, url: `${base}/t/${code}` }
-  })
+  }).concat([{ slug: 'projector', name: 'Projector (wall laptop)', code: shortCodeFor('projector', key), url: `${base}/t/${shortCodeFor('projector', key)}` }])
 }
