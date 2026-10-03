@@ -3,7 +3,7 @@
 // 5-second poll costs one storage list and nothing else.
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { listProjectorFiles, projectorKeyOk, projectorUploadCode, PROJECTOR_BUCKET, PROJECTOR_DIR } from '@/lib/projector'
+import { isProjectorVideo, listProjectorFiles, projectorKeyOk, projectorUploadCode, PROJECTOR_BUCKET, PROJECTOR_DIR } from '@/lib/projector'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -24,5 +24,5 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabaseAdmin().storage.from(PROJECTOR_BUCKET)
     .createSignedUrl(`${PROJECTOR_DIR}/${newest}`, 12 * 3600)
   if (error || !data) return NextResponse.json({ error: error?.message || 'sign failed' }, { status: 500 })
-  return NextResponse.json({ v: newest, url: data.signedUrl, uploadUrl })
+  return NextResponse.json({ v: newest, url: data.signedUrl, kind: isProjectorVideo(newest) ? 'video' : 'image', uploadUrl })
 }

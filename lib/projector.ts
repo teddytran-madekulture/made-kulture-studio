@@ -17,6 +17,9 @@ import { supabaseAdmin } from '@/lib/supabase'
 export const PROJECTOR_BUCKET = 'portal-media'
 export const PROJECTOR_DIR = 'projector'
 export const PROJECTOR_SLUG = 'projector'   // /t/ short-link identity
+// Supabase's per-file cap on the free plan is 50 MB; stay just under it.
+export const PROJECTOR_VIDEO_MAX = 49 * 1024 * 1024
+export function isProjectorVideo(name: string): boolean { return /\.(mp4|mov|webm)$/i.test(name) }
 
 export function projectorUploadCode(key: string): string {
   return createHmac('sha256', key).update('projector-upload').digest('hex').slice(0, 12)

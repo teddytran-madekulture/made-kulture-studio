@@ -32,6 +32,7 @@ function QR({ url, size }: { url: string; size: number }) {
 export default function ProjectorPage() {
   const [key, setKey] = useState<string | null>(null)
   const [img, setImg] = useState<string | null>(null)
+  const [isVideo, setIsVideo] = useState(false)
   const [uploadUrl, setUploadUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [showQr, setShowQr] = useState(false)
@@ -66,7 +67,7 @@ export default function ProjectorPage() {
         setUploadUrl(j.uploadUrl)
         if (j.v === null) { v.current = null; setImg(null) }
         else if (!j.same) {
-          v.current = j.v; setImg(j.url); setShowQr(false)
+          v.current = j.v; setImg(j.url); setIsVideo(j.kind === 'video'); setShowQr(false)
           let saved = { s: 1, x: 0, y: 0 }
           try { const raw = localStorage.getItem(viewKey(j.v)); if (raw) saved = JSON.parse(raw) } catch {}
           setView(saved)
@@ -146,13 +147,18 @@ export default function ProjectorPage() {
       onMouseLeave={() => { drag.current = null }}
       onDoubleClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}>
       {img ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={img} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: cover ? 'cover' : 'contain', display: 'block', transformOrigin: '0 0', transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, willChange: 'transform', pointerEvents: 'none' }} />
+        isVideo ? (
+          // Muted is required for autoplay; loops as a background.
+          <video key={img} src={img} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: cover ? 'cover' : 'contain', display: 'block', transformOrigin: '0 0', transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, willChange: 'transform', pointerEvents: 'none' }} />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={img} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: cover ? 'cover' : 'contain', display: 'block', transformOrigin: '0 0', transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, willChange: 'transform', pointerEvents: 'none' }} />
+        )
       ) : uploadUrl ? (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, fontFamily: 'Georgia, serif', color: CHAMP }}>
           <div style={{ letterSpacing: '0.35em', fontSize: 14, fontFamily: 'sans-serif' }}>MADE KULTURE · PROJECTOR</div>
           <QR url={uploadUrl} size={300} />
-          <div style={{ fontSize: 30 }}>Scan to put your image on the wall</div>
+          <div style={{ fontSize: 30 }}>Scan to put your image or video on the wall</div>
           <div style={{ fontSize: 14, color: '#777', fontFamily: 'sans-serif' }}>Double-click for fullscreen</div>
         </div>
       ) : null}
