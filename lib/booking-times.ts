@@ -157,3 +157,21 @@ export function largestVisitGap(lines: { startHour: number; endHour: number }[])
 export function violatesVisitContinuity(lines: { startHour: number; endHour: number }[]): boolean {
   return largestVisitGap(lines) > VISIT_GAP_GRACE_HOURS
 }
+
+
+/**
+ * Should the customer get a confirmation TEXT at booking? (Teddy, 2026-10-02)
+ * Booking confirms by EMAIL; the text arrives with the day-before reminder
+ * (cron/reminders, 18:00 UTC = 1pm CDT / 12pm CST, for sessions on Central
+ * "tomorrow"). A session that reminder will NOT catch -- today, or tomorrow
+ * once the run has passed -- gets its text at booking instead.
+ * Uses 12:00 Central as the cut-over so the CST hour is covered too; the worst
+ * case is one extra text, never a missing one.
+ */
+export function confirmTextAtBooking(startISO: string, now = new Date()): boolean {
+  const today = centralDateStr(now.toISOString())
+  const day = centralDateStr(startISO)
+  if (day <= today) return true
+  const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+  return day === tomorrow && centralHourDecimal(now.toISOString()) >= 12
+}

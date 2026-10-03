@@ -16,7 +16,7 @@ import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
 import { createBookingPin, createBackDoorPin, doorCodeLinkLine } from '@/lib/igloohome'
-import { largestVisitGap, VISIT_GAP_GRACE_HOURS, bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
+import { largestVisitGap, VISIT_GAP_GRACE_HOURS, bookingHourToISO, centralDateStr, centralHourDecimal, confirmTextAtBooking } from '@/lib/booking-times'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { sendSMS } from '@/lib/sms'
@@ -398,7 +398,8 @@ export async function validateAndPriceOrder(
 
 export async function finalizeBooking(
   supabase: SupabaseClient,
-  bookingIds: string[]
+  bookingIds: string[],
+  opts: { forceText?: boolean } = {},
 ): Promise<{ doorCode: string | null }> {
   const { data: rows } = await supabase
     .from('bookings')
@@ -500,7 +501,10 @@ export async function finalizeBooking(
   // Confirmations to the BOOKER (person running the shoot) + owner.
   const notifications: Promise<any>[] = []
 
-  if (custPhone) {
+  // Email-first (2026-10-02): text now only if the day-before reminder won't
+  // catch this session, or the owner explicitly resends the confirmation.
+  const earliestStart = rows.map((r: any) => r.start_time as string).sort((a, b) => Date.parse(a) - Date.parse(b))[0]
+  if (custPhone && (opts.forceText || confirmTextAtBooking(earliestStart))) {
     const dollars = totalAmount.toFixed(2)
     const sched = lines.map(l => `📍 ${l.setName} — ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join('\n')
     // The code itself is NOT texted (2026-10-01) — it appears on the check-in

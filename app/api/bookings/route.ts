@@ -10,7 +10,7 @@ import { checkCartAvailability } from '@/lib/equipment-availability'
 import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin, doorCodeLinkLine } from '@/lib/igloohome'
-import { bookingHourToISO, largestVisitGap, VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'
+import { bookingHourToISO, largestVisitGap, VISIT_GAP_GRACE_HOURS, confirmTextAtBooking } from '@/lib/booking-times'
 import { violatesAdvanceWindow, sessionMayBookShortNotice, ADVANCE_WINDOW_ERROR, shortNoticeScopeOf, lineMatchesScope } from '@/lib/short-notice'
 import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
@@ -202,7 +202,10 @@ async function sendConfirmationSMS(
 
   // sendSMS never throws, so a bad customer phone can no longer take the
   // owner's new-booking text down with it (it used to — two bare awaits).
-  await sendSMS(body.phone, message)
+  // Email-first (2026-10-02): the customer's text comes with the day-before
+  // reminder, unless the session is too soon for that reminder to catch it.
+  const earliest = lines.map(l => l.startISO).sort()[0]
+  if (earliest && confirmTextAtBooking(earliest)) await sendSMS(body.phone, message)
 
   const ownerSummary = lines.map(l => `${l.setName} ${l.date} ${fmt12(l.startHour)}–${fmt12(l.endHour)}`).join(' | ')
   const ownerGuests = body.guests ? ` | 👥 ${body.guests}` : ''

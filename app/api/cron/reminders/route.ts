@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendBookingReminder, formatTimeLabel, formatDateLabel } from '@/lib/email'
+import { sendSMS } from '@/lib/sms'
+import { doorCodeLinkLine } from '@/lib/igloohome'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,8 +51,9 @@ export async function GET(req: NextRequest) {
       end_time,
       total_amount,
       notes,
+      check_in_token,
       sets ( name ),
-      customers ( name, email )
+      customers ( name, email, phone )
     `)
     .eq('status', 'confirmed')
     .gte('start_time', windowStart)
@@ -68,16 +71,37 @@ export async function GET(req: NextRequest) {
   }
 
   let sent = 0
+  let texted = 0
   const errors: string[] = []
 
   for (const booking of bookings) {
     const customer = Array.isArray(booking.customers) ? booking.customers[0] : booking.customers
     const set      = Array.isArray(booking.sets)      ? booking.sets[0]      : booking.sets
 
-    if (!customer?.email || !customer?.name) continue
-
     const startHour = centralHourDecimal(booking.start_time)
     const endHour   = centralHourDecimal(booking.end_time)
+
+    // Day-before TEXT (2026-10-02). Booking confirms by email; this is the
+    // text, with the check-in link, the way Acuity customers were used to.
+    // Consent: checkout's "booking confirmations, reminders and door codes"
+    // checkbox. Plain text only — lib/sms strips anything outside GSM-7.
+    const phone = (customer as any)?.phone as string | undefined
+    if (phone) {
+      const first = String(customer?.name ?? '').trim().split(/\s+/)[0]
+      const msg = [
+        `Made Kulture reminder: ${first ? first + ', see' : 'See'} you tomorrow.`,
+        `${set?.name ?? 'Full Studio Takeover'} - ${formatDateLabel(tomorrowStr)}, ${formatTimeLabel(startHour)}-${formatTimeLabel(endHour)}`,
+        ``,
+        doorCodeLinkLine((booking as any).check_in_token),
+        ``,
+        `No early arrivals. 4825 Gulf Freeway, Houston TX 77023`,
+        `Reply STOP to opt out.`,
+      ].join('\n')
+      try { await sendSMS(phone, msg); texted++ }
+      catch (err) { console.error(`Reminder text failed for booking ${booking.id}:`, err) }
+    }
+
+    if (!customer?.email || !customer?.name) continue
 
     try {
       await sendBookingReminder({
@@ -100,6 +124,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     sent,
+    texted,
     total: bookings.length,
     errors: errors.length > 0 ? errors : undefined,
     date: tomorrowStr,
