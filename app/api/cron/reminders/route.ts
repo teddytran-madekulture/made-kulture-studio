@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { sendBookingReminder, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { sendSMS } from '@/lib/sms'
 import { reminderText } from '@/lib/reminder-text'
+import { confirmTextAtBooking } from '@/lib/booking-times'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
       id,
       start_time,
       end_time,
+      created_at,
       total_amount,
       notes,
       check_in_token,
@@ -85,8 +87,14 @@ export async function GET(req: NextRequest) {
     // text, with the check-in link, the way Acuity customers were used to.
     // Consent: checkout's "booking confirmations, reminders and door codes"
     // checkbox. Plain text only — lib/sms strips anything outside GSM-7.
+    // Skip the text if this booking already got one AT BOOKING time -- the same
+    // rule booking-core / api/bookings used, replayed at created_at. Without
+    // this, booking tomorrow's session between noon and the run (or anywhere in
+    // Hobby cron's up-to-59-min drift) texted the customer twice.
+    const textedAtBooking = !!(booking as any).created_at &&
+      confirmTextAtBooking(booking.start_time, new Date((booking as any).created_at))
     const phone = (customer as any)?.phone as string | undefined
-    if (phone) {
+    if (phone && !textedAtBooking) {
       const msg = reminderText({
         name: customer?.name, setName: set?.name, startISO: booking.start_time, endISO: booking.end_time,
         checkInToken: (booking as any).check_in_token,
