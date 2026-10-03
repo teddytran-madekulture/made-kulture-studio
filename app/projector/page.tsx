@@ -3,6 +3,8 @@
 // No image: a big QR ("scan to put an image on the wall").
 // Image: the image, edge to edge, nothing else (the wall is in the shot).
 // Click: toggle a small corner QR.  Double-click or F: fullscreen.  C: fill/fit.
+// Scroll / trackpad pinch: zoom at the cursor.  Drag: move.  Arrows: nudge.
+// + / -: zoom.  R or 0: reset.  Position is remembered per image on this laptop.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import qrcode from 'qrcode-generator'
 
@@ -36,6 +38,10 @@ export default function ProjectorPage() {
   const [cover, setCover] = useState(false)
   const [cursor, setCursor] = useState(true)
   const v = useRef<string | null>(null)
+  const [view, setView] = useState({ s: 1, x: 0, y: 0 })
+  const stage = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const viewKey = (n: string | null) => `projector-view:${n ?? ''}`
 
   // globals.css zooms desktop body 1.25x; the wall must be 1:1.
   useEffect(() => {
@@ -59,7 +65,12 @@ export default function ProjectorPage() {
         setErr(null)
         setUploadUrl(j.uploadUrl)
         if (j.v === null) { v.current = null; setImg(null) }
-        else if (!j.same) { v.current = j.v; setImg(j.url); setShowQr(false) }
+        else if (!j.same) {
+          v.current = j.v; setImg(j.url); setShowQr(false)
+          let saved = { s: 1, x: 0, y: 0 }
+          try { const raw = localStorage.getItem(viewKey(j.v)); if (raw) saved = JSON.parse(raw) } catch {}
+          setView(saved)
+        }
       } catch { /* offline blip: keep showing what we have */ }
     }
     tick()
@@ -75,10 +86,45 @@ export default function ProjectorPage() {
       if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.().catch(() => {})
       if (e.key === 'c' || e.key === 'C') setCover(x => !x)
       if (e.key === 'q' || e.key === 'Q') setShowQr(x => !x)
+      const step = e.shiftKey ? 60 : 15
+      if (e.key === 'ArrowLeft') setView(w => ({ ...w, x: w.x - step }))
+      if (e.key === 'ArrowRight') setView(w => ({ ...w, x: w.x + step }))
+      if (e.key === 'ArrowUp') setView(w => ({ ...w, y: w.y - step }))
+      if (e.key === 'ArrowDown') setView(w => ({ ...w, y: w.y + step }))
+      if (e.key === '+' || e.key === '=') zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1.08)
+      if (e.key === '-' || e.key === '_') zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1 / 1.08)
+      if (e.key === 'r' || e.key === 'R' || e.key === '0') setView({ s: 1, x: 0, y: 0 })
     }
     window.addEventListener('mousemove', wake); window.addEventListener('keydown', keyd); wake()
     return () => { window.removeEventListener('mousemove', wake); window.removeEventListener('keydown', keyd); clearTimeout(t) }
   }, [])
+
+  // Zoom keeping the point under the cursor fixed.
+  function zoomAt(cx: number, cy: number, k: number) {
+    setView(w => {
+      const s2 = Math.min(8, Math.max(0.2, w.s * k))
+      const kk = s2 / w.s
+      return { s: s2, x: cx - (cx - w.x) * kk, y: cy - (cy - w.y) * kk }
+    })
+  }
+
+  // Non-passive so a trackpad pinch (ctrl+wheel) zooms the image, not the page.
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const k = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))
+      zoomAt(e.clientX, e.clientY, k)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  })
+
+  useEffect(() => {
+    if (!v.current) return
+    try { localStorage.setItem(viewKey(v.current), JSON.stringify(view)) } catch {}
+  }, [view])
 
   const base: React.CSSProperties = { position: 'fixed', inset: 0, background: '#000', overflow: 'hidden', cursor: cursor ? 'default' : 'none', userSelect: 'none' }
 
@@ -86,12 +132,22 @@ export default function ProjectorPage() {
   if (err) return <div style={{ ...base, color: '#888', display: 'grid', placeItems: 'center', fontFamily: 'sans-serif' }}>{err}</div>
 
   return (
-    <div style={base}
-      onClick={() => img && setShowQr(x => !x)}
+    <div style={base} ref={stage}
+      onMouseDown={e => { if (img && e.button === 0) drag.current = { x: e.clientX, y: e.clientY, moved: false } }}
+      onMouseMove={e => {
+        const d = drag.current
+        if (!d) return
+        const dx = e.clientX - d.x, dy = e.clientY - d.y
+        if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4) return
+        d.moved = true; d.x = e.clientX; d.y = e.clientY
+        setView(w => ({ ...w, x: w.x + dx, y: w.y + dy }))
+      }}
+      onMouseUp={() => { const d = drag.current; drag.current = null; if (img && d && !d.moved) setShowQr(x => !x) }}
+      onMouseLeave={() => { drag.current = null }}
       onDoubleClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}>
       {img ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: cover ? 'cover' : 'contain', display: 'block' }} />
+        <img src={img} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: cover ? 'cover' : 'contain', display: 'block', transformOrigin: '0 0', transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, willChange: 'transform', pointerEvents: 'none' }} />
       ) : uploadUrl ? (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, fontFamily: 'Georgia, serif', color: CHAMP }}>
           <div style={{ letterSpacing: '0.35em', fontSize: 14, fontFamily: 'sans-serif' }}>MADE KULTURE · PROJECTOR</div>
