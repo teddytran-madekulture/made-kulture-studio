@@ -11,6 +11,7 @@ import { deleteCalendarEvent } from '@/lib/gcal'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
+import { logBookingChange } from '@/lib/booking-changes'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -167,6 +168,14 @@ export async function POST(req: NextRequest) {
       bookingId: booking_id, createdBy: 'system',
     })
   }
+
+  // Change log (migration 134) — written once WE won the cancel claim above.
+  await logBookingChange(service, {
+    bookingId: booking_id, kind: 'cancel', actor: 'customer', via: 'account',
+    oldStartISO: booking.start_time as string,
+    authUserId: user.id, customerEmail: customerEmail ?? user.email ?? null,
+    creditCents,
+  })
 
   // Send cancellation email (non-blocking)
   const startTime2 = new Date(booking.start_time)

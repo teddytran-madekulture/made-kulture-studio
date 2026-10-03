@@ -17,6 +17,7 @@
 // OWN authorization and then hand the work to this function; everything after
 // authorization lives here exactly once.
 
+import { logBookingChange } from '@/lib/booking-changes'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { plusActive } from '@/lib/short-notice'
 import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
@@ -298,6 +299,20 @@ export async function rescheduleBooking(
   if (!moved?.length) {
     return { ok: false, error: 'That booking just changed somewhere else — reload and try again.', status: 409 }
   }
+
+  // Change log (migration 134). Measured from the OLD start — that is the
+  // notice the studio actually got. An owner-approved request is still the
+  // customer's change; `via` records that it went through approval.
+  await logBookingChange(service, {
+    bookingId: booking.id,
+    kind: 'reschedule',
+    actor: 'customer',
+    via: input.ownerApproved ? 'request-approved' : via,
+    oldStartISO: booking.start_time,
+    newStartISO,
+    authUserId: (booking as any).auth_user_id ?? null,
+    customerEmail: cust?.email ?? null,
+  })
 
   // ── New door codes for the new window ───────────────────────────────────
   // The existing algoPIN was minted for the OLD window and stops working at its

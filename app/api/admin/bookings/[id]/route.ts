@@ -1,3 +1,4 @@
+import { logBookingChange } from '@/lib/booking-changes'
 import { NextRequest, NextResponse } from 'next/server'
 import { adjustRewardForRefund } from '@/lib/rewards'
 import { isAdminAuthed } from '@/lib/admin-auth'
@@ -37,9 +38,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   let cancelTotalCents = 0
   let cancelAuthUserId: string | null = null
   let cancelCustomer: { name?: string; email?: string; phone?: string } = {}
+  let cancelOldStart: string | null = null
+  let cancelWasLive = false
   if (body.status === 'cancelled') {
     const { data: existing } = await supabase
-      .from('bookings').select('acuity_block_ids, gcal_event_id, square_payment_id, total_amount, auth_user_id, customers(name, email, phone)').eq('id', params.id).single()
+      .from('bookings').select('acuity_block_ids, gcal_event_id, square_payment_id, total_amount, auth_user_id, start_time, status, customers(name, email, phone)').eq('id', params.id).single()
     const blockIds = Array.isArray(existing?.acuity_block_ids) ? existing!.acuity_block_ids : []
     if (blockIds.length) {
       await deleteAcuityBlocks(blockIds)
@@ -55,6 +58,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     cancelAuthUserId = (existing as any)?.auth_user_id ?? null
     const c: any = (existing as any)?.customers
     if (c) cancelCustomer = { name: c.name, email: c.email, phone: c.phone }
+    cancelOldStart = (existing as any)?.start_time ?? null
+    cancelWasLive = (existing as any)?.status !== 'cancelled'
+  }
+  // For the change log: the start BEFORE an admin move (migration 134).
+  let moveBefore: { start_time: string; auth_user_id: string | null; email: string | null } | null = null
+  if (body.status !== 'cancelled' && body.start_time !== undefined) {
+    const { data: cur0 } = await supabase
+      .from('bookings').select('start_time, auth_user_id, customers(email)').eq('id', params.id).maybeSingle()
+    if (cur0) moveBefore = { start_time: (cur0 as any).start_time, auth_user_id: (cur0 as any).auth_user_id ?? null, email: (cur0 as any).customers?.email ?? null }
   }
   if (body.start_time   !== undefined) updates.start_time   = body.start_time
   if (body.end_time     !== undefined) updates.end_time     = body.end_time
@@ -149,6 +161,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       { error: isConflict ? 'This time slot conflicts with another booking.' : error.message },
       { status: isConflict ? 409 : 500 }
     )
+  }
+
+  // Change log (migration 134). Admin rows are recorded but the late-change
+  // meter counts customer rows only.
+  if (body.status === 'cancelled' && cancelWasLive) {
+    await logBookingChange(supabase, {
+      bookingId: params.id, kind: 'cancel', actor: 'admin', via: 'admin',
+      oldStartISO: cancelOldStart, authUserId: cancelAuthUserId, customerEmail: cancelCustomer.email ?? null,
+    })
+  } else if (moveBefore && body.start_time && new Date(body.start_time).getTime() !== new Date(moveBefore.start_time).getTime()) {
+    await logBookingChange(supabase, {
+      bookingId: params.id, kind: 'reschedule', actor: 'admin', via: 'admin',
+      oldStartISO: moveBefore.start_time, newStartISO: body.start_time,
+      authUserId: moveBefore.auth_user_id, customerEmail: moveBefore.email,
+    })
   }
 
   // Optional refund on cancel (money OUT — only when the admin explicitly opts in).

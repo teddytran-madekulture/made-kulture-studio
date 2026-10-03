@@ -1,3 +1,4 @@
+import { logBookingChange } from '@/lib/booking-changes'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
@@ -97,6 +98,14 @@ export async function POST(req: NextRequest) {
   if (!cancelledRows || cancelledRows.length === 0) {
     return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
   }
+
+  // Change log (migration 134) — written once WE won the cancel claim above.
+  await logBookingChange(service, {
+    bookingId: booking_id, kind: 'release_credit', actor: 'customer', via: 'account',
+    oldStartISO: booking.start_time as string,
+    authUserId: user.id, customerEmail: customerEmail ?? user.email ?? null,
+    creditCents,
+  })
 
   // Bank the value as credit on THIS account.
   const credit = await issueCredit(user.id, creditCents, {

@@ -1,3 +1,4 @@
+import { logBookingChange } from '@/lib/booking-changes'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const db = supabaseAdmin()
   const { data: existing } = await db
     .from('bookings')
-    .select('id, status, acuity_block_ids, gcal_event_id, total_amount, customers ( name )')
+    .select('id, status, start_time, auth_user_id, acuity_block_ids, gcal_event_id, total_amount, customers ( name, email )')
     .eq('id', params.id)
     .maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 })
@@ -39,6 +40,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { error } = await db.from('bookings').update(updates).eq('id', params.id)
   if (error) return NextResponse.json({ error: 'Could not cancel the booking.' }, { status: 500 })
+
+  await logBookingChange(db, {
+    bookingId: params.id, kind: 'cancel', actor: 'desk', via: 'desk',
+    oldStartISO: (existing as any).start_time,
+    authUserId: (existing as any).auth_user_id ?? null,
+    customerEmail: (existing.customers as any)?.email ?? null,
+  })
 
   await audit(g, 'booking.cancel', {
     entityType: 'booking',
