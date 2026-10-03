@@ -363,9 +363,21 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
 
   // Who is this, in Square's terms as well as ours.
   const custQ = service.from('customers').select('id, email, name, phone, pricing_overrides')
-  const { data: cust } = reqRow.customer_id
+  let { data: cust } = reqRow.customer_id
     ? await custQ.eq('id', reqRow.customer_id).maybeSingle()
     : await custQ.eq('email', normEmail(reqRow.customer_email)).maybeSingle()
+  // 2026-10-03: a signed-in account that has NEVER booked has no customers row
+  // yet (checkout is what creates it), so approving their first request said
+  // "Customer not found". Create it here the same way checkout does
+  // (api/bookings upsert on email) instead of refusing.
+  if (!cust && reqRow.customer_email) {
+    const { data: made, error: mkErr } = await service.from('customers')
+      .upsert({ email: normEmail(reqRow.customer_email), name: reqRow.customer_name || normEmail(reqRow.customer_email).split('@')[0], phone: reqRow.customer_phone || null }, { onConflict: 'email' })
+      .select('id, email, name, phone, pricing_overrides').maybeSingle()
+    if (mkErr) return NextResponse.json({ error: `Could not create the customer record: ${mkErr.message}` }, { status: 500 })
+    cust = made
+    if (cust?.id) await service.from('short_notice_requests').update({ customer_id: cust.id }).eq('id', reqRow.id)
+  }
   if (!cust) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
 
   const email = String(cust.email || reqRow.customer_email).toLowerCase().trim()
