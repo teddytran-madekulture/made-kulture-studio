@@ -93,9 +93,21 @@ export async function GET() {
       isNew: Date.parse(p.created_at) >= monthAgo,
     }))
 
-  out.fresh = [...safePics]
+  // Newest first, but at most FRESH_PER_MEMBER photos per person (2026-10-02:
+  // one member's batch upload filled half the grid). Only if there aren't
+  // enough different people does it top up with more from the same members.
+  const FRESH_PER_MEMBER = 2
+  const newestPics = [...safePics]
     .filter(p => listedById.has(p.user_id))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+  const perMember = new Map<string, number>()
+  const picked: typeof newestPics = []
+  const extra: typeof newestPics = []
+  for (const p of newestPics) {
+    const n = perMember.get(p.user_id) ?? 0
+    if (n < FRESH_PER_MEMBER) { picked.push(p); perMember.set(p.user_id, n + 1) } else extra.push(p)
+  }
+  out.fresh = [...picked, ...extra]
     .slice(0, 12)
     .map(p => ({ id: p.id, url: p.url, memberId: p.user_id, name: listedById.get(p.user_id)?.full_name ?? '' }))
 
