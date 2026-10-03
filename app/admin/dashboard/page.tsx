@@ -477,7 +477,12 @@ function overrunMinutes(b: Booking): number {
   }
   // No checkout yet: only counts as running over if they actually showed up.
   if (!b.checked_in_at) return 0
-  return Math.max(0, Math.round((Date.now() - end) / 60000))
+  // More than an hour past the end with no checkout is a FORGOTTEN checkout,
+  // not a 7-hour overrun (2026-10-02: a guest showed "RAN 428 MIN OVER"). Same
+  // 1-hour rule as cron/auto-checkout, which later stamps checkout = end time.
+  const over = Math.round((Date.now() - end) / 60000)
+  if (over > 60) return 0
+  return Math.max(0, over)
 }
 
 function getNowHour(): number {
