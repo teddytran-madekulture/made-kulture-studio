@@ -96,7 +96,7 @@ export async function GET() {
   // Newest first, but at most FRESH_PER_MEMBER photos per person (2026-10-02:
   // one member's batch upload filled half the grid). Only if there aren't
   // enough different people does it top up with more from the same members.
-  const FRESH_PER_MEMBER = 2
+  const FRESH_PER_MEMBER = 1
   const newestPics = [...safePics]
     .filter(p => listedById.has(p.user_id))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
