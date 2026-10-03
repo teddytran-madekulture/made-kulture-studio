@@ -83,7 +83,11 @@ export default function MemberProfilePage() {
   const [reportBusy, setReportBusy] = useState(false)
   const [reportMsg, setReportMsg] = useState('')
   const [reported, setReported] = useState<Set<string>>(new Set())
-  const closeLightbox = () => { setLightbox(null); setReportOpen(false); setReportReason(''); setReportNote(''); setReportMsg('') }
+  // Instagram-style chrome (2026-10-02): tags stay hidden until the tag icon
+  // is tapped; Report lives in the top-right ⋯ menu, not over the photo.
+  const [showTags, setShowTags] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeLightbox = () => { setLightbox(null); setReportOpen(false); setReportReason(''); setReportNote(''); setReportMsg(''); setShowTags(false); setMenuOpen(false) }
   const sendReport = async () => {
     if (!lightbox || !reportReason) return
     setReportBusy(true); setReportMsg('')
@@ -95,7 +99,8 @@ export default function MemberProfilePage() {
     setReportBusy(false)
     if (res?.ok) {
       setReported(prev => new Set(prev).add(lightbox.id))
-      setReportOpen(false)
+      // Show the thank-you briefly, then get out of the way of the photo.
+      setTimeout(() => setReportOpen(false), 2500)
     } else {
       setReportMsg((d as any).error || 'Could not send that. Try again.')
     }
@@ -510,12 +515,48 @@ export default function MemberProfilePage() {
       {lightbox && (
         <div onClick={closeLightbox}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100, cursor: 'zoom-out' }}>
-          <img src={lightbox.url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 6 }} />
-          {/* Who's credited on this photo (or, on the TAGGED tab, who posted it). */}
-          {(lightbox.creditId || (lightbox.credits ?? []).length > 0) && (
-            <div onClick={e => e.stopPropagation()}
-              style={{ position: 'absolute', top: 16, left: 16, right: 16, display: 'flex', justifyContent: 'center', cursor: 'default' }}>
-              <div style={{ maxWidth: 520, background: 'rgba(20,20,20,0.9)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '10px 14px', fontFamily: 'Inter', fontSize: 12.5, color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, display: 'flex', flexWrap: 'wrap', gap: '2px 14px', alignItems: 'center' }}>
+          {/* The photo, with Instagram-style controls on its corners. Tapping the
+              photo itself still closes the viewer; the controls stop that. */}
+          <div style={{ position: 'relative', display: 'flex', maxWidth: '100%' }}>
+            <img src={lightbox.url} alt="" style={{ maxWidth: '100%', maxHeight: 'calc(100 * var(--svh) - 48px)', objectFit: 'contain', borderRadius: 6, display: 'block' }} />
+
+            {/* ⋯ menu (top right) — Report lives here, not over the photo. */}
+            {!member.is_self && !reportOpen && (
+              <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 10, right: 10, cursor: 'default' }}>
+                <button type="button" aria-label="More options" onClick={() => setMenuOpen(o => !o)} style={{ position: 'relative', width: 34, height: 34, borderRadius: 17, background: 'rgba(15,15,15,0.72)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+                </button>
+                {menuOpen && (
+                  <div style={{ position: 'absolute', top: 40, right: 0, minWidth: 160, background: 'rgba(24,24,24,0.98)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, overflow: 'hidden', fontFamily: 'Inter', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+                    {reported.has(lightbox.id) ? (
+                      <div style={{ padding: '11px 14px', fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>Reported — thanks</div>
+                    ) : (
+                      <button type="button" onClick={() => { setMenuOpen(false); setReportOpen(true) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', fontSize: 13, fontWeight: 600, color: '#ff6b6b', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                        Report
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setMenuOpen(false)}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '11px 14px', fontSize: 13, color: 'rgba(255,255,255,0.8)', background: 'transparent', border: 'none', borderTop: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tag icon (bottom left) — credits only appear when it's tapped. */}
+            {(lightbox.creditId || (lightbox.credits ?? []).length > 0) && (
+              <button type="button" aria-label={showTags ? 'Hide tags' : 'Show tags'}
+                onClick={e => { e.stopPropagation(); setShowTags(v => !v) }}
+                style={{ position: 'absolute', bottom: 10, left: 10, width: 34, height: 34, borderRadius: 17, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, background: showTags ? '#fff' : 'rgba(15,15,15,0.72)', color: showTags ? '#080808' : '#fff' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5z"/></svg>
+              </button>
+            )}
+            {showTags && (lightbox.creditId || (lightbox.credits ?? []).length > 0) && (
+              <div onClick={e => e.stopPropagation()}
+                style={{ position: 'absolute', left: 52, right: 10, bottom: 10, display: 'flex', cursor: 'default' }}>
+                <div style={{ maxWidth: 520, background: 'rgba(20,20,20,0.88)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 10, padding: '7px 12px', fontFamily: 'Inter', fontSize: 12.5, color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, display: 'flex', flexWrap: 'wrap', gap: '2px 14px', alignItems: 'center' }}>
                 {lightbox.creditId ? (
                   <>
                     <span>{member.is_self ? 'You' : member.full_name.split(' ')[0]} · <b style={{ color: '#fff' }}>{lightbox.role}</b></span>
@@ -537,20 +578,18 @@ export default function MemberProfilePage() {
                         : <b style={{ color: '#fff' }}>{c.name}</b>}
                   </span>
                 ))}
+                </div>
               </div>
-            </div>
-          )}
-          {!member.is_self && (
+            )}
+          </div>
+
+          {/* Report form — only after choosing Report from the ⋯ menu. */}
+          {!member.is_self && reportOpen && (
             <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 18, left: 0, right: 0, display: 'flex', justifyContent: 'center', padding: '0 16px', cursor: 'default' }}>
               {reported.has(lightbox.id) ? (
                 <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.75)', background: 'rgba(20,20,20,0.92)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
                   Thanks — the studio will take a look. Reports are anonymous.
                 </div>
-              ) : !reportOpen ? (
-                <button type="button" onClick={() => setReportOpen(true)}
-                  style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.7)', background: 'rgba(20,20,20,0.85)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 20, padding: '7px 14px', cursor: 'pointer' }}>
-                  ⚑ Report
-                </button>
               ) : (
                 <div style={{ width: '100%', maxWidth: 360, background: 'rgba(20,20,20,0.97)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: 14, fontFamily: 'Inter' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>Report this photo</div>
