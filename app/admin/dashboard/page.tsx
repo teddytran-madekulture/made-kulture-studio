@@ -1339,6 +1339,23 @@ export default function AdminDashboard() {
     }
   }
 
+  // Text the reminder + check-in link (one SMS, no door-code minting — see the
+  // route). Reports the server's answer, same as the email resend above.
+  const handleTextCheckin = async (id: string) => {
+    setResending(id); setResendMsg(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}/text-checkin`, { method: 'POST' })
+      const d = await res.json().catch(() => ({} as any))
+      setResendMsg(res.ok
+        ? { id, ok: true, text: `Texted ${d.to}.${d.hasCheckInLink ? ' It includes their check-in link.' : ' ⚠️ This booking has no check-in link.'}` }
+        : { id, ok: false, text: d.error || 'Could not send that text.' })
+    } catch {
+      setResendMsg({ id, ok: false, text: 'Something went wrong — nothing was sent.' })
+    } finally {
+      setResending(null)
+    }
+  }
+
   const handleCancel = async (id: string) => {
     if (!confirm('Cancel this booking?')) return
     // Money resolution: credit first (refund-avoidance), else refund, else neither.
@@ -4529,6 +4546,12 @@ export default function AdminDashboard() {
               <button onClick={() => handleResendConfirmation(detailBooking.id)} disabled={resending === detailBooking.id}
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
                 {resending === detailBooking.id ? 'SENDING...' : 'RESEND CONFIRMATION EMAIL'}
+              </button>
+            )}
+            {detailBooking.status !== 'cancelled' && detailBooking.customers?.phone && new Date(detailBooking.end_time).getTime() > Date.now() && (
+              <button onClick={() => handleTextCheckin(detailBooking.id)} disabled={resending === detailBooking.id}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
+                {resending === detailBooking.id ? 'SENDING...' : 'TEXT CHECK-IN LINK'}
               </button>
             )}
             {resendMsg?.id === detailBooking.id && (

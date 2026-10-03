@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendBookingReminder, formatTimeLabel, formatDateLabel } from '@/lib/email'
 import { sendSMS } from '@/lib/sms'
-import { doorCodeLinkLine } from '@/lib/igloohome'
+import { reminderText } from '@/lib/reminder-text'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -87,16 +87,10 @@ export async function GET(req: NextRequest) {
     // checkbox. Plain text only — lib/sms strips anything outside GSM-7.
     const phone = (customer as any)?.phone as string | undefined
     if (phone) {
-      const first = String(customer?.name ?? '').trim().split(/\s+/)[0]
-      const msg = [
-        `Made Kulture reminder: ${first ? first + ', see' : 'See'} you tomorrow.`,
-        `${set?.name ?? 'Full Studio Takeover'} - ${formatDateLabel(tomorrowStr)}, ${formatTimeLabel(startHour)}-${formatTimeLabel(endHour)}`,
-        ``,
-        doorCodeLinkLine((booking as any).check_in_token),
-        ``,
-        `No early arrivals. 4825 Gulf Freeway, Houston TX 77023`,
-        `Reply STOP to opt out.`,
-      ].join('\n')
+      const msg = reminderText({
+        name: customer?.name, setName: set?.name, startISO: booking.start_time, endISO: booking.end_time,
+        checkInToken: (booking as any).check_in_token,
+      })
       try { await sendSMS(phone, msg); texted++ }
       catch (err) { console.error(`Reminder text failed for booking ${booking.id}:`, err) }
     }
