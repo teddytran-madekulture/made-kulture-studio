@@ -18,6 +18,7 @@
 // authorization lives here exactly once.
 
 import { logBookingChange } from '@/lib/booking-changes'
+import { lateChangeMeter } from '@/lib/late-change-meter'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { plusActive } from '@/lib/short-notice'
 import { sessionMayInstantBook, PLUS_INSTANT_ERROR } from '@/lib/plus-instant-book'
@@ -246,6 +247,18 @@ export async function rescheduleBooking(
       // availability is still checked below so nobody requests a taken slot.
       if (input.request && via === 'account') needsApproval = true
       else return { ok: false, error: PLUS_INSTANT_ERROR, status: 400, requestable: via === 'account' }
+    }
+  }
+
+  // ── Late-change meter at RED: a late move becomes a request ─────────────
+  // (lib/late-change-meter, Teddy 2026-10-02). "Late" is measured from the OLD
+  // start. The account door turns it into an owner request automatically; the
+  // emailed manage link (weaker identity) is refused instead.
+  if (!approved && hoursUntil < SELF_SERVE_HOURS) {
+    const meter = await lateChangeMeter(service, { authUserId: (booking as any).auth_user_id ?? null, email: cust?.email ?? actorEmail })
+    if (meter.level === 'red') {
+      if (via === 'account') needsApproval = true
+      else return { ok: false, error: 'You’ve made several last-minute changes recently, so this move needs a quick OK — sign in to your account to send a request.', status: 400 }
     }
   }
 

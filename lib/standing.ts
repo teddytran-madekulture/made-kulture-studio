@@ -32,6 +32,7 @@ export const DEFAULT_STANDING_CONFIG: StandingConfig = {
     { key: 'unbooked',    label: 'Used a set or gear they did not book',          severity: 'moderate' },
     { key: 'overtime',    label: 'Ran over and did not pay overtime',             severity: 'moderate' },
     { key: 'no_show',     label: 'No-show',                                       severity: 'minor' },
+    { key: 'late_changes', label: 'Repeated late changes (cancels / reschedules)', severity: 'minor' },
     { key: 'rules',       label: 'Rules violation (fog/haze, nudity in shared hours, unapproved messy concept)', severity: 'serious' },
     { key: 'damage',      label: 'Damage to set, props or gear',                  severity: 'serious' },
     { key: 'conduct',     label: 'Conduct toward staff or other guests',          severity: 'serious' },
@@ -84,7 +85,11 @@ export function mergeConfig(raw: any): StandingConfig {
     thresholds: { ...d.thresholds, ...(raw.thresholds ?? {}) },
     expiryMonths: Number(raw.expiryMonths) > 0 ? Number(raw.expiryMonths) : d.expiryMonths,
     emailFrom: SEVERITIES.includes(raw.emailFrom) ? raw.emailFrom : d.emailFrom,
-    categories: Array.isArray(raw.categories) && raw.categories.length ? raw.categories : d.categories,
+    // Saved categories win, but any DEFAULT category added later (e.g.
+    // late_changes, 2026-10-02) is appended so it isn't hidden by an older save.
+    categories: Array.isArray(raw.categories) && raw.categories.length
+      ? [...raw.categories, ...d.categories.filter(dc => !raw.categories.some((c: any) => c?.key === dc.key))]
+      : d.categories,
   }
 }
 

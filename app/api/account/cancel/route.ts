@@ -12,6 +12,7 @@ import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { logBookingChange } from '@/lib/booking-changes'
+import { lateChangeMeter } from '@/lib/late-change-meter'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -76,6 +77,27 @@ export async function POST(req: NextRequest) {
   }
   if (hoursUntil < 48 && !isPlus && !isBuyout) {
     return NextResponse.json({ error: 'Cancellations must be made at least 48 hours in advance to receive studio credit. Text (832) 408-1631 if something has come up.' }, { status: 400 })
+  }
+
+  // Late-change meter at RED (lib/late-change-meter): a late cancel becomes a
+  // REQUEST. Nothing is cancelled and no credit moves; the owner decides from
+  // admin (cancel with credit, partial, or keep the booking). Terms → Fair use.
+  if (hoursUntil < 48 && !isBuyout) {
+    const meter = await lateChangeMeter(service, { authUserId: user.id, email: customerEmail ?? user.email })
+    if (meter.level === 'red') {
+      const setNm = (booking.sets as any)?.name ?? 'their set'
+      const when = `${formatDateLabel(centralDateStr(booking.start_time as string))} ${formatTimeLabel(centralHourDecimal(booking.start_time as string))}`
+      const who = (booking.customers as any)?.name ?? customerEmail ?? 'A customer'
+      const msg = `Cancel request (late-change meter RED, ${meter.points} late changes in 30 days): ${who} wants to cancel ${setNm} on ${when}. Decide in admin.`
+      await Promise.all([
+        sendOwnerPush({ title: '🔴 Cancel request', body: msg, url: '/admin/dashboard' }).catch(() => {}),
+        sendOwnerSMS(`Made Kulture: ${msg}`).catch(() => {}),
+      ])
+      return NextResponse.json({
+        error: 'You’ve made several last-minute changes recently, so this cancellation needs a quick OK from the studio. We’ve sent your request and will text you once it’s handled. Your booking stays as is until then.',
+        pending: true,
+      }, { status: 409 })
+    }
   }
 
   // Cancel in Acuity if we have an appointment ID

@@ -6,6 +6,8 @@
 // result, because supabase-js reports failure in `error` rather than throwing
 // (see silent-failure-pattern) — an unchecked insert would fail silently forever.
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { lateChangeMeter, METER_LABEL } from '@/lib/late-change-meter'
+import { sendOwnerPush } from '@/lib/push'
 
 export type BookingChangeKind = 'cancel' | 'reschedule' | 'release_credit'
 export type BookingChangeActor = 'customer' | 'admin' | 'desk' | 'system'
@@ -46,8 +48,29 @@ export async function logBookingChange(service: SupabaseClient, input: BookingCh
       hours_notice: hoursNotice(input.oldStartISO),
       credit_cents: input.creditCents ?? null,
     })
-    if (error) console.error('[booking-changes] log insert failed:', error.message, input.kind, input.bookingId)
+    if (error) { console.error('[booking-changes] log insert failed:', error.message, input.kind, input.bookingId); return }
   } catch (e) {
     console.error('[booking-changes] log insert threw:', e)
+    return
+  }
+
+  // Late-change meter: tell the owner whenever a customer change leaves them
+  // off green. Repeats on each further change while they stay orange/red —
+  // that is the point, each one is worth a glance.
+  if (input.actor !== 'customer') return
+  try {
+    const m = await lateChangeMeter(service, { authUserId: input.authUserId, email: input.customerEmail })
+    if (m.level === 'green') return
+    const who = input.customerEmail || 'A customer'
+    const why = m.longestChain >= 3 && m.points < 3
+      ? `one session changed ${m.longestChain} times`
+      : `${m.points} last-minute change${m.points === 1 ? '' : 's'} in 30 days`
+    await sendOwnerPush({
+      title: `${m.level === 'red' ? '🔴' : '🟠'} ${METER_LABEL[m.level]}: ${who}`,
+      body: `${why}.${m.level === 'red' ? ' Their late changes now come to you.' : ''}`,
+      url: '/admin/dashboard',
+    })
+  } catch (e) {
+    console.error('[booking-changes] meter alert failed (non-fatal):', e)
   }
 }

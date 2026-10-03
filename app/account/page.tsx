@@ -7,6 +7,7 @@ import PlusCard from '@/components/PlusCard'
 import { getCreditBalance } from '@/lib/credits'
 import { rewardPotForUser } from '@/lib/rewards'
 import { standingForCustomerId, LEVEL_LABEL, LEVEL_MEANING, LEVEL_COLOR } from '@/lib/standing'
+import { lateChangeMeter, meterMessage, METER_LABEL } from '@/lib/late-change-meter'
 
 export default async function AccountDashboard() {
   const supabase = createClient()
@@ -42,9 +43,10 @@ export default async function AccountDashboard() {
 
   const creditCents = await getCreditBalance(user!.id)
   // Rewards share of that balance + account standing (migration 109).
-  const [{ rewardCents }, standing] = await Promise.all([
+  const [{ rewardCents }, standing, meter] = await Promise.all([
     rewardPotForUser(service, user!.id),
     standingForCustomerId(service, custIds[0] ?? null),
+    lateChangeMeter(service, { authUserId: user!.id, email: user!.email }),
   ])
 
   const firstName = profile?.full_name?.split(' ')[0] ?? user!.email?.split('@')[0]
@@ -100,6 +102,14 @@ export default async function AccountDashboard() {
             Account standing{standing.level !== 'good' ? ` · ${LEVEL_MEANING[standing.level]}` : ''}
             {standing.level !== 'good' && standing.nextDropOff ? ` Improves as points drop off; the next on ${standing.nextDropOff}.` : ''}
             {standing.level !== 'good' ? ' Questions? Text (832) 408-1631.' : ''}
+          </div>
+          {/* Booking flexibility — the late-change meter (lib/late-change-meter). */}
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <span aria-hidden style={{ width: 9, height: 9, borderRadius: 9, marginTop: 4, flexShrink: 0, background: meter.level === 'green' ? 'var(--t-ok)' : meter.level === 'orange' ? 'var(--t-warn-hi)' : 'var(--t-err)' }} />
+            <div>
+              <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600 }}>Booking flexibility · {METER_LABEL[meter.level]}</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginTop: 3, lineHeight: 1.5 }}>{meterMessage(meter)}</div>
+            </div>
           </div>
         </div>
       </div>
