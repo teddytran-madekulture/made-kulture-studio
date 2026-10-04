@@ -638,7 +638,21 @@ export async function POST(req: NextRequest) {
         customerId = ownerSquareId
         savedCardId = body.savedCardId
       } else if (isWallet) {
-        // Charged directly below; nothing is saved on file.
+        // The wallet token is charged directly below and can't be saved. Every
+        // booking must still leave a REAL card on file (damage, overtime, a
+        // no-show), so wallets are only for signed-in members who already have
+        // one - and that card is what this booking records. (2026-10-04)
+        const noCard = NextResponse.json({ error: 'Apple Pay and Google Pay are available once you have a card saved with us. Please pay with a card this time.' }, { status: 400 })
+        if (!sessionUser?.id) return noCard
+        const { data: prof } = await supabase
+          .from('customer_profiles').select('square_customer_id').eq('id', sessionUser.id).maybeSingle()
+        if (!prof?.square_customer_id) return noCard
+        const onFile = await square.cardsApi.listCards(undefined, prof.square_customer_id)
+          .then(r => (r.result.cards ?? []).find(c => c.enabled) ?? null)
+          .catch(() => null)
+        if (!onFile?.id) return noCard
+        customerId = prof.square_customer_id
+        savedCardId = onFile.id
       } else {
         const { result: cardResult } = await square.cardsApi.createCard({
           idempotencyKey: randomUUID(),

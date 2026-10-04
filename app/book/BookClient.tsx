@@ -2383,14 +2383,16 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
         ) : (
           <>
             {/* Apple Pay button — hidden until the domain is registered with Square (Safari only) */}
-            <div style={{ display: chargeCents > 0 ? 'block' : 'none' }}>
+            {/* Wallets only when a REAL card is already on file - a wallet token can't be
+                saved, and every booking needs a card behind it (damage, overtime). */}
+            <div style={{ display: chargeCents > 0 && savedCards.length > 0 ? 'block' : 'none' }}>
             <div id="apple-pay-button" style={{ display: 'none', height: 48, marginBottom: 12, WebkitAppearance: '-apple-pay-button', borderRadius: 4, overflow: 'hidden', cursor: 'pointer' } as any} />
             {/* Google Pay button (auto-hides if unsupported) */}
             <div ref={googlePayContainerRef} style={{ marginBottom: googlePayReady ? 16 : 0 }}>
               <div id="google-pay-button" />
             </div>
             </div>
-            {googlePayReady && chargeCents > 0 && (
+            {googlePayReady && chargeCents > 0 && savedCards.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
                 <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em' }}>OR PAY WITH CARD</span>
