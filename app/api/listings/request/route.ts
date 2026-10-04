@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   if (!me.listed) return notListedResponse(me, 'send requests')
 
   const { data: listing, error: lErr } = await service.from('service_listings')
-    .select('id, user_id, title, rate, active').eq('id', listingId).maybeSingle()
+    .select('id, user_id, title, rate, price_extras, active').eq('id', listingId).maybeSingle()
   if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 })
   if (!listing || !listing.active) return NextResponse.json({ error: 'That listing is no longer available.' }, { status: 404 })
   if (listing.user_id === user.id) return NextResponse.json({ error: "That's your own listing." }, { status: 400 })
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   const label = dateLabel(date)
-  const text = [`REQUEST: ${listing.title}`, `Date: ${label}`, listing.rate ? `Listed rate: ${listing.rate}` : '', note ? `\n${note}` : '']
+  const text = [`REQUEST: ${listing.title}`, `Date: ${label}`, listing.rate ? `Listed rate: ${listing.rate}${listing.price_extras ? ` (${listing.price_extras})` : ''}` : '', note ? `\n${note}` : '']
     .filter(Boolean).join('\n').slice(0, 2000)
   const { error: mErr } = await service.from('messages').insert({ conversation_id: convId, sender_id: user.id, body: text }).select('id').single()
   if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 })

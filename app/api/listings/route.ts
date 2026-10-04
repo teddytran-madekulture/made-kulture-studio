@@ -21,7 +21,7 @@ export async function GET() {
   if (!me.listed) return notListedResponse(me, 'browse services')
 
   const { data: rows, error } = await service.from('service_listings')
-    .select('id, user_id, category, title, details, rate, notes, photos, tags, created_at')
+    .select('id, user_id, category, title, details, rate, price_cents, price_unit, price_extras, notes, photos, tags, created_at')
     .eq('active', true).eq('review_hold', false).order('created_at', { ascending: false })
   // A failed read must never render as "no services yet".
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -43,7 +43,7 @@ export async function GET() {
   const listings = (rows ?? []).filter(r => listed.has(r.user_id)).map(r => {
     const v = listed.get(r.user_id)!
     return {
-      id: r.id, category: r.category, title: r.title, details: r.details, rate: r.rate, notes: r.notes,
+      id: r.id, category: r.category, title: r.title, details: r.details, rate: r.rate, price_cents: r.price_cents, price_unit: r.price_unit, price_extras: r.price_extras ?? '', notes: r.notes,
       photos: r.photos ?? [], tags: r.tags ?? [],
       vendor: { id: v.id, name: v.full_name ?? '', avatar_url: v.avatar_url ?? null },
       is_self: r.user_id === user.id,

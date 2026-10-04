@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { SERVICE_ROLES, SERVICE_TAG_SUGGESTIONS } from '@/lib/roles'
+import { PRICE_UNITS, formatPrice, isPriceUnit, parseLegacyRate, type PriceUnit } from '@/lib/listing-rate'
 import { VENDOR_AGREEMENT_SECTIONS, VENDOR_AGREEMENT_TITLE, VENDOR_AGREEMENT_VERSION } from '@/lib/vendor-agreement'
 
 export const LISTING_MAX = 12
@@ -18,6 +19,10 @@ export type Listing = {
   title: string
   details: string
   rate: string
+  price_cents: number | null
+  price_unit: PriceUnit | null
+  price_from: boolean
+  price_extras: string
   notes: string
   photos: string[]
   tags: string[]
@@ -37,9 +42,21 @@ export function cleanTags(raw: string[]): string[] {
   return out.slice(0, LISTING_TAG_MAX)
 }
 
-type Draft = Omit<Listing, 'id' | 'sort_order'> & { id?: string }
+type Draft = Omit<Listing, 'id' | 'sort_order'> & { id?: string; priceText: string }
 
-const emptyDraft = (category: string): Draft => ({ category, title: '', details: '', rate: '', notes: '', photos: [], tags: [], active: true })
+// Editing a listing: pre-fill the price fields, reading an old free-text rate
+// (pre-migration 140) when that's all there is.
+function draftFrom(l: Listing): Draft {
+  let cents = l.price_cents ?? null, unit = l.price_unit ?? null, from = !!l.price_from
+  if (!unit && l.rate) {
+    const g = parseLegacyRate(l.rate)
+    if (g) { cents = g.cents; unit = g.unit; from = g.from }
+  }
+  return { ...l, tags: l.tags ?? [], price_cents: cents, price_unit: unit, price_from: from, price_extras: l.price_extras ?? '',
+    priceText: cents != null ? String(cents / 100) : '' }
+}
+
+const emptyDraft = (category: string): Draft => ({ category, title: '', details: '', rate: '', price_cents: null, price_unit: 'day', price_from: false, price_extras: '', priceText: '', notes: '', photos: [], tags: [], active: true })
 
 const muted = 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))'
 const line = '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))'
@@ -90,7 +107,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
 
   const load = async (id: string) => {
     const { data, error } = await supabase.from('service_listings')
-      .select('id, category, title, details, rate, notes, photos, tags, active, review_hold, sort_order')
+      .select('id, category, title, details, rate, price_cents, price_unit, price_from, price_extras, notes, photos, tags, active, review_hold, sort_order')
       .eq('user_id', id).order('sort_order', { ascending: true }).order('created_at', { ascending: true })
     // A failed read must not look like "no listings yet".
     if (error) setError(`Couldn't load your listings: ${error.message}`)
@@ -142,10 +159,17 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
   const save = async () => {
     if (!uid || !draft) return
     if (!draft.title.trim()) { setError('Give it a title, e.g. "2021 Mercedes G-Wagon (black)".'); return }
+    if (!isPriceUnit(draft.price_unit)) { setError('Pick how you charge (per hour, per day, flat...).'); return }
+    const priceNum = draft.priceText.trim() === '' ? null : Number(draft.priceText.replace(/[$,\s]/g, ''))
+    if (priceNum != null && (!Number.isFinite(priceNum) || priceNum < 0 || priceNum > 100000)) { setError('Enter the price as a number, e.g. 800.'); return }
+    if (priceNum == null && draft.price_unit !== 'quote') { setError('Add a price, or choose "Ask for a quote".'); return }
+    const priceCents = priceNum == null ? null : Math.round(priceNum * 100)
     setBusy(true); setError('')
     const row = {
       category: draft.category, title: draft.title.trim().slice(0, 120), details: draft.details.trim().slice(0, 1200),
-      rate: draft.rate.trim().slice(0, 80), notes: draft.notes.trim().slice(0, 600), photos: draft.photos, tags: cleanTags(draft.tags), active: draft.active,
+      rate: formatPrice(priceCents, draft.price_unit, draft.price_from).slice(0, 80),
+      price_cents: priceCents, price_unit: draft.price_unit, price_from: draft.price_unit === 'quote' ? false : draft.price_from,
+      price_extras: draft.price_extras.trim().slice(0, 120), notes: draft.notes.trim().slice(0, 600), photos: draft.photos, tags: cleanTags(draft.tags), active: draft.active,
       updated_at: new Date().toISOString(),
     }
     const res = draft.id
@@ -218,7 +242,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
               <div style={{ fontSize: 12, color: muted }}>{l.category}{l.rate ? ` · ${l.rate}` : ''}{l.active ? '' : ' · HIDDEN'}{l.review_hold ? ' · UNDER REVIEW' : ''}</div>
             </div>
             <button type="button" onClick={() => toggle(l)} style={{ ...btn, background: 'transparent', border: line, color: muted }}>{l.active ? 'HIDE' : 'SHOW'}</button>
-            <button type="button" onClick={() => { setError(''); setDraft({ ...l, tags: l.tags ?? [] }) }} style={{ ...btn, background: 'transparent', border: line, color: 'var(--t-fg)' }}>EDIT</button>
+            <button type="button" onClick={() => { setError(''); setDraft(draftFrom(l)) }} style={{ ...btn, background: 'transparent', border: line, color: 'var(--t-fg)' }}>EDIT</button>
             <button type="button" onClick={() => remove(l)} disabled={busy} style={{ ...btn, background: 'transparent', border: line, color: '#e6a0a0' }}>DELETE</button>
           </div>
         ))}
@@ -271,8 +295,34 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
           </select>
           <label style={label}>TITLE</label>
           <input value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} maxLength={120} placeholder="2021 Mercedes G-Wagon (black)" style={inputStyle} />
-          <label style={label}>RATE</label>
-          <input value={draft.rate} onChange={e => setDraft({ ...draft, rate: e.target.value })} maxLength={80} placeholder="$350/day · $75/hr on set" style={inputStyle} />
+          <label style={label}>PRICE</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ position: 'relative', flex: '0 0 40%' }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: muted, fontSize: 14, pointerEvents: 'none' }}>$</span>
+              <input value={draft.priceText} inputMode="decimal" onChange={e => setDraft({ ...draft, priceText: e.target.value.replace(/[^\d.,]/g, '') })}
+                placeholder={draft.price_unit === 'quote' ? 'optional' : '800'} style={{ ...inputStyle, paddingLeft: 26 }} />
+            </div>
+            <select value={draft.price_unit ?? ''} onChange={e => setDraft({ ...draft, price_unit: (e.target.value || null) as PriceUnit | null })} style={{ ...inputStyle, colorScheme: 'dark' }}>
+              {!draft.price_unit && <option value="" style={{ background: '#111', color: '#eee' }}>Choose...</option>}
+              {PRICE_UNITS.map(u => <option key={u.value} value={u.value} style={{ background: '#111', color: '#eee' }}>{u.label}</option>)}
+            </select>
+          </div>
+          {draft.price_unit !== 'quote' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'Inter', fontSize: 13, color: 'var(--t-fg)', marginTop: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={draft.price_from} onChange={e => setDraft({ ...draft, price_from: e.target.checked })} />
+              Starting price (shows as &quot;From $...&quot;)
+            </label>
+          )}
+          <input value={draft.price_extras} onChange={e => setDraft({ ...draft, price_extras: e.target.value })} maxLength={120}
+            placeholder="Extras (optional): $200 deposit, delivery $50, 4 hr minimum" style={{ ...inputStyle, marginTop: 10 }} />
+          {(() => {
+            const n = draft.priceText.trim() === '' ? null : Number(draft.priceText.replace(/[$,\s]/g, ''))
+            const preview = formatPrice(n != null && Number.isFinite(n) ? Math.round(n * 100) : null, draft.price_unit, draft.price_from)
+            return preview ? <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>Shows as: <span style={{ color: 'var(--t-fg)' }}>{preview}</span></div> : null
+          })()}
+          {draft.id && !list.find(l => l.id === draft.id)?.price_unit && list.find(l => l.id === draft.id)?.rate && (
+            <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Previous rate text: {list.find(l => l.id === draft.id)?.rate}</div>
+          )}
           <label style={label}>DETAILS</label>
           <textarea value={draft.details} onChange={e => setDraft({ ...draft, details: e.target.value })} maxLength={1200} rows={4} placeholder="What it is, condition, what's included." style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
           <label style={label}>NOTES <span style={{ color: 'var(--t-gold)' }}>· optional</span></label>

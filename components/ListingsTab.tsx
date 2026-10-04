@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import { track, trackNow } from '@/lib/track'
 
 export type PublicListing = {
-  id: string; category: string; title: string; details: string; rate: string; notes: string; photos: string[]
+  id: string; category: string; title: string; details: string; rate: string; price_cents?: number | null; price_unit?: string | null; price_extras?: string; notes: string; photos: string[]
   tags?: string[]
   /** Set on the Services page, where listings from many vendors share one grid. */
   vendor?: { id: string; name: string; avatar_url: string | null }
@@ -156,7 +156,8 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
             <div style={{ padding: '18px 20px 22px' }}>
               <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--t-gold)', marginBottom: 4 }}>{open.category.toUpperCase()} · {vName(open).toUpperCase()}</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t-fg)', marginBottom: 6 }}>{open.title}</div>
-              {open.rate && <div style={{ fontSize: 16, color: 'var(--t-fg)', marginBottom: 14 }}>{open.rate}</div>}
+              {open.rate && <div style={{ fontSize: 16, color: 'var(--t-fg)', marginBottom: open.price_extras ? 4 : 14 }}>{open.rate}</div>}
+              {open.price_extras && <div style={{ fontSize: 12, color: muted, marginBottom: 14 }}>{open.price_extras}</div>}
               {open.details && <div style={{ fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 12 }}>{open.details}</div>}
               {open.notes && <div style={{ fontSize: 13, color: muted, lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 14, fontStyle: 'italic' }}>{open.notes}</div>}
               {(open.tags ?? []).length > 0 && (
