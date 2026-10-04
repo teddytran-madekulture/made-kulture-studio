@@ -148,9 +148,12 @@ export default function PayPage({ params }: { params: { token: string } }) {
           })
         } catch { /* Google Pay unavailable on this device/browser */ }
 
-        // Apple Pay — only appears in Safari once the domain is registered with
-        // Square (madekulture.com). Fails gracefully (button stays hidden) until then.
-        try {
+        // Apple Pay on the web does NOT work inside a home-screen web app on
+        // iPhone: the button renders, then Apple's sheet fails every time
+        // ("An unexpected error occurred while using Apple Pay"). Only offer it
+        // in a real browser tab. (2026-10-04)
+        const standalone = (navigator as any).standalone === true || window.matchMedia?.('(display-mode: standalone)').matches
+        if (!standalone) try {
           const applePay = await payments.applePay(paymentRequest)
           const btn = document.getElementById('pay-apple')
           if (btn) {

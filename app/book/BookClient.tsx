@@ -2263,9 +2263,12 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           // Google Pay not available on this device/browser — card form is the fallback
         }
 
-        // Apple Pay — appears in Safari once madekulture.com is registered with Square.
-        // Stays hidden (fails gracefully) until then.
-        try {
+        // Apple Pay on the web does NOT work inside a home-screen web app on
+        // iPhone: the button renders, then Apple's sheet fails every time
+        // ("An unexpected error occurred while using Apple Pay"). Only offer it
+        // in a real browser tab. (2026-10-04)
+        const standalone = (navigator as any).standalone === true || window.matchMedia?.('(display-mode: standalone)').matches
+        if (!standalone) try {
           const apReq = payments.paymentRequest({
             countryCode: 'US', currencyCode: 'USD',
             total: { amount: walletAmount(), label: 'Made Kulture Studio' },
