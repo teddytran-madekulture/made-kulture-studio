@@ -10,6 +10,7 @@ import { finalizeBooking } from '@/lib/booking-core'
 import { sendSMS } from '@/lib/sms'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendOwnerPush } from '@/lib/push'
+import { findOrCreateSquareCustomer, findCardOnFileByEmail } from '@/lib/square-customer'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -79,6 +80,9 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       payerName: d.payer_name,
       bookerName: d.booker_name,
       selfPay: isSelfPay(d),
+      // Apple Pay / Google Pay can't be saved on file. A member paying for their
+      // OWN booking may only use them when a real card is already on file.
+      walletsAllowed: !isSelfPay(d) || !!(await findCardOnFileByEmail(square, d.booker_email)),
       lines,
     },
   })
@@ -87,6 +91,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   const body = await req.json().catch(() => ({}))
   const sourceId = body?.sourceId as string | undefined
+  const wallet = body?.wallet === true
 
   const d = await loadDelegation(params.token)
   if (!d) return NextResponse.json({ error: 'Payment request not found.' }, { status: 404 })
@@ -108,12 +113,47 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     return NextResponse.json({ error: 'This hold was released — the slot is no longer reserved.' }, { status: 409 })
   }
 
-  // Charge the payer's card nonce directly (no saved card needed for a third party).
+  // 2026-10-04: every booking must end with a REAL card on file behind it
+  // (damage, overtime, no-shows).
+  //  - Booker paying for themselves with a typed card: save it to their Square
+  //    profile and charge the saved card.
+  //  - Booker paying for themselves with Apple/Google Pay: only allowed when
+  //    they already have a card on file (a wallet token can't be saved).
+  //  - Someone else paying: charge their card directly (it's not the booker's
+  //    to keep) and link the booker's own card on file if they have one.
+  const self = isSelfPay(d)
+  const existing = await findCardOnFileByEmail(square, d.booker_email)
+  let chargeSource: string = sourceId
+  let chargeCustomer: string | undefined
+  let linkCardId: string | null = existing?.cardId ?? null
+  if (self && wallet) {
+    if (!existing) {
+      return NextResponse.json({ error: 'Apple Pay and Google Pay are available once you have a card saved with us. Please pay with a card this time.' }, { status: 400 })
+    }
+  } else if (self) {
+    const custId = await findOrCreateSquareCustomer(square, { email: d.booker_email, name: d.booker_name, phone: d.booker_phone })
+    if (!custId) return NextResponse.json({ error: 'Could not set up your payment profile - please try again.' }, { status: 502 })
+    try {
+      const { result } = await square.cardsApi.createCard({
+        idempotencyKey: `card-${d.id}-${String(sourceId).slice(-12)}`,
+        sourceId,
+        card: { customerId: custId, referenceId: `made-kulture-pay-${d.id}`.slice(0, 40) },
+      })
+      chargeSource = result.card!.id!
+      chargeCustomer = custId
+      linkCardId = chargeSource
+    } catch (e: any) {
+      console.error('[pay] save card failed', e)
+      return NextResponse.json({ error: e?.errors?.[0]?.detail || 'That card could not be saved - try another card.' }, { status: 402 })
+    }
+  }
+
   const isEmail = d.channel === 'email'
   let paymentId: string | null = null
   try {
     const { result } = await square.paymentsApi.createPayment({
-      sourceId,
+      sourceId: chargeSource,
+      ...(chargeCustomer ? { customerId: chargeCustomer } : {}),
       idempotencyKey: d.id, // one charge per delegation, even on double-submit
       amountMoney: { amount: BigInt(d.amount_cents), currency: 'USD' },
       locationId: process.env.SQUARE_LOCATION_ID!,
@@ -143,6 +183,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   }
 
   await supabase.from('booking_add_ons').update({ paid: true }).in('booking_id', d.booking_ids)
+  if (linkCardId) {
+    const { error: linkErr } = await supabase.from('bookings')
+      .update({ square_card_on_file_id: linkCardId }).in('id', d.booking_ids).is('square_card_on_file_id', null)
+    if (linkErr) console.error('[pay] could not link card on file (non-fatal):', linkErr)
+  }
   await supabase.from('payment_delegations').update({ status: 'paid', square_payment_id: paymentId }).eq('id', d.id)
 
   // Door code + calendar + booker confirmations (non-fatal inside).

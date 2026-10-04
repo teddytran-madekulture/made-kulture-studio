@@ -69,3 +69,28 @@ export async function findOrCreateSquareCustomer(
     return null
   }
 }
+
+// A usable card already on file for this email, across every Square profile
+// that carries it (duplicates are common). null when there is none or Square
+// can't be reached - callers treat that as "no card". (2026-10-04)
+export async function findCardOnFileByEmail(
+  square: Client,
+  email: string | null | undefined,
+): Promise<{ customerId: string; cardId: string } | null> {
+  const cleanEmail = (email ?? '').trim().toLowerCase()
+  if (!cleanEmail) return null
+  try {
+    const { result } = await square.customersApi.searchCustomers({
+      query: { filter: { emailAddress: { exact: cleanEmail } } },
+    })
+    for (const c of result.customers ?? []) {
+      if (!c.id) continue
+      const cards = await square.cardsApi.listCards(undefined, c.id).then(r => r.result.cards ?? []).catch(() => [])
+      const card = cards.find(k => k.enabled && k.id)
+      if (card?.id) return { customerId: c.id, cardId: card.id }
+    }
+  } catch (e) {
+    console.error('[square-customer] card-on-file lookup failed', e)
+  }
+  return null
+}

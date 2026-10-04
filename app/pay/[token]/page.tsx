@@ -37,6 +37,7 @@ interface Req {
   payerName: string | null
   bookerName: string | null
   selfPay?: boolean
+  walletsAllowed?: boolean
   lines: Line[]
 }
 
@@ -85,12 +86,12 @@ export default function PayPage({ params }: { params: { token: string } }) {
   const showPaid = done || req?.status === 'paid'
 
   // Shared: send a Square token (card OR Google/Apple Pay) to the pay endpoint.
-  const submitToken = async (token: string) => {
+  const submitToken = async (token: string, wallet = false) => {
     setPaying(true); setPayError(null)
     try {
       const r = await fetch(`/api/pay/${params.token}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId: token }),
+        body: JSON.stringify({ sourceId: token, wallet }),
       })
       const d = await r.json()
       if (r.ok && d.success) { setDone(true) }
@@ -121,6 +122,8 @@ export default function PayPage({ params }: { params: { token: string } }) {
           cardRef.current = card
         }
         if (mounted) setSdkReady(true)
+        // No card on file for a member paying their own booking => card only.
+        if (req.walletsAllowed === false) return
 
         // Digital wallets — one paymentRequest drives both Google Pay and Apple Pay.
         const paymentRequest = payments.paymentRequest({
@@ -139,7 +142,7 @@ export default function PayPage({ params }: { params: { token: string } }) {
           document.getElementById('pay-google')?.addEventListener('click', async () => {
             try {
               const tok = await googlePay.tokenize()
-              if (tok.status === 'OK') submitToken(tok.token)
+              if (tok.status === 'OK') submitToken(tok.token, true)
               else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Google Pay failed — try a card.')
             } catch (e: any) { setPayError(`Google Pay failed — try a card. (${e?.message || 'unknown error'})`) }
           })
@@ -155,7 +158,7 @@ export default function PayPage({ params }: { params: { token: string } }) {
             btn.addEventListener('click', async () => {
               try {
                 const tok = await applePay.tokenize()
-                if (tok.status === 'OK') submitToken(tok.token)
+                if (tok.status === 'OK') submitToken(tok.token, true)
                 else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Apple Pay failed — try a card.')
               } catch (e: any) { setPayError(`Apple Pay failed — try a card. (${e?.message || 'unknown error'})`) }
             })
