@@ -37,7 +37,6 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading]   = useState(true)
   const [cancelling, setCancelling] = useState<string | null>(null)
-  const [rescheduling, setRescheduling] = useState<string | null>(null)
   const [error, setError]       = useState('')
   const [notice, setNotice]     = useState('')
   const [gearCart, setGearCart] = useState<GearLine[]>([])
@@ -95,24 +94,10 @@ export default function BookingsPage() {
     setAddingTo(null)
   }
 
-  const rescheduleCredit = async (id: string) => {
-    if (!confirm('Reschedule later?\n\nThis releases your session and banks its full value as studio credit on your account. Credit never expires and applies automatically when you rebook — pick a new date whenever you’re ready.')) return
-    setRescheduling(id); setError(''); setNotice('')
-    const res = await fetch('/api/account/reschedule-credit', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ booking_id: id }),
-    })
-    const data = await res.json()
-    if (!res.ok) { setError(data.error ?? 'Something went wrong'); setRescheduling(null); return }
-    setBookings(bs => bs.map(b => b.id === id ? { ...b, status: 'cancelled' } : b))
-    setNotice(`$${((data.creditCents || 0) / 100).toFixed(2)} added to your account as studio credit — it applies automatically next time you book.`)
-    setRescheduling(null)
-  }
-
   const cancel = async (id: string) => {
-    const msg = isPlus
-      ? 'Cancel this booking?\n\nAs a Plus member, its full value comes back as studio credit — it never expires and applies automatically to your next booking.'
-      : 'Cancel this booking? Refunds are only issued if cancelled 48+ hours in advance.'
+    // 2026-10-04: the separate RELEASE -> CREDIT button is gone - it did the
+    // same thing as cancelling more than 48h out. One button, one message.
+    const msg = 'Cancel this booking?\n\nIts full value comes back as studio credit on your account — credit never expires and applies automatically next time you book.'
     if (!confirm(msg)) return
     setCancelling(id); setError(''); setNotice('')
     const res = await fetch('/api/account/cancel', {
@@ -126,7 +111,7 @@ export default function BookingsPage() {
       setCancelling(null)
     } else {
       setBookings(bs => bs.map(b => b.id === id ? { ...b, status: 'cancelled' } : b))
-      if (isPlus && data.creditCents > 0) {
+      if (data.creditCents > 0) {
         setNotice(`$${((data.creditCents || 0) / 100).toFixed(2)} added to your account as studio credit — it applies automatically next time you book.`)
       }
       setCancelling(null)
@@ -202,20 +187,10 @@ export default function BookingsPage() {
                 RESCHEDULE
               </button>
             )}
-            {canReschedule && (
-              <button
-                onClick={() => rescheduleCredit(b.id)}
-                disabled={rescheduling === b.id || cancelling === b.id}
-                title="Don’t know the new date yet? Release this session and bank its full value as credit — it never expires and applies automatically when you rebook"
-                style={{ background: 'linear-gradient(135deg, rgba(var(--t-gold-rgb), 0.16), rgba(var(--t-gold-rgb), 0.05))', border: '1px solid rgba(var(--t-gold-rgb), 0.4)', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'var(--t-gold)', cursor: 'pointer', opacity: rescheduling === b.id ? 0.5 : 1, whiteSpace: 'nowrap' }}
-              >
-                {rescheduling === b.id ? 'BANKING…' : 'RELEASE → CREDIT'}
-              </button>
-            )}
             {canCancel && (
               <button
                 onClick={() => cancel(b.id)}
-                disabled={cancelling === b.id || rescheduling === b.id}
+                disabled={cancelling === b.id}
                 style={{ background: 'none', border: '1px solid rgba(255,60,60,0.3)', borderRadius: 4, padding: '6px 14px', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'var(--t-err)', cursor: 'pointer', opacity: cancelling === b.id ? 0.5 : 1 }}
               >
                 {cancelling === b.id ? 'CANCELLING...' : 'CANCEL'}
