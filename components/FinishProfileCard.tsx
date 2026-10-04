@@ -10,6 +10,7 @@ const FIX: Record<string, { label: string; href: string }> = {
   'no name':         { label: 'Add your name',                                   href: '/account/profile' },
   'no role':         { label: 'Pick at least one role',                          href: '/account/profile' },
   'no bio':          { label: 'Write a short bio',                               href: '/account/profile' },
+  'vendor agreement': { label: 'Sign the Vendor Agreement (Settings → Service listings)', href: '/account/profile?s=listings' },
   'nothing to show': { label: 'Add a portfolio photo, a link, or your Instagram', href: '/account/profile?s=portfolio' },
 }
 

@@ -36,7 +36,7 @@ export async function GET() {
   // listed viewer, the new-members row and the fresh-work owners.
   const [{ data: profiles, error: pErr }, { data: pics, error: picErr }] = await Promise.all([
     service.from('customer_profiles')
-      .select('id, full_name, roles, bio, instagram, links, account_type, avatar_url, created_at')
+      .select('id, full_name, roles, bio, instagram, links, account_type, avatar_url, created_at, vendor_terms_accepted_at')
       .eq('directory_opt_in', true),
     service.from('portfolio_images')
       .select('id, user_id, url, sort_order, is_mature, hidden, explore_hidden, created_at'),

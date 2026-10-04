@@ -1,3 +1,5 @@
+import { isServiceMember } from '@/lib/roles'
+
 // THE one rule for "does this profile actually appear in the Creative Directory?"
 //
 // A member can opt in and still be invisible, because the directory refuses to
@@ -20,10 +22,12 @@ export type DirectoryProfile = {
   instagram: string | null
   links: unknown
   account_type?: string | null
+  /** Migration 136. Required (not optional) for Production Services members. */
+  vendor_terms_accepted_at?: string | null
 }
 
 /** Human-readable reasons a profile would not be listed. Empty ⇒ it lists. */
-export type ListingBlocker = 'no name' | 'no role' | 'no bio' | 'nothing to show'
+export type ListingBlocker = 'no name' | 'no role' | 'no bio' | 'nothing to show' | 'vendor agreement'
 
 /**
  * @param hasPhoto whether this member has at least one portfolio image. Passed
@@ -39,6 +43,13 @@ export function profileBlockers(p: DirectoryProfile, hasPhoto: boolean): Listing
   const hasLink = Array.isArray(p.links) && p.links.length > 0
   const hasIg = !!(p.instagram ?? '').trim()
   if (!hasPhoto && !hasLink && !hasIg) out.push('nothing to show')
+  // 2026-10-03 — anyone OFFERING a Production Services role must sign the
+  // Vendor Agreement (lib/vendor-agreement.ts) before they appear in the
+  // directory at all. Enforced here, the one listing rule, so it holds however
+  // the role got onto the profile (signup, /welcome or Edit profile).
+  // ⚠️ Every caller's SELECT must include vendor_terms_accepted_at, or a signed
+  // vendor reads as unsigned and silently disappears from the directory.
+  if (isServiceMember(p.roles) && !p.vendor_terms_accepted_at) out.push('vendor agreement')
   return out
 }
 

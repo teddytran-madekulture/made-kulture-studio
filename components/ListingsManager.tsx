@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { SERVICE_ROLES } from '@/lib/roles'
+import { VENDOR_AGREEMENT_SECTIONS, VENDOR_AGREEMENT_TITLE, VENDOR_AGREEMENT_VERSION } from '@/lib/vendor-agreement'
 
 export const LISTING_MAX = 12
 export const LISTING_PHOTO_MAX = 6
@@ -65,6 +66,11 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Vendor Agreement (migration 136): null = still checking.
+  const [agreed, setAgreed] = useState<{ accepted: boolean; acceptedAt: string | null } | null>(null)
+  const [signName, setSignName] = useState('')
+  const [tick, setTick] = useState(false)
+  const [signing, setSigning] = useState(false)
 
   const load = async (id: string) => {
     const { data, error } = await supabase.from('service_listings')
@@ -80,6 +86,12 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { setLoading(false); return }
       setUid(user.id); load(user.id)
+      fetch('/api/listings/agreement', { cache: 'no-store' }).then(r => r.json().then(d => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+          // A failed check must not read as "not signed" and nag a vendor who has.
+          if (!ok) { setError(d.error || "Couldn't check your vendor agreement."); return }
+          setAgreed({ accepted: !!d.accepted, acceptedAt: d.acceptedAt ?? null })
+        }).catch(() => setError("Couldn't check your vendor agreement."))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -154,6 +166,17 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
     load(uid)
   }
 
+  const sign = async () => {
+    if (!tick) { setError('Tick the box to agree.'); return }
+    if (signName.trim().length < 2) { setError('Type your full name to sign.'); return }
+    setSigning(true); setError('')
+    const r = await fetch('/api/listings/agreement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: signName.trim(), agree: true }) })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) setError(d.error || 'Could not save your agreement.')
+    else setAgreed({ accepted: true, acceptedAt: d.acceptedAt ?? new Date().toISOString() })
+    setSigning(false)
+  }
+
   if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: muted }}>Loading…</div>
 
   return (
@@ -183,7 +206,34 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
           </div>
         ))}
         {list.length === 0 && <div style={{ fontSize: 13, color: muted, marginBottom: 14 }}>No listings yet.</div>}
-        {list.length < LISTING_MAX && (
+        {agreed && !agreed.accepted && (
+          <div style={{ border: '1px solid rgba(var(--t-gold-rgb), 0.45)', borderRadius: 8, padding: 18, marginTop: 8 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--t-gold)' }}>REQUIRED BEFORE YOUR FIRST LISTING</div>
+            <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--t-fg)', margin: '6px 0 12px' }}>{VENDOR_AGREEMENT_TITLE}</div>
+            <div style={{ maxHeight: 320, overflowY: 'auto', border: line, borderRadius: 6, padding: '12px 14px', background: 'var(--t-surface)' }}>
+              {VENDOR_AGREEMENT_SECTIONS.map((sec, i) => (
+                <div key={sec.heading} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-fg)', marginBottom: 3 }}>{i + 1}. {sec.heading}</div>
+                  <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.55 }}>{sec.body}</div>
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: muted }}>Version {VENDOR_AGREEMENT_VERSION}</div>
+            </div>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 14, fontSize: 13, color: 'var(--t-fg)', cursor: 'pointer', lineHeight: 1.5 }}>
+              <input type="checkbox" checked={tick} onChange={e => setTick(e.target.checked)} style={{ marginTop: 3 }} />
+              I have read and agree to the {VENDOR_AGREEMENT_TITLE}. I understand Made Kulture is not a party to my rentals and does not handle payment, logistics, insurance or disputes.
+            </label>
+            <label style={label}>TYPE YOUR FULL NAME TO SIGN</label>
+            <input value={signName} onChange={e => setSignName(e.target.value)} maxLength={120} placeholder="Full name" style={inputStyle} />
+            <button type="button" onClick={sign} disabled={signing} style={{ ...btn, background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', marginTop: 14, opacity: signing ? 0.6 : 1 }}>{signing ? 'SAVING…' : 'I AGREE'}</button>
+          </div>
+        )}
+        {agreed?.accepted && agreed.acceptedAt && (
+          <div style={{ fontSize: 11, color: muted, margin: '4px 0 10px' }}>
+            Vendor Agreement signed {new Date(agreed.acceptedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' })}.
+          </div>
+        )}
+        {agreed?.accepted && list.length < LISTING_MAX && (
           <button type="button" onClick={() => { setError(''); setDraft(emptyDraft(categories[0])) }} style={{ ...btn, background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', marginTop: 6 }}>+ ADD LISTING</button>
         )}
       </>)}

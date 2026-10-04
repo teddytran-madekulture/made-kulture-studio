@@ -19,7 +19,7 @@ const service = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.
 export async function GET() {
   const [{ data: profiles, error }, { data: pics, error: picErr }] = await Promise.all([
     service.from('customer_profiles')
-      .select('id, full_name, roles, instagram, bio, links, account_type, created_at')
+      .select('id, full_name, roles, instagram, bio, links, account_type, created_at, vendor_terms_accepted_at')
       .eq('directory_opt_in', true),
     service.from('portfolio_images').select('user_id'),
   ])

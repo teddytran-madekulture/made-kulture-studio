@@ -109,7 +109,7 @@ export default function ListingsTab({ memberId, memberName, listings, isSelf }: 
             <input type="date" value={date} onChange={e => setDate(e.target.value)} style={input} />
             <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: muted, margin: '14px 0 6px' }}>DETAILS <span style={{ color: 'var(--t-gold)' }}>· optional</span></label>
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={4} maxLength={1500} placeholder="Times, location, what the shoot is, pickup or delivery…" style={{ ...input, resize: 'vertical', lineHeight: 1.5 }} />
-            <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>This sends {memberName.split(' ')[0] || 'them'} a message. Pricing, deposits and pickup are arranged directly between you.</div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>This sends {memberName.split(' ')[0] || 'them'} a message. Made Kulture connects members but isn’t part of the arrangement: pricing, payment, insurance and logistics are between you and the vendor.</div>
             {error && <div style={{ color: '#e6a0a0', fontSize: 13, marginTop: 10 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button type="button" onClick={send} disabled={sending} style={{ flex: 1, padding: '12px 0', borderRadius: 4, border: 'none', background: 'var(--t-fg)', color: 'var(--t-on-fg)', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer', opacity: sending ? 0.6 : 1 }}>{sending ? 'SENDING…' : 'SEND REQUEST'}</button>

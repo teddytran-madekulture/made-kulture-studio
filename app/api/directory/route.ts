@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   let q = service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type, founding_number, founding_blocked, created_at, profile_color')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type, founding_number, founding_blocked, created_at, profile_color, vendor_terms_accepted_at')
     .eq('directory_opt_in', true)
   if (role) q = q.contains('roles', [role])
 

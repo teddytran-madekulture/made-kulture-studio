@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
   const { data: profiles, error } = await supabase
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, directory_opt_in, account_type, onboarded, founding_number')
+    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, directory_opt_in, account_type, onboarded, founding_number, vendor_terms_accepted_at')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Photo counts for everyone in ONE query — a per-row lookup would be ~N

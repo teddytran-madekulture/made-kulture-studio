@@ -23,7 +23,7 @@ export type MemberAccess = { optedIn: boolean; listed: boolean; blockers: Listin
  *  a failed lookup must never read as "listed" (or silently as "not"). */
 export async function memberAccess(db: SupabaseClient, userId: string): Promise<MemberAccess> {
   const { data: p, error } = await db.from('customer_profiles')
-    .select('id, full_name, roles, bio, instagram, links, account_type, directory_opt_in')
+    .select('id, full_name, roles, bio, instagram, links, account_type, directory_opt_in, vendor_terms_accepted_at')
     .eq('id', userId).maybeSingle()
   if (error) throw new Error(`member access lookup failed: ${error.message}`)
   if (!p) return { optedIn: false, listed: false, blockers: [] }
