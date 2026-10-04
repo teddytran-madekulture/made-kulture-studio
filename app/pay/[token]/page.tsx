@@ -133,10 +133,15 @@ export default function PayPage({ params }: { params: { token: string } }) {
           const googlePay = await payments.googlePay(paymentRequest)
           await googlePay.attach('#pay-google')
           if (mounted) setGpayReady(true)
-          googlePay.addEventListener('ontokenization', (event: any) => {
-            const { tokenResult } = event.detail
-            if (tokenResult.status === 'OK') submitToken(tokenResult.token)
-            else setPayError(tokenResult.errors?.[0]?.message || 'Google Pay failed.')
+          // 2026-10-04: Square's documented pattern — tokenize when the button is
+          // clicked. The old 'ontokenization' listener left Google's sheet with
+          // nothing driving it ("Something went wrong" on pay.google.com).
+          document.getElementById('pay-google')?.addEventListener('click', async () => {
+            try {
+              const tok = await googlePay.tokenize()
+              if (tok.status === 'OK') submitToken(tok.token)
+              else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Google Pay failed — try a card.')
+            } catch (e: any) { setPayError(`Google Pay failed — try a card. (${e?.message || 'unknown error'})`) }
           })
         } catch { /* Google Pay unavailable on this device/browser */ }
 
@@ -151,8 +156,8 @@ export default function PayPage({ params }: { params: { token: string } }) {
               try {
                 const tok = await applePay.tokenize()
                 if (tok.status === 'OK') submitToken(tok.token)
-                else setPayError(tok.errors?.[0]?.message || 'Apple Pay failed.')
-              } catch { setPayError('Apple Pay failed — try a card.') }
+                else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Apple Pay failed — try a card.')
+              } catch (e: any) { setPayError(`Apple Pay failed — try a card. (${e?.message || 'unknown error'})`) }
             })
           }
         } catch { /* Apple Pay unavailable / domain not yet registered */ }

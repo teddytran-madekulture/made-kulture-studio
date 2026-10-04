@@ -2068,6 +2068,20 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   const creditApplied = (mode === 'self' && useCredit) ? Math.min(creditCents, payCents) : 0
   const chargeCents = Math.max(0, payCents - creditApplied)
   const chargeDollars = (chargeCents / 100).toFixed(2)
+  // 2026-10-04: Apple Pay / Google Pay must ask for what will ACTUALLY be
+  // charged (after promo + credit), not the pre-discount total frozen when the
+  // SDK mounted. Requests are kept so they can be updated as the total moves.
+  const chargeCentsRef = useRef(chargeCents)
+  const walletReqsRef  = useRef<any[]>([])
+  const walletAmount = () => ((chargeCentsRef.current > 0 ? chargeCentsRef.current : grandTotalRef.current * 100) / 100).toFixed(2)
+  useEffect(() => {
+    chargeCentsRef.current = chargeCents
+    if (chargeCents <= 0) return
+    for (const r of walletReqsRef.current) {
+      try { r.update({ total: { amount: (chargeCents / 100).toFixed(2), label: 'Made Kulture Studio' } }) }
+      catch (e) { console.warn('[wallet] total update failed', e) }
+    }
+  }, [chargeCents])
   // Mirrors lib/rewards rowBasisCents: earnable × card share × rate. Card-paid
   // part only, so credit and promo shrink it exactly as the server will.
   const rewardEstimateCents = (mode === 'self' && rewardRate && grandTotal > 0)
@@ -2209,15 +2223,21 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           const paymentRequest = payments.paymentRequest({
             countryCode:  'US',
             currencyCode: 'USD',
-            total: { amount: grandTotalRef.current.toFixed(2), label: 'Made Kulture Studio' },
+            total: { amount: walletAmount(), label: 'Made Kulture Studio' },
           })
+          walletReqsRef.current.push(paymentRequest)
           const googlePay = await payments.googlePay(paymentRequest)
           await googlePay.attach('#google-pay-button')
           if (mounted) setGooglePayReady(true)
-          googlePay.addEventListener('ontokenization', (event: any) => {
-            const { tokenResult } = event.detail
-            if (tokenResult.status === 'OK') submitBooking(tokenResult.token)
-            else setPayError(tokenResult.errors?.[0]?.message || 'Google Pay failed')
+          // 2026-10-04: Square's documented pattern — tokenize when the button is
+          // clicked. The old 'ontokenization' listener left Google's sheet with
+          // nothing driving it ("Something went wrong" on pay.google.com).
+          document.getElementById('google-pay-button')?.addEventListener('click', async () => {
+            try {
+              const tok = await googlePay.tokenize()
+              if (tok.status === 'OK') submitBooking(tok.token)
+              else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Google Pay failed — try a card.')
+            } catch (e: any) { setPayError(`Google Pay failed — try a card. (${e?.message || 'unknown error'})`) }
           })
         } catch {
           // Google Pay not available on this device/browser — card form is the fallback
@@ -2228,8 +2248,9 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
         try {
           const apReq = payments.paymentRequest({
             countryCode: 'US', currencyCode: 'USD',
-            total: { amount: grandTotalRef.current.toFixed(2), label: 'Made Kulture Studio' },
+            total: { amount: walletAmount(), label: 'Made Kulture Studio' },
           })
+          walletReqsRef.current.push(apReq)
           const applePay = await payments.applePay(apReq)
           const btn = document.getElementById('apple-pay-button')
           if (btn) {
@@ -2238,8 +2259,8 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
               try {
                 const tok = await applePay.tokenize()
                 if (tok.status === 'OK') submitBooking(tok.token)
-                else setPayError(tok.errors?.[0]?.message || 'Apple Pay failed')
-              } catch { setPayError('Apple Pay failed — try a card.') }
+                else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Apple Pay failed — try a card.')
+              } catch (e: any) { setPayError(`Apple Pay failed — try a card. (${e?.message || 'unknown error'})`) }
             })
           }
         } catch {
@@ -2362,12 +2383,14 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
         ) : (
           <>
             {/* Apple Pay button — hidden until the domain is registered with Square (Safari only) */}
+            <div style={{ display: chargeCents > 0 ? 'block' : 'none' }}>
             <div id="apple-pay-button" style={{ display: 'none', height: 48, marginBottom: 12, WebkitAppearance: '-apple-pay-button', borderRadius: 4, overflow: 'hidden', cursor: 'pointer' } as any} />
             {/* Google Pay button (auto-hides if unsupported) */}
             <div ref={googlePayContainerRef} style={{ marginBottom: googlePayReady ? 16 : 0 }}>
               <div id="google-pay-button" />
             </div>
-            {googlePayReady && (
+            </div>
+            {googlePayReady && chargeCents > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                 <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
                 <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em' }}>OR PAY WITH CARD</span>
