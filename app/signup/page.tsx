@@ -68,7 +68,13 @@ export default function SignupPage() {
     setLoading(true)
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
+        // Always show Google's account chooser (same as the admin login) so a
+        // browser with several Google accounts can't silently sign in as the
+        // wrong one. (2026-10-04)
+        queryParams: { prompt: 'select_account' },
+      },
     })
   }
 
