@@ -37,17 +37,30 @@ export default function ServicesPage() {
 
   const cats = useMemo(() => SERVICE_ROLES.filter(c => listings.some(l => l.category === c)), [listings])
 
+  // Ranked, so tag-stuffing doesn't pay: a word found in the TITLE scores
+  // highest, then category, then details/notes/vendor, and a tag-only match
+  // scores least. A snake wrangler tagged "car" sinks below actual cars.
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/[\s,]+/).filter(Boolean).map(stem)
-    return listings.filter(l => {
-      if (cat && l.category !== cat) return false
-      if (!words.length) return true
-      const hay = [l.title, l.details, l.notes, l.category, l.vendor?.name ?? '', ...(l.tags ?? [])].join(' ').toLowerCase()
-      const hayWords = new Set(hay.split(/[^a-z0-9]+/).filter(Boolean).map(stem))
-      // Every typed word must appear — as a whole (stemmed) word, or inside a
-      // longer one ("pole" in "dance-pole", "truck" in "trucks").
-      return words.every(w => hayWords.has(w) || hay.includes(w))
-    })
+    const has = (text: string, w: string) => {
+      const t = text.toLowerCase()
+      return t.split(/[^a-z0-9]+/).filter(Boolean).map(stem).includes(w) || t.includes(w)
+    }
+    const scored = listings
+      .filter(l => !cat || l.category === cat)
+      .map(l => {
+        if (!words.length) return { l, score: 1 }
+        let score = 0
+        for (const w of words) {
+          const s = has(l.title, w) ? 8 : has(l.category, w) ? 5 : (has(l.details, w) || has(l.notes, w) || has(l.vendor?.name ?? '', w)) ? 3 : (l.tags ?? []).some(t => has(t, w)) ? 1 : 0
+          if (s === 0) return { l, score: 0 }   // every typed word must match somewhere
+          score += s
+        }
+        return { l, score }
+      })
+      .filter(x => x.score > 0)
+    // Stable sort keeps newest-first within the same score.
+    return scored.sort((a, b) => b.score - a.score).map(x => x.l)
   }, [listings, q, cat])
 
   const chip = (on: boolean): React.CSSProperties => ({

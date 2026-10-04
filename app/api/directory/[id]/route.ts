@@ -48,6 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .select('id, category, title, details, rate, notes, photos, tags')
     .eq('user_id', params.id)
     .eq('active', true)
+    .eq('review_hold', false)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
   if (listErr) console.error('[directory/id] listings lookup failed:', listErr.message)

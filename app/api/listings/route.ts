@@ -22,7 +22,7 @@ export async function GET() {
 
   const { data: rows, error } = await service.from('service_listings')
     .select('id, user_id, category, title, details, rate, notes, photos, tags, created_at')
-    .eq('active', true).order('created_at', { ascending: false })
+    .eq('active', true).eq('review_hold', false).order('created_at', { ascending: false })
   // A failed read must never render as "no services yet".
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

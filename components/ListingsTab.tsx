@@ -71,6 +71,11 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
   const [note, setNote] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  // Report a listing (migration 139): inside the detail pop-up.
+  const [reporting, setReporting] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportNote, setReportNote] = useState('')
+  const [reportMsg, setReportMsg] = useState('')
 
   // Esc closes the top layer; the page behind doesn't scroll while one is open.
   useEffect(() => {
@@ -90,7 +95,7 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
     )
   }
 
-  const openDetail = (l: PublicListing) => { setOpen(l); track('portfolio_open', { target_id: vId(l), meta: { kind: 'listing', listing: l.id } }) }
+  const openDetail = (l: PublicListing) => { setOpen(l); setReporting(false); setReportReason(''); setReportNote(''); setReportMsg(''); track('portfolio_open', { target_id: vId(l), meta: { kind: 'listing', listing: l.id } }) }
   const startRequest = (l: PublicListing) => { setReq(l); setDate(''); setNote(''); setError('') }
 
   const send = async () => {
@@ -160,6 +165,35 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
                 </div>
               )}
               <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.5, marginBottom: 16 }}>Pricing, payment, insurance and logistics are arranged directly with {vName(open).split(' ')[0] || 'the vendor'}. Made Kulture isn’t part of the arrangement.</div>
+              {!mine(open) && (
+                <div style={{ marginBottom: 14 }}>
+                  {reportMsg ? <div style={{ fontSize: 12, color: 'var(--t-gold)' }}>{reportMsg}</div>
+                  : !reporting ? <button type="button" onClick={() => setReporting(true)} style={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: muted, textDecoration: 'underline' }}>Report this listing</button>
+                  : (
+                    <div style={{ border: line, borderRadius: 8, padding: 12 }}>
+                      <div style={{ fontSize: 12, color: 'var(--t-fg)', marginBottom: 8 }}>What’s wrong with this listing? The vendor won’t see who reported it.</div>
+                      <select value={reportReason} onChange={e => setReportReason(e.target.value)} style={{ ...input, padding: '10px 12px', marginBottom: 8 }}>
+                        <option value="" style={{ background: '#111', color: '#eee' }}>Pick a reason…</option>
+                        <option value="misleading" style={{ background: '#111', color: '#eee' }}>Misleading tags or details</option>
+                        <option value="off_topic" style={{ background: '#111', color: '#eee' }}>Not a real service</option>
+                        <option value="spam" style={{ background: '#111', color: '#eee' }}>Spam</option>
+                        <option value="inappropriate" style={{ background: '#111', color: '#eee' }}>Inappropriate</option>
+                        <option value="other" style={{ background: '#111', color: '#eee' }}>Other</option>
+                      </select>
+                      <input value={reportNote} onChange={e => setReportNote(e.target.value)} maxLength={300} placeholder="Anything else? (optional)" style={{ ...input, padding: '10px 12px', marginBottom: 8 }} />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" onClick={async () => {
+                          if (!reportReason) { setReportMsg(''); return }
+                          const r = await fetch('/api/listings/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listingId: open.id, reason: reportReason, note: reportNote }) })
+                          const d = await r.json().catch(() => ({}))
+                          setReportMsg(r.ok ? 'Thanks. The studio will take a look.' : (d.error || 'Could not send that.'))
+                        }} style={{ ...primaryBtn, padding: '9px 14px', opacity: reportReason ? 1 : 0.5 }}>SEND REPORT</button>
+                        <button type="button" onClick={() => setReporting(false)} style={{ padding: '9px 14px', borderRadius: 4, border: line, background: 'transparent', color: muted, fontSize: 12, cursor: 'pointer' }}>CANCEL</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {!mine(open) && <button type="button" onClick={() => { const l = open; setOpen(null); startRequest(l) }} style={{ ...primaryBtn, width: '100%', padding: '14px 0' }}>REQUEST</button>}
             </div>
           </div>

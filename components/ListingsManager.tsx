@@ -22,10 +22,11 @@ export type Listing = {
   photos: string[]
   tags: string[]
   active: boolean
+  review_hold?: boolean
   sort_order: number
 }
 
-export const LISTING_TAG_MAX = 15
+export const LISTING_TAG_MAX = 8   // also a DB check constraint (migration 139)
 /** Lower-case, trim, collapse spaces, drop empties and duplicates. */
 export function cleanTags(raw: string[]): string[] {
   const out: string[] = []
@@ -89,7 +90,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
 
   const load = async (id: string) => {
     const { data, error } = await supabase.from('service_listings')
-      .select('id, category, title, details, rate, notes, photos, tags, active, sort_order')
+      .select('id, category, title, details, rate, notes, photos, tags, active, review_hold, sort_order')
       .eq('user_id', id).order('sort_order', { ascending: true }).order('created_at', { ascending: true })
     // A failed read must not look like "no listings yet".
     if (error) setError(`Couldn't load your listings: ${error.message}`)
@@ -214,7 +215,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
             <div style={{ width: 72, height: 54, borderRadius: 4, background: 'var(--t-surface)', backgroundImage: l.photos[0] ? `url(${l.photos[0]})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
-              <div style={{ fontSize: 12, color: muted }}>{l.category}{l.rate ? ` · ${l.rate}` : ''}{l.active ? '' : ' · HIDDEN'}</div>
+              <div style={{ fontSize: 12, color: muted }}>{l.category}{l.rate ? ` · ${l.rate}` : ''}{l.active ? '' : ' · HIDDEN'}{l.review_hold ? ' · UNDER REVIEW' : ''}</div>
             </div>
             <button type="button" onClick={() => toggle(l)} style={{ ...btn, background: 'transparent', border: line, color: muted }}>{l.active ? 'HIDE' : 'SHOW'}</button>
             <button type="button" onClick={() => { setError(''); setDraft({ ...l, tags: l.tags ?? [] }) }} style={{ ...btn, background: 'transparent', border: line, color: 'var(--t-fg)' }}>EDIT</button>
