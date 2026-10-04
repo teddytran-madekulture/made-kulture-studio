@@ -2263,12 +2263,10 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           // Google Pay not available on this device/browser — card form is the fallback
         }
 
-        // Apple Pay on the web does NOT work inside a home-screen web app on
-        // iPhone: the button renders, then Apple's sheet fails every time
-        // ("An unexpected error occurred while using Apple Pay"). Only offer it
-        // in a real browser tab. (2026-10-04)
-        const standalone = (navigator as any).standalone === true || window.matchMedia?.('(display-mode: standalone)').matches
-        if (!standalone) try {
+        // Apple Pay. (2026-10-04: the earlier failures were a wrong Square
+        // location id in the live env, not home-screen mode - so it is offered
+        // everywhere again.)
+        try {
           const apReq = payments.paymentRequest({
             countryCode: 'US', currencyCode: 'USD',
             total: { amount: walletAmount(), label: 'Made Kulture Studio' },
