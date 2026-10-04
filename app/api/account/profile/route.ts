@@ -27,13 +27,18 @@ export async function GET() {
   // Fetch custom pricing overrides using service role (customers table is service_role only)
   const { data: custData } = await serviceSupabase
     .from('customers')
-    .select('pricing_overrides')
+    .select('pricing_overrides, phone')
     .eq('email', user.email!.toLowerCase())
     .maybeSingle()
 
   return NextResponse.json({
     profile: { ...data, email: user.email },
     pricingOverrides: custData?.pricing_overrides ?? null,
+    // 2026-10-04: checkout prefill. A profile phone can be blank (Google
+    // sign-ups, accounts made before phone was asked) while the customer
+    // record from their bookings has one. Checkout falls back to it; the
+    // profile itself is untouched.
+    bookingPhone: data?.phone || custData?.phone || null,
   })
 }
 

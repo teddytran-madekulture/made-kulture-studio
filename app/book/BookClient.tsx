@@ -299,7 +299,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
             ...b,
             name:  d.profile.full_name  || b.name,
             email: d.profile.email      || b.email,
-            phone: d.profile.phone      || b.phone,
+            phone: d.profile.phone      || d.bookingPhone || b.phone,
           }))
         }
         if (d?.pricingOverrides) setPricingOverrides(d.pricingOverrides)
