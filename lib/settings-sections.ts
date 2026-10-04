@@ -9,7 +9,7 @@ export const PROFILE_SECTIONS = {
   privacy: 'DIRECTORY & NOTIFICATIONS',
 } as const
 
-export const SETTINGS_PAGES = ['/account/profile', '/account/security', '/account/payment', '/account/plus']
+export const SETTINGS_PAGES = ['/account/profile', '/account/security', '/account/payment', '/account/plus', '/account/app']
 
 export const SETTINGS_MENU: { group: string; items: { href: string; label: string; s?: string }[] }[] = [
   { group: 'Your profile', items: [
@@ -24,5 +24,6 @@ export const SETTINGS_MENU: { group: string; items: { href: string; label: strin
     { href: '/account/security', label: 'Login & security' },
     { href: '/account/payment', label: 'Payment methods' },
     { href: '/account/plus', label: 'Membership' },
+    { href: '/account/app', label: 'Get the app' },
   ] },
 ]

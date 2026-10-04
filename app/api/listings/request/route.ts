@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { sendListingRequestEmail } from '@/lib/email'
+import { sendMemberPush } from '@/lib/member-push'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -90,5 +91,10 @@ export async function POST(req: NextRequest) {
     console.error('[listings/request] vendor email failed:', e)
   }
 
-  return NextResponse.json({ conversationId: convId, emailed })
+  // App push to the vendor (migration 137). Non-fatal; email above is the
+  // guaranteed channel.
+  const { data: sp } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
+  const pushed = await sendMemberPush(listing.user_id, { title: `Request: ${listing.title}`, body: `${sp?.full_name || 'A member'} · ${label}${note ? ` · ${note.slice(0, 80)}` : ''}`, url: `/account/messages/${convId}`, tag: `msg-${convId}` })
+
+  return NextResponse.json({ conversationId: convId, emailed, pushed })
 }

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { SERVICE_ROLES } from '@/lib/roles'
+import { GetAppBanner } from '@/components/MemberApp'
 import { VENDOR_AGREEMENT_SECTIONS, VENDOR_AGREEMENT_TITLE, VENDOR_AGREEMENT_VERSION } from '@/lib/vendor-agreement'
 
 export const LISTING_MAX = 12
@@ -181,6 +182,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
 
   return (
     <div style={{ fontFamily: 'Inter' }}>
+      <GetAppBanner reason="Get notified the moment someone requests one of your listings." storageKey="mk-app-banner-vendor" />
       {myServiceRoles.length === 0 && (
         <div style={{ fontSize: 13, color: muted, border: '1px dashed rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 8, padding: '14px 16px', marginBottom: 18, lineHeight: 1.55 }}>
           Listings are for <strong>Production Services</strong> members (vehicle, wardrobe, prop or equipment rental, catering). Add one of those roles in Edit profile and your listings will show on your directory profile.

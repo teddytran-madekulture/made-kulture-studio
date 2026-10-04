@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import JuneChatWidget from '@/components/JuneChatWidget'
 import { MarketingOverlays } from '@/components/MarketingTools'
+import { InstallCatcher } from '@/components/MemberApp'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
@@ -39,6 +40,10 @@ export const metadata: Metadata = {
   // Share image itself comes from app/opengraph-image.jpg + twitter-image.jpg
   // (Next file convention). This just asks X/Twitter for the big-photo card.
   twitter: { card: 'summary_large_image' },
+  // The installable Made Kulture app (2026-10-03, components/MemberApp.tsx).
+  // /admin overrides both with its own MK Admin manifest.
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: 'Made Kulture', statusBarStyle: 'black-translucent' },
 }
 
 // LocalBusiness structured data — how Google understands who/where we are.
@@ -81,6 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <JuneChatWidget />
         <MarketingOverlays />
+        <InstallCatcher />
       </body>
     </html>
   )

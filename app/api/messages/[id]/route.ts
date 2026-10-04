@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
+import { sendMemberPush } from '@/lib/member-push'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendNewMessageEmail } from '@/lib/email'
 import { sendMessageSMS } from '@/lib/sms'
@@ -80,6 +81,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const now = Date.now()
     const activeRecently = recipRead && now - new Date(recipRead).getTime() < 2 * 60 * 1000       // in the thread now
     const cooldownOk = !recipNotified || now - new Date(recipNotified).getTime() > 3 * 60 * 60 * 1000 // 3h per convo
+    // App push (migration 137): every message, unless they're in the thread
+    // right now. NOT throttled like the email — the tag collapses a burst into
+    // one notification per conversation instead.
+    if (!activeRecently) {
+      const { data: sp } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
+      await sendMemberPush(recipientId, { title: sp?.full_name || 'New message', body: text.slice(0, 140), url: `/account/messages/${params.id}`, tag: `msg-${params.id}` })
+    }
     if (!activeRecently && cooldownOk) {
       const { data: recipProf } = await service.from('customer_profiles').select('notify_email, notify_sms, phone').eq('id', recipientId).maybeSingle()
       const { data: senderProf } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
