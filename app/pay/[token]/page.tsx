@@ -162,8 +162,8 @@ export default function PayPage({ params }: { params: { token: string } }) {
               try {
                 const tok = await applePay.tokenize()
                 if (tok.status === 'OK') submitToken(tok.token, true)
-                else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Apple Pay failed — try a card.')
-              } catch (e: any) { setPayError(`Apple Pay failed — try a card. (${e?.message || 'unknown error'})`) }
+                else if (tok.status !== 'Cancel') setPayError(`Apple Pay: ${tok.status} ${JSON.stringify(tok.errors ?? [])}`)
+              } catch (e: any) { console.error('[apple-pay]', e); setPayError(`Apple Pay failed — try a card. (${e?.name || 'Error'}: ${e?.message || 'unknown error'}${e?.errors ? ' ' + JSON.stringify(e.errors) : ''}${e?.cause ? ' cause: ' + String(e.cause?.message || e.cause) : ''})`) }
             })
           }
         } catch { /* Apple Pay unavailable / domain not yet registered */ }
