@@ -4,7 +4,24 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 // Paging through a year+ of Square payments can take a few seconds on a cold
 // (uncached) load, so give the function headroom and never let Next cache it.
 export const dynamic = 'force-dynamic'
+// 2026-10-04: force-dynamic does NOT stop Next 14 from caching the fetch()
+// calls below in its Data Cache. Every Square page URL (begin_time + cursor)
+// is deterministic, so each page was served from the first copy ever fetched
+// and new payments past the last cached page never appeared - October sat
+// frozen at $409 for days. Same trap as the Supabase route-cache note.
+export const fetchCache = 'force-no-store'
 export const maxDuration = 30
+
+// Square's own Sales Report buckets by the LOCATION's local day (Central),
+// not UTC. A payment at 8pm on Sep 30 is September in Square and was October
+// here. Bucket the same way Square does so the two agree.
+const monthFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit' })
+function centralMonth(iso: string): string {
+  const parts = monthFmt.formatToParts(new Date(iso))
+  const y = parts.find(x => x.type === 'year')?.value
+  const m = parts.find(x => x.type === 'month')?.value
+  return `${y}-${m}`
+}
 
 // GET /api/admin/revenue
 // True collected revenue straight from Square — the money that actually hit the
@@ -52,6 +69,7 @@ export async function GET(req: NextRequest) {
       if (cursor) url.searchParams.set('cursor', cursor)
 
       const res = await fetch(url.toString(), {
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
           'Square-Version': '2025-01-23',
@@ -66,7 +84,7 @@ export async function GET(req: NextRequest) {
       for (const p of json.payments ?? []) {
         if (p.status !== 'COMPLETED') continue
         if (!p.created_at) continue
-        const month = String(p.created_at).slice(0, 7) // YYYY-MM (UTC)
+        const month = centralMonth(String(p.created_at)) // YYYY-MM in Central, like Square's report
         const total = Number(p.total_money?.amount ?? p.amount_money?.amount ?? 0) / 100
         const refunded = Number(p.refunded_money?.amount ?? 0) / 100
         const b = (months[month] ||= { gross: 0, net: 0, count: 0 })
