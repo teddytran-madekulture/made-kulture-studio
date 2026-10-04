@@ -62,8 +62,8 @@ export async function logBookingChange(service: SupabaseClient, input: BookingCh
     const m = await lateChangeMeter(service, { authUserId: input.authUserId, email: input.customerEmail })
     if (m.level === 'green') return
     const who = input.customerEmail || 'A customer'
-    const why = m.longestChain >= 3 && m.points < 3
-      ? `one session changed ${m.longestChain} times`
+    const why = m.longestChain >= 3 && m.lateChanges < m.points
+      ? `one session changed ${m.longestChain} times (${m.points} points)`
       : `${m.points} last-minute change${m.points === 1 ? '' : 's'} in 30 days`
     await sendOwnerPush({
       title: `${m.level === 'red' ? '🔴' : '🟠'} ${METER_LABEL[m.level]}: ${who}`,
