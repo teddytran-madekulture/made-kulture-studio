@@ -2042,6 +2042,8 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   // "charge the card you already have", which it never did.
   const [savedCards, setSavedCards] = useState<{ id: string; last_4: string; card_brand: string; exp_month: number | null; exp_year: number | null }[]>([])
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null)
+  const [cardsRefresh, setCardsRefresh] = useState(0)
+  const hadCardsRef = useRef(false)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -2054,10 +2056,20 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
         setSavedCards(cards)
         // Default to the card on file. It's what they expect to be charged, and
         // it's the option that can't be mistyped.
-        if (cards.length) setSelectedCardId(cards[0].id)
+        // Preselect only the FIRST time cards appear - a later refresh must not
+        // undo someone choosing "Use a different card".
+        if (cards.length && !hadCardsRef.current) setSelectedCardId(cards[0].id)
+        hadCardsRef.current = cards.length > 0
       } catch { /* never block checkout on this */ }
     })()
     return () => { cancelled = true }
+  }, [cardsRefresh])
+  // Someone who adds a card in another tab (the "Add a card" link) comes back
+  // to this one - pick the new card up without losing their booking.
+  useEffect(() => {
+    const onFocus = () => setCardsRefresh(n => n + 1)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
   }, [])
 
   const promoDiscount = promoApplied?.discountCents ?? 0
@@ -2366,7 +2378,9 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           )}
           {savedCards.length === 0 && (
             <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#d4a843', lineHeight: 1.6, marginBottom: 16, padding: '10px 14px', border: '1px solid rgba(212,168,67,0.3)', background: 'rgba(212,168,67,0.06)' }}>
-              To have someone else pay, you need a card saved with us first. Sign in and pay for one booking with a card, and it will be saved.
+              To have someone else pay, you need a card saved with us first.{' '}
+              <a href="/account/payment" target="_blank" rel="noopener" style={{ color: '#d4a843', textDecoration: 'underline' }}>Add a card</a>
+              {' '}(opens in a new tab, your booking stays here), or pay for this one with a card and it will be saved.
             </div>
           )}
           <button onClick={sendDelegate} disabled={!payerContact.trim() || delegating || savedCards.length === 0}
