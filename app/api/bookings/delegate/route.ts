@@ -14,6 +14,13 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { sendSMS, toE164 } from '@/lib/sms'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendOwnerPush } from '@/lib/push'
+import { Client, Environment } from 'square'
+import { findCardOnFileByEmail } from '@/lib/square-customer'
+
+const square = new Client({
+  accessToken: process.env.SQUARE_ACCESS_TOKEN!,
+  environment: process.env.SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox,
+})
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -80,6 +87,15 @@ export async function POST(req: NextRequest) {
       isMember = !!data.user
       sessionEmail = data.user?.email ?? null
     } catch { /* guest */ }
+    // 2026-10-04: someone else's card is charged and never saved, so the
+    // BOOKER must have their own card on file first - every booking needs a
+    // card behind it (damage, overtime, no-shows). Checked against the signed-in
+    // session, never the typed email.
+    const NEED_CARD = 'To have someone else pay, you need a card saved with us first. Sign in, pay for one booking with a card, and it will be saved.'
+    if (!sessionEmail) return NextResponse.json({ error: NEED_CARD }, { status: 400 })
+    const bookerCard = await findCardOnFileByEmail(square, sessionEmail)
+    if (!bookerCard) return NextResponse.json({ error: NEED_CARD }, { status: 400 })
+
     // Short-notice eligibility comes from the VERIFIED session, never body.email.
     const allowShortNotice = await sessionMayBookShortNotice(supabase, sessionEmail)
     const v = await validateAndPriceOrder(supabase, body, { isMember, allowShortNotice, payerContacts: [body.payerContact] })
@@ -134,6 +150,7 @@ export async function POST(req: NextRequest) {
       authUserId,
       notes:      body.notes,
       equipment:  body.equipment,
+      squareCardOnFileId: bookerCard.cardId,
     })
     if (!ins.ok) return NextResponse.json({ error: ins.error }, { status: 500 })
     const { bookingIds, orderGroup } = ins

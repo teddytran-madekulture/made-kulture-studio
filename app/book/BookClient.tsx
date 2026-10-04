@@ -2364,8 +2364,13 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
               {delegateError}
             </div>
           )}
-          <button onClick={sendDelegate} disabled={!payerContact.trim() || delegating}
-            style={{ width: '100%', background: (!payerContact.trim() || delegating) ? 'rgba(255,255,255,0.5)' : '#fff', border: 'none', padding: '16px', cursor: (!payerContact.trim() || delegating) ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: '#080808' }}>
+          {savedCards.length === 0 && (
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#d4a843', lineHeight: 1.6, marginBottom: 16, padding: '10px 14px', border: '1px solid rgba(212,168,67,0.3)', background: 'rgba(212,168,67,0.06)' }}>
+              To have someone else pay, you need a card saved with us first. Sign in and pay for one booking with a card, and it will be saved.
+            </div>
+          )}
+          <button onClick={sendDelegate} disabled={!payerContact.trim() || delegating || savedCards.length === 0}
+            style={{ width: '100%', background: (!payerContact.trim() || delegating || savedCards.length === 0) ? 'rgba(255,255,255,0.5)' : '#fff', border: 'none', padding: '16px', cursor: (!payerContact.trim() || delegating || savedCards.length === 0) ? 'not-allowed' : 'pointer', fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em', color: '#080808' }}>
             {delegating ? 'SENDING…' : `SEND PAYMENT LINK — $${grandTotal}`}
           </button>
         </div>
