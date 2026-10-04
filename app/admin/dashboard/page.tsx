@@ -15,7 +15,7 @@ import { bookingHourToISO } from '@/lib/booking-times'
 // ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
 // share the API routes' pricing instead of keeping a fourth copy of the rate
 // table. Do not import from lib/extensions here — that one pulls in Supabase.
-import { RATE_BY_NAME, guestSurchargePerHourOf } from '@/lib/guest-rate'
+import { RATE_BY_NAME, guestSurchargePerHourOf, effectiveHourlyRate } from '@/lib/guest-rate'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -4857,7 +4857,10 @@ export default function AdminDashboard() {
       {overtimeFor && (
         <OvertimeModal
           booking={overtimeFor as any}
-          rate={effectiveRateFor(overtimeFor.sets?.name ?? '', overtimeFor)}
+          // Overtime is real money on the customer's card, so it honours their
+          // negotiated rate (pricing_overrides) — same rule the server uses for
+          // EXTEND. effectiveRateFor stays override-free on purpose (editDiff).
+          rate={effectiveHourlyRate(overtimeFor.sets?.name ?? '', (overtimeFor as any).customers?.pricing_overrides, overtimeFor as any) || effectiveRateFor(overtimeFor.sets?.name ?? '', overtimeFor)}
           onClose={() => setOvertimeFor(null)}
           onSuccess={() => {
             const ob = overtimeFor
