@@ -1,7 +1,7 @@
 'use client'
 // The directory's own header (2026-10-02). It sits at the top of every
 // directory page so the network reads as its own site inside the studio's:
-// gold ◆ wordmark + Home · Explore · People · Castings · Messages, with a
+// gold ◆ wordmark + Home · Explore · People · Services · Castings · Messages, with a
 // quiet way back to booking the studio.
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -10,6 +10,7 @@ const TABS = [
   { key: 'home', label: 'Home', href: '/account/directory' },
   { key: 'explore', label: 'Explore', href: '/account/directory/explore' },
   { key: 'people', label: 'People', href: '/account/directory/explore?view=people' },
+  { key: 'services', label: 'Services', href: '/account/directory/services' },
   { key: 'castings', label: 'Castings', href: '/account/castings' },
   { key: 'messages', label: 'Messages', href: '/account/messages' },
 ]
@@ -21,6 +22,7 @@ export default function DirectoryHeader({ active, onView }: { active?: string; o
   const current = active ?? (
     path === '/account/directory' ? 'home'
     : path?.startsWith('/account/directory/explore') ? 'explore'
+    : path?.startsWith('/account/directory/services') ? 'services'
     : path?.startsWith('/account/castings') ? 'castings'
     : path?.startsWith('/account/messages') ? 'messages' : '')
   return (

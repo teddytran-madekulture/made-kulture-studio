@@ -72,12 +72,24 @@ export const ROLE_CATEGORIES: RoleCategory[] = [
   // ⚠️ Keep the label in sync with SERVICES_CATEGORY below.
   {
     label: 'Production Services',
-    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Catering'],
+    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Animal Wrangler', 'Catering'],
   },
 ]
 
 export const SERVICES_CATEGORY = 'Production Services'
 export const SERVICE_ROLES: string[] = ROLE_CATEGORIES.find(c => c.label === SERVICES_CATEGORY)?.roles ?? []
+/** Starter tags offered in the listing editor, per category. Tags are what
+ *  make the Services search find "snake" on a listing titled "Exotic Animal
+ *  Handling" — vendors can type their own too. */
+export const SERVICE_TAG_SUGGESTIONS: Record<string, string[]> = {
+  'Vehicle Rental': ['car', 'truck', 'classic car', 'luxury car', 'motorcycle', 'van', 'bucket truck', 'lift'],
+  'Wardrobe Rental': ['wardrobe', 'dress', 'gown', 'suit', 'vintage', 'costume', 'shoes', 'jewelry'],
+  'Prop Rental': ['prop', 'furniture', 'decor', 'vintage', 'neon sign', 'pole', 'dance pole', 'florals', 'backdrop'],
+  'Equipment Rental': ['lighting', 'camera', 'lens', 'grip', 'drone', 'audio', 'fog'],
+  'Animal Wrangler': ['animal', 'dog', 'cat', 'horse', 'snake', 'reptile', 'bird', 'exotic'],
+  'Catering': ['catering', 'craft services', 'food', 'coffee', 'drinks', 'snacks'],
+}
+
 /** Does this member offer a production service (and so get listings)? */
 export function isServiceMember(roles: string[] | null | undefined): boolean {
   const set = new Set(SERVICE_ROLES.map(r => r.toLowerCase()))

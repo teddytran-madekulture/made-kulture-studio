@@ -8,7 +8,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { track, trackNow } from '@/lib/track'
 
-export type PublicListing = { id: string; category: string; title: string; details: string; rate: string; notes: string; photos: string[] }
+export type PublicListing = {
+  id: string; category: string; title: string; details: string; rate: string; notes: string; photos: string[]
+  tags?: string[]
+  /** Set on the Services page, where listings from many vendors share one grid. */
+  vendor?: { id: string; name: string; avatar_url: string | null }
+  is_self?: boolean
+}
 
 const muted = 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))'
 const line = '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))'
@@ -48,7 +54,13 @@ function Photos({ l, idx, setIdx, aspect, fit, onOpen }: {
   )
 }
 
-export default function ListingsTab({ memberId, memberName, listings, isSelf }: { memberId: string; memberName: string; listings: PublicListing[]; isSelf: boolean }) {
+export default function ListingsTab({ memberId = '', memberName = '', listings, isSelf = false, showVendor = false, emptyText }: {
+  memberId?: string; memberName?: string; listings: PublicListing[]; isSelf?: boolean; showVendor?: boolean; emptyText?: string
+}) {
+  // Per-listing vendor (Services page) falls back to the profile's owner.
+  const vName = (l: PublicListing) => l.vendor?.name || memberName
+  const vId = (l: PublicListing) => l.vendor?.id || memberId
+  const mine = (l: PublicListing) => l.is_self ?? isSelf
   const router = useRouter()
   const [photoIdx, setPhotoIdx] = useState<Record<string, number>>({})
   const idxOf = (id: string) => photoIdx[id] ?? 0
@@ -73,19 +85,19 @@ export default function ListingsTab({ memberId, memberName, listings, isSelf }: 
   if (listings.length === 0) {
     return (
       <div style={{ fontFamily: 'Inter', fontSize: 14, color: muted, textAlign: 'center', padding: '48px 0', lineHeight: 1.6 }}>
-        {isSelf ? <>No listings yet. Add them in <a href="/account/profile?s=listings" style={{ color: 'var(--t-gold)' }}>Settings → Service listings</a>.</> : 'No listings right now.'}
+        {emptyText ?? (isSelf ? <>No listings yet. Add them in <a href="/account/profile?s=listings" style={{ color: 'var(--t-gold)' }}>Settings → Service listings</a>.</> : 'No listings right now.')}
       </div>
     )
   }
 
-  const openDetail = (l: PublicListing) => { setOpen(l); track('portfolio_open', { target_id: memberId, meta: { kind: 'listing', listing: l.id } }) }
+  const openDetail = (l: PublicListing) => { setOpen(l); track('portfolio_open', { target_id: vId(l), meta: { kind: 'listing', listing: l.id } }) }
   const startRequest = (l: PublicListing) => { setReq(l); setDate(''); setNote(''); setError('') }
 
   const send = async () => {
     if (!req || sending) return
     if (!date) { setError('Pick the date you need it.'); return }
     setSending(true); setError('')
-    trackNow('contact_click', { target_id: memberId, meta: { what: 'listing_request', listing: req.id } })
+    trackNow('contact_click', { target_id: vId(req), meta: { what: 'listing_request', listing: req.id } })
     const res = await fetch('/api/listings/request', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ listingId: req.id, date, note: note.trim() }),
@@ -103,12 +115,20 @@ export default function ListingsTab({ memberId, memberName, listings, isSelf }: 
         <div key={l.id} style={{ border: line, borderRadius: 10, overflow: 'hidden', background: 'var(--t-surface)', display: 'flex', flexDirection: 'column' }}>
           <Photos l={l} idx={idxOf(l.id)} setIdx={setIdxOf(l.id)} aspect="4 / 3" fit="cover" onOpen={() => openDetail(l)} />
           <div style={{ padding: '14px 16px', fontFamily: 'Inter', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {showVendor && l.vendor && (
+              <a href={`/account/directory/${l.vendor.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--t-fg)', marginBottom: 10 }}>
+                <span style={{ width: 24, height: 24, borderRadius: 12, overflow: 'hidden', background: 'var(--t-surface-hi, #222)', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 11 }}>
+                  {l.vendor.avatar_url ? <img src={l.vendor.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (l.vendor.name || '?').charAt(0).toUpperCase()}
+                </span>
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{l.vendor.name}</span>
+              </a>
+            )}
             <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--t-gold)', marginBottom: 4 }}>{l.category.toUpperCase()}</div>
             <button type="button" onClick={() => openDetail(l)} style={{ all: 'unset', cursor: 'pointer', fontSize: 16, fontWeight: 600, color: 'var(--t-fg)', marginBottom: 4 }}>{l.title}</button>
             {l.rate && <div style={{ fontSize: 14, color: 'var(--t-fg)', marginBottom: 8 }}>{l.rate}</div>}
             {l.details && <div style={{ fontSize: 13, color: muted, lineHeight: 1.55, marginBottom: 6, ...clamp2 }}>{l.details}</div>}
             <button type="button" onClick={() => openDetail(l)} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: 'var(--t-gold)', marginBottom: 12 }}>View details →</button>
-            {!isSelf && <button type="button" onClick={() => startRequest(l)} style={{ ...primaryBtn, marginTop: 'auto' }}>REQUEST</button>}
+            {!mine(l) && <button type="button" onClick={() => startRequest(l)} style={{ ...primaryBtn, marginTop: 'auto' }}>REQUEST</button>}
           </div>
         </div>
       ))}
@@ -129,13 +149,18 @@ export default function ListingsTab({ memberId, memberName, listings, isSelf }: 
               </div>
             )}
             <div style={{ padding: '18px 20px 22px' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--t-gold)', marginBottom: 4 }}>{open.category.toUpperCase()} · {memberName.toUpperCase()}</div>
+              <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--t-gold)', marginBottom: 4 }}>{open.category.toUpperCase()} · {vName(open).toUpperCase()}</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--t-fg)', marginBottom: 6 }}>{open.title}</div>
               {open.rate && <div style={{ fontSize: 16, color: 'var(--t-fg)', marginBottom: 14 }}>{open.rate}</div>}
               {open.details && <div style={{ fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 12 }}>{open.details}</div>}
               {open.notes && <div style={{ fontSize: 13, color: muted, lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 14, fontStyle: 'italic' }}>{open.notes}</div>}
-              <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.5, marginBottom: 16 }}>Pricing, payment, insurance and logistics are arranged directly with {memberName.split(' ')[0] || 'the vendor'}. Made Kulture isn’t part of the arrangement.</div>
-              {!isSelf && <button type="button" onClick={() => { const l = open; setOpen(null); startRequest(l) }} style={{ ...primaryBtn, width: '100%', padding: '14px 0' }}>REQUEST</button>}
+              {(open.tags ?? []).length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                  {(open.tags ?? []).map(t => <span key={t} style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 12, border: line, color: muted }}>{t}</span>)}
+                </div>
+              )}
+              <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.5, marginBottom: 16 }}>Pricing, payment, insurance and logistics are arranged directly with {vName(open).split(' ')[0] || 'the vendor'}. Made Kulture isn’t part of the arrangement.</div>
+              {!mine(open) && <button type="button" onClick={() => { const l = open; setOpen(null); startRequest(l) }} style={{ ...primaryBtn, width: '100%', padding: '14px 0' }}>REQUEST</button>}
             </div>
           </div>
         </div>
@@ -145,13 +170,13 @@ export default function ListingsTab({ memberId, memberName, listings, isSelf }: 
       {req && (
         <div onClick={() => !sending && setReq(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1001, display: 'grid', placeItems: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, background: 'var(--t-bg, #0d0d0d)', border: line, borderRadius: 10, padding: 20, fontFamily: 'Inter' }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--t-gold)' }}>REQUEST FROM {memberName.toUpperCase()}</div>
+            <div style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--t-gold)' }}>REQUEST FROM {vName(req).toUpperCase()}</div>
             <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--t-fg)', margin: '6px 0 16px' }}>{req.title}</div>
             <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: muted, marginBottom: 6 }}>DATE NEEDED</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} style={input} />
             <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: muted, margin: '14px 0 6px' }}>DETAILS <span style={{ color: 'var(--t-gold)' }}>· optional</span></label>
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={4} maxLength={1500} placeholder="Times, location, what the shoot is, pickup or delivery…" style={{ ...input, resize: 'vertical', lineHeight: 1.5 }} />
-            <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>This sends {memberName.split(' ')[0] || 'them'} a message. Made Kulture connects members but isn’t part of the arrangement: pricing, payment, insurance and logistics are between you and the vendor.</div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>This sends {vName(req).split(' ')[0] || 'them'} a message. Made Kulture connects members but isn’t part of the arrangement: pricing, payment, insurance and logistics are between you and the vendor.</div>
             {error && <div style={{ color: '#e6a0a0', fontSize: 13, marginTop: 10 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button type="button" onClick={send} disabled={sending} style={{ ...primaryBtn, flex: 1, opacity: sending ? 0.6 : 1 }}>{sending ? 'SENDING…' : 'SEND REQUEST'}</button>

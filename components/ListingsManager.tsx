@@ -6,7 +6,7 @@
 // [[silent-failure-pattern]].
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { SERVICE_ROLES } from '@/lib/roles'
+import { SERVICE_ROLES, SERVICE_TAG_SUGGESTIONS } from '@/lib/roles'
 import { VENDOR_AGREEMENT_SECTIONS, VENDOR_AGREEMENT_TITLE, VENDOR_AGREEMENT_VERSION } from '@/lib/vendor-agreement'
 
 export const LISTING_MAX = 12
@@ -20,13 +20,25 @@ export type Listing = {
   rate: string
   notes: string
   photos: string[]
+  tags: string[]
   active: boolean
   sort_order: number
 }
 
+export const LISTING_TAG_MAX = 15
+/** Lower-case, trim, collapse spaces, drop empties and duplicates. */
+export function cleanTags(raw: string[]): string[] {
+  const out: string[] = []
+  for (const t of raw) {
+    const v = t.toLowerCase().replace(/[#,]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30)
+    if (v && !out.includes(v)) out.push(v)
+  }
+  return out.slice(0, LISTING_TAG_MAX)
+}
+
 type Draft = Omit<Listing, 'id' | 'sort_order'> & { id?: string }
 
-const emptyDraft = (category: string): Draft => ({ category, title: '', details: '', rate: '', notes: '', photos: [], active: true })
+const emptyDraft = (category: string): Draft => ({ category, title: '', details: '', rate: '', notes: '', photos: [], tags: [], active: true })
 
 const muted = 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))'
 const line = '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))'
@@ -66,6 +78,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [tagInput, setTagInput] = useState('')
   // Vendor Agreement (migration 136): null = still checking.
   const [agreed, setAgreed] = useState<{ accepted: boolean; acceptedAt: string | null } | null>(null)
   const [signName, setSignName] = useState('')
@@ -76,7 +89,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
 
   const load = async (id: string) => {
     const { data, error } = await supabase.from('service_listings')
-      .select('id, category, title, details, rate, notes, photos, active, sort_order')
+      .select('id, category, title, details, rate, notes, photos, tags, active, sort_order')
       .eq('user_id', id).order('sort_order', { ascending: true }).order('created_at', { ascending: true })
     // A failed read must not look like "no listings yet".
     if (error) setError(`Couldn't load your listings: ${error.message}`)
@@ -131,7 +144,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
     setBusy(true); setError('')
     const row = {
       category: draft.category, title: draft.title.trim().slice(0, 120), details: draft.details.trim().slice(0, 1200),
-      rate: draft.rate.trim().slice(0, 80), notes: draft.notes.trim().slice(0, 600), photos: draft.photos, active: draft.active,
+      rate: draft.rate.trim().slice(0, 80), notes: draft.notes.trim().slice(0, 600), photos: draft.photos, tags: cleanTags(draft.tags), active: draft.active,
       updated_at: new Date().toISOString(),
     }
     const res = draft.id
@@ -204,7 +217,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
               <div style={{ fontSize: 12, color: muted }}>{l.category}{l.rate ? ` · ${l.rate}` : ''}{l.active ? '' : ' · HIDDEN'}</div>
             </div>
             <button type="button" onClick={() => toggle(l)} style={{ ...btn, background: 'transparent', border: line, color: muted }}>{l.active ? 'HIDE' : 'SHOW'}</button>
-            <button type="button" onClick={() => { setError(''); setDraft({ ...l }) }} style={{ ...btn, background: 'transparent', border: line, color: 'var(--t-fg)' }}>EDIT</button>
+            <button type="button" onClick={() => { setError(''); setDraft({ ...l, tags: l.tags ?? [] }) }} style={{ ...btn, background: 'transparent', border: line, color: 'var(--t-fg)' }}>EDIT</button>
             <button type="button" onClick={() => remove(l)} disabled={busy} style={{ ...btn, background: 'transparent', border: line, color: '#e6a0a0' }}>DELETE</button>
           </div>
         ))}
@@ -263,6 +276,34 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
           <textarea value={draft.details} onChange={e => setDraft({ ...draft, details: e.target.value })} maxLength={1200} rows={4} placeholder="What it is, condition, what's included." style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
           <label style={label}>NOTES <span style={{ color: 'var(--t-gold)' }}>· optional</span></label>
           <textarea value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })} maxLength={600} rows={2} placeholder="Delivery to the studio available. Deposit required. Driver included." style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} />
+
+          <label style={label}>SEARCH TAGS · {draft.tags.length}/{LISTING_TAG_MAX} <span style={{ color: 'var(--t-gold)' }}>· how members find this, e.g. car, snake, pole</span></label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: draft.tags.length ? 8 : 0 }}>
+            {draft.tags.map(t => (
+              <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '5px 10px', borderRadius: 14, background: 'rgba(var(--t-gold-rgb), 0.12)', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-gold-rgb), 0.4)' }}>
+                {t}
+                <button type="button" aria-label={`Remove ${t}`} onClick={() => setDraft({ ...draft, tags: draft.tags.filter(x => x !== t) })} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
+              </span>
+            ))}
+          </div>
+          <input value={tagInput} onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault()
+                if (tagInput.trim()) { setDraft({ ...draft, tags: cleanTags([...draft.tags, ...tagInput.split(',')]) }); setTagInput('') }
+              }
+            }}
+            onBlur={() => { if (tagInput.trim()) { setDraft({ ...draft, tags: cleanTags([...draft.tags, ...tagInput.split(',')]) }); setTagInput('') } }}
+            placeholder="Type a tag and press Enter" style={inputStyle} />
+          {(SERVICE_TAG_SUGGESTIONS[draft.category] ?? []).filter(t => !draft.tags.includes(t)).length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Suggestions:</span>
+              {(SERVICE_TAG_SUGGESTIONS[draft.category] ?? []).filter(t => !draft.tags.includes(t)).map(t => (
+                <button key={t} type="button" onClick={() => setDraft({ ...draft, tags: cleanTags([...draft.tags, t]) })}
+                  style={{ fontSize: 12, padding: '4px 10px', borderRadius: 14, background: 'transparent', color: muted, border: line, cursor: 'pointer' }}>+ {t}</button>
+              ))}
+            </div>
+          )}
 
           <label style={label}>PHOTOS · {draft.photos.length}/{LISTING_PHOTO_MAX}</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

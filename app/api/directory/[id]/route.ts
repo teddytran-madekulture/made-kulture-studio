@@ -45,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   // read their own rows, so this route is the one way others see them.
   const { data: listingRows, error: listErr } = await service
     .from('service_listings')
-    .select('id, category, title, details, rate, notes, photos')
+    .select('id, category, title, details, rate, notes, photos, tags')
     .eq('user_id', params.id)
     .eq('active', true)
     .order('sort_order', { ascending: true })
