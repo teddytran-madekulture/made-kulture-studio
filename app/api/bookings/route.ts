@@ -891,35 +891,13 @@ export async function POST(req: NextRequest) {
     //     One code on the shared front door, valid from the earliest start to
     //     the latest end across all set lines. Awaited so the SMS/email below
     //     can include it, but non-fatal — the booking is already saved.
-    let doorCode: string | null = null
-    let doorCodeBack: string | null = null
-    try {
-      const startMs = Math.min(...lines.map(l => Date.parse(l.startISO)))
-      const endMs   = Math.max(...lines.map(l => Date.parse(l.endISO)))
-      const winStart = new Date(startMs).toISOString()
-      const winEnd   = new Date(endMs).toISOString()
-      // Front door, and (when a back-door lock is configured) the back door too.
-      // Each lock's algoPIN is distinct — the same window yields two codes.
-      const pin     = await createBookingPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${body.name} ${primary.date}` })
-      if (pin) {
-        doorCode = pin.pin
-        await supabase.from('bookings').update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).in('id', bookingIds)
-      }
-      // Back door is written separately so a missing back-door column (migration
-      // 081 not yet run) can never roll back the front-door code above.
-      const pinBack = await createBackDoorPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${body.name} ${primary.date} back` })
-      if (pinBack) {
-        doorCodeBack = pinBack.pin
-        await supabase.from('bookings').update({ door_code_back: pinBack.pin, door_code_back_pin_id: pinBack.pinId }).in('id', bookingIds)
-      }
-    } catch (err) {
-      console.error('[bookings] door code generation error (non-fatal):', err)
-    }
-
-    // ── 11c. Google Calendar sync (studio calendar) ────────────────────────
-    //     One event per set line on the madekulture calendar. Gated on the
-    //     admin toggle (studio_settings.gcal_sync_enabled) + GCAL_* env vars.
-    //     Non-fatal — the booking is already saved.
+    //     2026-10-04: the two door codes and the calendar sync used to run one
+    //     after another (front door -> back door -> calendar), and that serial
+    //     chain was most of the wait after Face ID / card entry. They do not
+    //     depend on each other, so the calendar sync is STARTED here and the two
+    //     PINs are requested together; each result is still written separately
+    //     and each failure is still non-fatal, exactly as before.
+    const gcalWork = (async () => {
     try {
       if (gcalRows.length && await gcalSyncEnabled(supabase)) {
         for (const r of gcalRows) {
@@ -942,6 +920,40 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('[bookings] gcal sync error (non-fatal):', err)
+    }
+    })()
+
+    let doorCode: string | null = null
+    let doorCodeBack: string | null = null
+    try {
+      const startMs = Math.min(...lines.map(l => Date.parse(l.startISO)))
+      const endMs   = Math.max(...lines.map(l => Date.parse(l.endISO)))
+      const winStart = new Date(startMs).toISOString()
+      const winEnd   = new Date(endMs).toISOString()
+      // Front door, and (when a back-door lock is configured) the back door too.
+      // Each lock's algoPIN is distinct — the same window yields two codes.
+      const [frontRes, backRes] = await Promise.allSettled([
+        createBookingPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${body.name} ${primary.date}` }),
+        createBackDoorPin({ startISO: winStart, endISO: winEnd, accessName: `MK ${body.name} ${primary.date} back` }),
+      ])
+      if (frontRes.status === 'fulfilled' && frontRes.value) {
+        const pin = frontRes.value
+        doorCode = pin.pin
+        await supabase.from('bookings').update({ door_code: pin.pin, door_code_pin_id: pin.pinId }).in('id', bookingIds)
+      } else if (frontRes.status === 'rejected') {
+        console.error('[bookings] front door code error (non-fatal):', frontRes.reason)
+      }
+      // Back door is written separately so a missing back-door column (migration
+      // 081 not yet run) can never roll back the front-door code above.
+      if (backRes.status === 'fulfilled' && backRes.value) {
+        const pinBack = backRes.value
+        doorCodeBack = pinBack.pin
+        await supabase.from('bookings').update({ door_code_back: pinBack.pin, door_code_back_pin_id: pinBack.pinId }).in('id', bookingIds)
+      } else if (backRes.status === 'rejected') {
+        console.error('[bookings] back door code error (non-fatal):', backRes.reason)
+      }
+    } catch (err) {
+      console.error('[bookings] door code generation error (non-fatal):', err)
     }
 
     // ── 12. Flagged customer alert (non-blocking) ──────────────────────────
@@ -1018,7 +1030,7 @@ export async function POST(req: NextRequest) {
     )
 
     // Ensure the sends finish before the serverless function suspends.
-    await Promise.allSettled(notifications)
+    await Promise.allSettled([...notifications, gcalWork])
 
     return NextResponse.json({
       success: true,
