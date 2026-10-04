@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
 
   const { booking_id } = await req.json()
 
-  const { data: booking, error: fetchError } = await supabase
+  // SERVICE client (2026-10-04): bookings is no longer readable through the
+  // member's session — see app/api/account/cancel. Ownership is checked below.
+  const { data: booking, error: fetchError } = await service
     .from('bookings')
     .select('id, start_time, status, total_amount, acuity_appointment_id, acuity_block_ids, gcal_event_id, auth_user_id, customers(name, email, phone), sets(name)')
     .eq('id', booking_id)

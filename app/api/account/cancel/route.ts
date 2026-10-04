@@ -21,8 +21,12 @@ export async function POST(req: NextRequest) {
 
   const { booking_id } = await req.json()
 
-  // Fetch the booking — verify it belongs to this user
-  const { data: booking, error: fetchError } = await supabase
+  // Fetch the booking — verify it belongs to this user.
+  // SERVICE client (2026-10-04): bookings is no longer readable by members or
+  // the public (the "availability is public" RLS policy exposed every row,
+  // door codes included, to anyone with the anon key). Ownership is checked
+  // below, so nothing about who may cancel changes.
+  const { data: booking, error: fetchError } = await createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     .from('bookings')
     .select('id, start_time, end_time, status, total_amount, set_id, acuity_appointment_id, acuity_block_ids, gcal_event_id, auth_user_id, customers(name, email, phone), sets(name)')
     .eq('id', booking_id)
