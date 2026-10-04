@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
+import { accountEmails, hasPricing } from '@/lib/account-emails'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,6 +34,22 @@ export async function POST(req: NextRequest) {
   if (!primary) return NextResponse.json({ error: 'Primary customer not found' }, { status: 404 })
 
   const duplicates = customers.filter(c => c.id !== primaryId)
+  if (duplicates.length !== duplicateIds.length) return NextResponse.json({ error: 'Some duplicate records were not found.' }, { status: 404 })
+
+  // A website login finds its customer record by EMAIL. Deleting the record a
+  // login points at would cut that member off from their bookings, so the
+  // record with a login must be the one kept, and two logins never merge.
+  let accounts: Set<string>
+  try { accounts = await accountEmails(supabase) }
+  catch (e: any) { return NextResponse.json({ success: false, errors: [e.message] }, { status: 500 }) }
+  const hasAcct = (c: any) => !!c.email && accounts.has(String(c.email).trim().toLowerCase())
+  const dupWithAcct = duplicates.filter(hasAcct)
+  if (dupWithAcct.length > 0) {
+    const msg = hasAcct(primary) || dupWithAcct.length > 1
+      ? 'More than one of these records has a website login - not merged.'
+      : `Keep the record with the website login (${dupWithAcct[0].email}) - not merged.`
+    return NextResponse.json({ success: false, errors: [msg] }, { status: 409 })
+  }
 
   // Build merged field values: prefer primary's data, fill blanks from duplicates
   let mergedName             = primary.name
@@ -41,6 +58,7 @@ export async function POST(req: NextRequest) {
   let mergedSquareCustomerId = primary.square_customer_id
   let mergedAcuityClientId   = primary.acuity_client_id
   let mergedPricingOverrides = primary.pricing_overrides
+  let mergedBanned           = !!primary.banned
 
   // Collect every email/phone that differs from the primary so none is lost.
   const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
@@ -54,7 +72,10 @@ export async function POST(req: NextRequest) {
     if (mergedStatus === 'regular' && dup.status && dup.status !== 'regular') mergedStatus = dup.status
     if (!mergedSquareCustomerId && dup.square_customer_id) mergedSquareCustomerId = dup.square_customer_id
     if (!mergedAcuityClientId  && dup.acuity_client_id)  mergedAcuityClientId  = dup.acuity_client_id
-    if (!mergedPricingOverrides && dup.pricing_overrides) mergedPricingOverrides = dup.pricing_overrides
+    // An empty {} on the primary is not "has special pricing" - don't let it
+    // erase a duplicate's real special rates / Plus.
+    if (!hasPricing(mergedPricingOverrides) && hasPricing(dup.pricing_overrides)) mergedPricingOverrides = dup.pricing_overrides
+    if (dup.banned) mergedBanned = true
 
     // Preserve the duplicate's contact info + name (and any alternates it had).
     if (dup.email && norm(dup.email) !== norm(primary.email)) altEmails.add(dup.email.trim())
@@ -105,6 +126,7 @@ export async function POST(req: NextRequest) {
       square_customer_id: mergedSquareCustomerId,
       acuity_client_id:   mergedAcuityClientId,
       pricing_overrides:  mergedPricingOverrides,
+      banned:             mergedBanned,
       alt_emails:         mergedAltEmails,
       alt_phones:         mergedAltPhones,
       alt_names:          mergedAltNames,
@@ -113,7 +135,9 @@ export async function POST(req: NextRequest) {
 
   if (updateErr) errors.push(`update primary: ${updateErr.message}`)
 
-  // 4. Delete duplicates
+  // 4. Delete duplicates - ONLY if every move above worked. Deleting after a
+  //    failed move would leave rows pointing at a customer that no longer exists.
+  if (errors.length) return NextResponse.json({ success: false, mergedCount: 0, primaryId, errors }, { status: 500 })
   const { error: deleteErr } = await supabase
     .from('customers')
     .delete()

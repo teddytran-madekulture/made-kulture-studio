@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
+import { accountEmails, hasPricing } from '@/lib/account-emails'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('customers')
       .select(`
-        id, name, email, phone, status, banned, created_at,
+        id, name, email, phone, status, banned, created_at, pricing_overrides,
         bookings ( id )
       `)
       .order('created_at', { ascending: true })
@@ -32,6 +33,12 @@ export async function GET(req: NextRequest) {
     customers.push(...(data ?? []))
     if (!data || data.length < 1000) break
   }
+
+  let accounts: Set<string>
+  try { accounts = await accountEmails(supabase) }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+  const hasAcct = (c: any) => !!c.email && accounts.has(String(c.email).trim().toLowerCase())
+  const digits = (p: string | null) => { let d = String(p ?? '').replace(/\D/g, ''); if (d.length === 11 && d.startsWith('1')) d = d.slice(1); return d }
 
   const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ')
 
@@ -64,9 +71,24 @@ export async function GET(req: NextRequest) {
     const key = members.map(m => m.id).sort().join(',')
     if (seenGroups.has(key)) return
     seenGroups.add(key)
+    // Order = merge preference: the record a website login points at first
+    // (it MUST be the one kept), then most bookings, then oldest. The UI
+    // defaults KEEP to members[0].
+    const sorted = [...members].sort((a, b) =>
+      (hasAcct(b) ? 1 : 0) - (hasAcct(a) ? 1 : 0) ||
+      (b.bookings as any[]).length - (a.bookings as any[]).length ||
+      String(a.created_at).localeCompare(String(b.created_at)))
+    // Why a human should look before merging. MERGE ALL skips these.
+    const review: string[] = []
+    const accts = sorted.filter(hasAcct).length
+    if (accts > 1) review.push('Two website logins - merging would orphan one. Do not merge.')
+    if (reason === 'phone' && new Set(sorted.map(m => normalize(m.name ?? ''))).size > 1) review.push('Same phone, different names - could be family or a shared number.')
+    if (reason === 'name' && new Set(sorted.map(m => digits(m.phone)).filter(d => d.length >= 7)).size > 1) review.push('Same name, different phones - could be two different people.')
     groups.push({
       reason,
-      members: members.map(m => ({
+      review,
+      blocked: accts > 1,
+      members: sorted.map(m => ({
         id:           m.id,
         name:         m.name,
         email:        m.email,
@@ -75,6 +97,8 @@ export async function GET(req: NextRequest) {
         banned:       m.banned ?? false,
         createdAt:    m.created_at,
         bookingCount: (m.bookings as any[]).length,
+        hasAccount:   hasAcct(m),
+        hasPricing:   hasPricing(m.pricing_overrides),
       })),
     })
   }

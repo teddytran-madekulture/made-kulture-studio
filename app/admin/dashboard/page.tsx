@@ -3496,7 +3496,9 @@ export default function AdminDashboard() {
                     const res = await fetch('/api/admin/customers/duplicates')
                     const data = await res.json()
                     setDupGroups(data.groups ?? [])
-                    // Default: oldest record is primary for each group
+                    if (!res.ok) { setDupGroups([]); setDupLoading(false); alert(`Couldn't scan for duplicates: ${data.error || res.status}`); return }
+                    // Default KEEP = members[0]: the server orders the record with a
+                    // website login first, then most bookings, then oldest.
                     const defaults: Record<number, string> = {}
                     ;(data.groups ?? []).forEach((g: any, i: number) => { defaults[i] = g.members[0].id })
                     setDupPrimaryMap(defaults)
@@ -3524,12 +3526,14 @@ export default function AdminDashboard() {
                       <button
                         disabled={dupMergingAll}
                         onClick={async () => {
-                          if (!confirm(`Merge all ${dupGroups.length} duplicate groups? The oldest record in each group will be kept. This cannot be undone.`)) return
+                          const safe = dupGroups.filter((g: any) => !(g.review?.length)).length
+                          if (!confirm(`Merge ${safe} of ${dupGroups.length} groups? Groups flagged for review are skipped. In each group the highlighted KEEP record stays (a record with a website login is always kept). This cannot be undone.`)) return
                           setDupMergingAll(true)
                           const results: Record<number, string> = {}
                           for (let gi = 0; gi < dupGroups.length; gi++) {
                             if (dupMergeResult[gi]) continue // already merged
                             const group = dupGroups[gi]
+                            if (group.review?.length) { results[gi] = 'Skipped - needs review'; continue }
                             const primaryId    = dupPrimaryMap[gi] ?? group.members[0].id
                             const duplicateIds = group.members.filter((m: any) => m.id !== primaryId).map((m: any) => m.id)
                             const res = await fetch('/api/admin/customers/merge', {
@@ -3552,7 +3556,7 @@ export default function AdminDashboard() {
                           fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em',
                           color: dupMergingAll ? 'rgba(255,255,255,0.3)' : '#000',
                         }}>
-                        {dupMergingAll ? 'MERGING ALL…' : `MERGE ALL (${dupGroups.length})`}
+                        {dupMergingAll ? 'MERGING ALL…' : `MERGE ALL SAFE (${dupGroups.filter((g: any) => !(g.review?.length)).length})`}
                       </button>
                     )}
                     <button onClick={() => setDupPanelOpen(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -3570,6 +3574,9 @@ export default function AdminDashboard() {
                       <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.25)', marginBottom: 10 }}>
                         MATCHED BY {group.reason.toUpperCase()} — {group.members.length} RECORDS
                       </div>
+                      {(group.review ?? []).map((r: string) => (
+                        <div key={r} style={{ fontSize: 11, color: '#f59e0b', marginBottom: 8 }}>⚠ {r}</div>
+                      ))}
                       <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, marginBottom: 12 }}>
                         {group.members.map((m: any) => {
                           const isPrimary = dupPrimaryMap[gi] === m.id
@@ -3585,6 +3592,8 @@ export default function AdminDashboard() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                                   <span style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>{m.name}</span>
                                   {isPrimary && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#d4a843', background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.3)', padding: '1px 6px' }}>KEEP</span>}
+                                  {m.hasAccount && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.35)', padding: '1px 6px' }}>WEBSITE LOGIN</span>}
+                                  {m.hasPricing && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#e6c07a', border: '1px solid rgba(212,168,67,0.3)', padding: '1px 6px' }}>SPECIAL PRICING</span>}
                                 </div>
                                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{m.email} {m.phone ? `· ${m.phone}` : ''}</div>
                               </div>
@@ -3600,7 +3609,7 @@ export default function AdminDashboard() {
                           <span style={{ fontSize: 11, color: '#4ade80' }}>✓ {merged}</span>
                         ) : (
                           <button
-                            disabled={dupMerging === gi}
+                            disabled={dupMerging === gi || group.blocked}
                             onClick={async () => {
                               setDupMerging(gi)
                               const primaryId  = dupPrimaryMap[gi]
