@@ -16,6 +16,13 @@ const input: React.CSSProperties = { width: '100%', background: 'var(--t-surface
 export default function ListingsTab({ memberId, memberName, listings, isSelf }: { memberId: string; memberName: string; listings: PublicListing[]; isSelf: boolean }) {
   const router = useRouter()
   const [photoIdx, setPhotoIdx] = useState<Record<string, number>>({})
+  // Step through a listing's photos, wrapping at both ends.
+  const step = (l: PublicListing, dir: number) => setPhotoIdx(p => {
+    const n = l.photos.length
+    return n < 2 ? p : { ...p, [l.id]: (((p[l.id] ?? 0) + dir) % n + n) % n }
+  })
+  // Phone swipe: remember where the touch started per listing.
+  const [touchX, setTouchX] = useState<Record<string, number>>({})
   const [req, setReq] = useState<PublicListing | null>(null)
   const [date, setDate] = useState('')
   const [note, setNote] = useState('')
@@ -50,8 +57,23 @@ export default function ListingsTab({ memberId, memberName, listings, isSelf }: 
         const i = Math.min(photoIdx[l.id] ?? 0, Math.max(0, l.photos.length - 1))
         return (
           <div key={l.id} style={{ border: line, borderRadius: 10, overflow: 'hidden', background: 'var(--t-surface)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ position: 'relative', aspectRatio: '4 / 3', background: '#111' }}>
+            <div style={{ position: 'relative', aspectRatio: '4 / 3', background: '#111' }}
+              onTouchStart={e => setTouchX(t => ({ ...t, [l.id]: e.touches[0].clientX }))}
+              onTouchEnd={e => {
+                const x0 = touchX[l.id]
+                if (x0 == null) return
+                const dx = e.changedTouches[0].clientX - x0
+                if (Math.abs(dx) > 40) step(l, dx < 0 ? 1 : -1)
+              }}>
               {l.photos[i] && <img src={l.photos[i]} alt={l.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+              {l.photos.length > 1 && (<>
+                {([['prev', -1], ['next', 1]] as const).map(([k, dir]) => (
+                  <button key={k} type="button" aria-label={k === 'prev' ? 'Previous photo' : 'Next photo'} onClick={() => step(l, dir)}
+                    style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', ...(k === 'prev' ? { left: 8 } : { right: 8 }), width: 34, height: 34, borderRadius: 17, border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={k === 'prev' ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} /></svg>
+                  </button>
+                ))}
+              </>)}
               {l.photos.length > 1 && (
                 <div style={{ position: 'absolute', bottom: 8, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }}>
                   {l.photos.map((_, k) => (
