@@ -7,7 +7,7 @@ import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
-import { authUserIdForEmail, rewardFor } from '@/lib/rewards'
+import { authUserIdForEmail, rewardFor, addRewardForCharge } from '@/lib/rewards'
 
 // POST /api/admin/bookings/[id]/add-charge
 // Charge a customer for equipment they used and/or any one-off fee — AFTER THE
@@ -37,6 +37,8 @@ interface RawLine {
   equipmentId?: string | null
   unitRate?: number | string     // per-unit price (equipment lines)
   quantity?: number | string
+  /** Studio time billed here (overtime CHARGE NOW) earns rewards like gear. Fees don't. */
+  earns?: boolean
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -69,6 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         equipmentId: l.equipmentId || null,
         unitRate:    l.unitRate != null ? Number(l.unitRate) : null,
         quantity,
+        earns:       !!l.earns,
       }
     })
     if (clean.some(l => !(l.amount > 0))) {
@@ -222,16 +225,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { error: addOnErr } = await supabase.from('booking_add_ons').insert(rows)
     if (addOnErr) console.error('[add-charge] add_ons insert failed', addOnErr)
 
-    // Gear paid by CARD before the nightly payout earns like gear at checkout
-    // (Made Kulture Rewards). Fees don't earn; neither does the credit part.
-    if ((booking as any).reward_rate != null && !(booking as any).reward_paid_at) {
-      const gearCardCents = clean.reduce((s, l, i) => s + (l.equipmentId ? lineCents[i] - lineCredit[i] : 0), 0)
-      if (gearCardCents > 0) {
-        const { error: rErr } = await supabase.from('bookings')
-          .update({ reward_basis_cents: ((booking as any).reward_basis_cents ?? 0) + gearCardCents })
-          .eq('id', booking.id).is('reward_paid_at', null)
-        if (rErr) console.error('[add-charge] reward basis bump failed (non-fatal)', rErr)
-      }
+    // Gear and studio time (overtime) paid by CARD earn rewards; fees and the
+    // credit-paid part don't. Before tonight's payout this grows the basis;
+    // after it, a top-up is posted (lib/rewards addRewardForCharge).
+    {
+      const earnCardCents = clean.reduce((s, l, i) => s + ((l.equipmentId || l.earns) ? lineCents[i] - lineCredit[i] : 0), 0)
+      if (earnCardCents > 0) await addRewardForCharge(supabase, booking.id, earnCardCents, 'added charge')
     }
 
     // ── Reflect the charge on the booking total ─────────────────────────────

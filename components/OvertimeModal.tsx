@@ -133,7 +133,7 @@ export default function OvertimeModal({
       const r = await fetch(`/api/admin/bookings/${booking.id}/add-charge`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lines: [{ label: `${durationLabel(hours)} overtime — ${setName}`, amount }],
+          lines: [{ label: `${durationLabel(hours)} overtime — ${setName}`, amount, earns: true }],
           squareCardId: chosenCard.id,
           squareCustomerId: chosenCard.squareCustomerId,
           customerId: booking.customer_id,
