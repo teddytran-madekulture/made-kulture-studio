@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { normEmail } from '@/lib/customer-email'
+import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
 import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
@@ -91,11 +91,7 @@ export async function POST(req: NextRequest) {
     const squarePaymentId = paymentResult.payment!.id!
 
     // 2. Upsert customer in Supabase
-    const { data: customerData } = await supabase
-      .from('customers')
-      .upsert({ email: normEmail(email), name, phone }, { onConflict: 'email' })
-      .select('id')
-      .single()
+    const { data: customerData } = await upsertCustomerByEmail(supabase, { email, name, phone })
 
     // 3. Get set ID
     let setId: string | null = null

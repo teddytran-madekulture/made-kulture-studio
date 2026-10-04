@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { normEmail } from '@/lib/customer-email'
+import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
 import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
 import { computeVisits, fetchVisitRows, fetchPrior, type VisitInfo } from '@/lib/visits'
 import { isAdminAuthed } from '@/lib/admin-auth'
@@ -122,11 +122,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert customer
-  const { data: customerData } = await supabase
-    .from('customers')
-    .upsert({ email: normEmail(email), name, phone }, { onConflict: 'email' })
-    .select('id')
-    .single()
+  const { data: customerData } = await upsertCustomerByEmail(supabase, { email, name, phone })
 
   // Get set ID
   let setId: string | null = null
