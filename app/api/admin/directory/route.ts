@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
         phone: p.phone ?? null,
         instagram: p.instagram ?? null,
         avatar: p.avatar_url ?? null,
-        accountType: p.account_type === 'brand' ? 'brand' : p.account_type === 'creative' ? 'creative' : 'customer',
+        accountType: (['brand', 'creative', 'vendor'].includes(p.account_type) ? p.account_type : 'customer') as 'brand' | 'creative' | 'vendor' | 'customer',
         roles: p.roles ?? [],
         hasBio: !!(p.bio ?? '').trim(),
         hasVideo: !!(p.video_url ?? '').trim(),

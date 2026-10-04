@@ -283,7 +283,7 @@ export default function MemberProfilePage() {
       <button type="button" onClick={() => openList('following')}><b>{member.following}</b> following</button>
     </div>
   )
-  const category = [member.account_type === 'brand' ? 'Brand' : null, ...member.roles].filter(Boolean).join(' · ')
+  const category = [member.account_type === 'brand' ? 'Brand' : member.account_type === 'vendor' ? 'Vendor' : null, ...member.roles].filter(Boolean).join(' · ')
 
   return (
     <div className="ig-page">

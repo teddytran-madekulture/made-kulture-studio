@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { CREATIVE_ROLES } from '@/lib/roles'
+import { CREATIVE_ROLES, SERVICE_ROLES } from '@/lib/roles'
 import { cleanIgHandle } from '@/lib/directory-listing'
 import RolePicker from '@/components/RolePicker'
 
@@ -11,7 +11,7 @@ export default function SignupPage() {
   const router = useRouter()
   const [nextUrl, setNextUrl]  = useState('/account')
   const [form, setForm]       = useState({ full_name: '', email: '', password: '', phone: '', instagram: '', roles: [] as string[] })
-  const [accountType, setAccountType] = useState<'customer' | 'creative' | 'brand'>('customer')
+  const [accountType, setAccountType] = useState<'customer' | 'creative' | 'vendor' | 'brand'>('customer')
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
   const [directoryOptIn, setDirectoryOptIn] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -52,7 +52,7 @@ export default function SignupPage() {
       password: form.password,
       options: {
         data: {
-          full_name: form.full_name, phone: form.phone, roles: accountType === 'creative' ? form.roles : [],
+          full_name: form.full_name, phone: form.phone, roles: (accountType === 'creative' || accountType === 'vendor') ? form.roles : [],
           instagram: igHandle || null,
           directory_opt_in: accountType === 'customer' ? false : directoryOptIn,
           account_type: accountType,
@@ -131,8 +131,8 @@ export default function SignupPage() {
           )}
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: -4 }}>What brings you here?</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {([['customer', 'Just booking'], ['creative', 'Creative / Services'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
-              <button key={t} type="button" onClick={() => setAccountType(t)} style={{
+            {([['customer', 'Just booking'], ['creative', 'Creative'], ['vendor', 'Vendor'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
+              <button key={t} type="button" onClick={() => { setAccountType(t); setForm(f => ({ ...f, roles: [] })) }} style={{
                 flex: 1, padding: '10px 6px', borderRadius: 4, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
                 background: accountType === t ? '#fff' : 'transparent',
                 color: accountType === t ? '#080808' : 'rgba(255,255,255,0.6)',
@@ -143,8 +143,10 @@ export default function SignupPage() {
           {accountType !== 'customer' && (
             <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginTop: -4 }}>
               {accountType === 'creative'
-                ? 'Get listed in the creative directory, build a portfolio, and find collaborations. Rent out vehicles, wardrobe, props or gear? Pick a Production Services role and list them.'
-                : 'List your brand, post castings, and hire creatives from the community.'}
+                ? 'Get listed in the creative directory, build a portfolio, and find collaborations.'
+                : accountType === 'vendor'
+                  ? 'Rent out vehicles, wardrobe, props or gear, or work with animals? List what you offer so photographers and crews can request it.'
+                  : 'List your brand, post castings, and hire creatives from the community.'}
               {foundingLeft && foundingLeft.left > 0 && (
                 <div style={{ color: '#e6c07a', marginTop: 6 }}>
                   {foundingLeft.left} of {foundingLeft.cap} First 100 spots left: the first {foundingLeft.cap} complete profiles get a permanent First 100 badge, a cover photo and 15 portfolio photos.
@@ -152,7 +154,7 @@ export default function SignupPage() {
               )}
             </div>
           )}
-          <input placeholder={accountType === 'brand' ? 'Company name' : 'Full name'} value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
+          <input placeholder={accountType === 'brand' ? 'Company name' : accountType === 'vendor' ? 'Your name or business name' : 'Full name'} value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
           <input type="email" placeholder="Email address" value={form.email} onChange={set('email')} required style={inputStyle} />
           <input placeholder="Phone number" value={form.phone} onChange={set('phone')} style={inputStyle} />
           <input placeholder="Instagram (optional)" value={form.instagram} onChange={set('instagram')} style={inputStyle} />
@@ -162,6 +164,14 @@ export default function SignupPage() {
               value={form.roles}
               onChange={roles => setForm(f => ({ ...f, roles }))}
               options={roleOptions}
+            />
+          )}
+          {accountType === 'vendor' && (
+            <RolePicker
+              value={form.roles}
+              onChange={roles => setForm(f => ({ ...f, roles }))}
+              options={SERVICE_ROLES}
+              label="What do you offer?"
             />
           )}
 

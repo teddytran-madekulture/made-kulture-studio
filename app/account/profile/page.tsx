@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { PROFILE_SECTIONS } from '@/lib/settings-sections'
-import { CREATIVE_ROLES } from '@/lib/roles'
+import { CREATIVE_ROLES, SERVICE_ROLES } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
 import PortfolioManager from '@/components/PortfolioManager'
@@ -18,7 +18,7 @@ type ProfileLink = { label: string; url: string }
 
 interface Profile {
   id: string
-  account_type: 'customer' | 'creative' | 'brand'
+  account_type: 'customer' | 'creative' | 'vendor' | 'brand'
   full_name: string
   email: string
   phone: string
@@ -89,7 +89,7 @@ function ProfileSettings() {
       .then(d => {
         if (d.profile) setForm({
           ...d.profile,
-          account_type: ['customer', 'creative', 'brand'].includes(d.profile.account_type) ? d.profile.account_type : 'customer',
+          account_type: ['customer', 'creative', 'vendor', 'brand'].includes(d.profile.account_type) ? d.profile.account_type : 'customer',
           full_name: d.profile.full_name ?? '',
           phone: d.profile.phone ?? '',
           instagram: d.profile.instagram ?? '',
@@ -321,7 +321,7 @@ function ProfileSettings() {
         {sec === 'edit' && (<>
         <Field label="ACCOUNT TYPE">
           <div style={{ display: 'flex', gap: 8 }}>
-            {([['customer', 'Customer'], ['creative', 'Creative'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
+            {([['customer', 'Customer'], ['creative', 'Creative'], ['vendor', 'Vendor'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
               <button key={t} type="button" onClick={() => setForm(f => ({ ...f, account_type: t }))} style={{
                 flex: 1, padding: '10px 6px', borderRadius: 4, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
                 background: form.account_type === t ? 'var(--t-fg)' : 'transparent',
@@ -332,7 +332,7 @@ function ProfileSettings() {
           </div>
           {isCustomer && (
             <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', lineHeight: 1.5, marginTop: 8 }}>
-              A customer account is just for booking and managing your sessions. Switch to <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>Creative</strong> or <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>Brand</strong> to add a portfolio, roles, and join the directory.
+              A customer account is just for booking and managing your sessions. Switch to <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>Creative</strong>, <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>Vendor</strong> or <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))' }}>Brand</strong> to join the directory. Vendors list what they rent or provide.
             </div>
           )}
         </Field>
@@ -426,11 +426,11 @@ function ProfileSettings() {
         </Field>
 
         {!isBrand && (
-          <Field label="WHAT YOU DO" hint="for directory">
+          <Field label={form.account_type === 'vendor' ? 'WHAT YOU OFFER' : 'WHAT YOU DO'} hint="for directory">
             <RolePicker
               value={form.roles}
               onChange={roles => setForm(f => ({ ...f, roles }))}
-              options={roleOptions}
+              options={form.account_type === 'vendor' ? SERVICE_ROLES : roleOptions}
             />
           </Field>
         )}

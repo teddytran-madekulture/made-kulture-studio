@@ -200,7 +200,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
     <div style={{ fontFamily: 'Inter' }}>
       {myServiceRoles.length === 0 && (
         <div style={{ fontSize: 13, color: muted, border: '1px dashed rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 8, padding: '14px 16px', marginBottom: 18, lineHeight: 1.55 }}>
-          Listings are for <strong>Production Services</strong> members (vehicle, wardrobe, prop or equipment rental, catering). Add one of those roles in Edit profile and your listings will show on your directory profile.
+          Listings are for <strong>Production Services</strong> members (vehicle, wardrobe, prop or equipment rental, catering). Set your account type to <strong>Vendor</strong> (or add one of those roles) in Edit profile and your listings will show on your directory profile.
         </div>
       )}
       <div style={{ fontSize: 12, color: muted, marginBottom: 16, lineHeight: 1.5 }}>

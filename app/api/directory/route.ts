@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { isProfileComplete } from '@/lib/directory-listing'
+import { publicAccountType } from '@/lib/roles'
 import { claimFoundingSpots, FOUNDING_CAP } from '@/lib/founding'
 
 // Service client to read across profiles; we only ever expose opted-in members
@@ -72,7 +73,7 @@ export async function GET(req: NextRequest) {
   }
 
   const members = listed
-    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: m.account_type === 'brand' ? 'brand' : 'creative', founding_number: m.founding_number ?? null, profile_color: m.profile_color ?? null, photos: feedPhotos.get(m.id) ?? [] }))
+    .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: publicAccountType(m.account_type), founding_number: m.founding_number ?? null, profile_color: m.profile_color ?? null, photos: feedPhotos.get(m.id) ?? [] }))
 
   return NextResponse.json({ members, founding: { cap: FOUNDING_CAP, taken: Math.min(taken, FOUNDING_CAP) } })
 }

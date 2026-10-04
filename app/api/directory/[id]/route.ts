@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
+import { publicAccountType } from '@/lib/roles'
 import { creditsForImages, photosTaggingMember } from '@/lib/photo-credits'
 
 const service = createServiceClient(
@@ -76,7 +77,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     member: {
       id: p.id,
       full_name: p.full_name,
-      account_type: p.account_type === 'brand' ? 'brand' : 'creative',
+      account_type: publicAccountType(p.account_type),
       roles: p.roles ?? [],
       instagram: p.instagram ?? null,
       avatar_url: p.avatar_url ?? null,

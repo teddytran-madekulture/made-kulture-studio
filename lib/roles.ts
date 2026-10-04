@@ -77,6 +77,22 @@ export const ROLE_CATEGORIES: RoleCategory[] = [
 ]
 
 export const SERVICES_CATEGORY = 'Production Services'
+/** 2026-10-03: a 4th account type, 'vendor', for people who rent things or
+ *  provide a service to shoots (car owner, wardrobe house, animal wrangler).
+ *  Vendors pick from Production Services roles only; creatives can still add a
+ *  service role alongside their creative ones. Listings key off the ROLE
+ *  (isServiceMember), so both paths work. */
+export type AccountType = 'customer' | 'creative' | 'vendor' | 'brand'
+export const ACCOUNT_TYPES: AccountType[] = ['customer', 'creative', 'vendor', 'brand']
+/** What a directory card/badge calls this account type ('' for creatives). */
+export function accountTypeLabel(t: string | null | undefined): string {
+  return t === 'brand' ? 'Brand' : t === 'vendor' ? 'Vendor' : ''
+}
+/** Normalize for API output: anything unknown reads as creative. */
+export function publicAccountType(t: string | null | undefined): 'creative' | 'vendor' | 'brand' {
+  return t === 'brand' ? 'brand' : t === 'vendor' ? 'vendor' : 'creative'
+}
+
 export const SERVICE_ROLES: string[] = ROLE_CATEGORIES.find(c => c.label === SERVICES_CATEGORY)?.roles ?? []
 /** Starter tags offered in the listing editor, per category. Tags are what
  *  make the Services search find "snake" on a listing titled "Exotic Animal

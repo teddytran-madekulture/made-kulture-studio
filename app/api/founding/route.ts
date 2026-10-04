@@ -18,7 +18,7 @@ export async function GET() {
     let mine: number | null = null
     if (user) {
       const { data: me, error } = await service.from('customer_profiles')
-        .select('id, full_name, roles, bio, instagram, links, account_type, directory_opt_in, founding_number, founding_blocked, created_at')
+        .select('id, full_name, roles, bio, instagram, links, account_type, directory_opt_in, founding_number, founding_blocked, created_at, vendor_terms_accepted_at')
         .eq('id', user.id).maybeSingle()
       if (error) throw new Error(error.message)
       mine = me?.founding_number ?? null

@@ -56,7 +56,7 @@ export async function PUT(req: NextRequest) {
   if (typeof body.video_url === 'string') patch.video_url = body.video_url.slice(0, 300)
   if (typeof body.show_email === 'boolean') patch.show_email = body.show_email
   if (typeof body.show_phone === 'boolean') patch.show_phone = body.show_phone
-  if (['customer', 'creative', 'brand'].includes(body.account_type)) patch.account_type = body.account_type
+  if (['customer', 'creative', 'vendor', 'brand'].includes(body.account_type)) patch.account_type = body.account_type
   if (typeof body.notify_email === 'boolean') patch.notify_email = body.notify_email
   if (typeof body.notify_sms === 'boolean') patch.notify_sms = body.notify_sms
   // Credits + CV (migration 123).

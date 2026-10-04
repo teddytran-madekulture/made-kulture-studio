@@ -18,7 +18,7 @@ type Member = {
   phone: string | null
   instagram: string | null
   avatar: string | null
-  accountType: 'brand' | 'creative' | 'customer'
+  accountType: 'brand' | 'creative' | 'vendor' | 'customer'
   roles: string[]
   hasBio: boolean
   hasVideo: boolean

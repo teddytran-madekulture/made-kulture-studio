@@ -105,7 +105,7 @@ export default function DirectoryExplorePage() {
     const pq = peopleQuery.trim().toLowerCase()
     return members.filter(m => {
       if (foundingOnly && !m.founding_number) return false
-      if (servicesOnly && !isServiceMember(m.roles)) return false
+      if (servicesOnly && !(isServiceMember(m.roles) || m.account_type === 'vendor')) return false
       const roleMatch = selected.length === 0 || m.roles.some(r => selected.includes(r))
       const peopleMatch = !pq
         || (m.full_name || '').toLowerCase().includes(pq)
@@ -340,7 +340,7 @@ export default function DirectoryExplorePage() {
                     <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
                       {m.full_name}
-                      {m.account_type === 'brand' && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-link)', border: '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>BRAND</span>}
+                      {(m.account_type === 'brand' || m.account_type === 'vendor') && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: m.account_type === 'vendor' ? 'var(--t-gold)' : 'var(--t-link)', border: m.account_type === 'vendor' ? '1px solid rgba(var(--t-gold-rgb), 0.45)' : '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>{m.account_type === 'vendor' ? 'VENDOR' : 'BRAND'}</span>}
                     </div>
                     {m.founding_number ? <div style={{ marginTop: 5 }}><FoundingBadge number={m.founding_number} /></div> : null}
                     </div>
