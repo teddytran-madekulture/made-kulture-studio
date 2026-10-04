@@ -13,6 +13,7 @@
 // there isn't one (tokenized by Square in their browser — the raw number never
 // reaches this server; we only ever see a single-use nonce).
 
+import { addRewardForCharge } from '@/lib/rewards'
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
@@ -314,6 +315,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   await db.from('extension_requests')
     .update({ status: 'confirmed', payment_id: paymentId, paid_new_card: !!keyedSourceId })
     .eq('id', r.id)
+
+  // Extra time earns rewards like the original booking (lib/rewards).
+  await addRewardForCharge(db, r.booking_id, r.amount_cents, `${kind === 'overage' ? 'overtime' : 'extra time'} ${p.setName}`)
 
   // ── Everything below is non-fatal: the money and the booking are already right ──
 

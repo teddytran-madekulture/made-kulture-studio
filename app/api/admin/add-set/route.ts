@@ -9,6 +9,8 @@ import { createBookingPin, createBackDoorPin, doorCodeLinkLine } from '@/lib/igl
 import { bookingHourToISO } from '@/lib/booking-times'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
+import { rateFor, hasRateOverride } from '@/lib/guest-rate'
+import { rewardRateForEmail } from '@/lib/rewards'
 
 // Add another set to a customer — creates a SECOND, independent booking on a
 // DIFFERENT set (any date/time), since a plain extension can only push the end
@@ -37,7 +39,16 @@ function isoFor(date: string, hour: number): string {
 
 // Resolve set + rate, and whether it's free for [startISO, endISO). A full-studio
 // buyout (set_id null) blocks every set, so it counts as a conflict too.
-async function resolveAndCheck(setName: string, date: string, startHour: number, endHour: number) {
+// The customer's negotiated rate (customers.pricing_overrides) REPLACES the list
+// price, same rule as everywhere else (lib/guest-rate). 2026-10-03: this route
+// used to charge the bare list rate even for customers with special pricing.
+async function overridesFor(customerId: string | null | undefined): Promise<any> {
+  if (!customerId) return null
+  const { data } = await supabase.from('customers').select('pricing_overrides').eq('id', customerId).maybeSingle()
+  return data?.pricing_overrides ?? null
+}
+
+async function resolveAndCheck(setName: string, date: string, startHour: number, endHour: number, overrides: any = null) {
   const { data: setRow } = await supabase
     .from('sets').select('id, rate_per_hour').eq('name', setName).maybeSingle()
   if (!setRow) return { error: `Unknown set "${setName}".` as string }
@@ -55,7 +66,7 @@ async function resolveAndCheck(setName: string, date: string, startHour: number,
     .gt('end_time', startISO)
     .limit(1)
 
-  const rate  = Number(setRow.rate_per_hour) || 0
+  const rate  = hasRateOverride(setName, overrides) ? rateFor(setName, overrides) : (Number(setRow.rate_per_hour) || 0)
   const price = rate * (endHour - startHour)
   return { setId: setRow.id, rate, price, startISO, endISO, available: !(clash && clash.length) }
 }
@@ -71,7 +82,7 @@ export async function GET(req: NextRequest) {
   if (!setName || !date || !(endHour > startHour)) {
     return NextResponse.json({ error: 'setName, date, startHour, endHour required' }, { status: 400 })
   }
-  const r = await resolveAndCheck(setName, date, startHour, endHour)
+  const r = await resolveAndCheck(setName, date, startHour, endHour, await overridesFor(p.get('customerId')))
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: 400 })
   return NextResponse.json({ available: r.available, price: r.price, rate: r.rate })
 }
@@ -97,7 +108,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Re-check availability at execute time (schedule may have changed).
-  const r = await resolveAndCheck(setName, date, startHour, endHour)
+  const r = await resolveAndCheck(setName, date, startHour, endHour, await overridesFor(customerId))
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: 400 })
   if (!r.available) {
     return NextResponse.json({ error: `${setName} is already booked for that window.` }, { status: 409 })
@@ -137,6 +148,8 @@ export async function POST(req: NextRequest) {
       buyerEmailAddress: email || undefined,
     })
     const squarePaymentId = pay.payment!.id!
+    let rewardRate: number | null = null
+    try { rewardRate = await rewardRateForEmail(supabase, email) } catch (e) { console.error('[add-set] reward lock failed (non-fatal)', e) }
 
     // 3. Insert the new booking.
     const { data: booking, error: insErr } = await supabase
@@ -155,6 +168,8 @@ export async function POST(req: NextRequest) {
         square_payment_id:      squarePaymentId,
         square_card_on_file_id: savedCardId,
         source:                 'manual',
+        // Earns rewards like a checkout booking: whole card-paid amount is the basis.
+        ...(rewardRate != null ? { reward_rate: rewardRate, reward_basis_cents: Math.round(amount * 100) } : {}),
       })
       .select('id, check_in_token')
       .single()

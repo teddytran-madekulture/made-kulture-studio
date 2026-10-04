@@ -1,3 +1,4 @@
+import { addRewardForCharge } from '@/lib/rewards'
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
@@ -135,6 +136,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       charged: !!squarePaymentId,
     }, { status: conflict ? 409 : 500 })
   }
+
+  // Card-paid extra time earns rewards like the original booking.
+  if (squarePaymentId) await addRewardForCharge(db, params.id, p.priceCents, `extra time ${p.setName}`)
 
   await audit(g, 'booking.add_time', {
     entityType: 'booking', entityId: params.id, amountCents: body.charge ? p.priceCents : undefined,

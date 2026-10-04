@@ -164,6 +164,50 @@ export async function payDueRewards(db: any, now = new Date()): Promise<{ paid: 
   return res
 }
 
+// ── Money came IN after checkout → it earns too (2026-10-03) ─────────────────
+// Extra time, an added set, overtime — anything charged by card on top of a
+// booking that already has a locked reward_rate. Before the nightly payout it
+// just grows the basis (paid together tonight). After the payout it posts a
+// top-up reward right away, so a charge made at 11:30 PM still earns.
+// Same standing rule as the payout. Never throws — the charge already happened.
+export async function addRewardForCharge(db: any, bookingId: string | null | undefined, cardCents: number, label: string): Promise<{ added: number; mode: 'basis' | 'topup' | 'none' }> {
+  const none = { added: 0, mode: 'none' as const }
+  try {
+    if (!bookingId || !(cardCents > 0)) return none
+    const { data: b, error } = await db.from('bookings')
+      .select('id, status, reward_rate, reward_basis_cents, reward_cents, reward_paid_at, auth_user_id, customer_id, customers ( email )')
+      .eq('id', bookingId).maybeSingle()
+    if (error || !b || b.reward_rate == null) return none
+    const cents = Math.round(cardCents)
+
+    if (!b.reward_paid_at) {
+      const { data: upd } = await db.from('bookings')
+        .update({ reward_basis_cents: (b.reward_basis_cents ?? 0) + cents })
+        .eq('id', b.id).is('reward_paid_at', null).select('id')
+      if ((upd ?? []).length === 1) return { added: rewardFor(cents, Number(b.reward_rate)), mode: 'basis' }
+      // Payout won the race between our read and write — fall through to a top-up.
+    }
+
+    if (b.customer_id) {
+      const st = (await standingForCustomerIds(db, [b.customer_id])).get(b.customer_id)
+      if (st && !canEarnRewards(st)) return none
+    }
+    const authId = b.auth_user_id ?? await authUserIdForEmail(db, b.customers?.email)
+    if (!authId) return none
+    const reward = rewardFor(cents, Number(b.reward_rate))
+    if (reward <= 0) return none
+    const { error: insErr } = await db.from('credit_ledger').insert({
+      auth_user_id: authId, amount_cents: reward, kind: 'reward',
+      reason: `Reward · ${label} · ${Number(b.reward_rate)}% back`,
+      booking_id: b.id, created_by: 'system', expires_at: null,
+    })
+    if (insErr) { console.error('[rewards] top-up insert failed', b.id, insErr); return none }
+    // Keep reward_cents the running total so a later refund reverses correctly.
+    await db.from('bookings').update({ reward_cents: (b.reward_cents ?? 0) + reward }).eq('id', b.id)
+    return { added: reward, mode: 'topup' }
+  } catch (e) { console.error('[rewards] addRewardForCharge error (non-fatal)', e); return none }
+}
+
 // ── Money went back → take the matching reward back ─────────────────────────
 // Call from EVERY refund / credit-back path with the cents returned on this row.
 // Before payout it shrinks the basis; after payout it posts a negative ledger row.

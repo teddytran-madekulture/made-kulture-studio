@@ -70,7 +70,7 @@ export default function AddSetModal({ booking, sets, defaultDate, onClose, onSuc
     if (!setName || !date || !(endHour > startHour)) { setAvail('idle'); return }
     let on = true
     setAvail('checking'); setError(null)
-    const q = new URLSearchParams({ setName, date, startHour: String(startHour), endHour: String(endHour) })
+    const q = new URLSearchParams({ setName, date, startHour: String(startHour), endHour: String(endHour), customerId: booking.customer_id ?? '' })
     fetch(`/api/admin/add-set?${q}`)
       .then(r => r.json())
       .then(d => {
