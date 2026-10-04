@@ -131,7 +131,7 @@ export default function SignupPage() {
           )}
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: -4 }}>What brings you here?</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {([['customer', 'Just booking'], ['creative', 'Creative'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
+            {([['customer', 'Just booking'], ['creative', 'Creative / Services'], ['brand', 'Brand']] as const).map(([t, lbl]) => (
               <button key={t} type="button" onClick={() => setAccountType(t)} style={{
                 flex: 1, padding: '10px 6px', borderRadius: 4, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
                 background: accountType === t ? '#fff' : 'transparent',
@@ -143,7 +143,7 @@ export default function SignupPage() {
           {accountType !== 'customer' && (
             <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, marginTop: -4 }}>
               {accountType === 'creative'
-                ? 'Get listed in the creative directory, build a portfolio, and find collaborations.'
+                ? 'Get listed in the creative directory, build a portfolio, and find collaborations. Rent out vehicles, wardrobe, props or gear? Pick a Production Services role and list them.'
                 : 'List your brand, post castings, and hire creatives from the community.'}
               {foundingLeft && foundingLeft.left > 0 && (
                 <div style={{ color: '#e6c07a', marginTop: 6 }}>

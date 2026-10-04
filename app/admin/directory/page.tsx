@@ -24,6 +24,7 @@ type Member = {
   hasVideo: boolean
   linkCount: number
   photos: Photos
+  listings?: { active: number; hidden: number }
   optedIn: boolean
   onboarded: boolean
   joined: string | null
@@ -202,6 +203,7 @@ export default function AdminDirectoryPage() {
                 {m.photos.mature ? `, ${m.photos.mature} mature` : ''}
                 {m.linkCount ? `, ${m.linkCount} link${m.linkCount === 1 ? '' : 's'}` : ''}
                 {m.hasVideo ? ', video' : ''}
+                {m.listings && (m.listings.active + m.listings.hidden) > 0 ? `, ${m.listings.active} listing${m.listings.active === 1 ? '' : 's'}${m.listings.hidden ? ` (+${m.listings.hidden} hidden)` : ''}` : ''}
               </div>
 
               {m.optedIn && m.blockers.length > 0 && (

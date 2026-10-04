@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CREATIVE_ROLES } from '@/lib/roles'
+import { CREATIVE_ROLES, isServiceMember } from '@/lib/roles'
 import { track } from '@/lib/track'
 import FoundingBadge, { HexCrest } from '@/components/FoundingBadge'
 import { colorVars, colorByKey } from '@/lib/profile-colors'
@@ -54,6 +54,8 @@ export default function DirectoryExplorePage() {
   const [sortMode, setSortMode]   = useState<'common' | 'az'>('common')
   const [peopleQuery, setPeople]  = useState('')
   const [foundingOnly, setFoundingOnly] = useState(false)
+  // Production Services (vendors) only — lib/roles.ts SERVICE_ROLES.
+  const [servicesOnly, setServicesOnly] = useState(false)
   const [view, setView] = useState<'explore' | 'people'>('explore')
   useEffect(() => {
     try { if (new URLSearchParams(window.location.search).get('view') === 'people') setView('people') } catch {}
@@ -103,13 +105,14 @@ export default function DirectoryExplorePage() {
     const pq = peopleQuery.trim().toLowerCase()
     return members.filter(m => {
       if (foundingOnly && !m.founding_number) return false
+      if (servicesOnly && !isServiceMember(m.roles)) return false
       const roleMatch = selected.length === 0 || m.roles.some(r => selected.includes(r))
       const peopleMatch = !pq
         || (m.full_name || '').toLowerCase().includes(pq)
         || (m.instagram || '').toLowerCase().includes(pq)
       return roleMatch && peopleMatch
     }).sort((a, b) => rank(seed, a.id) - rank(seed, b.id))
-  }, [members, selected, peopleQuery, foundingOnly, seed])
+  }, [members, selected, peopleQuery, foundingOnly, servicesOnly, seed])
 
   // Explore feed: ONE photo per member, in shuffled member order. Which photo
   // rotates with the visit seed, so each visit shows a different piece of
@@ -202,8 +205,16 @@ export default function DirectoryExplorePage() {
             <HexCrest size={16} /> First 100
           </button>
         )}
-        {(selected.length > 0 || peopleQuery || foundingOnly) && (
-          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false) }}
+        {members.some(m => isServiceMember(m.roles)) && (
+          // Vendors often have listings rather than portfolio photos, so this
+          // jumps to the People view where every member shows.
+          <button onClick={() => { const on = !servicesOnly; setServicesOnly(on); if (on) { setView('people'); track('filter', { meta: { role: 'Services', results: members.filter(m => isServiceMember(m.roles)).length } }) } }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: servicesOnly ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', color: servicesOnly ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Services
+          </button>
+        )}
+        {(selected.length > 0 || peopleQuery || foundingOnly || servicesOnly) && (
+          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false); setServicesOnly(false) }}
             style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
             Clear
           </button>

@@ -40,6 +40,18 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq('hidden', false)
     .order('sort_order', { ascending: true })
 
+  // Production Services listings (migration 135). Read here with the service
+  // role AFTER the members-only gate above — the table's RLS only lets a member
+  // read their own rows, so this route is the one way others see them.
+  const { data: listingRows, error: listErr } = await service
+    .from('service_listings')
+    .select('id, category, title, details, rate, notes, photos')
+    .eq('user_id', params.id)
+    .eq('active', true)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (listErr) console.error('[directory/id] listings lookup failed:', listErr.message)
+
   // Photo credits (migration 133): who's credited on each photo, and photos in
   // OTHER members' portfolios that credit this member (the TAGGED tab).
   const credits = await creditsForImages(service, (images ?? []).map(i => i.id))
@@ -74,6 +86,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       phone: p.show_phone ? (p.phone ?? null) : null,
       portfolio: (images ?? []).map(i => ({ id: i.id, url: i.url, is_mature: i.is_mature, credits: credits.get(i.id) ?? [] })),
       tagged,
+      listings: listingRows ?? [],
       founding_number: p.founding_number ?? null,
       profile_color: p.profile_color ?? null,
       credits: Array.isArray(p.credits) ? p.credits : [],

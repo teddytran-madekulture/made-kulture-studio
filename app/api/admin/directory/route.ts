@@ -44,6 +44,16 @@ export async function GET(req: NextRequest) {
     if (pic.is_mature) row.mature++
   }
 
+  // Production Services listings per member (migration 135). Display-only, so
+  // a lookup failure logs and shows no count rather than breaking the roster.
+  const listingCounts: Record<string, { active: number; hidden: number }> = {}
+  const { data: lst, error: lstErr } = await supabase.from('service_listings').select('user_id, active')
+  if (lstErr) console.error('[admin/directory] listings lookup failed:', lstErr.message)
+  for (const l of lst ?? []) {
+    const c = listingCounts[l.user_id] ?? (listingCounts[l.user_id] = { active: 0, hidden: 0 })
+    if (l.active) c.active++; else c.hidden++
+  }
+
   // Emails and signup dates live in auth.users, not customer_profiles.
   const emails: Record<string, { email: string | null; created_at: string | null; confirmed: boolean }> = {}
   const { data: authData } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
@@ -73,6 +83,7 @@ export async function GET(req: NextRequest) {
         hasVideo: !!(p.video_url ?? '').trim(),
         linkCount: Array.isArray(p.links) ? p.links.length : 0,
         photos: ph,
+        listings: listingCounts[p.id] ?? { active: 0, hidden: 0 },
         optedIn: !!p.directory_opt_in,
         foundingNumber: (p as any).founding_number ?? null,
         onboarded: p.onboarded !== false,

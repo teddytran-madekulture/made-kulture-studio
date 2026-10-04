@@ -615,6 +615,22 @@ export async function sendNewMessageEmail(opts: { to: string; fromName: string; 
   return sendEmail('new_message', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `${opts.fromName} messaged you on Made Kulture`, html: layout(body) })
 }
 
+// A Production Services REQUEST (migration 135). Unlike sendNewMessageEmail it
+// is NOT throttled — a rental request is a lead, and a vendor who misses one
+// because a chat message went out an hour earlier has lost business.
+export async function sendListingRequestEmail(opts: { to: string; fromName: string; listingTitle: string; dateLabel: string; note: string; conversationId: string }) {
+  const link = `${APP_URL}/account/messages/${opts.conversationId}`
+  const noteHtml = opts.note ? `<p style="margin:0 0 24px;font-size:14px;color:#ccc;white-space:pre-wrap;">${esc(opts.note)}</p>` : ''
+  const body = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">New request</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:#999;"><strong style="color:#fff;">${esc(opts.fromName)}</strong> requested <strong style="color:#fff;">${esc(opts.listingTitle)}</strong> for <strong style="color:#fff;">${esc(opts.dateLabel)}</strong>.</p>
+    ${noteHtml}
+    ${NOTIF_BUTTON(link, 'Reply to request')}
+    ${NOTIF_FOOTER(`${APP_URL}/account/profile`)}
+  `
+  return sendEmail('listing_request', { from: FROM_EMAIL, reply_to: REPLY_TO, to: opts.to, subject: `Request: ${opts.listingTitle} on ${opts.dateLabel}`, html: layout(body) })
+}
+
 export async function sendCastingInterestEmail(opts: { to: string; interestedName: string; castingTitle: string; castingId: string }) {
   const link = `${APP_URL}/account/castings/${opts.castingId}`
   const body = `

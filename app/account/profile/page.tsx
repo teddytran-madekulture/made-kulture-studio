@@ -7,6 +7,7 @@ import { CREATIVE_ROLES } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
 import PortfolioManager from '@/components/PortfolioManager'
+import ListingsManager from '@/components/ListingsManager'
 import ImageCropper from '@/components/ImageCropper'
 import { stampCopyright } from '@/lib/jpeg-copyright'
 import { HexCrest } from '@/components/FoundingBadge'
@@ -310,7 +311,7 @@ function ProfileSettings() {
           </div>
         ) : null)}
 
-        {isCustomer && (sec === 'look' || sec === 'portfolio' || sec === 'credits') && (
+        {isCustomer && (sec === 'look' || sec === 'portfolio' || sec === 'listings' || sec === 'credits') && (
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px dashed rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 8, padding: '16px 18px', lineHeight: 1.55 }}>
             This is for directory profiles. Switch your account type to <strong>Creative</strong> or <strong>Brand</strong> in <Link href="/account/profile" style={{ color: 'var(--t-gold)' }}>Edit profile</Link> to use it.
           </div>
@@ -459,6 +460,9 @@ function ProfileSettings() {
             <PortfolioManager onCountChange={setPortfolioCount} ownerName={form.full_name} />
           </div>
         )}
+
+        {/* Production Services listings (migration 135). Saves per listing. */}
+        {!isCustomer && sec === 'listings' && <ListingsManager roles={form.roles} />}
 
         {!isCustomer && (<>
         {sec === 'edit' && (
@@ -623,7 +627,7 @@ function ProfileSettings() {
 
         </>)}
 
-        {sec !== 'portfolio' && !(isCustomer && (sec === 'look' || sec === 'credits')) && (
+        {sec !== 'portfolio' && sec !== 'listings' && !(isCustomer && (sec === 'look' || sec === 'credits')) && (
         <button type="submit" disabled={saving} style={{
           background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4,
           padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600,

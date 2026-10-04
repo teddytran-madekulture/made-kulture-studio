@@ -6,6 +6,7 @@ import { colorVars, colorByKey } from '@/lib/profile-colors'
 import { groupCredits, type Credit } from '@/lib/profile-credits'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import ListingsTab, { type PublicListing } from '@/components/ListingsTab'
 
 type PhotoCredit = { id: string; role: string; member: { id: string; name: string; avatar_url: string | null } | null; name: string | null; instagram: string | null; pending: boolean }
 // creditId / role / by are set when the photo is from ANOTHER member's portfolio
@@ -31,6 +32,7 @@ type Member = {
   phone: string | null
   portfolio: PortfolioImg[]
   tagged?: TaggedImg[]
+  listings?: PublicListing[]
   is_self: boolean
   followers: number
   following: number
@@ -105,7 +107,7 @@ export default function MemberProfilePage() {
       setReportMsg((d as any).error || 'Could not send that. Try again.')
     }
   }
-  const [tab, setTab] = useState<'portfolio' | 'tagged' | 'credits'>('portfolio')
+  const [tab, setTab] = useState<'listings' | 'portfolio' | 'tagged' | 'credits'>('portfolio')
   // ?tab=tagged — the "you were credited" email lands here.
   useEffect(() => {
     try { if (new URLSearchParams(window.location.search).get('tab') === 'tagged') setTab('tagged') } catch {}
@@ -188,6 +190,11 @@ export default function MemberProfilePage() {
         if (!r.ok) { setError(d.error ?? 'Could not load profile.'); setMember(null) }
         else {
           setMember(d.member); setFollowing(!!d.member.is_following); setFollowers(d.member.followers ?? 0)
+          // A vendor's listings ARE their profile — open on them, unless the
+          // visitor came from a "you were tagged" email (?tab=tagged).
+          let wantsTagged = false
+          try { wantsTagged = new URLSearchParams(window.location.search).get('tab') === 'tagged' } catch {}
+          if ((d.member.listings ?? []).length > 0 && !wantsTagged) setTab('listings')
           if (!d.member.is_self) track('profile_view', { target_id: d.member.id, meta: { photos: d.member.portfolio?.length ?? 0 } })
         }
         setLoading(false)
@@ -382,6 +389,12 @@ export default function MemberProfilePage() {
 
       {/* Tabs */}
       <div className="ig-tabs">
+        {(member.listings ?? []).length > 0 && (
+          <button type="button" className={`ig-tab${tab === 'listings' ? ' on' : ''}`} onClick={() => setTab('listings')}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>
+            LISTINGS
+          </button>
+        )}
         <button type="button" className={`ig-tab${tab === 'portfolio' ? ' on' : ''}`} onClick={() => setTab('portfolio')}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
           PORTFOLIO
@@ -398,7 +411,9 @@ export default function MemberProfilePage() {
         </button>
       </div>
 
-      {tab === 'tagged' ? (
+      {tab === 'listings' ? (
+        <ListingsTab memberId={member.id} memberName={member.full_name ?? ''} listings={member.listings ?? []} isSelf={member.is_self} />
+      ) : tab === 'tagged' ? (
         (member.tagged ?? []).length > 0 ? (
           <div className="ig-grid">
             {(member.tagged ?? []).map(t => {

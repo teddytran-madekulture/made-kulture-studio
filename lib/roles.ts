@@ -67,7 +67,22 @@ export const ROLE_CATEGORIES: RoleCategory[] = [
     label: 'Digital & Brand',
     roles: ['Content Creator', 'Influencer', 'Social Media Manager', 'Writer'],
   },
+  // 2026-10-03 — vendors. A member holding any of these gets LISTINGS on their
+  // profile (migration 135) and shows under the directory's SERVICES filter.
+  // ⚠️ Keep the label in sync with SERVICES_CATEGORY below.
+  {
+    label: 'Production Services',
+    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Catering'],
+  },
 ]
+
+export const SERVICES_CATEGORY = 'Production Services'
+export const SERVICE_ROLES: string[] = ROLE_CATEGORIES.find(c => c.label === SERVICES_CATEGORY)?.roles ?? []
+/** Does this member offer a production service (and so get listings)? */
+export function isServiceMember(roles: string[] | null | undefined): boolean {
+  const set = new Set(SERVICE_ROLES.map(r => r.toLowerCase()))
+  return (roles ?? []).some(r => set.has(r.toLowerCase()))
+}
 
 // Flat list of every built-in role (derived) — kept for the /api/roles route and
 // any surface that just needs the full set.
