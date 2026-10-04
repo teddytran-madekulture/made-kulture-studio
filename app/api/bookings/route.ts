@@ -57,6 +57,10 @@ interface BookingRequest {
    *  of typing one. Verified server-side against the SIGNED-IN user — never
    *  trusted as sent. */
   savedCardId?: string
+  /** true when sourceId is an Apple Pay / Google Pay token. A wallet token is
+   *  single-use and Square refuses to save it as a card on file ("Invalid card
+   *  data"), so it is charged directly instead. (2026-10-04) */
+  wallet?: boolean
 
   type:       'set' | 'studio'
   // Legacy single-set / studio fields (still supported):
@@ -580,6 +584,10 @@ export async function POST(req: NextRequest) {
     if (chargeCents > 0 && !body.sourceId) {
       return NextResponse.json({ error: 'Payment information is required.' }, { status: 400 })
     }
+    const isWallet = !!body.wallet && !body.savedCardId
+    if (isWallet && chargeCents <= 0) {
+      return NextResponse.json({ error: 'Nothing to charge — tap Confirm instead of Apple Pay / Google Pay.' }, { status: 400 })
+    }
     // Nothing to charge and no credit covering it → a truly $0 booking still
     // needs a card on file (for overages) unless the customer is comp-no-card.
     if (chargeCents === 0 && creditAppliedCents === 0 && !body.sourceId && !compNoCard) {
@@ -629,6 +637,8 @@ export async function POST(req: NextRequest) {
         // resolved from the typed email — otherwise Square rejects the payment.
         customerId = ownerSquareId
         savedCardId = body.savedCardId
+      } else if (isWallet) {
+        // Charged directly below; nothing is saved on file.
       } else {
         const { result: cardResult } = await square.cardsApi.createCard({
           idempotencyKey: randomUUID(),
@@ -677,7 +687,10 @@ export async function POST(req: NextRequest) {
         })
 
         const { result: paymentResult } = await square.paymentsApi.createPayment({
-          sourceId: savedCardId, idempotencyKey: randomUUID(),
+          sourceId: isWallet ? body.sourceId : savedCardId!, idempotencyKey: randomUUID(),
+          // A wallet card's fingerprint is only known once Square has it, so
+          // authorise first, screen it, then capture (or void) below.
+          ...(isWallet ? { autocomplete: false } : {}),
           amountMoney: { amount: BigInt(chargeCents), currency: 'USD' },
           customerId: customerId!, locationId: process.env.SQUARE_LOCATION_ID!,
           ...(orderId ? { orderId } : {}),
@@ -690,6 +703,21 @@ export async function POST(req: NextRequest) {
           buyerEmailAddress: body.email,
         })
         squarePaymentId = paymentResult.payment!.id!
+
+        if (isWallet) {
+          usedCard = paymentResult.payment?.cardDetails?.card ?? null
+          if (usedCard?.fingerprint) {
+            const screen = await screenBooking(supabase, {
+              fingerprint: usedCard.fingerprint, zip: usedCard.billingAddress?.postalCode, name: body.name,
+              excludeIds: ownIds, where: 'website checkout (wallet)', bookerLabel,
+            })
+            if (screen.block) {
+              await square.paymentsApi.cancelPayment(squarePaymentId).catch(e => console.error('[bookings] wallet void failed', e))
+              return NextResponse.json({ error: await blockMessage() }, { status: 403 })
+            }
+          }
+          await square.paymentsApi.completePayment(squarePaymentId, {})
+        }
       }
     }
 

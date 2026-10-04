@@ -2125,14 +2125,14 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   })
 
   // Shared booking submission used by both card and Google Pay
-  const submitBooking = async (sourceId: string, savedCardId?: string) => {
+  const submitBooking = async (sourceId: string, savedCardId?: string, wallet = false) => {
     setPaying(true)
     setPayError(null)
     try {
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId, savedCardId, ...bookingPayload() }),
+        body: JSON.stringify({ sourceId, savedCardId, wallet, ...bookingPayload() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -2235,7 +2235,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           document.getElementById('google-pay-button')?.addEventListener('click', async () => {
             try {
               const tok = await googlePay.tokenize()
-              if (tok.status === 'OK') submitBooking(tok.token)
+              if (tok.status === 'OK') submitBooking(tok.token, undefined, true)
               else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Google Pay failed — try a card.')
             } catch (e: any) { setPayError(`Google Pay failed — try a card. (${e?.message || 'unknown error'})`) }
           })
@@ -2258,7 +2258,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
             btn.addEventListener('click', async () => {
               try {
                 const tok = await applePay.tokenize()
-                if (tok.status === 'OK') submitBooking(tok.token)
+                if (tok.status === 'OK') submitBooking(tok.token, undefined, true)
                 else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Apple Pay failed — try a card.')
               } catch (e: any) { setPayError(`Apple Pay failed — try a card. (${e?.message || 'unknown error'})`) }
             })
