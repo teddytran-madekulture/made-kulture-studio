@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
+import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { planExtension, durationLabel, type ExtensionKind } from '@/lib/extensions'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { patchCalendarEvent } from '@/lib/gcal'
@@ -192,9 +193,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     let profileUserId: string | null = b.auth_user_id ?? null
     if (!profileUserId && customer?.email) {
       try {
-        const { data: authUsers } = await (db as any).auth.admin.listUsers()
-        const match = authUsers?.users?.find((u: any) => u.email?.toLowerCase() === String(customer.email).toLowerCase())
-        profileUserId = match?.id ?? null
+        profileUserId = await findAuthUserIdByEmail(db as any, customer.email)
       } catch (e) {
         console.error('[extension] auth email lookup failed', e)
       }

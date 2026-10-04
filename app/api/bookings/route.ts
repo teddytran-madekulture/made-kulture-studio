@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
+import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
@@ -697,9 +698,9 @@ export async function POST(req: NextRequest) {
     const supabaseCustomerId = customerData?.id
     await rememberCard(supabase, supabaseCustomerId, usedCard)
 
-    const { data: authUsers } = await supabase.auth.admin.listUsers()
-    const authUser = authUsers?.users?.find((u: any) => u.email === body.email)
-    const authUserId = authUser?.id ?? null
+    let authUserId: string | null = null
+    try { authUserId = await findAuthUserIdByEmail(supabase, body.email) }
+    catch (e) { console.error('[bookings] auth lookup failed (non-fatal):', e) }
     if (authUserId && customerId) {
       await supabase.from('customer_profiles')
         .update({ square_customer_id: customerId })

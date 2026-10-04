@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
+import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { validateAndPriceOrder, insertBookingRows, fmt12, type BookingCoreInput } from '@/lib/booking-core'
@@ -120,8 +121,7 @@ export async function POST(req: NextRequest) {
 
     let authUserId: string | null = null
     try {
-      const { data: authUsers } = await supabase.auth.admin.listUsers()
-      authUserId = authUsers?.users?.find((u: any) => u.email === body.email)?.id ?? null
+      authUserId = await findAuthUserIdByEmail(supabase, body.email)
     } catch { /* non-fatal */ }
 
     // 4. Insert the held booking row(s) — status pending_payment holds the slot.

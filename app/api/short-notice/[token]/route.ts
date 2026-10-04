@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail } from '@/lib/customer-email'
+import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
@@ -387,8 +388,7 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   let authUserId: string | null = null
   let squareCustomerId: string | null = null
   try {
-    const { data: authUsers } = await service.auth.admin.listUsers()
-    authUserId = authUsers?.users?.find((u: any) => u.email === email)?.id ?? null
+    authUserId = await findAuthUserIdByEmail(service, email)
     if (authUserId) {
       const { data: prof } = await service
         .from('customer_profiles').select('square_customer_id').eq('id', authUserId).maybeSingle()
@@ -396,6 +396,25 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
     }
   } catch (e) {
     console.error('[approve_charge] auth/profile lookup failed (non-fatal):', e)
+  }
+  // 2026-10-04: the CARD is the authority on whose card it is. Square refuses a
+  // payment whose customerId does not own the card, and the profile lookup
+  // above can miss (or point at a duplicate Square profile). Ask Square which
+  // customer owns the card the member chose; fall back to the profile only if
+  // Square cannot answer.
+  if (reqRow.square_card_id) {
+    try {
+      const res = await square.cardsApi.retrieveCard(reqRow.square_card_id)
+      const owner = res.result.card?.customerId ?? null
+      if (owner) {
+        if (squareCustomerId && squareCustomerId !== owner) {
+          console.warn('[approve_charge] profile Square customer differs from card owner; using card owner')
+        }
+        squareCustomerId = owner
+      }
+    } catch (e) {
+      console.error('[approve_charge] card owner lookup failed (non-fatal):', e)
+    }
   }
 
   // ── Re-price and re-check the slot AT APPROVAL TIME ──────────────────────
