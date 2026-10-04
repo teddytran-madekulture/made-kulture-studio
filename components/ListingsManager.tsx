@@ -7,7 +7,6 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { SERVICE_ROLES } from '@/lib/roles'
-import { GetAppBanner } from '@/components/MemberApp'
 import { VENDOR_AGREEMENT_SECTIONS, VENDOR_AGREEMENT_TITLE, VENDOR_AGREEMENT_VERSION } from '@/lib/vendor-agreement'
 
 export const LISTING_MAX = 12
@@ -72,6 +71,8 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
   const [signName, setSignName] = useState('')
   const [tick, setTick] = useState(false)
   const [signing, setSigning] = useState(false)
+  const [textMe, setTextMe] = useState(true)
+  const [phone, setPhone] = useState('')
 
   const load = async (id: string) => {
     const { data, error } = await supabase.from('service_listings')
@@ -92,6 +93,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
           // A failed check must not read as "not signed" and nag a vendor who has.
           if (!ok) { setError(d.error || "Couldn't check your vendor agreement."); return }
           setAgreed({ accepted: !!d.accepted, acceptedAt: d.acceptedAt ?? null })
+          if (d.phone) setPhone(String(d.phone))
         }).catch(() => setError("Couldn't check your vendor agreement."))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,7 +173,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
     if (!tick) { setError('Tick the box to agree.'); return }
     if (signName.trim().length < 2) { setError('Type your full name to sign.'); return }
     setSigning(true); setError('')
-    const r = await fetch('/api/listings/agreement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: signName.trim(), agree: true }) })
+    const r = await fetch('/api/listings/agreement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: signName.trim(), agree: true, textMe, phone }) })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) setError(d.error || 'Could not save your agreement.')
     else setAgreed({ accepted: true, acceptedAt: d.acceptedAt ?? new Date().toISOString() })
@@ -182,7 +184,6 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
 
   return (
     <div style={{ fontFamily: 'Inter' }}>
-      <GetAppBanner reason="Get notified the moment someone requests one of your listings." storageKey="mk-app-banner-vendor" />
       {myServiceRoles.length === 0 && (
         <div style={{ fontSize: 13, color: muted, border: '1px dashed rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 8, padding: '14px 16px', marginBottom: 18, lineHeight: 1.55 }}>
           Listings are for <strong>Production Services</strong> members (vehicle, wardrobe, prop or equipment rental, catering). Add one of those roles in Edit profile and your listings will show on your directory profile.
@@ -225,6 +226,14 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
               <input type="checkbox" checked={tick} onChange={e => setTick(e.target.checked)} style={{ marginTop: 3 }} />
               I have read and agree to the {VENDOR_AGREEMENT_TITLE}. I understand Made Kulture is not a party to my rentals and does not handle payment, logistics, insurance or disputes.
             </label>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 14, fontSize: 13, color: 'var(--t-fg)', cursor: 'pointer', lineHeight: 1.5 }}>
+              <input type="checkbox" checked={textMe} onChange={e => setTextMe(e.target.checked)} style={{ marginTop: 3 }} />
+              Text me when someone requests one of my listings. Msg and data rates may apply; reply STOP to opt out.
+            </label>
+            {textMe && (<>
+              <label style={label}>MOBILE NUMBER</label>
+              <input value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" maxLength={20} placeholder="(713) 555-0123" style={inputStyle} />
+            </>)}
             <label style={label}>TYPE YOUR FULL NAME TO SIGN</label>
             <input value={signName} onChange={e => setSignName(e.target.value)} maxLength={120} placeholder="Full name" style={inputStyle} />
             <button type="button" onClick={sign} disabled={signing} style={{ ...btn, background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', marginTop: 14, opacity: signing ? 0.6 : 1 }}>{signing ? 'SAVING…' : 'I AGREE'}</button>

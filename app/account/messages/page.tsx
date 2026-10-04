@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { GetAppBanner } from '@/components/MemberApp'
 
 type Conv = {
   id: string
@@ -33,7 +32,6 @@ export default function MessagesPage() {
   return (
     <div>
       <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 36, margin: '0 0 24px' }}>MESSAGES</h1>
-      <GetAppBanner reason="Get a notification the moment someone messages you." />
 
       {loading ? (
         <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>Loading…</div>

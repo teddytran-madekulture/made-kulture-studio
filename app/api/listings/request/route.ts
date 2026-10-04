@@ -10,6 +10,7 @@ import { createClient as createService } from '@supabase/supabase-js'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { sendListingRequestEmail } from '@/lib/email'
 import { sendMemberPush } from '@/lib/member-push'
+import { sendListingRequestSMS } from '@/lib/sms'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
   let emailed = false
   try {
     const [{ data: vendorProf }, { data: senderProf }, { data: authUser }] = await Promise.all([
-      service.from('customer_profiles').select('notify_email').eq('id', listing.user_id).maybeSingle(),
+      service.from('customer_profiles').select('notify_email, notify_sms, phone').eq('id', listing.user_id).maybeSingle(),
       service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle(),
       service.auth.admin.getUserById(listing.user_id),
     ])
@@ -86,6 +87,11 @@ export async function POST(req: NextRequest) {
       // after doesn't send a second "new message" email on top of this one.
       const vCol = a === listing.user_id ? 'notified_a_at' : 'notified_b_at'
       await service.from('conversations').update({ [vCol]: new Date().toISOString() }).eq('id', convId)
+    }
+    // Text the vendor too, if they opted in (Vendor Agreement step or
+    // Settings -> Directory & notifications). Unthrottled, like the email.
+    if (vendorProf?.notify_sms === true && vendorProf?.phone) {
+      await sendListingRequestSMS(vendorProf.phone, senderProf?.full_name || 'A member', listing.title, label, convId!)
     }
   } catch (e) {
     console.error('[listings/request] vendor email failed:', e)

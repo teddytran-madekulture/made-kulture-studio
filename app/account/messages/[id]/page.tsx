@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { GetAppBanner } from '@/components/MemberApp'
 import { createClient } from '@/lib/supabase/client'
 import { linkify } from '@/lib/linkify'
 
@@ -77,7 +76,6 @@ export default function ThreadPage() {
   if (error && !meta) return (
     <div style={{ paddingTop: 20 }}>
       <Link href="/account/messages" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Messages</Link>
-      <GetAppBanner reason="Know the moment they reply." />
       <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', paddingTop: 20 }}>{error}</div>
     </div>
   )

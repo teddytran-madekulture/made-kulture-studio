@@ -18,13 +18,15 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data, error } = await service.from('customer_profiles')
-    .select('vendor_terms_accepted_at, vendor_terms_version').eq('id', user.id).maybeSingle()
+    .select('vendor_terms_accepted_at, vendor_terms_version, phone, notify_sms').eq('id', user.id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({
     accepted: !!data?.vendor_terms_accepted_at,
     acceptedAt: data?.vendor_terms_accepted_at ?? null,
     version: data?.vendor_terms_version ?? null,
     current: VENDOR_AGREEMENT_VERSION,
+    phone: data?.phone ?? '',
+    notifySms: data?.notify_sms === true,
   })
 }
 
@@ -37,8 +39,17 @@ export async function POST(req: NextRequest) {
   if (name.length < 2) return NextResponse.json({ error: 'Type your full name to sign.' }, { status: 400 })
   if (b.agree !== true) return NextResponse.json({ error: 'Tick the box to agree.' }, { status: 400 })
 
+  // Optional: "text me when someone requests a listing" — turns on the
+  // existing notify_sms preference and saves the number if one was typed.
+  const patch: Record<string, unknown> = { vendor_terms_accepted_at: new Date().toISOString(), vendor_terms_version: VENDOR_AGREEMENT_VERSION, vendor_terms_name: name }
+  if (b.textMe === true) {
+    const digits = String(b.phone || '').replace(/[^\d]/g, '')
+    if (digits.length < 10) return NextResponse.json({ error: 'Add a mobile number for request texts, or untick that box.' }, { status: 400 })
+    patch.phone = digits.slice(-10)
+    patch.notify_sms = true
+  }
   const { data, error } = await service.from('customer_profiles')
-    .update({ vendor_terms_accepted_at: new Date().toISOString(), vendor_terms_version: VENDOR_AGREEMENT_VERSION, vendor_terms_name: name })
+    .update(patch)
     .eq('id', user.id).select('vendor_terms_accepted_at')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data?.length) return NextResponse.json({ error: 'Your profile was not found — finish Edit profile first.' }, { status: 404 })

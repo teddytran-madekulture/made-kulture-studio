@@ -195,6 +195,16 @@ export async function sendMessageSMS(to: string, fromName: string, conversationI
   return sendSMS(num, `${fromName} messaged you on Made Kulture: ${APP_URL}/account/messages/${conversationId} (reply STOP to opt out)`)
 }
 
+// A Production Services REQUEST (2026-10-03). Sent EVERY time (unlike the 3h-
+// throttled message text) to vendors who opted in — a request is a lead.
+// Plain ASCII only: one curly quote or dash re-encodes the whole text to UCS-2.
+export async function sendListingRequestSMS(to: string, fromName: string, listingTitle: string, dateLabel: string, conversationId: string): Promise<void> {
+  const num = toE164(to)
+  if (!num) return
+  const title = listingTitle.length > 40 ? listingTitle.slice(0, 40) + '...' : listingTitle
+  return sendSMS(num, `Made Kulture: new request for ${title} on ${dateLabel} from ${fromName}. Reply here: ${APP_URL}/account/messages/${conversationId} (reply STOP to opt out)`)
+}
+
 export async function sendCastingInterestSMS(to: string, interestedName: string, castingTitle: string, castingId: string): Promise<void> {
   const num = toE164(to)
   if (!num) return
