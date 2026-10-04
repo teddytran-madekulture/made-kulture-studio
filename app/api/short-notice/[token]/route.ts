@@ -559,12 +559,15 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   }).eq('id', reqRow.id)
 
   const payUrl = `${APP_URL}/pay/${payToken}`
+  // No card on file is the NORMAL path for a first-time requester, not a
+  // failure — don't tell them (or Teddy) a card was declined. (2026-10-03)
+  const noCard = !reqRow.square_card_id
   const minsHeld = Math.max(1, Math.round((Date.parse(expiresAt) - Date.now()) / 60000))
   const sched = `${setName} — ${date} ${fmt12(startHour)}–${fmt12(endHour)}`
   try {
     if (channel === 'sms') {
       await sendSMS(payerContact,
-        `✅ Made Kulture: your ${isShared ? 'full-warehouse takeover' : 'short-notice session'} is approved!\n${sched}\n$${dollars(cents)}\n\nWe couldn't charge your card on file, so finish here to lock it in — held ${minsHeld} min: ${payUrl}\nReply STOP to opt out.`)
+        `✅ Made Kulture: your ${isShared ? 'full-warehouse takeover' : 'short-notice session'} is approved!\n${sched}\n$${dollars(cents)}\n\n${noCard ? 'Pay here to lock it in' : "We couldn't charge your card on file, so finish here to lock it in"} — held ${minsHeld} min: ${payUrl}\nReply STOP to opt out.`)
     } else {
       await sendSimpleEmail({
         to: email,
@@ -573,7 +576,9 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
         paragraphs: [
           `<strong style="color:#fff;">${sched}</strong>`,
           `Amount: <strong style="color:#fff;">$${dollars(cents)}</strong>`,
-          `We weren't able to charge your card on file, so the slot is held for <strong style="color:#fff;">${minsHeld} minutes</strong> while you complete payment.`,
+          noCard
+            ? `Your slot is held for <strong style="color:#fff;">${minsHeld} minutes</strong> while you complete payment.`
+            : `We weren't able to charge your card on file, so the slot is held for <strong style="color:#fff;">${minsHeld} minutes</strong> while you complete payment.`,
         ],
         ctaText: 'Pay & confirm', ctaUrl: payUrl, label: 'short_notice_pay_link',
       })
@@ -585,7 +590,7 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
   return NextResponse.json({
     ok: true, status: 'approved', outcome: 'held',
     amount: dollars(cents), bookingId: bookingIds[0],
-    holdExpiresAt: expiresAt, minsHeld, declineReason, payUrl,
+    holdExpiresAt: expiresAt, minsHeld, declineReason, noCard, payUrl,
     setName, date, startHour, endHour, channel,
   })
 }

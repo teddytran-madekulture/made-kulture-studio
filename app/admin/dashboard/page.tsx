@@ -802,7 +802,7 @@ export default function AdminDashboard() {
       } else if (d.outcome === 'charged') {
         setShortReqNote(`✅ Charged $${d.amount} — booked, confirmed, door code sent.`)
       } else if (d.outcome === 'held') {
-        setShortReqNote(`⏳ Card didn't go through. Slot held ${d.minsHeld} min and a payment link was sent — no door code until they pay.`)
+        setShortReqNote(`⏳ ${d.noCard ? 'No card on file' : "Card didn't go through"}. Slot held ${d.minsHeld} min and a payment link was sent — no door code until they pay.`)
       } else if (d.status === 'denied') {
         setShortReqNote('Request denied.')
       } else {

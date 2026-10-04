@@ -27,6 +27,7 @@ interface Outcome {
   outcome: 'charged' | 'held' | 'unlocked' | 'denied'
   amount?: string
   minsHeld?: number
+  noCard?: boolean
   declineReason?: string
   channel?: string
   doorCode?: string | null
@@ -76,6 +77,7 @@ export default function ApprovePage() {
                 : !r.booking_id ? 'unlocked'
                 : held ? 'held' : 'charged',
               amount: r.quoted_cents != null ? (r.quoted_cents / 100).toFixed(2) : undefined,
+              noCard: !r.square_card_id,
               minsHeld: held && r.hold_expires_at
                 ? Math.max(0, Math.round((Date.parse(r.hold_expires_at) - Date.now()) / 60000))
                 : undefined,
@@ -98,7 +100,7 @@ export default function ApprovePage() {
       // A refusal (slot taken, price moved, session already started) leaves the
       // request PENDING on purpose — the error shows and every button is still
       // live, so it can be retried or sent down the unlock path instead.
-      if (res.ok) setDone({ outcome: d.outcome ?? (action === 'deny' ? 'denied' : 'unlocked'), amount: d.amount, minsHeld: d.minsHeld, declineReason: d.declineReason, channel: d.channel, doorCode: d.doorCode })
+      if (res.ok) setDone({ outcome: d.outcome ?? (action === 'deny' ? 'denied' : 'unlocked'), amount: d.amount, minsHeld: d.minsHeld, noCard: d.noCard, declineReason: d.declineReason, channel: d.channel, doorCode: d.doorCode })
       else setErr(d.error || 'Something went wrong.')
     } catch { setErr('Something went wrong.') }
     finally { setBusy(null) }
@@ -128,7 +130,7 @@ export default function ApprovePage() {
         <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
           {done.outcome === 'denied' && `${req?.customer_name}'s request was denied.`}
           {done.outcome === 'charged' && `${req?.customer_name} was charged $${done.amount} and is confirmed for ${req?.desired_set_name} on ${req?.desired_date ? fmtDate(req.desired_date) : ''}${req?.desired_start != null ? ` at ${fmt12(req.desired_start)}` : ''}. Their confirmation and door code have been sent.`}
-          {done.outcome === 'held' && `Their card didn't go through, so the slot is held${done.minsHeld != null ? ` for ${done.minsHeld} more minute${done.minsHeld === 1 ? '' : 's'}` : ''} and a payment link was sent${done.channel ? (done.channel === 'sms' ? ' by text' : ' by email') : ''}. No door code is issued until they pay. If they don't, the slot reopens on its own.`}
+          {done.outcome === 'held' && `${done.noCard ? 'They have no card on file' : "Their card didn't go through"}, so the slot is held${done.minsHeld != null ? ` for ${done.minsHeld} more minute${done.minsHeld === 1 ? '' : 's'}` : ''} and a payment link was sent${done.channel ? (done.channel === 'sms' ? ' by text' : ' by email') : ''}. No door code is issued until they pay. If they don't, the slot reopens on its own.`}
           {done.outcome === 'unlocked' && `${req?.customer_name} can now book short-notice${req?.granted_expires_at ? ' for a limited window' : req?.granted_until ? ` through ${fmtDate(req.granted_until)}` : ''}. They've been notified. Nothing was charged.`}
         </p>
         {done.outcome === 'held' && done.declineReason && (
