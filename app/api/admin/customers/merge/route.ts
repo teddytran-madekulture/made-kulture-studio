@@ -116,6 +116,16 @@ export async function POST(req: NextRequest) {
     if (e) errors.push(`${t}: ${e.message}`)
   }
 
+  // 2c. square_customer_id (and acuity_client_id) are UNIQUE. When the primary
+  //     inherits one from a duplicate, the duplicate still holds it until it is
+  //     deleted, so the primary update failed with a unique violation and the
+  //     merge silently never happened. Release them from the duplicates first.
+  if (!errors.length) {
+    const { error: relErr } = await supabase.from('customers')
+      .update({ square_customer_id: null, acuity_client_id: null }).in('id', duplicateIds)
+    if (relErr) errors.push(`release ids: ${relErr.message}`)
+  }
+
   // 3. Update primary with merged fields
   const { error: updateErr } = await supabase
     .from('customers')

@@ -3544,7 +3544,7 @@ export default function AdminDashboard() {
                             const data = await res.json()
                             results[gi] = data.success
                               ? `Merged ${data.mergedCount} record${data.mergedCount !== 1 ? 's' : ''} into primary`
-                              : `Error: ${data.errors?.join(', ')}`
+                              : `Error: ${data.errors?.join(', ') || data.error || res.status}`
                           }
                           setDupMergeResult(r => ({ ...r, ...results }))
                           setDupMergingAll(false)
@@ -3627,7 +3627,7 @@ export default function AdminDashboard() {
                                 setDupGroups(gs => gs.map((g: any, j: number) => j === gi ? g : { ...g, members: g.members.filter((m: any) => !duplicateIds.includes(m.id)) }))
                                 fetchCustomers(custSearch, custFilter, custPage)
                               } else {
-                                setDupMergeResult(r => ({ ...r, [gi]: `Error: ${data.errors?.join(', ')}` }))
+                                setDupMergeResult(r => ({ ...r, [gi]: `Error: ${data.errors?.join(', ') || data.error || res.status}` }))
                               }
                               setDupMerging(null)
                             }}
