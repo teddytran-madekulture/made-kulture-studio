@@ -12,16 +12,26 @@ const supabase = createClient(
 export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Fetch all customers with booking counts
-  const { data: customers, error } = await supabase
-    .from('customers')
-    .select(`
-      id, name, email, phone, status, banned, created_at,
-      bookings ( id )
-    `)
-    .order('created_at', { ascending: true })
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Fetch ALL customers with booking counts. PostgREST caps a response at
+  // 1000 rows, so a single select silently dropped every customer past the
+  // first 1000 (oldest first) - the newest records, where fresh duplicates
+  // live, were never compared. Page through until a short page.
+  const customers: any[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('customers')
+      .select(`
+        id, name, email, phone, status, banned, created_at,
+        bookings ( id )
+      `)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + 999)
+    // A failed page must not read as "no duplicates".
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    customers.push(...(data ?? []))
+    if (!data || data.length < 1000) break
+  }
 
   const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ')
 
@@ -38,7 +48,9 @@ export async function GET(req: NextRequest) {
   const phoneGroups: Record<string, any[]> = {}
   for (const c of customers ?? []) {
     if (!c.phone) continue
-    const key = c.phone.replace(/\D/g, '')
+    // US numbers: +1 832... and 832... are the same phone.
+    let key = c.phone.replace(/\D/g, '')
+    if (key.length === 11 && key.startsWith('1')) key = key.slice(1)
     if (key.length < 7) continue
     if (!phoneGroups[key]) phoneGroups[key] = []
     phoneGroups[key].push(c)
