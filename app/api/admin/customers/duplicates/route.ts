@@ -82,8 +82,8 @@ export async function GET(req: NextRequest) {
     const review: string[] = []
     const accts = sorted.filter(hasAcct).length
     if (accts > 1) review.push('Two website logins - merging would orphan one. Do not merge.')
-    if (reason === 'phone' && new Set(sorted.map(m => normalize(m.name ?? ''))).size > 1) review.push('Same phone, different names - could be family or a shared number.')
-    if (reason === 'name' && new Set(sorted.map(m => digits(m.phone)).filter(d => d.length >= 7)).size > 1) review.push('Same name, different phones - could be two different people.')
+    if (reason.includes('phone') && new Set(sorted.map(m => normalize(m.name ?? ''))).size > 1) review.push('Same phone, different names - could be family or a shared number.')
+    if (reason.includes('name') && new Set(sorted.map(m => digits(m.phone)).filter(d => d.length >= 7)).size > 1) review.push('Same name, different phones - could be two different people.')
     groups.push({
       reason,
       review,
@@ -103,11 +103,31 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  for (const [, members] of Object.entries(nameGroups)) {
-    if (members.length > 1) addGroup(members, 'name')
+  // One group per PERSON, not per match. The same pair often matches by name
+  // AND by phone; listing them as two groups meant merging one left the other
+  // on screen pointing at a record that no longer exists, so merged people
+  // "kept coming back". Union every overlapping match into a single group.
+  const parent = new Map<string, string>()
+  const find = (x: string): string => { const p = parent.get(x) ?? x; if (p === x) return x; const r = find(p); parent.set(x, r); return r }
+  const union = (a: string, b: string) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb) }
+  const byId = new Map<string, any>()
+  const why = new Map<string, Set<string>>()   // member id -> match reasons
+  const link = (members: any[], reason: string) => {
+    for (const m of members) { byId.set(m.id, m); if (!why.has(m.id)) why.set(m.id, new Set()); why.get(m.id)!.add(reason) }
+    for (let i = 1; i < members.length; i++) union(members[0].id, members[i].id)
   }
-  for (const [, members] of Object.entries(phoneGroups)) {
-    if (members.length > 1) addGroup(members, 'phone')
+  for (const [, members] of Object.entries(nameGroups)) if (members.length > 1) link(members, 'name')
+  for (const [, members] of Object.entries(phoneGroups)) if (members.length > 1) link(members, 'phone')
+  const clusters = new Map<string, any[]>()
+  for (const id of Array.from(byId.keys())) {
+    const r = find(id)
+    if (!clusters.has(r)) clusters.set(r, [])
+    clusters.get(r)!.push(byId.get(id))
+  }
+  for (const members of Array.from(clusters.values())) {
+    const reasons = new Set<string>()
+    for (const m of members) why.get(m.id)!.forEach(r => reasons.add(r))
+    addGroup(members, Array.from(reasons).sort().join(' + '))
   }
 
   // Sort: groups with more members first

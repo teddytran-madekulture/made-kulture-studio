@@ -3569,6 +3569,7 @@ export default function AdminDashboard() {
                   <div style={{ padding: '32px 20px', fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No duplicates found.</div>
                 ) : dupGroups.map((group, gi) => {
                   const merged = dupMergeResult[gi]
+                  if (!merged && group.members.length < 2) return null   // emptied by another group's merge
                   return (
                     <div key={gi} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '16px 20px', opacity: merged ? 0.4 : 1 }}>
                       <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.25)', marginBottom: 10 }}>
@@ -3622,6 +3623,8 @@ export default function AdminDashboard() {
                               const data = await res.json()
                               if (data.success) {
                                 setDupMergeResult(r => ({ ...r, [gi]: `Merged ${data.mergedCount} record${data.mergedCount !== 1 ? 's' : ''} into primary` }))
+                                // Any other group still showing a now-deleted record is stale.
+                                setDupGroups(gs => gs.map((g: any, j: number) => j === gi ? g : { ...g, members: g.members.filter((m: any) => !duplicateIds.includes(m.id)) }))
                                 fetchCustomers(custSearch, custFilter, custPage)
                               } else {
                                 setDupMergeResult(r => ({ ...r, [gi]: `Error: ${data.errors?.join(', ')}` }))
