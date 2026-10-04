@@ -2137,6 +2137,12 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
   })
 
   // Shared booking submission used by both card and Google Pay
+  // The wallet buttons are wired ONCE when the Square SDK mounts, so their
+  // click handlers would otherwise keep the FIRST render's copy of this
+  // function - with credit still "on" and the old form values. Google Pay then
+  // sent applyCredit:true for a $5 booking with $10 credit and the server saw
+  // nothing to charge. Always call the latest copy. (2026-10-04)
+  const submitBookingRef = useRef<(sourceId: string, savedCardId?: string, wallet?: boolean) => Promise<void>>(async () => {})
   const submitBooking = async (sourceId: string, savedCardId?: string, wallet = false) => {
     setPaying(true)
     setPayError(null)
@@ -2159,6 +2165,8 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
       setPaying(false)
     }
   }
+
+  submitBookingRef.current = submitBooking
 
   // Send a payment link to someone else (creates a 30-min hold).
   const sendDelegate = async () => {
@@ -2247,7 +2255,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           document.getElementById('google-pay-button')?.addEventListener('click', async () => {
             try {
               const tok = await googlePay.tokenize()
-              if (tok.status === 'OK') submitBooking(tok.token, undefined, true)
+              if (tok.status === 'OK') submitBookingRef.current(tok.token, undefined, true)
               else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Google Pay failed — try a card.')
             } catch (e: any) { setPayError(`Google Pay failed — try a card. (${e?.message || 'unknown error'})`) }
           })
@@ -2270,7 +2278,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
             btn.addEventListener('click', async () => {
               try {
                 const tok = await applePay.tokenize()
-                if (tok.status === 'OK') submitBooking(tok.token, undefined, true)
+                if (tok.status === 'OK') submitBookingRef.current(tok.token, undefined, true)
                 else if (tok.status !== 'Cancel') setPayError(tok.errors?.[0]?.message || 'Apple Pay failed — try a card.')
               } catch (e: any) { setPayError(`Apple Pay failed — try a card. (${e?.message || 'unknown error'})`) }
             })
