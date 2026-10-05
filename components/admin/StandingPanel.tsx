@@ -14,6 +14,7 @@ interface Incident {
 interface Meter {
   customer: { id: string; name: string | null; email: string | null; banned: boolean | null; suspended_until: string | null }
   standing: Standing; incidents: Incident[]; config: StandingConfig
+  flex?: { level: 'green' | 'orange' | 'red'; label: string; points: number; lateChanges: number; sessionsUsed: number; longestChain: number; nextDropOff: string | null }
 }
 
 const lbl: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.4)' }
@@ -130,6 +131,28 @@ export default function StandingPanel({ customerId, bookingId }: { customerId?: 
         {st.reason === 'banned' && <><br />Banned by hand (customer record switch).</>}
         {st.suspendedUntil && <><br />Suspended until {st.suspendedUntil.slice(0, 10)}</>}
       </div>
+
+      {/* Booking flexibility — the late-change meter (lib/late-change-meter). A
+          separate system from standing: it never adds points above. */}
+      {m.flex && (() => {
+        const fx = m.flex
+        const fc = fx.level === 'green' ? '#4ade80' : fx.level === 'orange' ? '#fb923c' : '#f87171'
+        return (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+              <span style={lbl}>BOOKING FLEXIBILITY</span>
+              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: fc }}>{fx.label.toUpperCase()}</span>
+            </div>
+            <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
+              {fx.points} point{fx.points === 1 ? '' : 's'} · heads-up at 3, needs approval at 4
+              {fx.longestChain > 0 && <><br />Most changes on one session: {fx.longestChain}{fx.longestChain < 3 ? ` (the 3rd makes them all count)` : ''}</>}
+              {fx.lateChanges > 0 && <><br />Late changes (inside 48h): {fx.lateChanges}</>}
+              {fx.sessionsUsed > 0 && <><br />Sessions used since: {fx.sessionsUsed}</>}
+              {fx.nextDropOff && <><br />Next point clears {new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric' }).format(new Date(fx.nextDropOff))}</>}
+            </div>
+          </div>
+        )
+      })()}
 
       {m.incidents.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>

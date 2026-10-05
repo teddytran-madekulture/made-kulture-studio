@@ -15,6 +15,8 @@ import {
 } from '@/lib/standing'
 import { sendIncidentNoticeEmail } from '@/lib/email'
 import { centralDateStr } from '@/lib/booking-times'
+import { lateChangeMeter, METER_LABEL } from '@/lib/late-change-meter'
+import { findAuthUserIdByEmail } from '@/lib/auth-user'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -47,7 +49,16 @@ async function meter(customer: any) {
     const { data } = await db.storage.from('incident-photos').createSignedUrls(paths, 600)
     return { ...i, photos: (data ?? []).map((d: any) => ({ path: d.path, url: d.signedUrl })).filter((x: any) => x.url) }
   }))
-  return { customer, standing, incidents: withPhotos, config }
+  // Booking flexibility (late-change meter) — shown under standing so the owner
+  // can see it without opening the customer's own account page (2026-10-04).
+  // Separate system: it never adds standing points. lateChangeMeter fails open
+  // (green) on a read error, and an account lookup failure only drops the
+  // by-account read — the by-email read still runs.
+  let authUserId: string | null = null
+  try { authUserId = await findAuthUserIdByEmail(db, customer.email) } catch (e) { console.error('[incidents] auth lookup failed (non-fatal):', e) }
+  const fm = await lateChangeMeter(db, { authUserId, email: customer.email })
+  const flex = { ...fm, label: METER_LABEL[fm.level] }
+  return { customer, standing, incidents: withPhotos, config, flex }
 }
 
 export async function GET(req: NextRequest) {
