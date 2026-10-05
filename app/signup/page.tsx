@@ -30,6 +30,9 @@ export default function SignupPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setNextUrl(params.get('next') ?? '/account')
+    // ?as=vendor — the "Know a vendor?" referral link on the directory home.
+    const as = params.get('as')
+    if (as === 'vendor' || as === 'creative' || as === 'brand') setAccountType(as)
     // Prefill from a post-checkout invite (?email=&name=&phone=).
     const email = params.get('email'), name = params.get('name'), phone = params.get('phone')
     if (email || name || phone) {

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 type Row = {
   id: string; user_id: string; vendor_name: string; category: string; title: string; details: string; rate: string
   photos: string[]; tags: string[]; active: boolean; review_hold: boolean; review_hold_reason: string | null
+  featured?: boolean
   created_at: string; reports: { reason: string; note: string | null }[]
 }
 const REASON: Record<string, string> = { misleading: 'Misleading tags/details', off_topic: 'Not a real service', spam: 'Spam', inappropriate: 'Inappropriate', other: 'Other' }
@@ -52,7 +53,7 @@ export default function AdminListingsPage() {
     <div style={{ padding: '24px 20px', maxWidth: 1100, fontFamily: 'Inter, sans-serif', color: '#eee' }}>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 32, margin: '0 0 6px', letterSpacing: '0.02em' }}>SERVICE LISTINGS</h1>
       <p style={{ color: '#999', fontSize: 13, margin: '0 0 18px', lineHeight: 1.5 }}>
-        Everything vendors list on the directory&apos;s Services page. Three member reports pull a listing automatically until you review it. Vendors can&apos;t undo a hold themselves.
+        Everything vendors list on the directory&apos;s Services page. Three member reports pull a listing automatically until you review it. Vendors can&apos;t undo a hold themselves. FEATURE puts a listing first in the Production services row on the directory home.
       </p>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {(['all', 'flagged'] as const).map(f => (
@@ -72,6 +73,7 @@ export default function AdminListingsPage() {
               <div style={{ fontSize: 15, fontWeight: 700 }}>{r.title}</div>
               <div style={{ fontSize: 12.5, color: '#aaa', margin: '2px 0 6px' }}>
                 <a href={`/account/directory/${r.user_id}`} target="_blank" rel="noreferrer" style={{ color: '#e6c07a' }}>{r.vendor_name}</a> · {r.category}{r.rate ? ` · ${r.rate}` : ''}
+                {r.featured && <span style={{ color: '#e6c07a' }}> · ★ FEATURED</span>}
                 {!r.active && ' · hidden by vendor'}
                 {r.review_hold && <span style={{ color: '#f0a0a0' }}> · ON HOLD ({r.review_hold_reason === 'reports' ? '3+ reports' : 'by you'})</span>}
               </div>
@@ -91,6 +93,8 @@ export default function AdminListingsPage() {
                 ? <button type="button" disabled={busy === r.id} onClick={() => act(r.id, 'PATCH', 'restore')} style={btn('light')}>RESTORE</button>
                 : <button type="button" disabled={busy === r.id} onClick={() => act(r.id, 'PATCH', 'hold')} style={btn('ghost')}>PULL</button>}
               {!r.review_hold && r.reports.length > 0 && <button type="button" disabled={busy === r.id} onClick={() => act(r.id, 'PATCH', 'dismiss')} style={btn('ghost')}>KEEP · DISMISS</button>}
+              <button type="button" disabled={busy === r.id} onClick={() => act(r.id, 'PATCH', r.featured ? 'unfeature' : 'feature')} style={btn(r.featured ? 'light' : 'ghost')}
+                title="Featured listings lead the Production services row on the directory home">{r.featured ? '★ FEATURED' : '☆ FEATURE'}</button>
               <button type="button" disabled={busy === r.id} onClick={() => act(r.id, 'DELETE')} style={btn('danger')}>DELETE</button>
             </div>
           </div>

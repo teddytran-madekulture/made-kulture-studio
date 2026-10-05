@@ -4,7 +4,9 @@
 // • me          — always (name, avatar, First 100 number, listing state + blockers)
 // • editorial   — always: it is already public on the studio home page. Credits
 //                 that match a member's Instagram link to their profile.
-// • newMembers, castings, fresh — ONLY when the viewer is listed. Same rule as
+// • services   — the "Production services" row: featured first, then newest,
+//                 3 max, same visibility rule as the Services page.
+// • newMembers, castings, fresh, services — ONLY when the viewer is listed. Same rule as
 //   /api/directory (lib/directory-access.ts): no listing, no browsing.
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -12,6 +14,7 @@ import { NextResponse } from 'next/server'
 import { memberAccess } from '@/lib/directory-access'
 import { isProfileComplete, cleanIgHandle } from '@/lib/directory-listing'
 import { pickEditorialForVisit } from '@/lib/featured-editorial-server'
+import { loadVisibleListings, showcaseOrder } from '@/lib/service-listings'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -116,6 +119,14 @@ export async function GET() {
     .eq('status', 'open').gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false }).limit(3)
   out.castings = casts ?? []
+
+  // Non-fatal: if listings can't load, the row just doesn't render — the rest
+  // of the home page still works. (The Services page itself reports the error.)
+  try {
+    const all = await loadVisibleListings(service, user.id)
+    out.services = showcaseOrder(all).slice(0, 3)
+    out.servicesTotal = all.length
+  } catch (e: any) { console.error('[directory/home] services', e?.message) }
 
   return NextResponse.json(out)
 }

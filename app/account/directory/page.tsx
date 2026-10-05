@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { Instrument_Serif } from 'next/font/google'
 import DirectoryHeader from '@/components/DirectoryHeader'
 import FinishProfileCard from '@/components/FinishProfileCard'
+import ServicesShowcase, { type ShowcaseListing } from '@/components/ServicesShowcase'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
 const serif = Instrument_Serif({ subsets: ['latin'], weight: '400', style: ['normal', 'italic'] })
@@ -19,6 +20,8 @@ type Home = {
   total: number
   newMembers?: { id: string; name: string; roles: string[]; account_type?: string; photo: string | null; isNew: boolean }[]
   fresh?: { id: string; url: string; memberId: string; name: string }[]
+  services?: ShowcaseListing[]
+  servicesTotal?: number
   castings?: { id: string; title: string; compensation_type: string; roles_needed: string[]; set_slug: string | null; plan_mode: string; shoot_date: string | null; mature: boolean }[]
 }
 
@@ -145,6 +148,10 @@ export default function DirectoryHome() {
             </div>
           </section>
         )}
+
+        {/* PRODUCTION SERVICES — featured vendor listings + vendor referral */}
+        <ServicesShowcase listings={d.services ?? []} total={d.servicesTotal ?? 0} isMobile={isMobile} serifClass={serif.className}
+          sectionStyle={section} head={<SectionHead title="Production services" href="/account/directory/services" link="All services" />} />
 
         {/* CASTINGS + YOU */}
         <section style={{ ...section, display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.6fr 1fr', gap: 28 }}>

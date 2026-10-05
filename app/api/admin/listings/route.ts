@@ -1,6 +1,7 @@
 // /api/admin/listings — every Production Services listing for Teddy to review.
 //   GET                          → { listings } with vendor, tags, open report counts/reasons
 //   PATCH { id, action }         → 'hold' (pull it) | 'restore' (clear hold + dismiss open reports) | 'dismiss' (keep it live, dismiss reports)
+//                                  | 'feature' / 'unfeature' (lead the directory home's Production services row, migration 141)
 //   DELETE { id }                → delete the listing and its photos
 // Writes are .select()-verified: an update that matched nothing is not success.
 import { NextRequest, NextResponse } from 'next/server'
@@ -15,7 +16,7 @@ const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPAB
 export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data: rows, error } = await db.from('service_listings')
-    .select('id, user_id, category, title, details, rate, photos, tags, active, review_hold, review_hold_reason, created_at, updated_at')
+    .select('id, user_id, category, title, details, rate, photos, tags, active, review_hold, review_hold_reason, featured, featured_at, created_at, updated_at')
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const ids = Array.from(new Set((rows ?? []).map(r => r.user_id)))
@@ -36,8 +37,15 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id, action } = await req.json().catch(() => ({} as any))
-  if (!id || !['hold', 'restore', 'dismiss'].includes(action)) return NextResponse.json({ error: 'Bad request' }, { status: 400 })
+  if (!id || !['hold', 'restore', 'dismiss', 'feature', 'unfeature'].includes(action)) return NextResponse.json({ error: 'Bad request' }, { status: 400 })
   const now = new Date().toISOString()
+  if (action === 'feature' || action === 'unfeature') {
+    const on = action === 'feature'
+    const { data, error } = await db.from('service_listings').update({ featured: on, featured_at: on ? now : null }).eq('id', id).select('id')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data?.length) return NextResponse.json({ error: 'Listing not found.' }, { status: 404 })
+    return NextResponse.json({ ok: true })
+  }
   const patch = action === 'hold'
     ? { review_hold: true, review_hold_reason: 'admin' }
     : { review_hold: false, review_hold_reason: null, reviewed_at: now }

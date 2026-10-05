@@ -54,8 +54,11 @@ function Photos({ l, idx, setIdx, aspect, fit, onOpen }: {
   )
 }
 
-export default function ListingsTab({ memberId = '', memberName = '', listings, isSelf = false, showVendor = false, emptyText }: {
+export default function ListingsTab({ memberId = '', memberName = '', listings, isSelf = false, showVendor = false, emptyText, openId, requestId }: {
   memberId?: string; memberName?: string; listings: PublicListing[]; isSelf?: boolean; showVendor?: boolean; emptyText?: string
+  /** Deep link from the directory home's "Production services" row: open this
+   *  listing's detail pop-up (openId) or its REQUEST form (requestId) on arrival. */
+  openId?: string | null; requestId?: string | null
 }) {
   // Per-listing vendor (Services page) falls back to the profile's owner.
   const vName = (l: PublicListing) => l.vendor?.name || memberName
@@ -86,6 +89,17 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
     window.addEventListener('keydown', onKey)
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
   }, [open, req, sending])
+
+  // Deep link: act once, the first time the listing is actually in the list.
+  const [deepDone, setDeepDone] = useState(false)
+  useEffect(() => {
+    if (deepDone || (!openId && !requestId)) return
+    const target = listings.find(l => l.id === (requestId || openId))
+    if (!target) return
+    setDeepDone(true)
+    if (requestId && !(target.is_self ?? isSelf)) { setReq(target); setDate(''); setNote(''); setError('') }
+    else { setOpen(target); track('portfolio_open', { target_id: target.vendor?.id || memberId, meta: { kind: 'listing', listing: target.id, from: 'home' } }) }
+  }, [listings, openId, requestId, deepDone, isSelf, memberId])
 
   if (listings.length === 0) {
     return (

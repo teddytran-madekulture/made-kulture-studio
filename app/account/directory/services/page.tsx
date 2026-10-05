@@ -24,6 +24,11 @@ export default function ServicesPage() {
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState<string | null>(null)
+  // ?open=<id> / ?request=<id> — deep links from the directory home row.
+  const [deep, setDeep] = useState<{ open: string | null; request: string | null }>({ open: null, request: null })
+  useEffect(() => {
+    try { const p = new URLSearchParams(window.location.search); setDeep({ open: p.get('open'), request: p.get('request') }) } catch {}
+  }, [])
 
   useEffect(() => {
     fetch('/api/listings', { cache: 'no-store' }).then(async r => {
@@ -92,7 +97,7 @@ export default function ServicesPage() {
           {loading ? 'Loading…' : err ? <span style={{ color: '#e6a0a0' }}>{err}</span> : `${shown.length} listing${shown.length === 1 ? '' : 's'}`}
         </div>
         {!loading && !err && (
-          <ListingsTab listings={shown} showVendor
+          <ListingsTab listings={shown} showVendor openId={deep.open} requestId={deep.request}
             emptyText={listings.length === 0 ? 'No services listed yet. Rent out vehicles, wardrobe, props, gear or animals? Add a Production Services role to your profile.' : 'Nothing matches that search. Try a different word.'} />
         )}
       </>)}
