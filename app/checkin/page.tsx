@@ -1,13 +1,13 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function CheckinKioskPage() {
-  const router = useRouter()
   const [phone, setPhone] = useState('')
   const [busy, setBusy]   = useState(false)
   const [err, setErr]     = useState<string | null>(null)
-  const kiosk = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('kiosk') === '1'
+  // 2026-10-04: the lookup now TEXTS the check-in link instead of returning it
+  // (see app/api/checkin/lookup). This page just confirms it was sent.
+  const [sent, setSent]   = useState<string | null>(null)
 
   const find = async () => {
     setBusy(true); setErr(null)
@@ -18,7 +18,7 @@ export default function CheckinKioskPage() {
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'No booking found.'); setBusy(false); return }
-      router.push(`/checkin/${d.token}${kiosk ? '?kiosk=1' : ''}`)
+      setSent(d.message || 'Check your texts for your check-in link.'); setBusy(false)
     } catch {
       setErr('Something went wrong. Please try again.'); setBusy(false)
     }
@@ -29,7 +29,16 @@ export default function CheckinKioskPage() {
       <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, letterSpacing: '0.05em', marginBottom: 40, lineHeight: 1 }}>MADE<br />KULTURE</div>
       <div style={{ width: '100%', maxWidth: 420 }}>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 12 }}>CHECK IN</h1>
-        <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 28 }}>Enter the phone number on your booking.</p>
+        {sent ? (
+          <>
+            <p style={{ fontFamily: 'Inter', fontSize: 16, color: '#fff', lineHeight: 1.5, marginBottom: 28 }}>{sent}</p>
+            <button onClick={() => { setSent(null); setPhone('') }}
+              style={{ width: '100%', padding: '20px', border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 14, fontWeight: 600, letterSpacing: '0.2em', cursor: 'pointer' }}>
+              TRY A DIFFERENT NUMBER
+            </button>
+          </>
+        ) : (<>
+        <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 28 }}>Enter the phone number on your booking. We'll text you your check-in link.</p>
         <input
           type="tel" inputMode="tel" placeholder="(832) 000-0000" value={phone}
           onChange={e => setPhone(e.target.value)}
@@ -39,8 +48,9 @@ export default function CheckinKioskPage() {
         {err && <p style={{ color: '#f0a0a0', fontFamily: 'Inter', fontSize: 13, marginBottom: 12 }}>{err}</p>}
         <button onClick={find} disabled={busy || !phone}
           style={{ width: '100%', padding: '20px', border: 'none', background: '#fff', color: '#080808', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 14, fontWeight: 600, letterSpacing: '0.2em', cursor: busy ? 'wait' : 'pointer', opacity: (busy || !phone) ? 0.6 : 1 }}>
-          {busy ? 'FINDING…' : 'FIND MY BOOKING'}
+          {busy ? 'SENDING…' : 'TEXT MY CHECK-IN LINK'}
         </button>
+        </>)}
       </div>
     </div>
   )
