@@ -13,7 +13,7 @@
 // credits band below); a landscape door screen puts the credits beside it.
 // Full brightness, no dimming — Teddy's call: the tablets aren't bright enough
 // to affect a shoot.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import qrcode from 'qrcode-generator'
 
 export interface ShowcaseEditorial {
@@ -51,18 +51,21 @@ export function orderForTablet<T extends { setSlug?: string }>(items: T[], setSl
   return [...own, ...rest]
 }
 
-export default function KioskShowcase({ items: raw, setSlug = null, onDismiss, portrait }: { items: ShowcaseEditorial[]; setSlug?: string | null; onDismiss: () => void; portrait: boolean }) {
+// `footer` (2026-10-06): the NOW PLAYING bar + STAFF/MUSIC buttons stay on
+// screen under the gallery — the showcase used to cover them whenever the set
+// was empty. Taps on the footer do NOT dismiss the showcase.
+export default function KioskShowcase({ items: raw, setSlug = null, onDismiss, portrait, footer }: { items: ShowcaseEditorial[]; setSlug?: string | null; onDismiss: () => void; portrait: boolean; footer?: ReactNode }) {
   const items = useMemo(() => orderForTablet(raw, setSlug), [raw, setSlug])
   // A running count, not an index: with ONE editorial the index would stay 0,
   // nothing would remount, and it would freeze on the last photo.
   const [turn, setTurn] = useState(0)
   const cur = items[turn % Math.max(items.length, 1)]
   if (!cur) return null
-  return <One key={turn} e={cur} onDismiss={onDismiss} portrait={portrait}
+  return <One key={turn} e={cur} onDismiss={onDismiss} portrait={portrait} footer={footer}
     onCycleDone={() => setTurn(x => x + 1)} />
 }
 
-function One({ e, onDismiss, portrait, onCycleDone }: { e: ShowcaseEditorial; onDismiss: () => void; portrait: boolean; onCycleDone: () => void }) {
+function One({ e, onDismiss, portrait, onCycleDone, footer }: { e: ShowcaseEditorial; onDismiss: () => void; portrait: boolean; onCycleDone: () => void; footer?: ReactNode }) {
   const [i, setI] = useState(0)
   const n = e.photos.length
   // ⚠️ Refs, not deps: the kiosk page re-renders every 5s (its clock tick) and
@@ -142,9 +145,12 @@ function One({ e, onDismiss, portrait, onCycleDone }: { e: ShowcaseEditorial; on
   return (
     <div onClick={onDismiss} role="button" aria-label="Tap to return"
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#050505', color: '#fff', fontFamily: 'Inter, sans-serif',
-               display: 'flex', flexDirection: portrait ? 'column' : 'row', cursor: 'pointer', userSelect: 'none' }}>
-      <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', padding: portrait ? '28px 28px 0' : '28px 0 28px 28px' }}>{photo}</div>
-      {band}
+               display: 'flex', flexDirection: 'column', cursor: 'pointer', userSelect: 'none' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: portrait ? 'column' : 'row' }}>
+        <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', padding: portrait ? '28px 28px 0' : '28px 0 28px 28px' }}>{photo}</div>
+        {band}
+      </div>
+      {footer && <div onClick={ev => ev.stopPropagation()} style={{ flexShrink: 0, cursor: 'default' }}>{footer}</div>}
       {n > 1 && (
         <div style={{ position: 'absolute', top: 14, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6, pointerEvents: 'none' }}>
           {e.photos.map((_, k) => (
