@@ -45,7 +45,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // 3. Aggregate requested quantities + fetch authoritative rates
   const requested: Record<string, number> = {}
-  for (const l of lines) requested[l.equipment_id] = (requested[l.equipment_id] ?? 0) + (l.quantity ?? 1)
+  for (const l of lines) {
+    const qty = l.quantity ?? 1
+    // 2026-10-06: 0 or 0.01 used to reserve a ~$0 unpaid row.
+    if (!Number.isInteger(qty) || qty < 1 || qty > 10) return NextResponse.json({ error: 'Quantity must be a whole number from 1 to 10.' }, { status: 400 })
+    requested[l.equipment_id] = (requested[l.equipment_id] ?? 0) + qty
+  }
 
   const ids = Object.keys(requested)
   const { data: equipRows } = await admin.from('equipment').select('id, name, rate').in('id', ids)

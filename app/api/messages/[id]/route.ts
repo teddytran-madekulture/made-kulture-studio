@@ -1,3 +1,4 @@
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { sendMemberPush } from '@/lib/member-push'
@@ -54,6 +55,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const c = await participant(params.id, user.id)
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // 2026-10-06: leaving the directory used to stop nothing — DMs, pushes and
+  // emails kept flowing. Sending now needs BOTH sides listed, same as starting
+  // a conversation does.
+  const other = (c as any).user_a === user.id ? (c as any).user_b : (c as any).user_a
+  const [meAcc, themAcc] = await Promise.all([memberAccess(service, user.id), memberAccess(service, other)])
+  if (!meAcc.listed) return notListedResponse(meAcc, 'send messages')
+  if (!themAcc.listed) return NextResponse.json({ error: 'This member is no longer in the directory.' }, { status: 403 })
 
   const { body } = await req.json().catch(() => ({}))
   const text = String(body ?? '').trim().slice(0, 2000)

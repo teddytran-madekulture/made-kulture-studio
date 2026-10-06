@@ -51,7 +51,10 @@ export async function POST(req: NextRequest) {
   const external_id = String(b?.external_id ?? '').trim().slice(0, 64)
   const title = String(b?.title ?? '').trim().slice(0, 200)
   const artist = String(b?.artist ?? '').trim().slice(0, 120) || null
-  const thumbnail = String(b?.thumbnail ?? '').trim().slice(0, 400) || null
+  // 2026-10-06: it's rendered in the admin console, so only the two CDNs the
+  // search results actually come from — not an arbitrary (tracking) URL.
+  const rawThumb = String(b?.thumbnail ?? '').trim().slice(0, 400)
+  const thumbnail = /^https:\/\/(i\.ytimg\.com|img\.youtube\.com|i\.scdn\.co|mosaic\.scdn\.co)\//.test(rawThumb) ? rawThumb : null
   const device = String(b?.device ?? '').trim().slice(0, 80) || null
   const name = String(b?.name ?? '').trim().slice(0, 40) || null
   const duration = Number.isFinite(+b?.duration) ? Math.max(0, Math.round(+b.duration)) : null

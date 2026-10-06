@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { randomBytes } from 'crypto'
 import { cleanIg, creditsForImages, escHtml, MAX_CREDITS_PER_PHOTO } from '@/lib/photo-credits'
 import { sendSimpleEmail } from '@/lib/email'
@@ -38,6 +39,9 @@ export async function GET(req: NextRequest) {
 
   const q = (sp.get('q') || '').trim().replace(/[%,()*]/g, '').slice(0, 40)
   if (q) {
+    // 2026-10-06: searching members by name/IG is a directory read — listed only.
+    const acc = await memberAccess(service, user.id)
+    if (!acc.listed) return notListedResponse(acc, 'search members')
     const ig = cleanIg(q)
     let query = service.from('customer_profiles')
       .select('id, full_name, avatar_url, roles, instagram')

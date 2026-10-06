@@ -3,6 +3,7 @@
 // GET  → tour details for the cancel page
 // POST { by?: 'customer' | 'studio' } → cancel + clean up calendar + notify
 
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS } from '@/lib/sms'
@@ -39,11 +40,9 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 }
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
-  let by: 'customer' | 'studio' = 'customer'
-  try {
-    const body = await req.json()
-    if (body?.by === 'studio') by = 'studio'
-  } catch {}
+  // 2026-10-06: `by` comes from the ADMIN cookie, not the body — the
+  // customer's own link could claim 'studio' and get the "we had to cancel" text.
+  const by: 'customer' | 'studio' = isAdminAuthed(req) ? 'studio' : 'customer'
 
   const r = await findByCancelToken(params.token)
   if (!r) return NextResponse.json({ error: 'not found' }, { status: 404 })

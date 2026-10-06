@@ -152,9 +152,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
     if (action === 'check_out') {
       if (!b.checked_in_at && !b.code_revealed_at) return NextResponse.json({ error: 'Please check in first.' }, { status: 400 })
-      await supabase.from('bookings').update({ checked_out_at: new Date().toISOString() }).eq('id', b.id)
-
-      await sendOwnerSMS(`👋 CHECKED OUT — ${customer?.name ?? 'Guest'}\n📍 ${setName} is now free.`)
+      // 2026-10-06: claim the first check-out so a token holder can't text the
+      // owner on every tap.
+      const { data: out } = await supabase.from('bookings').update({ checked_out_at: new Date().toISOString() })
+        .eq('id', b.id).is('checked_out_at', null).select('id')
+      if (out?.length) await sendOwnerSMS(`👋 CHECKED OUT — ${customer?.name ?? 'Guest'}\n📍 ${setName} is now free.`)
 
       return NextResponse.json({ success: true, checkedOut: true })
     }

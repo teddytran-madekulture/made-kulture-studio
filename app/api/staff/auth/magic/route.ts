@@ -29,7 +29,11 @@ export async function GET(req: NextRequest) {
   }
 
   // Consume it (one-time) before granting the session.
-  await db.from('staff_password_resets').update({ used_at: new Date().toISOString() }).eq('id', row.id)
+  // Claimed, not just updated: `.is('used_at', null)` + `.select()` so two
+  // near-simultaneous opens of one link mint ONE session (2026-10-06).
+  const { data: claimed } = await db.from('staff_password_resets')
+    .update({ used_at: new Date().toISOString() }).eq('id', row.id).is('used_at', null).select('id')
+  if (!claimed?.length) return fail('This link has expired or was already used. Request a new one.')
 
   const { data: staff } = await db
     .from('staff_users')

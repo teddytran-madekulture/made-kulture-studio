@@ -23,9 +23,13 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const me = await memberAccess(service, user.id)
   if (!me.listed) return notListedResponse(me, 'respond to castings')
 
-  const { data: c } = await service.from('castings').select('author_id, status').eq('id', params.id).maybeSingle()
+  const { data: c } = await service.from('castings').select('author_id, status, expires_at').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Casting not found.' }, { status: 404 })
   if (c.author_id === user.id) return NextResponse.json({ error: "This is your casting." }, { status: 400 })
+  // 2026-10-06: the board hides closed/expired castings but this route didn't check.
+  if (c.status !== 'open' || (c.expires_at && new Date(c.expires_at) < new Date())) {
+    return NextResponse.json({ error: 'This casting is closed.' }, { status: 409 })
+  }
 
   // Register interest (idempotent) — track whether it's brand new so we only
   // email the author the first time someone opts in.

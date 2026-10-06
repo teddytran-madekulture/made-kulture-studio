@@ -188,12 +188,24 @@ export async function createExtensionRequest(
   const db = supabaseAdmin()
   const { data: existing } = await db
     .from('extension_requests')
-    .select('id, confirm_token, hours, kind')
+    .select('id, confirm_token, hours, kind, created_by')
     .eq('booking_id', bookingId).eq('status', 'pending')
     .gt('expires_at', new Date().toISOString())
     .maybeSingle()
 
-  if (existing && Number(existing.hours) === normalized && (existing.kind ?? 'extend') === kind) {
+  // ⚠️ 2026-10-06 security pass: the KIOSK never reuses a request it did not
+  // create. The last-4 identity check on CONFIRM & CHARGE keys off
+  // created_by === 'kiosk', and the wrap-up cron mints a pending request 15
+  // minutes before every session end — so a tablet tap in that window used to
+  // be handed the cron's token and charge the card with no proof of who tapped.
+  // The cron/June row is cancelled instead (its SMS link reads as expired; the
+  // guest is standing at the tablet, so nothing is lost) and a fresh kiosk row
+  // carries the guard.
+  const reusable = existing
+    && Number(existing.hours) === normalized
+    && (existing.kind ?? 'extend') === kind
+    && (createdBy !== 'kiosk' || existing.created_by === 'kiosk')
+  if (reusable) {
     return { token: existing.confirm_token, priceCents: p.priceCents, setName: p.setName, hasCardOnFile: p.hasCardOnFile }
   }
   if (existing) await db.from('extension_requests').update({ status: 'cancelled' }).eq('id', existing.id)

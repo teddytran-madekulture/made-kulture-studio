@@ -76,6 +76,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { body, replyToId } = await req.json().catch(() => ({}))
   const text = String(body ?? '').trim().slice(0, 2000)
   if (!text) return NextResponse.json({ error: 'Empty message.' }, { status: 400 })
+  // 2026-10-06: a reply must point at a message IN THIS casting.
+  if (replyToId) {
+    const { data: parent } = await service.from('casting_messages').select('id').eq('id', String(replyToId)).eq('casting_id', params.id).maybeSingle()
+    if (!parent) return NextResponse.json({ error: 'That message is not in this channel.' }, { status: 400 })
+  }
 
   const { data: message, error } = await service.from('casting_messages')
     .insert({ casting_id: params.id, sender_id: user.id, body: text, reply_to_id: replyToId || null })
