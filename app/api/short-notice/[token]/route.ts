@@ -441,7 +441,7 @@ async function approveAndCharge(reqRow: ShortNoticeRow) {
         notes: reqRow.note || '',
         totalCents: cents,
       }
-  const v = await validateAndPriceOrder(service, input, { isMember: true, allowShortNotice: true, approved: true, sharedFloor: isShared })
+  const v = await validateAndPriceOrder(service, input, { isMember: true, allowShortNotice: true, approved: true, sharedFloor: isShared, pricingEmail: input.email })
   if (!v.ok) {
     // A price mismatch here means a rate moved between the quote and now. Say so
     // plainly rather than silently charging either number — the quote is what

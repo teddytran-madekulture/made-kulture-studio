@@ -49,6 +49,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
   }
 
+  // ⚠️ 2026-10-06 security pass: ONLY a confirmed booking carries value. A
+  // 'pending_payment' row is a HOLD — "someone else pays" (delegate) and the
+  // short-notice fallback both create the row at full price BEFORE any money
+  // moves. Crediting total_amount on one of those minted free studio credit:
+  // delegate a 10-hour buyout to yourself, cancel it, pocket $4,000 of credit.
+  // (payment_status is only stamped on $0 bookings and Acuity/credit-paid rows
+  // have no square_payment_id, so status is the reliable signal.)
+  if (booking.status !== 'confirmed') {
+    return NextResponse.json({ error: booking.status === 'pending_payment'
+      ? 'This booking is still waiting on payment, so there is nothing to credit. If the pay link has expired, just book again.'
+      : 'Only a confirmed booking can be cancelled here. Text (832) 408-1631 and we will sort it out.' }, { status: 409 })
+  }
+
   // Plus members get cancellation protection: they can cancel at any time and the
   // booking's full value returns as studio credit instead of being forfeited.
   const service = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)

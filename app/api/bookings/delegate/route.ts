@@ -5,7 +5,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
-import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { randomUUID } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { validateAndPriceOrder, insertBookingRows, fmt12, type BookingCoreInput } from '@/lib/booking-core'
@@ -96,9 +95,16 @@ export async function POST(req: NextRequest) {
     const bookerCard = await findCardOnFileByEmail(square, sessionEmail)
     if (!bookerCard) return NextResponse.json({ error: NEED_CARD }, { status: 400 })
 
+    // 2026-10-06 security pass: the BOOKER is the signed-in account. The hold
+    // is made under the session email (whatever the form said), special rates
+    // come from that account, and the per-booker cap is keyed on it — so one
+    // member can't hold every set by rotating typed emails, overwrite another
+    // customer's phone, or borrow a comped address.
+    body.email = sessionEmail.toLowerCase().trim()
+
     // Short-notice eligibility comes from the VERIFIED session, never body.email.
     const allowShortNotice = await sessionMayBookShortNotice(supabase, sessionEmail)
-    const v = await validateAndPriceOrder(supabase, body, { isMember, allowShortNotice, payerContacts: [body.payerContact] })
+    const v = await validateAndPriceOrder(supabase, body, { isMember, allowShortNotice, payerContacts: [body.payerContact], pricingEmail: sessionEmail })
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: v.status })
     const { lines, verifiedCents } = v.order
 
@@ -132,12 +138,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Upsert customer + link auth user (so confirmations resolve later).
-    const { data: customerData } = await upsertCustomerByEmail(supabase, { email: body.email, name: body.name, phone: body.phone })
+    const { data: customerData } = await upsertCustomerByEmail(supabase, { email: body.email, name: body.name, phone: body.phone }, { trusted: true })
     const supabaseCustomerId = customerData?.id ?? null
 
+    // Session identity, not a lookup on the typed email.
     let authUserId: string | null = null
     try {
-      authUserId = await findAuthUserIdByEmail(supabase, body.email)
+      const { data } = await createServerClient().auth.getUser()
+      authUserId = data.user?.id ?? null
     } catch { /* non-fatal */ }
 
     // 4. Insert the held booking row(s) — status pending_payment holds the slot.

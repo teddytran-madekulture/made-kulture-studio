@@ -136,7 +136,9 @@ export default function BookingsPage() {
     const isCancelled = b.status === 'cancelled'
     const hoursUntil = (new Date(b.start_time).getTime() - now.getTime()) / (1000 * 60 * 60)
     const canReschedule = isUpcoming && hoursUntil > 48
-    const canCancel = isUpcoming && (isPlus || hoursUntil > 48)
+    // A pending_payment row is a hold with no money behind it — the server
+    // refuses to credit it (2026-10-06), so don't offer the button either.
+    const canCancel = isUpcoming && b.status === 'confirmed' && (isPlus || hoursUntil > 48)
     // Moving a booking in place. Plus carries it inside 48h, matching the
     // cancellation policy. ⚠️ Acuity-sourced bookings are excluded here as well
     // as server-side — they're held in Acuity too, so moving one on our side

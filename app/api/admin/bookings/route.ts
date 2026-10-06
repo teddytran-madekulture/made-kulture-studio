@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert customer
-  const { data: customerData } = await upsertCustomerByEmail(supabase, { email, name, phone })
+  const { data: customerData } = await upsertCustomerByEmail(supabase, { email, name, phone }, { trusted: true })
 
   // Get set ID
   let setId: string | null = null

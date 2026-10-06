@@ -17,13 +17,28 @@ export function normEmail(e: unknown): string {
 // the old address quietly created a fresh duplicate of a merged person.
 // Order: exact main email -> an alt email -> upsert a new row (as before).
 // An alt match never renames the customer; it only fills a missing phone.
+// ⚠️ 2026-10-06 security pass: `trusted` decides whether an EXISTING row's
+// name/phone may be overwritten. The upsert below is INSERT … ON CONFLICT DO
+// UPDATE, so until now anyone at public checkout who typed a victim's email
+// replaced that customer's phone — and the phone is where the day-before
+// reminder (with the door-code link) gets texted. Trusted = the admin, or a
+// signed-in session whose email IS this email. Untrusted callers (guest
+// checkout) create new rows normally but only FILL BLANKS on existing ones.
 export async function upsertCustomerByEmail(
   db: any,
   c: { email: unknown; name?: string | null; phone?: string | null },
+  opts: { trusted?: boolean } = {},
 ): Promise<{ data: { id: string } | null; error: any }> {
   const email = normEmail(c.email)
   if (email) {
-    const { data: main } = await db.from('customers').select('id').eq('email', email).maybeSingle()
+    const { data: main } = await db.from('customers').select('id, name, phone').eq('email', email).maybeSingle()
+    if (main && !opts.trusted) {
+      const fill: Record<string, string> = {}
+      if (!main.name && c.name) fill.name = c.name
+      if (!main.phone && c.phone) fill.phone = c.phone
+      if (Object.keys(fill).length) await db.from('customers').update(fill).eq('id', main.id)
+      return { data: { id: main.id }, error: null }
+    }
     if (!main) {
       const raw = String(c.email ?? '').trim()
       const forms = Array.from(new Set([email, raw]))

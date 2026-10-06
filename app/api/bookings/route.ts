@@ -232,13 +232,29 @@ export async function POST(req: NextRequest) {
     } catch { /* guest */ }
     const isMember = !!sessionUser
 
-    // ── 1. Customer pricing overrides ──────────────────────────────────────
+    // ── 0b. Identity (2026-10-06 security pass) ────────────────────────────
+    //     Signed in: the booking is made under the account's email, whatever
+    //     the form said. Guest: an email that already has a website login must
+    //     sign in — otherwise a stranger could plant bookings in that account.
+    if (sessionUser?.email) {
+      body.email = sessionUser.email.toLowerCase().trim()
+    } else if (body.email) {
+      let taken: string | null = null
+      try { taken = await findAuthUserIdByEmail(supabase, body.email) } catch { /* treated as free */ }
+      if (taken) {
+        return NextResponse.json({ error: 'That email already has an account with us. Please sign in to book.', code: 'sign_in_required' }, { status: 409 })
+      }
+    }
+
+    // ── 1. Customer pricing overrides — session identity only ──────────────
+    //     Special rates and comp_no_card come from the signed-in account; a
+    //     guest always pays list price (they can't borrow a comped address).
     let customerPricingOverrides: any = null
-    if (body.email) {
+    if (sessionUser?.email) {
       const { data: custPricing } = await supabase
         .from('customers')
         .select('pricing_overrides')
-        .eq('email', body.email.toLowerCase().trim())
+        .eq('email', sessionUser.email.toLowerCase().trim())
         .maybeSingle()
       customerPricingOverrides = custPricing?.pricing_overrides ?? null
     }
@@ -736,13 +752,14 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 10. Upsert customer + link auth user ───────────────────────────────
-    const { data: customerData } = await upsertCustomerByEmail(supabase, { email: body.email, name: body.name, phone: body.phone })
+    // Only the account owner may overwrite their own name/phone on file.
+    const { data: customerData } = await upsertCustomerByEmail(supabase, { email: body.email, name: body.name, phone: body.phone }, { trusted: !!sessionUser })
     const supabaseCustomerId = customerData?.id
     await rememberCard(supabase, supabaseCustomerId, usedCard)
 
-    let authUserId: string | null = null
-    try { authUserId = await findAuthUserIdByEmail(supabase, body.email) }
-    catch (e) { console.error('[bookings] auth lookup failed (non-fatal):', e) }
+    // The account link comes from the session (guests with a login were
+    // refused above), never from a lookup on the typed email.
+    const authUserId: string | null = sessionUser?.id ?? null
     if (authUserId && customerId) {
       await supabase.from('customer_profiles')
         .update({ square_customer_id: customerId })

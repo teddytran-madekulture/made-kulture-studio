@@ -147,14 +147,18 @@ export type ValidateResult =
 export async function validateAndPriceOrder(
   supabase: SupabaseClient,
   body: BookingCoreInput,
-  opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean; payerContacts?: string[]; sharedFloor?: boolean } = {}
+  opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean; payerContacts?: string[]; sharedFloor?: boolean; pricingEmail?: string | null } = {}
 ): Promise<ValidateResult> {
-  // 1. Customer pricing overrides
+  // 1. Customer pricing overrides — ⚠️ 2026-10-06: looked up by `pricingEmail`,
+  //    which callers set from a VERIFIED identity (the session, or an owner-
+  //    approved request), never from the typed email. Anyone who knew a comped
+  //    customer's address used to book at their rate (comp_no_card = no card).
   let customerPricingOverrides: any = null
-  if (body.email) {
+  const pricingEmail = String(opts.pricingEmail ?? '').toLowerCase().trim()
+  if (pricingEmail) {
     const { data: custPricing } = await supabase
       .from('customers').select('pricing_overrides')
-      .eq('email', body.email.toLowerCase().trim()).maybeSingle()
+      .eq('email', pricingEmail).maybeSingle()
     customerPricingOverrides = custPricing?.pricing_overrides ?? null
   }
 

@@ -42,6 +42,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 400 })
   }
 
+  // ⚠️ 2026-10-06 security pass: ONLY a confirmed booking carries value. A
+  // 'pending_payment' row is a HOLD — "someone else pays" (delegate) and the
+  // short-notice fallback both create the row at full price BEFORE any money
+  // moves. Crediting total_amount on one of those minted free studio credit:
+  // delegate a 10-hour buyout to yourself, cancel it, pocket $4,000 of credit.
+  // (payment_status is only stamped on $0 bookings and Acuity/credit-paid rows
+  // have no square_payment_id, so status is the reliable signal.)
+  if (booking.status !== 'confirmed') {
+    return NextResponse.json({ error: booking.status === 'pending_payment'
+      ? 'This booking is still waiting on payment, so there is nothing to credit. If the pay link has expired, just book again.'
+      : 'Only a confirmed booking can be released for credit here. Text (832) 408-1631 and we will sort it out.' }, { status: 409 })
+  }
+
   // Same 48-hour window as a self-serve cancel. Inside 48h → they text the studio
   // (the team can still credit manually from admin if they choose).
   const hoursUntil = (new Date(booking.start_time).getTime() - Date.now()) / 3_600_000
