@@ -1,3 +1,4 @@
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { CREATIVE_ROLES } from '@/lib/roles'
@@ -13,6 +14,8 @@ const service = createServiceClient(
 // Public + best-effort (called from signup before auth). De-dupes against the
 // built-in list, approved roles, and existing pending suggestions.
 export async function POST(req: NextRequest) {
+  const rl = await rateLimit(`rolesuggest:${clientIp(req)}`, 5, 60 * 60_000, { failOpen: true })
+  if (!rl.allowed) return NextResponse.json({ error: rl.message }, { status: 429 })
   const body = await req.json().catch(() => ({} as any))
   const role = String(body.role || '').trim().slice(0, 40)
   const email = body.email ? String(body.email).trim().slice(0, 200) : null

@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { generateMagicToken, consumeMagicToken, setAdminCookie } from '@/lib/admin-auth'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 
 const ADMIN_EMAIL = 'teddytran@madekulture.com'
 const ACCENT      = '#d4a843'
 
 // POST /api/admin/auth/magic — generate and email a magic sign-in link
 export async function POST(req: NextRequest) {
+  // 2026-10-06: unauthenticated + unlimited = anyone could flood the owner's
+  // inbox and burn Resend quota. Per-IP AND global, since there is one inbox.
+  const perIp = await rateLimit(`magic:${clientIp(req)}`, 3, 60 * 60_000)
+  const global = perIp.allowed ? await rateLimit('magic:all', 6, 60 * 60_000) : perIp
+  if (!perIp.allowed || !global.allowed) return NextResponse.json({ error: 'Too many sign-in links requested. Try again in an hour.' }, { status: 429 })
+
   const { origin } = new URL(req.url)
   const token    = generateMagicToken()
   const magicUrl = `${origin}/api/admin/auth/magic?token=${token}`

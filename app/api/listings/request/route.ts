@@ -4,6 +4,7 @@
 // into the 1:1 directory conversation, and (c) email the vendor EVERY time —
 // the normal message email is throttled to once per 3h per conversation,
 // which would silently swallow a second request. (2026-10-03)
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
@@ -38,10 +39,15 @@ export async function POST(req: NextRequest) {
   const me = await memberAccess(service, user.id)
   if (!me.listed) return notListedResponse(me, 'send requests')
 
+  // 2026-10-06: emails + texts to the vendor were unthrottled.
+  const perListing = await rateLimit(`listreq:${user.id}:${listingId}`, 3, 60 * 60_000)
+  const perSender  = perListing.allowed ? await rateLimit(`listreq:${user.id}`, 10, 60 * 60_000) : perListing
+  if (!perListing.allowed || !perSender.allowed) return NextResponse.json({ error: 'You have sent a lot of requests recently — give the vendor a chance to reply, then try again later.' }, { status: 429 })
+
   const { data: listing, error: lErr } = await service.from('service_listings')
-    .select('id, user_id, title, rate, price_extras, active').eq('id', listingId).maybeSingle()
+    .select('id, user_id, title, rate, price_extras, active, review_hold').eq('id', listingId).maybeSingle()
   if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 })
-  if (!listing || !listing.active) return NextResponse.json({ error: 'That listing is no longer available.' }, { status: 404 })
+  if (!listing || !listing.active || listing.review_hold) return NextResponse.json({ error: 'That listing is no longer available.' }, { status: 404 })
   if (listing.user_id === user.id) return NextResponse.json({ error: "That's your own listing." }, { status: 400 })
   if (!(await memberAccess(service, listing.user_id)).listed) return NextResponse.json({ error: 'That listing is no longer available.' }, { status: 404 })
 

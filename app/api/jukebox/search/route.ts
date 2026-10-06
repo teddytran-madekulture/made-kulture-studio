@@ -2,6 +2,7 @@
 // (YouTube or Spotify) and returns up to 10 normalized results. Called on submit
 // / debounced by the client, never per keystroke.
 
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { searchTracks as spotifySearch } from '@/lib/spotify'
@@ -70,6 +71,10 @@ async function youtubeSearch(q: string) {
 
 export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get('q') || '').trim().slice(0, 120)
+  // 2026-10-06: each search costs ~100 of the 10,000 daily YouTube quota units,
+  // so ~100 unthrottled hits killed the jukebox for the day.
+  const rl = await rateLimit(`jbsearch:${clientIp(req)}`, 20, 60_000, { failOpen: true, message: 'Slow down a sec — try again in a minute.' })
+  if (!rl.allowed) return NextResponse.json({ results: [], error: rl.message }, { status: 429 })
   const slug = (req.nextUrl.searchParams.get('zone') || '').trim()
   if (!q) return NextResponse.json({ results: [] })
 

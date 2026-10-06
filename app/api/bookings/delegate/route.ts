@@ -3,6 +3,7 @@
 // as status='pending_payment' to hold the slot, then sends a short-lived pay link
 // to the payer. NO card, NO charge here — the payer pays on /pay/[token].
 
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
 import { randomUUID } from 'crypto'
@@ -111,6 +112,12 @@ export async function POST(req: NextRequest) {
     if (verifiedCents <= 0) {
       return NextResponse.json({ error: 'This order is $0 — just book it directly, no payment link needed.' }, { status: 400 })
     }
+
+    // 2026-10-06: per-booker cap on pay links — each one texts/emails an
+    //    address the booker typed, on the studio's Twilio bill. Checked BEFORE
+    //    any hold is written so a refusal leaves nothing behind.
+    const sendRl = await rateLimit(`delegate-send:${body.email}`, 5, 60 * 60_000)
+    if (!sendRl.allowed) return NextResponse.json({ error: 'You have sent several pay links this hour. Let one complete, or text the studio.' }, { status: 429 })
 
     // 2. Settings: hold length + per-booker active-hold cap.
     const { data: settingRows } = await supabase

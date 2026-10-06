@@ -3,6 +3,7 @@
 // POST → charge the payer's card (Square nonce), confirm the held booking,
 //        run the finalize chain, and receipt both sides.
 
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
@@ -89,6 +90,9 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
 }
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+  // 2026-10-06: a known pay link allowed unlimited declined-card retries.
+  const rl = await rateLimit(`pay:${params.token}`, 8, 60 * 60_000, { message: 'Too many payment attempts on this link. Text the studio and we will sort it out.' })
+  if (!rl.allowed) return NextResponse.json({ error: rl.message }, { status: 429 })
   const body = await req.json().catch(() => ({}))
   const sourceId = body?.sourceId as string | undefined
   const wallet = body?.wallet === true

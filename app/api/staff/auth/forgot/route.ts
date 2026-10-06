@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { createHash, randomBytes } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { findActiveStaffByEmail } from '@/lib/staff-auth'
@@ -17,7 +18,11 @@ export async function POST(req: NextRequest) {
   try { email = (await req.json())?.email ?? '' } catch { /* ignore */ }
   email = String(email).trim().toLowerCase()
 
-  if (email) {
+  // 2026-10-06: unlimited reset emails to any staff address. Still answers
+  // "ok" when throttled — no enumeration.
+  const perEmail = email ? await rateLimit(`stafforgot:${email}`, 3, 60 * 60_000) : { allowed: true }
+  const perIp = await rateLimit(`stafforgot:${clientIp(req)}`, 10, 60 * 60_000)
+  if (email && perEmail.allowed && perIp.allowed) {
     try {
       const staff = await findActiveStaffByEmail(email)
       if (staff?.id && staff.email) {
