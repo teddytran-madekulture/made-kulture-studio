@@ -365,6 +365,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   // Full-warehouse grid only: other TAKEOVERS (which block outright) kept apart
   // from SET bookings (which a shared-floor request can sit alongside).
   const [buyoutSlots, setBuyoutSlots] = useState<{ start: number; end: number }[]>([])
+  // Studio closures / holidays for the picked date (migration 143). Their hours
+  // already arrive inside the booked slots; this carries the PUBLIC label so
+  // the page can say WHY ("Closed for Thanksgiving") instead of a grey BOOKED.
+  const [closedSlots, setClosedSlots] = useState<{ start: number; end: number; label: string | null }[]>([])
   const [floorSets,   setFloorSets]   = useState<{ slug: string; start: number; end: number }[]>([])
 
   // Plus instant-book blocks for the selected date (only inside the window).
@@ -435,7 +439,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
             for (const b of v.bookedSlots || []) perSet.push({ slug, start: b.start, end: b.end })
           }
           setBookedSlots(all)
-          setBuyoutSlots(d.fullStudioSlots || [])
+          // A takeover needs every set, so ANY closure (even one set's) is a hard
+          // no — keep closed hours out of the gold "share the floor" ask.
+          setClosedSlots(d.closures || [])
+          setBuyoutSlots([...(d.fullStudioSlots || []), ...((d.closures || []) as { start: number; end: number }[])])
           setFloorSets(perSet)
           setLoadingSlots(false)
         })
@@ -446,7 +453,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
     setLoadingSlots(true)
     fetch(`/api/availability?set_id=${booking.setId}&date=${booking.date}`)
       .then(r => r.json())
-      .then(d => { setBookedSlots(d.booked || []); setLoadingSlots(false) })
+      .then(d => { setBookedSlots(d.booked || []); setClosedSlots(d.closures || []); setLoadingSlots(false) })
       .catch(() => setLoadingSlots(false))
   }, [booking.setId, booking.date, booking.type])
 
@@ -565,10 +572,12 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
       date: booking.date, startHour: booking.startHour!, endHour: booking.endHour!,
     }])
     setBooking(b => ({ ...b, setId: null, startHour: null, endHour: null }))
-    setBookedSlots([])
+    setBookedSlots([]); setClosedSlots([])
   }
   const removeCartItem = (i: number) => setSetCart(c => c.filter((_, idx) => idx !== i))
 
+  const closedAt = (h: number) => closedSlots.find(c => h >= c.start && h < c.end)
+  const fmtClosedTime = (h: number) => (h <= 0 || h >= 24 ? 'midnight' : fmt12(h))
   const isHourBooked = (h: number) =>
     bookedSlots.some(b => h >= b.start && h < b.end)
   // A free hour can still be a useless START: the minimum length (4hr for a
@@ -921,7 +930,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // multi-date order too — see the guard in app/api/bookings/route.ts.
                 if (setCart.length > 0) {
                   setBooking(b => ({ ...b, date: setCart[0].date, startHour: null, endHour: null }))
-                  setBookedSlots([])
+                  setBookedSlots([]); setClosedSlots([])
                   setStep(4)
                   return
                 }
@@ -957,7 +966,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 min={minBookDate}
                 onChange={d => {
                   setBooking(b => ({ ...b, date: d, startHour: null, endHour: null }))
-                  setBookedSlots([])
+                  setBookedSlots([]); setClosedSlots([])
                 }}
               />
             </div>
@@ -1045,10 +1054,26 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 CHECKING AVAILABILITY...
               </p>
             )}
+            {/* Closed hours (migration 143): say WHY, with the owner's public label. */}
+            {!loadingSlots && booking.date && closedSlots.length > 0 && (
+              <div style={{ border: '1px solid rgba(255,255,255,0.18)', background: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 6px, rgba(255,255,255,0.015) 6px 12px)', padding: '14px 16px', marginBottom: 20 }}>
+                {closedSlots.map((c, i) => {
+                  const allDay = c.start <= 9 && c.end >= CLOSE_HOUR
+                  const head = c.label?.trim() || (allDay ? 'Closed this day' : 'Closed for part of this day')
+                  return (
+                    <div key={i} style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.55 }}>
+                      <span style={{ fontWeight: 600 }}>{head}</span>
+                      {allDay ? (c.label ? ' — no bookings this day.' : '') : ` — ${fmtClosedTime(c.start)} to ${fmtClosedTime(c.end)}.`}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             {/* Nothing fits this day (e.g. a buyout on a busy day). Say so instead of
                 showing a silent all-grey grid. Only on the plain path — the Plus /
                 short-notice paths have their own gold "ask for it" options. */}
             {!loadingSlots && !plusWindowDate && !needsApproval && booking.startHour === null && setCart.length === 0 && booking.date
+              && !closedSlots.some(c => c.start <= 9 && c.end >= CLOSE_HOUR)
               && !SLOTS.some(h => h % 1 === 0 && h <= CLOSE_HOUR - minHours && !(bookingIsToday && h < nowChiDec)
                                   && !isHourBooked(h) && !noRoomFromStart(h)) && (
               <div style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.03)', padding: '14px 16px', marginBottom: 20 }}>
@@ -1165,7 +1190,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                     </div>
                     {booked && (
                       <div style={{ fontFamily: 'Inter', fontSize: 9, color: sharedAsk ? 'rgba(201,178,126,0.6)' : 'rgba(255,255,255,0.2)', letterSpacing: '0.08em', marginTop: 4 }}>
-                        {sharedAsk ? 'SET BOOKED' : 'BOOKED'}
+                        {sharedAsk ? 'SET BOOKED' : closedAt(h) ? 'CLOSED' : 'BOOKED'}
                       </div>
                     )}
                   </button>

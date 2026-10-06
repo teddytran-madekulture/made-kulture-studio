@@ -85,6 +85,9 @@ export default function AvailabilityPage() {
   const [date, setDate]           = useState(minDate())
   const [sets, setSets]           = useState<Record<string, SetData>>({})
   const [fullStudioSlots, setFullStudioSlots] = useState<{ start: number; end: number }[]>([])
+  // Studio closures (migration 143) — hours already arrive as booked; this
+  // carries the public label so the page can say why.
+  const [closures, setClosures] = useState<{ start: number; end: number; label: string | null; setIds: string[] | null }[]>([])
   const [loading, setLoading]     = useState(true)
   const [menuOpen, setMenuOpen]   = useState(false)
   const [mobileSet, setMobileSet] = useState('set-a')
@@ -97,6 +100,7 @@ export default function AvailabilityPage() {
       .then(d => {
         setSets(d.sets ?? {})
         setFullStudioSlots(d.fullStudioSlots ?? [])
+        setClosures(d.closures ?? [])
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -227,6 +231,16 @@ export default function AvailabilityPage() {
             <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, letterSpacing: '0.04em', color: '#fff' }}>
               {formatDateLabel(date)}
             </div>
+            {!loading && closures.map((c, i) => {
+              const allDay = c.start <= 9 && c.end >= 22
+              const t = (h: number) => (h <= 0 || h >= 24 ? 'midnight' : fmtFull(h))
+              const head = c.label?.trim() || (allDay ? (c.setIds ? 'Some sets are closed this day' : 'The studio is closed this day') : 'Closed for part of this day')
+              return (
+                <div key={i} style={{ marginTop: 10, display: 'inline-block', padding: '8px 12px', border: '1px solid rgba(255,255,255,0.18)', background: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0 6px, rgba(255,255,255,0.015) 6px 12px)', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.85)', marginRight: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{head}</span>{allDay ? '' : ` — ${t(c.start)} to ${t(c.end)}`}
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -374,7 +388,7 @@ export default function AvailabilityPage() {
                     }}>
                       <span style={{ fontFamily: '"Inter Tight", Inter, sans-serif', fontSize: 15, color: '#fff' }}>{fmtFull(slot)}</span>
                       <span style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.12em', color: booked ? 'rgba(255,120,120,0.7)' : dateBookable ? '#5dca8f' : 'rgba(255,255,255,0.4)' }}>
-                        {booked ? 'BOOKED' : dateBookable ? 'AVAILABLE' : 'OPEN'}
+                        {booked ? (closures.some(c => !c.setIds && slot < c.end && slot + 0.5 > c.start) ? 'CLOSED' : 'BOOKED') : dateBookable ? 'AVAILABLE' : 'OPEN'}
                       </span>
                     </button>
                   )

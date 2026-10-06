@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { activeClosures, closureBlocks, closureReason } from '@/lib/closures'
 
 // Statuses that occupy a set's calendar.
 // 'pending_payment' = a delegated ("someone else pays") hold; it reserves the
@@ -67,12 +68,26 @@ async function activeBuyouts(
 // ACTIVE row on that set, so without excluding it a move that overlaps its own
 // original window conflicts with itself — 6pm→6:30pm would be refused because
 // 6pm is "already booked", by the very booking you are moving.
+// ⚠️ `ignoreClosures` is for ADMIN edits only — Teddy may book over his own
+// closure on purpose. Every customer path leaves it off.
 export async function checkSetWindows(
   supabase: SupabaseClient,
   windows: SetWindow[],
-  excludeBookingId?: string
+  excludeBookingId?: string,
+  opts: { ignoreClosures?: boolean } = {}
 ): Promise<{ ok: boolean; conflicts: SetConflict[] }> {
   const conflicts: SetConflict[] = []
+
+  // 00. Studio closures / holidays (migration 143). Throws on a failed lookup.
+  if (windows.length && !opts.ignoreClosures) {
+    const spanStart = windows.reduce((m, w) => (Date.parse(w.startISO) < Date.parse(m) ? w.startISO : m), windows[0].startISO)
+    const spanEnd   = windows.reduce((m, w) => (Date.parse(w.endISO)   > Date.parse(m) ? w.endISO   : m), windows[0].endISO)
+    const closures  = await activeClosures(supabase, spanStart, spanEnd)
+    for (const w of windows) {
+      const hit = closures.find(c => closureBlocks(c, w.setId) && overlaps(w.startISO, w.endISO, c.startISO, c.endISO))
+      if (hit) conflicts.push({ setName: w.setName, startISO: w.startISO, endISO: w.endISO, reason: closureReason(hit, w.setName) })
+    }
+  }
 
   // 0. Against any full-warehouse buyout. Checked FIRST because a buyout beats
   //    every per-set answer: the sets are all individually free during one, and
@@ -147,8 +162,14 @@ export async function checkBuyoutWindow(
   startISO: string,
   endISO: string,
   excludeBookingId?: string,
-  opts: { buyoutsOnly?: boolean } = {}
+  opts: { buyoutsOnly?: boolean; ignoreClosures?: boolean } = {}
 ): Promise<{ ok: boolean; conflicts: SetConflict[] }> {
+  // A buyout needs every set, so ANY closure in the window blocks it.
+  if (!opts.ignoreClosures) {
+    const hit = (await activeClosures(supabase, startISO, endISO))[0]
+    if (hit) return { ok: false, conflicts: [{ setName: 'Full Studio Takeover', startISO, endISO, reason: closureReason(hit) }] }
+  }
+
   // buyoutsOnly: a SHARED-FLOOR takeover (approved by the studio, see
   // app/api/bookings/shared-buyout-request) knowingly runs alongside set
   // bookings already on the floor, so only another buyout can block it.

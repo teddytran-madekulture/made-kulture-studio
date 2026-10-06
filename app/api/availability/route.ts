@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { centralOffset } from '@/lib/booking-times'
 import { createClient } from '@supabase/supabase-js'
+import { activeClosures, closureBlocks, type Closure } from '@/lib/closures'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,6 +46,17 @@ function cdhTime(dateStr: string): number {
   const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
   const m = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
   return (h === 24 ? 0 : h) + m / 60
+}
+
+// Closures (migration 143) as grid slots, clamped to this day so an all-day
+// closure paints 0–24 instead of an end that sorts before its start.
+function closureSlots(cl: Closure[], dayStart: string, dayEnd: string) {
+  const s = Date.parse(dayStart), e = Date.parse(dayEnd)
+  return cl.map(c => ({
+    c,
+    start: Date.parse(c.startISO) <= s ? 0  : cdhTime(c.startISO),
+    end:   Date.parse(c.endISO)   >= e ? 24 : cdhTime(c.endISO),
+  }))
 }
 
 // GET /api/availability?date=YYYY-MM-DD            → all sets
@@ -104,9 +116,15 @@ export async function GET(req: NextRequest) {
       .gt('end_time', dayStart)     // buyout still occupies this morning
     if (buyoutErr) return NextResponse.json({ error: buyoutErr.message }, { status: 500 })
 
+    // Closed hours read as booked. A failed lookup is a 500, never "open".
+    let closed: ReturnType<typeof closureSlots> = []
+    try { closed = closureSlots((await activeClosures(supabase, dayStart, dayEnd)).filter(c => closureBlocks(c, resolvedId)), dayStart, dayEnd) }
+    catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+
     const dayStartMs = Date.parse(dayStart)
     const dayEndMs   = Date.parse(dayEnd)
     const booked = [
+      ...closed.map(x => ({ start: x.start, end: x.end })),
       ...(data || []).map(b => ({ start: cdhTime(b.start_time), end: cdhTime(b.end_time) })),
       // Clamp to the day so a buyout spilling over midnight cannot emit an end
       // that sorts before its start and paint the grid nonsense.
@@ -115,7 +133,7 @@ export async function GET(req: NextRequest) {
         end:   Date.parse(b.end_time)   >= dayEndMs   ? 24 : cdhTime(b.end_time),
       })),
     ]
-    return NextResponse.json({ booked })
+    return NextResponse.json({ booked, closures: closed.map(x => ({ start: x.start, end: x.end, label: x.c.publicLabel })) })
   }
 
   // ── All sets ───────────────────────────────────────────────────────────────
@@ -151,11 +169,19 @@ export async function GET(req: NextRequest) {
   if (bookingsError) return NextResponse.json({ error: bookingsError.message }, { status: 500 })
   if (buyoutsError)  return NextResponse.json({ error: buyoutsError.message },  { status: 500 })
 
-  // Full-studio slots block every set
-  const fullStudioSlots = (buyouts ?? []).map(b => ({
-    start: cdhTime(b.start_time),
-    end:   cdhTime(b.end_time),
-  }))
+  let closures: Closure[] = []
+  try { closures = await activeClosures(supabase, dayStart, dayEnd) }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+  const closed = closureSlots(closures, dayStart, dayEnd)
+
+  // Full-studio slots block every set — buyouts AND whole-studio closures
+  const fullStudioSlots = [
+    ...(buyouts ?? []).map(b => ({
+      start: cdhTime(b.start_time),
+      end:   cdhTime(b.end_time),
+    })),
+    ...closed.filter(x => !x.c.setIds).map(x => ({ start: x.start, end: x.end })),
+  ]
 
   // Group individual booked slots by set slug
   const result: Record<string, { name: string; bookedSlots: { start: number; end: number }[] }> = {}
@@ -168,8 +194,10 @@ export async function GET(req: NextRequest) {
         start: cdhTime(b.start_time),
         end:   cdhTime(b.end_time),
       }))
+    // Set-specific closures (e.g. "Set C repaint") paint only that set.
+    for (const x of closed) if (x.c.setIds?.includes(set.id)) slots.push({ start: x.start, end: x.end })
     result[slug] = { name: set.name, bookedSlots: slots }
   }
 
-  return NextResponse.json({ sets: result, fullStudioSlots })
+  return NextResponse.json({ sets: result, fullStudioSlots, closures: closed.map(x => ({ start: x.start, end: x.end, label: x.c.publicLabel, setIds: x.c.setIds })) })
 }

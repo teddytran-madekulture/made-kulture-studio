@@ -10,6 +10,7 @@
 //                 move: the set is often booked right behind them, which is
 //                 precisely the case where running over cost somebody something.
 
+import { activeClosures, closureBlocks } from '@/lib/closures'
 import { supabaseAdmin } from '@/lib/supabase'
 import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { randomUUID } from 'crypto'
@@ -115,6 +116,19 @@ export async function planExtension(
     .gt('end_time', curEnd.toISOString())
     .limit(1)
 
+  // A closure inside the new window (migration 143) is a conflict too. A failed
+  // lookup counts as a conflict — never sell time we could not check.
+  let closed = false
+  if (kind === 'extend') {
+    try {
+      closed = (await activeClosures(db, curEnd.toISOString(), newEnd.toISOString()))
+        .some(c => closureBlocks(c, b.set_id))
+    } catch (e: any) {
+      console.error('[extensions] closure lookup failed:', e?.message)
+      closed = true
+    }
+  }
+
   return {
     booking: b,
     kind,
@@ -125,7 +139,7 @@ export async function planExtension(
     rate,
     priceCents,
     newEndISO: newEnd.toISOString(),
-    conflict: kind === 'extend' && !!(clash && clash.length),
+    conflict: kind === 'extend' && (!!(clash && clash.length) || closed),
     // Optimistic: a Square customer profile can hold saved cards even when this
     // particular booking wasn't paid with one. The confirm endpoint resolves the
     // actual card (booking's card → else customer's saved cards) before charging.
@@ -330,6 +344,20 @@ export async function setHeadroom(
     { ms: 12 * 3600_000,      limit: 'max' },
   ]
   if (nextStartISO) bounds.push({ ms: Date.parse(nextStartISO) - end, limit: 'next-booking' })
+
+  // A closure starting before close (migration 143) caps it like a booking.
+  // A failed lookup means NO extension, never "wide open".
+  try {
+    const cl = (await activeClosures(db, new Date(end).toISOString(), new Date(closeMs).toISOString()))
+      .filter(c => closureBlocks(c, setId))
+    if (cl.length) {
+      const first = Math.max(end, Date.parse(cl[0].startISO))
+      bounds.push({ ms: first - end, limit: 'next-booking' })
+    }
+  } catch (e: any) {
+    console.error('[kiosk] closure headroom lookup failed:', e?.message)
+    return { nextStartISO: null, headroomHours: 0, headroomLimit: 'next-booking' }
+  }
   bounds.sort((a, b) => a.ms - b.ms)
 
   // FLOOR to a half hour. Rounding up here would sell time that overruns the

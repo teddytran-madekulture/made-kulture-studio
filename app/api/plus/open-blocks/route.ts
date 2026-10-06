@@ -8,6 +8,7 @@
 // from the database and refuses anything that does not fit. Never treat a
 // response from here as permission.
 
+import { activeClosures, closureBlocks, type Closure } from '@/lib/closures'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
@@ -84,6 +85,10 @@ export async function GET(req: NextRequest) {
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 })
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
 
+  let closures: Closure[] = []
+  try { closures = await activeClosures(admin, windowStart, windowEnd) }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+
   const rows = ((bookings ?? []) as any[])
     .filter(b => !exclude || b.id !== exclude) as BookingRow[]
   const open = openWindowsFrom(rows)
@@ -97,6 +102,8 @@ export async function GET(req: NextRequest) {
       // Houston-local day only — a block bleeding past midnight belongs to the
       // next date, and bookings may not span days anyway (visit continuity).
       .filter(i => centralDateOf(i.start) === date && centralDateOf(i.end - 1) === date)
+      // Never offer a closed hour (migration 143) — checkout would refuse it.
+      .filter(i => !closures.some(c => closureBlocks(c, s.id) && i.start < Date.parse(c.endISO) && i.end > Date.parse(c.startISO)))
       .map(i => ({
         startHour: centralDecimal(i.start),
         endHour:   centralDecimal(i.end),

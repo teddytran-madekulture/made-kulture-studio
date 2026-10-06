@@ -11,6 +11,7 @@ import OvertimeModal from '@/components/OvertimeModal'
 import GuestCountModal from '@/components/GuestCountModal'
 import StandingPanel, { StandingChip, QuickIncidentPrompt } from '@/components/admin/StandingPanel'
 import CreditPanel from '@/components/admin/CreditPanel'
+import { BlockTimeModal, ClosureDetailModal, CLOSED_BG, datesCovered, type Occurrence, type SetOpt, type BlockPrefill } from '@/components/BlockTime'
 import { bookingHourToISO } from '@/lib/booking-times'
 // ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
 // share the API routes' pricing instead of keeping a fourth copy of the rate
@@ -407,7 +408,9 @@ function addMonths(dateStr: string, n: number): string {
 function monthGridDates(dateStr: string): string[] {
   const first = dateStr.slice(0, 8) + '01'
   const gridStart = addDays(first, -dowIndex(first))
-  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i))
+  const all = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i))
+  // Drop a trailing week that is entirely next month (most months need 5 rows, not 6).
+  return all.slice(35, 42).every(d => d.slice(0, 7) !== dateStr.slice(0, 7)) ? all.slice(0, 35) : all
 }
 function shortDayLabel(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
@@ -629,6 +632,17 @@ export default function AdminDashboard() {
     if (res.ok) { setLegalSaved(which); setTimeout(() => setLegalSaved(null), 2500) }
   }
   const [calDate,       setCalDate]       = useState(todayStr)
+  // Closures / blocked time (migration 143) — drawn on every calendar view.
+  const [closures,      setClosures]      = useState<Occurrence[]>([])
+  const [closureSets,   setClosureSets]   = useState<SetOpt[]>([])
+  const [closuresErr,   setClosuresErr]   = useState('')
+  const [blockPrefill,  setBlockPrefill]  = useState<BlockPrefill | null>(null)
+  const [openClosure,   setOpenClosure]   = useState<Occurrence | null>(null)
+  // Month view fits the window: MEASURE the space below the grid's top instead
+  // of guessing with vh. body is zoomed 1.25x on desktop, and Chrome reports
+  // rects either zoomed or not depending on version — so detect which.
+  const monthGridRef = useRef<HTMLDivElement | null>(null)
+  const [monthAvail, setMonthAvail] = useState<number | null>(null)
   const [calMode,       setCalMode]       = useState<'day' | 'week' | 'month' | 'agenda'>('day')
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
   // "Log this as an incident?" after a cleaning fee / overtime charge (migration 109).
@@ -1109,18 +1123,55 @@ export default function AdminDashboard() {
   useEffect(() => { fetchBookings() }, [fetchBookings])
   useEffect(() => { fetchTours() }, [fetchTours])
 
+  // Closures load separately, like tours: a failure must never blank the
+  // bookings — but it is SHOWN, never rendered as "nothing blocked".
+  const calMonth = calDate.slice(0, 7)
+  const fetchClosures = useCallback(async () => {
+    try {
+      const anchor = `${calMonth}-01`
+      const res = await fetch(`/api/admin/closures?from=${addDays(anchor, -45)}&to=${addDays(anchor, 420)}`, { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setClosuresErr(data.error || 'Could not load blocked time.'); return }
+      setClosuresErr(''); setClosures(data.occurrences || []); setClosureSets(data.sets || [])
+    } catch { setClosuresErr('Could not load blocked time.') }
+  }, [calMonth])
+  useEffect(() => { fetchClosures() }, [fetchClosures])
+
+  useEffect(() => {
+    if (calMode !== 'month' || isMobile) return
+    const measure = () => {
+      const el = monthGridRef.current
+      if (!el) return
+      const Z = parseFloat((getComputedStyle(document.body) as any).zoom) || 1
+      // Probe: how tall does a 100px CSS box REPORT? ≈100·Z ⇒ rects are in screen px.
+      const probe = document.createElement('div')
+      probe.style.cssText = 'position:absolute;visibility:hidden;height:100px;width:1px'
+      document.body.appendChild(probe)
+      const r = probe.getBoundingClientRect().height / 100
+      probe.remove()
+      const top = el.getBoundingClientRect().top
+      const avail = Math.abs(r - Z) < Math.abs(r - 1)
+        ? (window.innerHeight - top) / Z      // rects in screen px
+        : window.innerHeight / Z - top        // rects in CSS px
+      setMonthAvail(avail - 28)               // breathing room under the last row
+    }
+    const raf = requestAnimationFrame(measure)
+    window.addEventListener('resize', measure)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure) }
+  }, [calMode, isMobile, calDate])
+
   // Auto-refresh bookings whenever the admin returns to this tab/window, so a
   // booking made elsewhere (or by a customer) shows up without a manual reload.
   useEffect(() => {
-    const refetch = () => { fetchBookings(true); fetchTours() }
-    const onVis   = () => { if (!document.hidden) { fetchBookings(true); fetchTours() } }
+    const refetch = () => { fetchBookings(true); fetchTours(); fetchClosures() }
+    const onVis   = () => { if (!document.hidden) { fetchBookings(true); fetchTours(); fetchClosures() } }
     window.addEventListener('focus', refetch)
     document.addEventListener('visibilitychange', onVis)
     return () => {
       window.removeEventListener('focus', refetch)
       document.removeEventListener('visibilitychange', onVis)
     }
-  }, [fetchBookings, fetchTours])
+  }, [fetchBookings, fetchTours, fetchClosures])
 
   // ── Sets Manager helpers ─────────────────────────────────────────────────────
   const fetchSets = useCallback(async () => {
@@ -1804,6 +1855,26 @@ export default function AdminDashboard() {
   const dayTours = calTours.filter(t => localDateStr(t.start_time) === calDate)
   const trByDate: Record<string, TourRequest[]> = {}
   calTours.forEach(t => { const d = localDateStr(t.start_time); (trByDate[d] ||= []).push(t) })
+  // Closures by Central date (a multi-day closure lands on every day it covers).
+  const clByDate: Record<string, Occurrence[]> = {}
+  closures.forEach(c => datesCovered(c.startISO, c.endISO).forEach(d => { (clByDate[d] ||= []).push(c) }))
+  const dayClosures = clByDate[calDate] || []
+  const setIdByName = (name: string) => closureSets.find(x => x.name === name)?.id
+  const closureHits = (c: Occurrence, setName: string) => !c.setIds || (!!setIdByName(setName) && c.setIds.includes(setIdByName(setName)!))
+  // A closure's hours on ONE day, clamped to 0–24 (an all-day closure → 0–24).
+  const closureSpanOn = (c: Occurrence, d: string) => {
+    const s = localDateStr(c.startISO) < d ? 0 : localHour(c.startISO)
+    const e = localDateStr(c.endISO) > d ? 24 : localHour(c.endISO)
+    return { s, e, allDay: s === 0 && e === 24 }
+  }
+  const fmt12h = (h: number) => (h === 0 || h === 24 ? '12:00 AM' : fmt12(h))
+  const closureLine = (c: Occurrence, d: string) => {
+    const { s, e, allDay } = closureSpanOn(c, d)
+    const when = allDay ? 'All day' : `${fmt12h(s)}–${fmt12h(e)}`
+    return `${when} · ${c.setNames?.length ? c.setNames.join(', ') : 'Whole studio'}`
+  }
+  const closureTitle = (c: Occurrence) => c.kind === 'holiday' ? (c.publicLabel || 'Holiday').replace(/^Closed for /, '').toUpperCase() : (c.publicLabel || c.note || 'Blocked').toUpperCase()
+
   const calHeaderLabel = calMode === 'day' ? fmtCalHeader(calDate)
     : calMode === 'week' ? weekLabel(calDate)
     : calMode === 'month' ? monthLabel(calDate)
@@ -2563,7 +2634,14 @@ export default function AdminDashboard() {
                   background: calMode === m ? '#fff' : 'transparent', color: calMode === m ? '#080808' : 'rgba(255,255,255,0.6)',
                 }}>{label}</button>
               ))}
+              <div style={{ flex: 1 }} />
+              <a href="/admin/closures" style={{ alignSelf: 'center', fontSize: 12, color: 'rgba(255,255,255,0.45)', textDecoration: 'none', letterSpacing: '0.04em', marginRight: 6 }}>Manage holidays</a>
+              <button onClick={() => setBlockPrefill({ date: calDate < todayStr() ? todayStr() : calDate })} title="Close the studio or certain sets for a day or a few hours" style={{
+                border: '1px solid rgba(255,255,255,0.25)', padding: '7px 14px', cursor: 'pointer', background: CLOSED_BG,
+                fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', color: '#fff',
+              }}>⊘ BLOCK TIME</button>
             </div>
+            {closuresErr && <div style={{ fontSize: 12, color: '#f0a0a0', marginBottom: 10 }}>Blocked time didn&apos;t load ({closuresErr}). Closures may be missing from the calendar.</div>}
 
             {/* Nav */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
@@ -2650,8 +2728,27 @@ export default function AdminDashboard() {
                     return (
                       <div key={setName} style={{ width: SET_COL, flexShrink: 0, position: 'relative', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
                         {HOURS.map(h => (
-                          <div key={h} style={{ height: SLOT_H * 2, borderTop: '1px solid rgba(255,255,255,0.06)' }} />
+                          // Tap an empty hour to block it. Bookings and closure bands
+                          // sit on top, so a tap on THEM still opens them.
+                          <div key={h} title="Tap to block this time"
+                            onClick={() => setBlockPrefill({ date: calDate, startHour: h, endHour: Math.min(h + 1, 24), setIds: setIdByName(setName) ? [setIdByName(setName)!] : undefined })}
+                            style={{ height: SLOT_H * 2, borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'cell' }} />
                         ))}
+                        {dayClosures.filter(c => closureHits(c, setName)).map(c => {
+                          const { s: cs, e: ce } = closureSpanOn(c, calDate)
+                          const top = Math.max(cs, CAL_START), bot = Math.min(ce, CAL_END)
+                          if (bot <= top) return null
+                          return (
+                            <div key={c.id} onClick={() => setOpenClosure(c)} title={closureLine(c, calDate)}
+                              style={{ position: 'absolute', top: (top - CAL_START) * SLOT_H * 2, left: 0, right: 0, height: (bot - top) * SLOT_H * 2,
+                                background: CLOSED_BG, borderTop: '1px solid rgba(255,255,255,0.18)', borderBottom: '1px solid rgba(255,255,255,0.18)',
+                                cursor: 'pointer', overflow: 'hidden', padding: '4px 6px', zIndex: 1 }}>
+                              <div style={{ fontSize: 9, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                CLOSED · {closureTitle(c)}
+                              </div>
+                            </div>
+                          )
+                        })}
                         {colBookings.map(b => {
                           const startH = localHour(b.start_time)
                           const endH   = localHour(b.end_time)
@@ -2671,7 +2768,7 @@ export default function AdminDashboard() {
                                   : b.customers?.status === 'warning'
                                     ? '1px solid rgba(249,115,22,0.6)'
                                     : '1px solid rgba(255,255,255,0.2)',
-                                borderRadius: 2, padding: '4px 6px', cursor: 'pointer', overflow: 'hidden',
+                                borderRadius: 2, padding: '4px 6px', cursor: 'pointer', overflow: 'hidden', zIndex: 2,
                               }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {b.customers?.banned && <span style={{ fontSize: 8, lineHeight: 1 }}>🚫</span>}
@@ -2741,15 +2838,25 @@ export default function AdminDashboard() {
                 {Array.from({ length: 7 }, (_, i) => addDays(weekStart(calDate), i)).map(dateStr => {
                   const list  = (bkByDate[dateStr] || []).slice().sort(sortByStart)
                   const tlist = (trByDate[dateStr] || []).slice().sort(byStart)
+                  const clist = clByDate[dateStr] || []
                   return (
                     <div key={dateStr} style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
                       <button onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: dateStr === todayStr() ? 'rgba(212,168,67,0.12)' : 'rgba(255,255,255,0.03)', border: 'none', padding: '12px 14px', cursor: 'pointer', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600 }}>
                         <span>{shortDayLabel(dateStr)}</span>
                         <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                          {list.length ? `${list.length} booking${list.length > 1 ? 's' : ''}` : tlist.length ? '' : '—'}
+                          {clist.length ? <span style={{ color: 'rgba(255,255,255,0.7)' }}>CLOSED{list.length || tlist.length ? ' · ' : ''}</span> : null}
+                          {list.length ? `${list.length} booking${list.length > 1 ? 's' : ''}` : tlist.length || clist.length ? '' : '—'}
                           {tlist.length ? <span style={{ color: '#5eead4' }}>{list.length ? ' · ' : ''}{tlist.length} tour{tlist.length > 1 ? 's' : ''}</span> : null}
                         </span>
                       </button>
+                      {clist.map(c => (
+                        <div key={c.id} onClick={() => setOpenClosure(c)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.05)', background: CLOSED_BG, cursor: 'pointer' }}>
+                          <div>
+                            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>CLOSED · {closureTitle(c)}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{closureLine(c, dateStr)}</div>
+                          </div>
+                        </div>
+                      ))}
                       {tlist.map(t => (
                         <div key={t.id} onClick={() => openTour(t)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.05)', borderLeft: '3px solid rgba(45,212,191,0.7)', cursor: 'pointer' }}>
                           <div>
@@ -2790,16 +2897,48 @@ export default function AdminDashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4, marginBottom: 6 }}>
                   {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 10, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.3)' }}>{d}</div>)}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
-                  {monthGridDates(calDate).map(dateStr => {
+                <div ref={monthGridRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+                  {monthGridDates(calDate).map((dateStr, _i, all) => {
+                    // Desktop: size the rows so the whole month fits the window
+                    // (square cells were ~240px tall on a wide screen). Phone keeps
+                    // squares. --svh, not vh: body is zoomed 1.25x on desktop.
+                    const rows = Math.ceil(all.length / 7)
+                    const cellSize: React.CSSProperties = isMobile
+                      ? { aspectRatio: '1 / 1' }
+                      : monthAvail != null
+                        ? { height: Math.max(64, Math.floor((monthAvail - (rows - 1) * 4) / rows)) }
+                        : { height: 96 }
                     const inMonth = dateStr.slice(0, 7) === calDate.slice(0, 7)
                     const count  = (bkByDate[dateStr] || []).length
                     const tcount = (trByDate[dateStr] || []).length
+                    const dcl    = clByDate[dateStr] || []
+                    // Fully closed = a whole-studio closure covering the entire day.
+                    const fullClosed = dcl.some(c => !c.setIds && closureSpanOn(c, dateStr).allDay)
                     const isTod = dateStr === todayStr()
+                    // Desktop lists what's on the day; phone keeps the compact counts.
+                    const cellH = typeof cellSize.height === 'number' ? cellSize.height : 96
+                    const maxLines = Math.max(1, Math.floor((cellH - 30) / 17))
+                    const short = (iso: string) => fmtTime(iso).replace(':00', '').replace(' ', '').toLowerCase()
+                    const lines: { key: string; text: string; color: string }[] = isMobile ? [] : [
+                      ...dcl.map(c => ({ key: `c-${c.id}`, text: `CLOSED · ${closureTitle(c)}`, color: 'rgba(255,255,255,0.6)' })),
+                      ...(trByDate[dateStr] || []).slice().sort(byStart).map(t => ({ key: `t-${t.id}`, text: `${short(t.start_time)} Tour · ${t.name}`, color: '#5eead4' })),
+                      ...(bkByDate[dateStr] || []).slice().sort(sortByStart).map(b => ({
+                        key: `b-${b.id}`,
+                        text: `${short(b.start_time)} ${b.sets?.name ?? 'Buyout'} · ${b.customers?.name || '—'}`,
+                        color: b.customers?.banned ? '#f87171' : !b.sets ? '#e6c07a' : 'rgba(255,255,255,0.82)',
+                      })),
+                    ]
+                    const shown = lines.length > maxLines ? lines.slice(0, maxLines - 1) : lines
+                    const more = lines.length - shown.length
                     return (
-                      <button key={dateStr} onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ aspectRatio: '1 / 1', border: '1px solid rgba(255,255,255,0.06)', background: isTod ? 'rgba(212,168,67,0.16)' : (count || tcount) ? 'rgba(255,255,255,0.04)' : 'transparent', cursor: 'pointer', padding: '5px 5px', display: 'flex', flexDirection: 'column', gap: 2, opacity: inMonth ? 1 : 0.3, color: '#fff' }}>
+                      <button key={dateStr} onClick={() => { setCalDate(dateStr); setCalMode('day') }} style={{ ...cellSize, overflow: 'hidden', minWidth: 0, border: '1px solid rgba(255,255,255,0.06)', background: isTod ? 'rgba(212,168,67,0.16)' : dcl.length ? CLOSED_BG : (count || tcount) ? 'rgba(255,255,255,0.04)' : 'transparent', cursor: 'pointer', padding: '5px 5px', display: 'flex', flexDirection: 'column', gap: 2, opacity: inMonth ? 1 : 0.3, color: '#fff' }}>
                         <span style={{ fontSize: 12, fontWeight: isTod ? 700 : 500, textAlign: 'left' }}>{Number(dateStr.slice(8, 10))}</span>
-                        {(count > 0 || tcount > 0) && (
+                        {!isMobile && shown.map(l => (
+                          <span key={l.key} style={{ fontSize: 11, lineHeight: '15px', color: l.color, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{l.text}</span>
+                        ))}
+                        {!isMobile && more > 0 && <span style={{ fontSize: 10.5, lineHeight: '15px', color: 'rgba(255,255,255,0.45)', textAlign: 'left' }}>+{more} more</span>}
+                        {isMobile && dcl.length > 0 && <span style={{ fontSize: 8.5, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.6)', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullClosed ? 'CLOSED' : 'PART CLOSED'}</span>}
+                        {isMobile && (count > 0 || tcount > 0) && (
                           <span style={{ fontSize: 10, marginTop: 'auto', textAlign: 'left', display: 'flex', gap: 4, alignItems: 'baseline' }}>
                             {count > 0 && <span style={{ color: 'rgba(255,255,255,0.6)' }}>{count}</span>}
                             {tcount > 0 && <span style={{ color: '#5eead4' }}>{tcount}T</span>}
@@ -2818,7 +2957,14 @@ export default function AdminDashboard() {
               // grouped by day. Arrow / pick a past date to look back.
               // Bookings and tours are merged and sorted together so the list reads
               // as the day actually runs, not bookings-then-tours.
-              const items: Array<{ start: string; booking?: Booking; tour?: TourRequest }> = [
+              const items: Array<{ start: string; booking?: Booking; tour?: TourRequest; closure?: Occurrence; cdate?: string }> = [
+                ...Object.entries(clByDate)
+                  .filter(([d]) => d >= calDate)
+                  .flatMap(([d, list]) => list.map(c => {
+                    const { s: cs } = closureSpanOn(c, d)
+                    // sort key: that day at the closure's start hour (midnight for all-day)
+                    return { start: bookingHourToISO(d, cs), closure: c, cdate: d }
+                  })),
                 ...bookings
                   .filter(b => b.status !== 'cancelled' && localDateStr(b.start_time) >= calDate)
                   .map(b => ({ start: b.start_time, booking: b })),
@@ -2834,10 +2980,16 @@ export default function AdminDashboard() {
                     const d = localDateStr(item.start); const showHeader = d !== lastDate; lastDate = d
                     const t = item.tour
                     const b = item.booking
+                    const c = item.closure
                     return (
-                      <div key={t ? `tour-${t.id}` : `bk-${b!.id}`}>
+                      <div key={c ? `cl-${c.id}-${item.cdate}` : t ? `tour-${t.id}` : `bk-${b!.id}`}>
                         {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
-                        {t ? (
+                        {c ? (
+                          <div onClick={() => setOpenClosure(c)} style={{ background: CLOSED_BG, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
+                            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>CLOSED · {closureTitle(c)}</div>
+                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{closureLine(c, item.cdate!)}</div>
+                          </div>
+                        ) : t ? (
                           <div onClick={() => openTour(t)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, background: '#141414', border: t.status === 'pending' ? '1px dashed rgba(45,212,191,0.6)' : '1px solid rgba(45,212,191,0.5)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
                             <div>
                               <div style={{ fontSize: 14, color: '#5eead4' }}>
@@ -5106,6 +5258,15 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Closures (migration 143) — block time from the calendar, tap a band to undo */}
+      {blockPrefill && (
+        <BlockTimeModal
+          key={`${blockPrefill.date}-${blockPrefill.startHour ?? 'day'}-${blockPrefill.setIds?.join(',') ?? 'all'}`}
+          sets={closureSets} prefill={blockPrefill}
+          onClose={() => setBlockPrefill(null)} onSaved={fetchClosures} />
+      )}
+      {openClosure && <ClosureDetailModal occ={openClosure} onClose={() => setOpenClosure(null)} onChanged={fetchClosures} />}
     </div>
   )
 }

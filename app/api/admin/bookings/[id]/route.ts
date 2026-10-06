@@ -124,13 +124,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         if (setId) {
           const { ok, conflicts } = await checkSetWindows(
             supabase, [{ setId, setName, startISO, endISO }], params.id,
+            { ignoreClosures: true },   // admin may book over a closure
           )
           if (!ok) return NextResponse.json({ error: conflicts.map(c => c.reason).join(' ') }, { status: 409 })
         } else {
           // set_id null = a full-warehouse buyout. The reverse question: is the
           // whole floor clear? Without this branch a buyout skipped the check
           // entirely, exactly as both booking paths used to.
-          const { ok, conflicts } = await checkBuyoutWindow(supabase, startISO, endISO, params.id)
+          const { ok, conflicts } = await checkBuyoutWindow(supabase, startISO, endISO, params.id, { ignoreClosures: true })
           if (!ok) {
             return NextResponse.json({
               error: `${conflicts.map(c => c.reason).join(' ')} Nothing was changed.`,
