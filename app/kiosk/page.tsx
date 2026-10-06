@@ -18,6 +18,7 @@ import KioskShowcase, { type ShowcaseEditorial } from '@/components/KioskShowcas
 import ZoomableImage from '@/components/ZoomableImage'
 import qrcode from 'qrcode-generator'
 import { POSE_CATEGORIES, POSE_GUIDE_ENABLED } from '@/lib/pose-categories'
+import { useJukeboxPlayer } from '@/components/jukebox/useJukeboxPlayer'
 
 const IDLE_MS = 90_000
 // SHOWCASE: how long the home screen sits untouched, with nobody booked, before
@@ -32,7 +33,7 @@ const CHAMP_DIM = 'rgba(201,178,126,0.55)'
 const HAIR = 'rgba(201,178,126,0.22)'
 const INK = '#0b0b0d'
 
-type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff' | 'portal' | 'board' | 'poses'
+type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff' | 'portal' | 'board' | 'poses' | 'music'
 interface Pose { id: string; src: string; credit: string | null; setName: string | null }
 interface PoseCat { key: string; label: string; count: number; cover: string | null }
 interface PortalItem { id: string; kind: string; src: string }
@@ -106,11 +107,16 @@ export default function KioskPage() {
   // wait for `booted`, or it decides using the door default and then corrects
   // itself in front of the guest.
   const [booted, setBooted] = useState(false)
+  const [musicZone, setMusicZone] = useState<string | null>(null)
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     const k = q.get('key')
     if (k) setKioskKey(k)
     setSetSlug(q.get('set'))
+    // MUSIC HOST (2026-10-05): `&jukebox=<zone>` makes this tablet ALSO play
+    // that zone's music (Set D → main-studio). Set tablets only.
+    const jz = (q.get('jukebox') || '').trim()
+    if (q.get('set') && /^[a-z0-9-]{2,40}$/.test(jz)) setMusicZone(jz)
     setBooted(true)
   }, [])
 
@@ -209,6 +215,55 @@ export default function KioskPage() {
   const needsReload = useRef(false)               // a newer build is live, waiting for idle
   const screenRef = useRef<Screen>('home')
 
+  // ── MUSIC HOST (2026-10-05) ───────────────────────────────────────────────
+  // Fully Kiosk can only show one page, and the studio music used to be its own
+  // page (/jukebox/player) — so switching this tablet to anything else stopped
+  // the music. On a tablet started with &jukebox=<zone>, the SAME player engine
+  // runs inside the kiosk page instead.
+  // ⚠️ The YouTube iframe lives in a node appended to <body> OUTSIDE React.
+  // Every kiosk screen is a separate early return, so anything rendered inside
+  // them would unmount on the first tap and kill the music.
+  const [musicHostReady, setMusicHostReady] = useState(false)
+  useEffect(() => {
+    if (!musicZone) return
+    if (!document.getElementById('kiosk-yt-wrap')) {
+      const wrapEl = document.createElement('div')
+      wrapEl.id = 'kiosk-yt-wrap'
+      wrapEl.setAttribute('aria-hidden', 'true')
+      Object.assign(wrapEl.style, { position: 'fixed', left: '0', bottom: '0', width: '200px', height: '200px', opacity: '0.001', pointerEvents: 'none', zIndex: '-1', overflow: 'hidden' })
+      const inner = document.createElement('div')
+      inner.id = 'kiosk-yt'
+      wrapEl.appendChild(inner)
+      document.body.appendChild(wrapEl)
+    }
+    setMusicHostReady(true)
+  }, [musicZone])
+  const music = useJukeboxPlayer({
+    zone: musicZone || '', playerKey: kioskKey, started: musicHostReady && !!musicZone,
+    ytElementId: 'kiosk-yt', selfUpdate: false,
+    // Updates land only on HOME and at a silent moment / between house tracks.
+    canReload: () => screenRef.current === 'home',
+  })
+  const musicZoneRef = useRef<string | null>(null); musicZoneRef.current = musicZone
+  const musicUpdateRef = useRef(music.requestUpdate); musicUpdateRef.current = music.requestUpdate
+  // A music tablet never reloads mid-song; everyone else reloads as before.
+  const reloadKiosk = useCallback(() => {
+    if (musicZoneRef.current) musicUpdateRef.current()
+    else window.location.reload()
+  }, [])
+  // Autoplay can be blocked until the screen is touched — the next tap anywhere starts it.
+  useEffect(() => {
+    if (!music.needsTap) return
+    const go = () => music.nudge()
+    document.addEventListener('pointerdown', go, { once: true })
+    return () => document.removeEventListener('pointerdown', go)
+  }, [music.needsTap, music.nudge])
+  const [musicPin, setMusicPin] = useState('')
+  const [musicAuthed, setMusicAuthed] = useState(false)
+  const [musicErr, setMusicErr] = useState('')
+  const [musicBusy, setMusicBusy] = useState(false)
+  const [musicVol, setMusicVol] = useState(100)
+
   const resetToHome = useCallback(() => {
     // ⚠️ Never yank the screen away from someone waiting on a human. The 90s
     // idle reset would fire long before Teddy walked over, and the answer they
@@ -222,6 +277,7 @@ export default function KioskPage() {
     setMsgs([]); setInput(''); setSummonState(null); setSummonPhone('')
     setExtStep('pick'); setExtReq(null); setExtError(''); setExtUntil('')
     setStaffPin(''); setStaffErr(''); setStaffDone(''); setStaffAction('clear')
+    setMusicPin(''); setMusicAuthed(false); setMusicErr('')
     chatToken.current = null
     lastTs.current = null
   }, [])
@@ -335,7 +391,7 @@ export default function KioskPage() {
         if (!version) return
         if (buildVer.current === null) { buildVer.current = version; return }
         if (version !== buildVer.current) {
-          if (screenRef.current === 'home') window.location.reload()
+          if (screenRef.current === 'home') reloadKiosk()
           else needsReload.current = true
         }
       } catch {}
@@ -347,7 +403,7 @@ export default function KioskPage() {
 
   // Flush a pending update the moment the kiosk falls back to HOME.
   useEffect(() => {
-    if (screen === 'home' && needsReload.current) window.location.reload()
+    if (screen === 'home' && needsReload.current) reloadKiosk()
   }, [screen])
 
   // ── Check-in ─────────────────────────────────────────────────────────────
@@ -764,6 +820,24 @@ export default function KioskPage() {
     </button>
   )
 
+  // MUSIC — only on the tablet hosting the music; same PIN as STAFF.
+  const musicBtn = () => (
+    <button
+      onClick={() => { setMusicPin(''); setMusicErr(''); setMusicAuthed(false); setScreen('music'); touch() }}
+      style={{ flexShrink: 0, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.16)',
+               borderRadius: 999, color: 'rgba(255,255,255,0.45)', fontFamily: 'Inter, sans-serif',
+               fontSize: 12, letterSpacing: '0.22em', cursor: 'pointer', padding: '11px 20px' }}>
+      MUSIC
+    </button>
+  )
+  const cornerBtns = (mode: 'absolute' | 'inline') => musicZone
+    ? (
+      <div style={{ display: 'flex', gap: 8, ...(mode === 'absolute' ? { position: 'absolute' as const, bottom: 18, right: 20 } : { flexShrink: 0 }) }}>
+        {musicBtn()}{staffBtn('inline')}
+      </div>
+    )
+    : staffBtn(mode)
+
   // ── Screens ──────────────────────────────────────────────────────────────
   // Time's up (or the session vanished) → the board closes itself and the home
   // screen shows TIME IS UP. The server wipes the pictures after the booking ends.
@@ -1017,7 +1091,7 @@ export default function KioskPage() {
     <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
       {/* STAFF sits bottom-right; while the NOW PLAYING bar is up it moves
           INTO the bar (passed as `right`) instead of floating over it. */}
-      {setSlug && !barOn && staffBtn('absolute')}
+      {setSlug && !barOn && cornerBtns('absolute')}
       {header}
       {occupancyLine}
       {/* ⚠️ `flex: 1 1 0` alongside the tile container, NOT a fixed block. The
@@ -1138,7 +1212,7 @@ export default function KioskPage() {
           sessionLive={!!occLive}
           suppress={!!urgency}
           onShow={setBarOn}
-          right={setSlug ? staffBtn('inline') : undefined}
+          right={setSlug ? cornerBtns('inline') : undefined}
         />
       )}
     </main>
@@ -1441,6 +1515,104 @@ export default function KioskPage() {
       }
     } catch { setStaffErr('Could not reach the studio system.'); }
     setBusy(false)
+  }
+
+  const musicAction = async (action: 'verify' | 'pause' | 'play' | 'next') => {
+    if (musicBusy || !setSlug || !musicZone || musicPin.length < 4) return
+    setMusicBusy(true); setMusicErr('')
+    try {
+      const r = await fetch('/api/kiosk/jukebox', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ set: setSlug, zone: musicZone, key: kioskKey, pin: musicPin, action }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setMusicErr(d.error || 'That did not go through.')
+        if (r.status === 401 || r.status === 429) { setMusicAuthed(false); setMusicPin('') }
+      } else {
+        if (action === 'verify') { setMusicAuthed(true); setMusicVol(music.getVolume()) }
+        if (action === 'next' && d.house) music.skipHouseTrack()
+        if (action !== 'verify') music.refresh()
+      }
+    } catch { setMusicErr('Could not reach the studio system.') }
+    setMusicBusy(false)
+  }
+
+  if (screen === 'music') {
+    const snap = music.snapshot
+    const paused = !!snap?.zone && (!snap.zone.is_open || snap.zone.paused)
+    const label = music.display.source === 'request' ? 'GUEST REQUEST' : music.display.source === 'house' ? 'HOUSE PLAYLIST' : paused ? 'PAUSED' : 'WAITING'
+    const ctrl: React.CSSProperties = { height: 72, minWidth: 150, padding: '0 26px', borderRadius: 16, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 800, letterSpacing: '0.16em', cursor: 'pointer', background: 'linear-gradient(150deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015))', color: '#fff', border: '1px solid rgba(255,255,255,0.16)' }
+    return (
+      <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
+        <button style={backBtn} onClick={resetToHome}>&larr; BACK</button>
+        {header}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 20 }}>
+          {!musicAuthed ? (
+            <>
+              <div style={{ fontSize: 12, letterSpacing: '0.3em', color: CHAMP_DIM }}>MUSIC</div>
+              <div style={{ fontSize: 30, fontWeight: 800, margin: '8px 0 4px' }}>Studio music</div>
+              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', marginBottom: 10 }}>Enter your staff PIN</div>
+              <div style={{ fontSize: 28, letterSpacing: 8, fontWeight: 700, minHeight: 38, color: musicPin ? CHAMP : 'rgba(255,255,255,0.18)' }}>
+                {musicPin ? '\u2022'.repeat(musicPin.length) : '\u2022\u2022\u2022\u2022'}
+              </div>
+              {musicErr && <div style={{ color: 'rgba(255,255,255,0.78)', borderLeft: `2px solid ${CHAMP_DIM}`, paddingLeft: 12, fontSize: 15, margin: '8px 0', maxWidth: 420, textAlign: 'left', lineHeight: 1.5 }}>{musicErr}</div>}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 84px)', gap: 9, marginTop: 8 }}>
+                {['1','2','3','4','5','6','7','8','9','\u232B','0','GO'].map(k => (
+                  <button key={k}
+                    onClick={() => {
+                      if (k === 'GO') musicAction('verify')
+                      else if (k === '\u232B') setMusicPin(v => v.slice(0, -1))
+                      else setMusicPin(v => (v.length >= 6 ? v : v + k))
+                    }}
+                    disabled={k === 'GO' && (musicPin.length < 4 || musicBusy)}
+                    style={{
+                      height: 64, borderRadius: 15, fontSize: k === 'GO' ? 13 : 21, fontWeight: k === 'GO' ? 800 : 500,
+                      fontFamily: 'Inter, sans-serif', cursor: 'pointer', letterSpacing: k === 'GO' ? '0.16em' : undefined,
+                      background: k === 'GO'
+                        ? (musicPin.length >= 4 ? 'linear-gradient(135deg, #d7c08b, #9c8250)' : 'rgba(255,255,255,0.03)')
+                        : 'linear-gradient(150deg, rgba(255,255,255,0.05), rgba(255,255,255,0.012))',
+                      color: k === 'GO' ? (musicPin.length >= 4 ? INK : 'rgba(255,255,255,0.25)') : '#fff',
+                      border: k === 'GO' && musicPin.length >= 4 ? 'none' : '1px solid rgba(255,255,255,0.13)',
+                    }}>
+                    {k === 'GO' && musicBusy ? '\u2026' : k}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, letterSpacing: '0.3em', color: paused ? 'rgba(255,140,140,0.8)' : CHAMP }}>{label}{music.zoneName ? ` \u00b7 ${music.zoneName.toUpperCase()}` : ''}</div>
+              <div style={{ fontSize: 34, fontWeight: 800, margin: '10px 0 4px', maxWidth: 640, lineHeight: 1.2 }}>{music.display.title || '\u2014'}</div>
+              {music.display.artist && <div style={{ fontSize: 17, color: 'rgba(255,255,255,0.5)' }}>{music.display.artist}</div>}
+              {music.needsTap && <div style={{ fontSize: 14, color: CHAMP, marginTop: 10 }}>Music is waiting to start. Tap anywhere on the screen.</div>}
+              {musicErr && <div style={{ color: 'rgba(255,255,255,0.78)', fontSize: 14, marginTop: 10 }}>{musicErr}</div>}
+              <div style={{ display: 'flex', gap: 12, marginTop: 26, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button disabled={musicBusy} onClick={() => musicAction(paused ? 'play' : 'pause')} style={ctrl}>{paused ? 'RESUME' : 'PAUSE'}</button>
+                <button disabled={musicBusy || paused} onClick={() => musicAction('next')} style={{ ...ctrl, opacity: paused ? 0.4 : 1 }}>SKIP</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 22 }}>
+                <button onClick={() => { const v = Math.max(0, musicVol - 10); setMusicVol(v); music.setVolume(v) }} style={{ ...ctrl, minWidth: 72, padding: 0, fontSize: 26 }}>&minus;</button>
+                <div style={{ minWidth: 120, fontSize: 15, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.6)' }}>VOLUME {musicVol}</div>
+                <button onClick={() => { const v = Math.min(100, musicVol + 10); setMusicVol(v); music.setVolume(v) }} style={{ ...ctrl, minWidth: 72, padding: 0, fontSize: 26 }}>+</button>
+              </div>
+              {(snap?.up_next?.length ?? 0) > 0 && (
+                <div style={{ marginTop: 26, width: '100%', maxWidth: 520, textAlign: 'left' }}>
+                  <div style={{ fontSize: 11, letterSpacing: '0.3em', color: CHAMP_DIM, marginBottom: 8 }}>UP NEXT</div>
+                  {snap.up_next.slice(0, 5).map((r: any) => (
+                    <div key={r.id} style={{ fontSize: 15, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {r.title}{r.artist ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> &middot; {r.artist}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginTop: 22, maxWidth: 460, lineHeight: 1.5 }}>Guest requests are approved in Admin &rarr; Jukebox. Volume here is this tablet only.</div>
+              <button onClick={resetToHome} style={{ ...champBtn, marginTop: 20 }}>DONE</button>
+            </>
+          )}
+        </div>
+      </main>
+    )
   }
 
   if (screen === 'staff') return (

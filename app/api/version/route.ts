@@ -1,23 +1,38 @@
 // GET /api/version — what build is actually deployed right now.
 //
-// ⚠️ Exists because the admin PWA silently ran code from four weeks earlier.
-// An installed home-screen app keeps its page alive across backgrounding, so
-// the JavaScript in memory can be however old the last full launch was. Nothing
-// looks wrong — the app just quietly lacks every feature shipped since.
+// Three readers, three fields — keep ALL of them:
+//   build       — short git SHA. The admin PWA's stale-build guard (components/AdminPwa).
+//   version     — full git SHA. The check-in kiosks reload on it (when idle on HOME).
+//   player_rev  — hand-bumped in lib/player-rev.ts, only when a deploy changes what
+//                 the jukebox player runs. Music devices watch this so unrelated
+//                 deploys never stop the music.
+//   reload_at   — Admin → Jukebox "Update players now". Music devices reload on it.
 //
-// On 2026-08-13 that meant the short-notice banner showed no price, no card and
-// no charge button, so every approval would have silently taken the no-charge
-// path. A stale UI that still works is more dangerous than one that breaks.
+// ⚠️ 2026-10-05: on 2026-08-13 this route was rewritten to return ONLY `build`,
+// which silently switched off kiosk self-update and the "Update players now"
+// button for seven weeks — every reader got `undefined` and quietly returned.
+// Removing a field here breaks a wall tablet nobody is watching.
 
 import { NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/lib/supabase'
+import { JUKEBOX_PLAYER_REV, PLAYER_RELOAD_KEY } from '@/lib/player-rev'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 export async function GET() {
-  return NextResponse.json({
-    // Vercel sets this per deployment. Locally there is no sha, so fall back to
-    // a constant — which correctly means "never stale" in dev.
-    build: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) || 'dev',
-  })
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || 'dev'
+
+  let reload_at: string | null = null
+  try {
+    const { data } = await supabaseAdmin()
+      .from('studio_settings').select('value').eq('key', PLAYER_RELOAD_KEY).maybeSingle()
+    reload_at = (data as any)?.value ?? null
+  } catch {}
+
+  return NextResponse.json(
+    { build: sha === 'dev' ? 'dev' : sha.slice(0, 12), version: sha, player_rev: JUKEBOX_PLAYER_REV, reload_at },
+    { headers: { 'Cache-Control': 'no-store, must-revalidate' } },
+  )
 }

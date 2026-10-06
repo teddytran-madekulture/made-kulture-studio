@@ -14,7 +14,11 @@ export const fetchCache = 'force-no-store'
 function keyOk(key: unknown): boolean {
   const required = process.env.JUKEBOX_PLAYER_KEY
   if (!required) return true
-  return typeof key === 'string' && key === required
+  if (typeof key !== 'string' || !key) return false
+  // The Set D kiosk tablet hosts the main-studio music inside the kiosk page
+  // (2026-10-05) and carries the KIOSK key, not the player key. Same trust
+  // level: both are wall-tablet credentials that live in a start URL.
+  return key === required || (!!process.env.KIOSK_KEY && key === process.env.KIOSK_KEY)
 }
 
 export async function POST(req: NextRequest) {

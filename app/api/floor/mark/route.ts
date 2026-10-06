@@ -17,19 +17,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getStaffFromRequest, verifySecret } from '@/lib/staff-auth'
+import { getStaffFromRequest } from '@/lib/staff-auth'
+import { checkKioskStaffPin, kioskKeyOk, pinFailed } from '@/lib/kiosk-staff-pin'
 import { isAdminAuthed } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 
-const LOCKOUT_WINDOW_MS = 10 * 60 * 1000
-const LOCKOUT_AFTER     = 6
-
-function kioskKeyOk(key: string | null): boolean {
-  const required = process.env.KIOSK_KEY
-  if (!required) return true
-  return key === required
-}
 
 export async function POST(req: NextRequest) {
   let body: any = {}
@@ -76,33 +69,10 @@ export async function POST(req: NextRequest) {
     if (!kioskKeyOk(body?.key ?? null)) {
       return NextResponse.json({ error: 'Unauthorized kiosk' }, { status: 401 })
     }
-    const pin = String(body?.pin ?? '').trim()
-    if (!/^\d{4,6}$/.test(pin)) {
-      return NextResponse.json({ error: 'Enter your 4-6 digit staff PIN.' }, { status: 400 })
-    }
-
-    const since = new Date(Date.now() - LOCKOUT_WINDOW_MS).toISOString()
-    const { count } = await db
-      .from('floor_area_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('action', 'bad_pin')
-      .gte('at', since)
-    if ((count ?? 0) >= LOCKOUT_AFTER) {
-      return NextResponse.json(
-        { error: 'Too many wrong PINs. Try again in a few minutes or mark it at the front desk.' },
-        { status: 429 },
-      )
-    }
-
-    const { data: staff } = await db
-      .from('staff_users').select('id, name, pin_hash').eq('is_active', true).not('pin_hash', 'is', null)
-    const match = (staff ?? []).find((s: any) => verifySecret(pin, s.pin_hash))
-    if (!match) {
-      await db.from('floor_area_events').insert({ code, action: 'bad_pin', source: 'kiosk' })
-      return NextResponse.json({ error: 'That PIN was not recognised.' }, { status: 401 })
-    }
-    staffId = match.id
-    staffName = match.name
+    const r = await checkKioskStaffPin(db, body?.pin, code, 'Too many wrong PINs. Try again in a few minutes or mark it at the front desk.')
+    if (pinFailed(r)) return NextResponse.json({ error: r.error }, { status: r.status })
+    staffId = (r as any).staffId
+    staffName = (r as any).staffName
   }
 
   // ── Write it ───────────────────────────────────────────────────────────────

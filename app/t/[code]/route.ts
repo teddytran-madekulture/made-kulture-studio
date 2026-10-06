@@ -60,6 +60,10 @@ export async function GET(_req: NextRequest, { params }: { params: { code: strin
   const url = new URL('/kiosk', process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app')
   url.searchParams.set('set', slug)
   url.searchParams.set('key', key)
+  // Pass-through: /t/<code>?jukebox=main-studio makes that tablet also play the
+  // zone's music (2026-10-05, Set D). Slug-shaped values only.
+  const jz = (_req.nextUrl.searchParams.get('jukebox') || '').trim()
+  if (/^[a-z0-9-]{2,40}$/.test(jz)) url.searchParams.set('jukebox', jz)
   // 307 keeps it a temporary redirect: browsers and Fully won't cache the
   // destination, so a rotated key takes effect on the next load rather than
   // living forever in a tablet's redirect cache.
