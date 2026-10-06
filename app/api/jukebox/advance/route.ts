@@ -14,7 +14,8 @@ const REQ_COLS = 'id, external_id, source, title, artist, thumbnail_url, duratio
 
 function keyOk(key: unknown): boolean {
   const required = process.env.JUKEBOX_PLAYER_KEY
-  if (!required) return true
+  // 2026-10-06: fail CLOSED — an unset key used to make this route public.
+  if (!required) { console.error('[auth] key env var is not set — refusing'); return false }
   if (typeof key !== 'string' || !key) return false
   // The Set D kiosk tablet hosts the main-studio music inside the kiosk page
   // (2026-10-05) and carries the KIOSK key, not the player key. Same trust

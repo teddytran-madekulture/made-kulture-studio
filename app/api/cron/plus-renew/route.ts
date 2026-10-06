@@ -28,7 +28,7 @@ function fmtDate(iso: string) { return new Date(iso).toLocaleDateString('en-US',
 // 2. On/after expiry (small grace window): auto-charge the saved card, extend a
 //    year, receipt. Skips comp / opted-out / suspended / no-card members.
 export async function GET(req: NextRequest) {
-  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

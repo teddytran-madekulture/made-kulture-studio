@@ -14,7 +14,8 @@ export const PIN_LOCKOUT_AFTER = 6
 
 export function kioskKeyOk(key: string | null | undefined): boolean {
   const required = process.env.KIOSK_KEY
-  if (!required) return true
+  // 2026-10-06: fail CLOSED — an unset key used to make this route public.
+  if (!required) { console.error('[auth] key env var is not set — refusing'); return false }
   return key === required
 }
 

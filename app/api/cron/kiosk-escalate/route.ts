@@ -28,7 +28,7 @@ const WINDOW_MS  = 6 * 60 * 1000        // give up re-pushing after 6 minutes
 const QUIET_MS   = 3 * 60 * 1000        // past this the tablet has shown them the studio number
 
 export async function GET(req: NextRequest) {
-  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

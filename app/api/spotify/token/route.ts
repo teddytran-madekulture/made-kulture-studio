@@ -11,7 +11,8 @@ export const fetchCache = 'force-no-store'
 
 function keyOk(key: string | null): boolean {
   const required = process.env.JUKEBOX_PLAYER_KEY
-  if (!required) return true
+  // 2026-10-06: fail CLOSED — an unset key used to make this route public.
+  if (!required) { console.error('[auth] key env var is not set — refusing'); return false }
   return key === required
 }
 

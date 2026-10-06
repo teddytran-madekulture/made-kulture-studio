@@ -40,7 +40,8 @@ const RING_TTL_MS        = 6 * 60 * 1000   // matches the escalate cron's give-u
 
 function keyOk(key: unknown): boolean {
   const required = process.env.KIOSK_KEY
-  if (!required) return true
+  // 2026-10-06: fail CLOSED — an unset key used to make this route public.
+  if (!required) { console.error('[auth] key env var is not set — refusing'); return false }
   return typeof key === 'string' && key === required
 }
 

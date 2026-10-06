@@ -38,7 +38,7 @@ const AGE_MS  = 48 * 60 * 60 * 1000
 const MAX_RUN = 25          // a sane ceiling on texts sent by one unattended run
 
 export async function GET(req: NextRequest) {
-  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
