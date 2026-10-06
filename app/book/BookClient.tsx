@@ -602,6 +602,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
     booking.type === 'studio' && booking.startHour === null && h % 1 === 0
     && h <= CLOSE_HOUR - minHours && !(bookingIsToday && h < nowChiDec)
     && (isHourBooked(h) || noRoomFromStart(h)) && sharedFits(h, minHours)
+  // 2026-10-06: the ask was only offered on a blocked START. A takeover that
+  // starts on a free hour and runs INTO a set booking later in the day (Kiah:
+  // 9am-9pm with a 7-9pm set session) had no way to ask — the end slots just
+  // went grey. An END that crosses set bookings only is now the same gold ask.
+  const sharedAskEndAt = (h: number) =>
+    booking.type === 'studio' && selecting === 'end' && booking.startHour !== null && h > booking.startHour
+    && (h - booking.startHour) >= minHours && h <= CLOSE_HOUR
+    && isBookedAsEnd(h) && sharedFits(booking.startHour, h - booking.startHour)
   const setLabel = (slug: string) => sets.find(x => x.id === slug)?.name ?? slug
 
   // For time grid: clicking selects start, second click selects end
@@ -1150,7 +1158,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // a box promising "same booking · one payment · one door code", and
                 // the member gets a second charge and a second door code they never
                 // agreed to. They can ask for the gold hour once this booking is done.
-                const sharedAsk = sharedAskAt(h)
+                const sharedAsk = sharedAskAt(h) || sharedAskEndAt(h)
                 const requestable = sharedAsk || ((notOpenForPlus || (needsApproval && booking.type !== 'studio')) && !booked && !isPast
                   && setCart.length === 0
                   && booking.startHour === null && h % 1 === 0 && h <= CLOSE_HOUR - minHours
@@ -1175,7 +1183,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 return (
                   <button key={h}
                     onClick={() => requestable
-                      ? (setRequestHour(h), setRequestHours(minHours), setRequestConsent(false), setRequestDone(null), setRequestErr(null))
+                      ? (sharedAskEndAt(h)
+                          ? (setRequestHour(booking.startHour!), setRequestHours(h - booking.startHour!))
+                          : (setRequestHour(h), setRequestHours(minHours)),
+                         setRequestConsent(false), setRequestDone(null), setRequestErr(null))
                       : handleHourClick(h)}
                     title={sharedAsk ? 'A set is booked during this window — tap to ask to share the floor' : requestable ? 'Not open this early/late — tap to ask' : undefined}
                     disabled={!requestable && (booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || beforeStartWhilePickingEnd || !!notOpenForPlus)}
@@ -1269,12 +1280,12 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       </div>
                     ) : (<>
 
-                    {/* Length. Capped at 4 hours on purpose: a member who needs
-                        longer extends once they're on site, the same way every
-                        other session does. */}
+                    {/* Length. Sets cap at 4 hours on purpose (extend on site like any
+                        session). A TAKEOVER can run the whole day — 9am to 10pm is 13h —
+                        so its options go that far (2026-10-06; it stopped at 8). */}
                     <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>HOW LONG?</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-                      {(booking.type === 'studio' ? [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8] : [1, 1.5, 2, 2.5, 3, 3.5, 4])
+                      {(booking.type === 'studio' ? Array.from({ length: 19 }, (_, i) => 4 + i * 0.5) : [1, 1.5, 2, 2.5, 3, 3.5, 4])
                         .filter(n => n >= minHours && requestHour + n <= CLOSE_HOUR
                           && (booking.type !== 'studio' || sharedFits(requestHour, n)))
                         .map(n => (
