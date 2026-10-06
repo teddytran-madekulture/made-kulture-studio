@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { listAllAuthUsers } from '@/lib/auth-user'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 
@@ -16,10 +17,12 @@ export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const limit = Math.min(100, Math.max(1, parseInt(req.nextUrl.searchParams.get('limit') ?? '50')))
 
-  // Pull auth users (small user base — one page covers it), newest first.
-  const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const users = (data?.users ?? [])
+  // All pages (2026-10-06) — one page of 1,000 would hide the NEWEST signups
+  // first, which is exactly what this screen exists to show.
+  let all: any[] = []
+  try { all = await listAllAuthUsers(supabase) }
+  catch (e: any) { return NextResponse.json({ error: `Could not list logins: ${e.message}` }, { status: 500 }) }
+  const users = all
     .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, limit)
 
@@ -51,7 +54,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ signups, total: data?.users?.length ?? signups.length })
+  return NextResponse.json({ signups, total: all.length })
 }
 
 // DELETE /api/admin/signups { ids: string[] } — remove junk sign-ups (2026-10-05:

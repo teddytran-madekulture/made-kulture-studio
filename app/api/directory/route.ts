@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { selectAll } from '@/lib/select-all'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { isProfileComplete } from '@/lib/directory-listing'
 import { publicAccountType } from '@/lib/roles'
@@ -32,11 +33,21 @@ export async function GET(req: NextRequest) {
     .eq('directory_opt_in', true)
   if (role) q = q.contains('roles', [role])
 
-  const { data, error } = await q.order('full_name', { ascending: true })
+  // All pages (2026-10-06) — see lib/select-all.ts.
+  const { data, error } = await selectAll(() => {
+    let b = service
+      .from('customer_profiles')
+      .select('id, full_name, roles, instagram, avatar_url, bio, links, account_type, founding_number, founding_blocked, created_at, profile_color, vendor_terms_accepted_at')
+      .eq('directory_opt_in', true)
+    if (role) b = b.contains('roles', [role])
+    return b.order('full_name', { ascending: true }).order('id')
+  })
+  void q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Members with at least one portfolio image (one query, built into a Set).
-  const { data: pics } = await service.from('portfolio_images').select('user_id, url, is_mature, hidden, explore_hidden, sort_order')
+  const { data: pics, error: picsErr } = await selectAll(() => service.from('portfolio_images').select('user_id, url, is_mature, hidden, explore_hidden, sort_order').order('id'))
+  if (picsErr) return NextResponse.json({ error: picsErr.message }, { status: 500 })
   const withPhotos = new Set((pics ?? []).map((p: { user_id: string }) => p.user_id))
   // Explore feed candidates: every photo a member could show in Explore —
   // never 18+ or archived (the grid has no over-18 reveal). The page shows ONE

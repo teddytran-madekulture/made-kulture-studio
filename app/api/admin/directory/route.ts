@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { listAllAuthUsers } from '@/lib/auth-user'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import { profileBlockers } from '@/lib/directory-listing'
@@ -56,8 +57,12 @@ export async function GET(req: NextRequest) {
 
   // Emails and signup dates live in auth.users, not customer_profiles.
   const emails: Record<string, { email: string | null; created_at: string | null; confirmed: boolean }> = {}
-  const { data: authData } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  for (const u of (authData?.users ?? []) as any[]) {
+  // 2026-10-06: all pages — a single page of 1,000 silently showed everyone
+  // past it as "no email / unconfirmed" (the 50-login bug at a bigger number).
+  let authUsers: any[] = []
+  try { authUsers = await listAllAuthUsers(supabase) }
+  catch (e: any) { return NextResponse.json({ error: `Could not list logins: ${e.message}` }, { status: 500 }) }
+  for (const u of authUsers) {
     emails[u.id] = { email: u.email ?? null, created_at: u.created_at ?? null, confirmed: !!u.email_confirmed_at }
   }
 

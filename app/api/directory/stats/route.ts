@@ -7,6 +7,7 @@
 //
 // "Listed" uses the same test as /api/directory (lib/directory-listing.ts) so
 // the number on the home page matches what a member actually sees inside.
+import { selectAll } from '@/lib/select-all'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { isProfileComplete } from '@/lib/directory-listing'
@@ -18,10 +19,10 @@ const service = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.
 
 export async function GET() {
   const [{ data: profiles, error }, { data: pics, error: picErr }] = await Promise.all([
-    service.from('customer_profiles')
+    selectAll(() => service.from('customer_profiles')
       .select('id, full_name, roles, instagram, bio, links, account_type, created_at, vendor_terms_accepted_at')
-      .eq('directory_opt_in', true),
-    service.from('portfolio_images').select('user_id'),
+      .eq('directory_opt_in', true).order('id')),
+    selectAll(() => service.from('portfolio_images').select('user_id').order('id')),
   ])
   // A failed read must never render as "0 members" on the home page.
   if (error || picErr) return NextResponse.json({ error: 'unavailable' }, { status: 503 })

@@ -9,6 +9,7 @@
 // • newMembers, castings, fresh, services — ONLY when the viewer is listed. Same rule as
 //   /api/directory (lib/directory-access.ts): no listing, no browsing.
 import { createClient } from '@/lib/supabase/server'
+import { selectAll } from '@/lib/select-all'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { memberAccess } from '@/lib/directory-access'
@@ -38,11 +39,11 @@ export async function GET() {
   // Everyone opted in (one query) — used to link editorial credits and, for a
   // listed viewer, the new-members row and the fresh-work owners.
   const [{ data: profiles, error: pErr }, { data: pics, error: picErr }] = await Promise.all([
-    service.from('customer_profiles')
+    selectAll<any>(() => service.from('customer_profiles')
       .select('id, full_name, roles, bio, instagram, links, account_type, avatar_url, created_at, vendor_terms_accepted_at')
-      .eq('directory_opt_in', true),
-    service.from('portfolio_images')
-      .select('id, user_id, url, sort_order, is_mature, hidden, explore_hidden, created_at'),
+      .eq('directory_opt_in', true).order('id')),
+    selectAll<any>(() => service.from('portfolio_images')
+      .select('id, user_id, url, sort_order, is_mature, hidden, explore_hidden, created_at').order('id')),
   ])
   if (pErr || picErr) return NextResponse.json({ error: 'Could not load the directory.' }, { status: 500 })
 

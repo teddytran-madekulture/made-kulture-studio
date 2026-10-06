@@ -56,25 +56,37 @@ export async function changeAdminPassword(
 // invalidate active sessions.
 function signingKey(): string {
   const secret = process.env.SESSION_SECRET ?? process.env.ADMIN_PASSWORD
-  if (!secret) return 'dev-fallback'
+  // 2026-10-06: never fall back to a constant from the source — a cookie
+  // signed with a public string is a cookie anyone can forge. No secret =
+  // no admin sessions at all, loudly.
+  if (!secret) throw new Error('SESSION_SECRET (or ADMIN_PASSWORD) is not set — admin sessions cannot be signed')
   return createHmac('sha256', secret).update('made-kulture-admin-cookie-v1').digest('hex')
 }
+
+// How long a signed admin cookie stays valid on the SERVER. The browser's
+// maxAge is only a hint; before 2026-10-06 the token had no timestamp, so a
+// leaked cookie value was an admin credential until SESSION_SECRET rotated.
+const ADMIN_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 // ── Session token (replaces storing the raw password in the cookie) ────────────
 
 export function generateAdminToken(): string {
   const id  = randomUUID()
-  const sig = createHmac('sha256', signingKey()).update(id).digest('hex')
-  return `${id}.${sig}`
+  const iat = Date.now().toString(36)
+  const sig = createHmac('sha256', signingKey()).update(`${id}.${iat}`).digest('hex')
+  return `${id}.${iat}.${sig}`
 }
 
 export function verifyAdminToken(token: string): boolean {
   try {
-    const dot = token.indexOf('.')
-    if (dot === -1) return false
-    const id  = token.slice(0, dot)
-    const sig = token.slice(dot + 1)
-    const expected = createHmac('sha256', signingKey()).update(id).digest('hex')
+    // id.iat.sig — a two-part token from before 2026-10-06 has no issued-at
+    // and is refused (one re-login, then it's never a concern again).
+    const parts = token.split('.')
+    if (parts.length !== 3) return false
+    const [id, iat, sig] = parts
+    const issued = parseInt(iat, 36)
+    if (!Number.isFinite(issued) || Date.now() - issued > ADMIN_TOKEN_TTL_MS) return false
+    const expected = createHmac('sha256', signingKey()).update(`${id}.${iat}`).digest('hex')
     const a = Buffer.from(sig,      'hex')
     const b = Buffer.from(expected, 'hex')
     return a.length === b.length && timingSafeEqual(a, b)

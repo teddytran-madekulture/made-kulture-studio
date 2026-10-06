@@ -20,7 +20,9 @@ const TYPE_MAP: Record<string, string> = {
 
 // Verify a Svix-signed webhook. Returns true if valid (or if no secret configured).
 function verify(secret: string | undefined, headers: Headers, raw: string): boolean {
-  if (!secret) return true // not hardened yet — accept and rely on the obscure URL until the secret is set
+  // 2026-10-06: fail CLOSED. With no secret set, a forged email.bounced /
+  // email.complained used to land real customers on the suppression list.
+  if (!secret) { console.error('[resend webhook] RESEND_WEBHOOK_SECRET is not set — rejecting delivery'); return false }
   const id = headers.get('svix-id'), ts = headers.get('svix-timestamp'), sigHeader = headers.get('svix-signature')
   if (!id || !ts || !sigHeader) return false
   try {

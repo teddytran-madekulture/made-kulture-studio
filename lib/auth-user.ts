@@ -13,6 +13,20 @@
 // try/catch and treat a failure as non-fatal).
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+// Every website login, all pages. THROWS on a page failure (a partial list
+// silently drops real people — see lib/rewards.ts for what that looked like).
+export async function listAllAuthUsers(db: SupabaseClient): Promise<any[]> {
+  const out: any[] = []
+  for (let page = 1; page < 100; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw new Error(`listUsers page ${page}: ${error.message}`)
+    const users = data?.users ?? []
+    out.push(...users)
+    if (users.length < 1000) break
+  }
+  return out
+}
+
 export async function findAuthUserIdByEmail(
   db: SupabaseClient,
   email: string | null | undefined,

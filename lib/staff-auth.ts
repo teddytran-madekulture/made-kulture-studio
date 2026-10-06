@@ -37,7 +37,9 @@ const MAX_AGE_SECONDS = 60 * 60 * 12 // a 12-hour shift
 type StaffSession = { sid: string; role: StaffRole; name: string; iat: number }
 
 function signingKey(): string {
-  const secret = process.env.SESSION_SECRET ?? process.env.ADMIN_PASSWORD ?? 'dev-fallback'
+  const secret = process.env.SESSION_SECRET ?? process.env.ADMIN_PASSWORD
+  // 2026-10-06: no constant fallback — see lib/admin-auth.ts signingKey().
+  if (!secret) throw new Error('SESSION_SECRET (or ADMIN_PASSWORD) is not set — staff sessions cannot be signed')
   return createHmac('sha256', secret).update('made-kulture-staff-cookie-v1').digest('hex')
 }
 

@@ -86,7 +86,10 @@ export async function authUserMap(db: any): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   for (let page = 1; page < 50; page++) {
     const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 })
-    if (error) { console.error('[rewards] listUsers failed', error); break }
+    // 2026-10-06: THROW, don't break — a partial map made authUserIdForEmail
+    // answer "no account" for everyone past the failed page, and the nightly
+    // payout then skipped them without a trace.
+    if (error) throw new Error(`[rewards] listUsers page ${page}: ${error.message}`)
     const users = data?.users ?? []
     for (const u of users) if (u.email) out.set(String(u.email).toLowerCase(), u.id)
     if (users.length < 1000) break

@@ -1,3 +1,4 @@
+import { selectAll } from '@/lib/select-all'
 // Two-way texting helpers (migration 115). Server-only; service-role client.
 // Phones are stored in every format ("(832) 454-9032", "+18324549032",
 // "832.454.9032"), so matching always compares the normalised LAST 10 digits.
@@ -13,7 +14,7 @@ export async function customersForPhone(db: any, phone: string): Promise<PhoneCu
   const { data: cands } = await db.from('customers').select('id, name, email, phone, alt_phones').ilike('phone', `%${d.slice(-4)}%`).limit(50)
   let hits = (cands ?? []).filter((c: any) => last10(c.phone) === d)
   if (!hits.length) {
-    const { data: alt } = await db.from('customers').select('id, name, email, phone, alt_phones').neq('alt_phones', '{}').limit(1000)
+    const { data: alt } = await selectAll(() => db.from('customers').select('id, name, email, phone, alt_phones').neq('alt_phones', '{}').order('id'))
     hits = (alt ?? []).filter((c: any) => (c.alt_phones ?? []).some((p: string) => last10(p) === d))
   }
   return hits.map((c: any) => ({ id: c.id, name: c.name ?? null, email: c.email ?? null }))
