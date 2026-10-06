@@ -80,7 +80,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const recipNotified = recipIsA ? conv?.notified_a_at : conv?.notified_b_at
     const now = Date.now()
     const activeRecently = recipRead && now - new Date(recipRead).getTime() < 2 * 60 * 1000       // in the thread now
-    const cooldownOk = !recipNotified || now - new Date(recipNotified).getTime() > 3 * 60 * 60 * 1000 // 3h per convo
+    // Email cooldown per conversation (2026-10-05):
+    //  • They haven't caught up since the last email → stay quiet for 3h (one
+    //    email brings them back; a burst while they're away doesn't spam).
+    //  • They HAVE read the thread since the last email → the next message is
+    //    genuinely new, so email again — but never more than once per 30 min,
+    //    so a slow live chat (sitting in the thread >2 min between replies)
+    //    can't turn every reply into an email.
+    const sinceNotified = recipNotified ? now - new Date(recipNotified).getTime() : Infinity
+    const caughtUp = !!recipNotified && !!recipRead && new Date(recipRead).getTime() > new Date(recipNotified).getTime()
+    const cooldownOk = !recipNotified
+      || sinceNotified > 3 * 60 * 60 * 1000
+      || (caughtUp && sinceNotified > 30 * 60 * 1000)
     // App push (migration 137): every message, unless they're in the thread
     // right now. NOT throttled like the email — the tag collapses a burst into
     // one notification per conversation instead.
