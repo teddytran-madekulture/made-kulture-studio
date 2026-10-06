@@ -1084,24 +1084,11 @@ export default function KioskPage() {
   if (screen === 'home' && showcaseOn && canShowcase) return (
     <KioskShowcase items={showcase} setSlug={setSlug}
       portrait={typeof window === 'undefined' ? true : window.innerHeight >= window.innerWidth}
-      onDismiss={() => { lastInteract.current = Date.now(); setShowcaseOn(false); touch() }}
-      // 2026-10-06: the showcase used to cover the NOW PLAYING bar and the
-      // STAFF/MUSIC buttons whenever the set was empty. Same bar as HOME; if
-      // the bar is off (after hours), the buttons still get their own row.
-      footer={booted ? (
-        <>
-          <KioskJukeboxBar
-            setSlug={setSlug}
-            sessionLive={!!occLive}
-            suppress={!!urgency}
-            onShow={setBarOn}
-            right={setSlug ? cornerBtns('inline') : undefined}
-          />
-          {setSlug && !barOn && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px 18px' }}>{cornerBtns('inline')}</div>
-          )}
-        </>
-      ) : undefined} />
+      // 2026-10-06 (later): the showcase takes the WHOLE screen again. The NOW
+      // PLAYING bar + STAFF/MUSIC are a HOME-screen thing — any tap ends the
+      // showcase and brings them straight back. (KioskShowcase still accepts a
+      // `footer` if that's ever wanted again.)
+      onDismiss={() => { lastInteract.current = Date.now(); setShowcaseOn(false); touch() }} />
   )
 
   if (screen === 'home') return (
