@@ -7,7 +7,7 @@ import { estimatePlan, type Rates } from '@/lib/estimate'
 import CastingTeamChannel from '@/components/CastingTeamChannel'
 import MoodBoard from '@/components/MoodBoard'
 
-type Participant = { id: string; status: string; role: string | null; name: string; avatar_url: string | null; roles: string[] }
+type Participant = { id: string; status: string; role: string | null; name: string; avatar_url: string | null; roles: string[]; isNew?: boolean; applied_at?: string }
 type Casting = {
   id: string; title: string; description: string | null
   compensation_type: 'paid' | 'unpaid' | 'tfp'; roles_needed: string[]
@@ -41,6 +41,8 @@ export default function CastingDetailPage() {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setError(d.error ?? 'Could not load.'); setLoading(false); return }
     setCasting(d.casting); setParticipants(d.participants ?? []); setIsAuthor(d.isAuthor); setMyStatus(d.myStatus); setLoading(false)
+    // Opening my own casting marks its applicants seen — tell the nav to refresh its badge.
+    if (d.isAuthor) window.dispatchEvent(new Event('mk-badges'))
     return d
   }).catch(() => { setError('Could not load.'); setLoading(false) })
 
@@ -61,7 +63,15 @@ export default function CastingDetailPage() {
   }, [casting, rates])
 
   const confirmed = participants.filter(p => p.status === 'confirmed')
+  // Newest applicants first, so the ones a notification was about are on top.
   const interested = participants.filter(p => p.status === 'interested')
+    .sort((a, b) => Date.parse(b.applied_at ?? '0') - Date.parse(a.applied_at ?? '0'))
+
+  // Notification links end in #applicants — scroll there once the panel exists.
+  useEffect(() => {
+    if (loading || typeof window === 'undefined' || window.location.hash !== '#applicants') return
+    requestAnimationFrame(() => document.getElementById('applicants')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [loading])
   const total = estimate?.total ?? casting?.estimated_cost ?? 0
   const expired = !!casting?.expires_at && new Date(casting.expires_at).getTime() < Date.now()
   const active = casting?.status === 'open' && !expired
@@ -131,7 +141,10 @@ export default function CastingDetailPage() {
           {p.avatar_url && <img src={p.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
         </div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, color: 'var(--t-fg)' }}>{p.name}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, color: 'var(--t-fg)' }}>
+            {p.name}
+            {p.isNew && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--t-gold)', border: '1px solid var(--t-gold)', borderRadius: 3, padding: '1px 5px', verticalAlign: 2 }}>NEW</span>}
+          </div>
           {p.roles.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 11, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.roles.join(' · ')}</div>}
         </div>
       </Link>
@@ -143,6 +156,41 @@ export default function CastingDetailPage() {
   const smallBtn = (txt: string, onClick: () => void, danger = false): React.ReactNode => (
     <button type="button" disabled={busy} onClick={onClick} style={{ background: 'transparent', border: `1px solid ${danger ? 'rgba(255,80,80,0.4)' : 'rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))'}`, color: danger ? 'var(--t-err)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', borderRadius: 4, padding: '5px 9px', fontFamily: 'Inter', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>{txt}</button>
   )
+
+  // Who applied / who's on the team. The AUTHOR sees this right under the
+  // title (2026-10-05: notifications landed at the top and the list was the
+  // last thing on a long page); everyone else still sees it at the bottom.
+  const participantsBlock = (confirmed.length > 0 || interested.length > 0) ? (
+    <div style={{ marginTop: 6 }}>
+          {confirmed.length > 0 && (
+            <>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '0 0 8px' }}>THE TEAM ({confirmed.length})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+                {confirmed.map(p => pill(p, isAuthor ? <>{smallBtn('Remove', () => setParticipant(p.id, 'unconfirm'))}</> : null))}
+              </div>
+            </>
+          )}
+          {interested.length > 0 && (
+            <>
+              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '0 0 8px' }}>INTERESTED ({interested.length})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {interested.map(p => pill(p, isAuthor ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {casting.roles_needed.length > 0 && (
+                      <select value={roleChoice[p.id] ?? ''} onChange={e => setRoleChoice(s => ({ ...s, [p.id]: e.target.value }))} style={selectStyle}>
+                        <option value="">Role…</option>
+                        {casting.roles_needed.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    )}
+                    {smallBtn('Approve', () => setParticipant(p.id, 'confirm', roleChoice[p.id] || undefined))}
+                    {smallBtn('✕', () => setParticipant(p.id, 'remove'), true)}
+                  </div>
+                ) : null))}
+              </div>
+            </>
+          )}
+        </div>
+  ) : null
 
   return (
     <div style={{ maxWidth: 620 }}>
@@ -159,6 +207,16 @@ export default function CastingDetailPage() {
         <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-err)', marginBottom: 8 }}>
           {expired ? 'This casting has expired — renew it to put it back on the board.' : 'This casting is closed.'}
         </div>
+      )}
+
+      {isAuthor && (
+        <section id="applicants" style={{ scrollMarginTop: 70, background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.35)', borderRadius: 10, padding: '14px 14px 12px', margin: '10px 0 18px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+            <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--t-gold)' }}>APPLICANTS ({interested.length})</div>
+            {confirmed.length > 0 && <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>{confirmed.length} on the team</div>}
+          </div>
+          {participantsBlock ?? <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))' }}>No one has applied yet. You&apos;ll get a notification when someone does.</div>}
+        </section>
       )}
 
       <Link href={`/account/directory/${casting.author.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'inherit', marginBottom: 14 }}>
@@ -233,38 +291,7 @@ export default function CastingDetailPage() {
         </div>
       )}
 
-      {/* Participants */}
-      {(confirmed.length > 0 || interested.length > 0) && (
-        <div style={{ marginTop: 6 }}>
-          {confirmed.length > 0 && (
-            <>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '0 0 8px' }}>THE TEAM ({confirmed.length})</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-                {confirmed.map(p => pill(p, isAuthor ? <>{smallBtn('Remove', () => setParticipant(p.id, 'unconfirm'))}</> : null))}
-              </div>
-            </>
-          )}
-          {interested.length > 0 && (
-            <>
-              <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '0 0 8px' }}>INTERESTED ({interested.length})</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {interested.map(p => pill(p, isAuthor ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {casting.roles_needed.length > 0 && (
-                      <select value={roleChoice[p.id] ?? ''} onChange={e => setRoleChoice(s => ({ ...s, [p.id]: e.target.value }))} style={selectStyle}>
-                        <option value="">Role…</option>
-                        {casting.roles_needed.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    )}
-                    {smallBtn('Approve', () => setParticipant(p.id, 'confirm', roleChoice[p.id] || undefined))}
-                    {smallBtn('✕', () => setParticipant(p.id, 'remove'), true)}
-                  </div>
-                ) : null))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      {!isAuthor && participantsBlock}
 
       {(isAuthor || myStatus === 'confirmed') && <CastingTeamChannel castingId={id} />}
     </div>

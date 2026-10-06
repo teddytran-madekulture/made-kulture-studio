@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .from('customer_profiles').select('id, full_name, avatar_url').eq('id', c.author_id).maybeSingle()
 
   const { data: parts } = await service
-    .from('casting_participants').select('user_id, status, role, created_at')
+    .from('casting_participants').select('user_id, status, role, created_at, seen_by_author_at')
     .eq('casting_id', params.id).order('created_at', { ascending: true })
 
   const partIds = (parts ?? []).map(p => p.user_id)
@@ -42,12 +42,22 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     id: p.user_id,
     status: p.status,
     role: p.role ?? null,
-    pledge_type: p.pledge_type ?? 'none',
-    pledge_value: p.pledge_value ?? null,
+    pledge_type: (p as any).pledge_type ?? 'none',
+    pledge_value: (p as any).pledge_value ?? null,
     name: profs[p.user_id]?.full_name || '(member)',
     avatar_url: profs[p.user_id]?.avatar_url || null,
     roles: profs[p.user_id]?.roles || [],
+    // "NEW" tag for the author: applied since they last opened this casting.
+    isNew: c.author_id === user.id && !p.seen_by_author_at,
+    applied_at: p.created_at,
   }))
+  // The author is looking now — clear the Castings badge for this casting.
+  if (c.author_id === user.id && (parts ?? []).some(p => !p.seen_by_author_at)) {
+    const { error: seenErr } = await service.from('casting_participants')
+      .update({ seen_by_author_at: new Date().toISOString() })
+      .eq('casting_id', params.id).is('seen_by_author_at', null)
+    if (seenErr) console.error('[castings/id] mark seen failed:', seenErr.message)
+  }
   const myStatus = participants.find(p => p.id === user.id)?.status ?? null
 
   return NextResponse.json({

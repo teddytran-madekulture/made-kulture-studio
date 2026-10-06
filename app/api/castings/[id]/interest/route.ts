@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { sendCastingInterestEmail } from '@/lib/email'
 import { sendCastingInterestSMS } from '@/lib/sms'
+import { sendMemberPush } from '@/lib/member-push'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +67,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       if (authorProf?.notify_sms === true && authorProf?.phone) {
         await sendCastingInterestSMS(authorProf.phone, interestedName, title, params.id)
       }
+      // App push (2026-10-05) — same as messages get. Opens the applicants panel.
+      await sendMemberPush(c.author_id, { title: `New applicant: ${title}`, body: `${interestedName} is interested`, url: `/account/castings/${params.id}#applicants`, tag: `cast-${params.id}` })
     } catch { /* notification failures never break interest */ }
   }
 

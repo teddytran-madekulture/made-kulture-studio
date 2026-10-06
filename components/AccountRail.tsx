@@ -51,6 +51,7 @@ const THEME_KEY = 'mk-acct-theme'
 export default function AccountRail() {
   const pathname = usePathname() || ''
   const [unread, setUnread] = useState(0)
+  const [unseenApplicants, setUnseenApplicants] = useState(0)   // new applicants on MY castings (migration 142)
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [moreOpen, setMoreOpen] = useState(false)
   const [myId, setMyId] = useState<string | null>(null)
@@ -60,8 +61,18 @@ export default function AccountRail() {
 
   useEffect(() => {
     fetch('/api/messages/unread').then(r => (r.ok ? r.json() : { unread: 0 })).then(d => setUnread(d.unread ?? 0)).catch(() => {})
+    fetch('/api/castings/unseen').then(r => (r.ok ? r.json() : { unseen: 0 })).then(d => setUnseenApplicants(d.unseen ?? 0)).catch(() => {})
     setMoreOpen(false)
   }, [pathname])
+  // Pages that clear something (e.g. opening my casting) fire 'mk-badges'.
+  useEffect(() => {
+    const refresh = () => {
+      fetch('/api/castings/unseen').then(r => (r.ok ? r.json() : { unseen: 0 })).then(d => setUnseenApplicants(d.unseen ?? 0)).catch(() => {})
+      fetch('/api/messages/unread').then(r => (r.ok ? r.json() : { unread: 0 })).then(d => setUnread(d.unread ?? 0)).catch(() => {})
+    }
+    window.addEventListener('mk-badges', refresh)
+    return () => window.removeEventListener('mk-badges', refresh)
+  }, [])
   useEffect(() => { setTheme(document.documentElement.dataset.acctTheme === 'light' ? 'light' : 'dark') }, [])
   // Make member photos harder to save: no right-click "Save image as", no
   // dragging to the desktop. (Screenshots can't be stopped; this removes the
@@ -98,7 +109,9 @@ export default function AccountRail() {
     if (href === '/account/directory' && onOwnProfile) return false
     return pathname === href || pathname.startsWith(href + '/')
   }
-  const badge = (href: string) => href === '/account/messages' && unread > 0
+  const countFor = (href: string) => href === '/account/messages' ? unread : href === '/account/castings' ? unseenApplicants : 0
+  const badge = (href: string) => countFor(href) > 0
+  const badgeText = (href: string) => { const n = countFor(href); return n > 9 ? '9+' : String(n) }
 
   return (
     <>
@@ -139,7 +152,7 @@ export default function AccountRail() {
           {ITEMS.map(it => (
             <Link key={it.href} href={it.href} className={`ar-it${isActive(it.href) ? ' on' : ''}`} title={it.label}>
               <Icon name={it.icon} active={isActive(it.href)} />
-              {badge(it.href) && <span className="ar-dot">{unread > 9 ? '9+' : unread}</span>}
+              {badge(it.href) && <span className="ar-dot">{badgeText(it.href)}</span>}
               <span className="lbl">{it.label}</span>
             </Link>
           ))}
@@ -170,7 +183,7 @@ export default function AccountRail() {
           return (
             <Link key={href} href={href} aria-label={it.label}>
               <Icon name={it.icon} active={isActive(href)} />
-              {badge(href) && <span className="ar-dot">{unread > 9 ? '9+' : unread}</span>}
+              {badge(href) && <span className="ar-dot">{badgeText(href)}</span>}
             </Link>
           )
         })}

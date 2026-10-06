@@ -209,7 +209,7 @@ export async function sendCastingInterestSMS(to: string, interestedName: string,
   const num = toE164(to)
   if (!num) return
   const title = castingTitle.length > 40 ? castingTitle.slice(0, 40) + '…' : castingTitle
-  return sendSMS(num, `${interestedName} is interested in your casting "${title}": ${APP_URL}/account/castings/${castingId} (reply STOP to opt out)`)
+  return sendSMS(num, `${interestedName} is interested in your casting "${title}": ${APP_URL}/account/castings/${castingId}#applicants (reply STOP to opt out)`)
 }
 
 export async function sendCastingConfirmedSMS(to: string, castingTitle: string, role: string | null, castingId: string): Promise<void> {

@@ -632,7 +632,7 @@ export async function sendListingRequestEmail(opts: { to: string; fromName: stri
 }
 
 export async function sendCastingInterestEmail(opts: { to: string; interestedName: string; castingTitle: string; castingId: string }) {
-  const link = `${APP_URL}/account/castings/${opts.castingId}`
+  const link = `${APP_URL}/account/castings/${opts.castingId}#applicants`
   const body = `
     <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff;">Someone&rsquo;s interested</h1>
     <p style="margin:0 0 24px;font-size:14px;color:#999;"><strong style="color:#fff;">${esc(opts.interestedName)}</strong> is interested in your casting: <strong style="color:#fff;">${esc(opts.castingTitle)}</strong>.</p>
