@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useTurnstile } from '@/components/Turnstile'
 
 const inputStyle: React.CSSProperties = {
   width: '100%', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))',
@@ -21,6 +22,8 @@ const errBox: React.CSSProperties = { background: 'rgba(255,60,60,0.1)', border:
 
 export default function SecurityPage() {
   const supabase = createClient()
+  // The current-password check is a signInWithPassword, so it needs a bot token too.
+  const bot = useTurnstile('auto')
   const [currentEmail, setCurrentEmail] = useState('')
 
   useEffect(() => {
@@ -35,7 +38,8 @@ export default function SecurityPage() {
     if (pw !== pwc) { setPwErr('Passwords do not match.'); return }
     setPwSaving(true)
     // Safeguard: verify the current password before allowing a change.
-    const { error: reauthErr } = await supabase.auth.signInWithPassword({ email: currentEmail, password: curPw })
+    const { error: reauthErr } = await supabase.auth.signInWithPassword({ email: currentEmail, password: curPw, options: { captchaToken: bot.token } })
+    bot.reset()
     if (reauthErr) { setPwErr('Current password is incorrect.'); setPwSaving(false); return }
     const { error } = await supabase.auth.updateUser({ password: pw })
     if (error) setPwErr(error.message)
@@ -82,7 +86,8 @@ export default function SecurityPage() {
             <label style={labelStyle}>CONFIRM NEW PASSWORD</label>
             <input type="password" value={pwc} onChange={e => setPwc(e.target.value)} required minLength={6} style={inputStyle} />
           </div>
-          <button type="submit" disabled={pwSaving} style={btnStyle(pwSaving)}>{pwSaving ? 'UPDATING…' : 'UPDATE PASSWORD'}</button>
+          {bot.widget}
+          <button type="submit" disabled={pwSaving || bot.waiting} style={btnStyle(pwSaving)}>{pwSaving ? 'UPDATING…' : 'UPDATE PASSWORD'}</button>
         </form>
       </div>
 

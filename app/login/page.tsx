@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useTurnstile } from '@/components/Turnstile'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [error, setError]       = useState('')
   const [showPw, setShowPw]     = useState(false)
   const supabase = createClient()
+  const bot = useTurnstile()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -26,7 +28,8 @@ export default function LoginPage() {
   const signInEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: bot.token } })
+    bot.reset()   // tokens are single-use
     if (error) { setError(error.message); setLoading(false) }
     else router.push(nextUrl)
   }
@@ -106,7 +109,8 @@ export default function LoginPage() {
           <Link href="/forgot-password" style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'right', textDecoration: 'none' }}>
             Forgot password?
           </Link>
-          <button type="submit" disabled={loading} style={{
+          {bot.widget}
+          <button type="submit" disabled={loading || bot.waiting} style={{
             width: '100%', background: '#fff', color: '#000', border: 'none',
             borderRadius: 4, padding: '14px', fontFamily: 'Inter', fontSize: 13,
             fontWeight: 600, letterSpacing: '0.1em', cursor: loading ? 'default' : 'pointer',

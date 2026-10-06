@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useTurnstile } from '@/components/Turnstile'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail]     = useState('')
@@ -9,13 +10,16 @@ export default function ForgotPasswordPage() {
   const [sent, setSent]       = useState(false)
   const [error, setError]     = useState('')
   const supabase = createClient()
+  const bot = useTurnstile()
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); setError('')
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/account/reset-password`,
+      captchaToken: bot.token,
     })
+    bot.reset()   // tokens are single-use
     if (error) { setError(error.message); setLoading(false) }
     else setSent(true)
   }
@@ -43,7 +47,8 @@ export default function ForgotPasswordPage() {
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {error && <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b' }}>{error}</div>}
           <input type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} required style={{ width: '100%', background: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '14px 16px', fontFamily: 'Inter', fontSize: 14, color: '#fff', outline: 'none', boxSizing: 'border-box' }} />
-          <button type="submit" disabled={loading} style={{ width: '100%', background: '#fff', color: '#000', border: 'none', borderRadius: 4, padding: '14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', cursor: 'pointer', opacity: loading ? 0.6 : 1 }}>
+          {bot.widget}
+          <button type="submit" disabled={loading || bot.waiting} style={{ width: '100%', background: '#fff', color: '#000', border: 'none', borderRadius: 4, padding: '14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.1em', cursor: 'pointer', opacity: loading ? 0.6 : 1 }}>
             {loading ? 'SENDING...' : 'SEND RESET LINK'}
           </button>
           <Link href="/login" style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'center', textDecoration: 'none' }}>Back to sign in</Link>

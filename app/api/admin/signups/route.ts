@@ -53,3 +53,52 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ signups, total: data?.users?.length ?? signups.length })
 }
+
+// DELETE /api/admin/signups { ids: string[] } — remove junk sign-ups (2026-10-05:
+// bots signing up with stolen addresses). PERMANENT. Each id is checked first
+// and SKIPPED, never deleted, if the account has anything real attached:
+// bookings, studio credit / rewards, messages, castings, service listings or
+// portfolio photos — or is the owner. Returns { deleted, skipped: [{id, reason}] }.
+const OWNER_EMAILS = ['teddytran@madekulture.com']
+
+export async function DELETE(req: NextRequest) {
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body = await req.json().catch(() => ({} as any))
+  const ids: string[] = Array.isArray(body.ids) ? body.ids.filter((x: unknown) => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x as string)).slice(0, 100) : []
+  if (!ids.length) return NextResponse.json({ error: 'No accounts selected.' }, { status: 400 })
+
+  const count = async (table: string, col: string, id: string) => {
+    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(col, id)
+    if (error) throw new Error(`${table}: ${error.message}`)   // can't prove it's empty → don't delete
+    return count ?? 0
+  }
+
+  const deleted: string[] = []
+  const skipped: { id: string; reason: string }[] = []
+  for (const id of ids) {
+    try {
+      const { data: u, error: uErr } = await supabase.auth.admin.getUserById(id)
+      if (uErr || !u?.user) { skipped.push({ id, reason: 'not found' }); continue }
+      if (OWNER_EMAILS.includes((u.user.email || '').toLowerCase())) { skipped.push({ id, reason: 'owner account' }); continue }
+      const checks: [string, string, string][] = [
+        ['bookings', 'auth_user_id', 'has bookings'],
+        ['customer_credits', 'auth_user_id', 'has studio credit'],
+        ['messages', 'sender_id', 'has sent messages'],
+        ['castings', 'author_id', 'has castings'],
+        ['service_listings', 'user_id', 'has service listings'],
+        ['portfolio_images', 'user_id', 'has portfolio photos'],
+      ]
+      let reason = ''
+      for (const [t, c, why] of checks) { if (await count(t, c, id) > 0) { reason = why; break } }
+      if (reason) { skipped.push({ id, reason }); continue }
+
+      await supabase.from('customer_profiles').delete().eq('id', id)
+      const { error: dErr } = await supabase.auth.admin.deleteUser(id)
+      if (dErr) { skipped.push({ id, reason: dErr.message }); continue }
+      deleted.push(id)
+    } catch (e: any) {
+      skipped.push({ id, reason: e?.message || 'check failed' })
+    }
+  }
+  return NextResponse.json({ deleted, skipped })
+}

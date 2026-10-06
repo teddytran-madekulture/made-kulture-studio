@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { CREATIVE_ROLES, SERVICE_ROLES } from '@/lib/roles'
 import { cleanIgHandle } from '@/lib/directory-listing'
 import RolePicker from '@/components/RolePicker'
+import { useTurnstile } from '@/components/Turnstile'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -26,6 +27,7 @@ export default function SignupPage() {
       .then(d => { if (d && typeof d.left === 'number') setFoundingLeft({ left: d.left, cap: d.cap }) }).catch(() => {})
   }, [])
   const supabase = createClient()
+  const bot = useTurnstile()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -61,8 +63,10 @@ export default function SignupPage() {
           account_type: accountType,
         },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
+        captchaToken: bot.token,
       },
     })
+    bot.reset()   // tokens are single-use
     if (error) { setError(error.message); setLoading(false); return }
     setSuccess(true)
   }
@@ -201,7 +205,8 @@ export default function SignupPage() {
             </button>
           </div>
           <input type={showPw ? 'text' : 'password'} placeholder="Confirm password" value={password2} onChange={e => setPassword2(e.target.value)} required minLength={6} style={inputStyle} />
-          <button type="submit" disabled={loading} style={{
+          {bot.widget}
+          <button type="submit" disabled={loading || bot.waiting} style={{
             width: '100%', background: '#fff', color: '#000', border: 'none',
             borderRadius: 4, padding: '14px', fontFamily: 'Inter', fontSize: 13,
             fontWeight: 600, letterSpacing: '0.1em', cursor: loading ? 'default' : 'pointer',
