@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getLockedStaff, getStaffFromRequest, verifySecret, setStaffCookie, clearLockedCookie } from '@/lib/staff-auth'
+import { staffAuthLocked, recordStaffAuthFailure, STAFF_LOCKED_MSG } from '@/lib/staff-lockout'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,8 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Bad request.' }, { status: 400 }) }
   const pin = (body.pin ?? '').trim()
   if (!pin) return NextResponse.json({ error: 'Enter your PIN.' }, { status: 400 })
+  // DB-backed lockout per staff id (2026-10-06) — a 4-digit PIN is 10k tries.
+  if (await staffAuthLocked(staff.staffId)) return NextResponse.json({ error: STAFF_LOCKED_MSG }, { status: 429 })
 
   const { data } = await supabaseAdmin()
     .from('staff_users').select('pin_hash, role, name, is_active').eq('id', staff.staffId).maybeSingle()
@@ -27,6 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No PIN set on your account — sign out and back in, or set one in the staff console.' }, { status: 400 })
   }
   if (!verifySecret(pin, data.pin_hash)) {
+    await recordStaffAuthFailure(staff.staffId, 'unlock')
     return NextResponse.json({ error: 'Wrong PIN.' }, { status: 401 })
   }
 

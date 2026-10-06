@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { normEmail } from '@/lib/customer-email'
 import { createClient } from '@supabase/supabase-js'
 import { resolveAcuitySet } from '@/lib/acuity-set-map'
@@ -11,12 +12,10 @@ const supabase = createClient(
 
 // GET /api/admin/sync-acuity?password=XXX&minDate=YYYY-MM-DD&maxDate=YYYY-MM-DD
 export async function GET(req: NextRequest) {
-  // Auth check
+  // 2026-10-06: admin cookie (was ADMIN_PASSWORD in the query string — logged
+  // by Vercel, no rate limit, and it ignored a rotated password).
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { searchParams } = new URL(req.url)
-  const password = searchParams.get('password')
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
 
   const minDate = searchParams.get('minDate') ?? new Date().toISOString().split('T')[0]
   const maxDate = searchParams.get('maxDate') ?? '2027-12-31'

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isAdminAuthed } from '@/lib/admin-auth'
 
 // GET /api/admin/acuity-meta?password=XXX
 // Read-only diagnostic: dumps Acuity calendars + appointment types so we can
 // build a correct set → appointment-type mapping for the two-way sync.
 export async function GET(req: NextRequest) {
-  const password = new URL(req.url).searchParams.get('password')
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-10-06: admin cookie, not a password in the URL.
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const userId = process.env.ACUITY_USER_ID
   const apiKey = process.env.ACUITY_API_KEY

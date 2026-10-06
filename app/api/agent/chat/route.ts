@@ -15,6 +15,7 @@ import { createClient as createUserClient } from '@/lib/supabase/server'
 import { randomUUID } from 'crypto'
 import { runJune, juneConfigured, JuneTurn } from '@/lib/agent/june'
 import { SLUG_TO_NAME } from '@/lib/booking-core'
+import { kioskKeyOk } from '@/lib/kiosk-staff-pin'
 
 const supabase = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,7 +58,15 @@ export async function POST(req: NextRequest) {
 
   const message = String(body?.message ?? '').trim().slice(0, 1000)
   if (!message) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
+  // ⚠️ 2026-10-06 security pass: kiosk mode was self-declared. In kiosk mode
+  // June names the guest on that set and can create an extension request that
+  // TEXTS the real customer a pay link — so a bare `kiosk:true` from the open
+  // internet is refused. The tablet sends its KIOSK_KEY; if the key is unset on
+  // the deploy, kiosk mode is off rather than open.
   const isKiosk = body?.kiosk === true
+  if (isKiosk && (!process.env.KIOSK_KEY || !kioskKeyOk(typeof body?.key === 'string' ? body.key : null))) {
+    return NextResponse.json({ error: 'Kiosk mode needs a tablet key.' }, { status: 401 })
+  }
   const kioskGuest = isKiosk && typeof body?.kioskGuest === 'string'
     ? body.kioskGuest.replace(/[\r\n]/g, ' ').slice(0, 160)
     : null

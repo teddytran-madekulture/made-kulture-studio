@@ -118,6 +118,17 @@ export async function POST(req: NextRequest) {
     // ── Cancellation ─────────────────────────────────────────────────────────
     // Acuity sends "canceled" (one l); accept both spellings to be safe.
     if (rawAction.includes('cancel')) {
+      // ⚠️ 2026-10-06 security pass: this route has NO signature check, and
+      // Acuity ids are sequential integers — a POST of id=N&action=canceled
+      // used to cancel any Acuity booking, in a loop all of them. Ask Acuity
+      // (authenticated) whether the appointment is really cancelled first.
+      // Acuity is closed to new bookings; this stays only until the last
+      // existing ones have run.
+      const live = await fetchAcuityAppointment(acuityId)
+      if (!live || live.canceled !== true) {
+        console.warn('[Acuity webhook] cancel ignored — Acuity does not show it cancelled:', acuityId)
+        return NextResponse.json({ ok: true, action: 'ignored' })
+      }
       const { error } = await supabase
         .from('bookings')
         .update({ status: 'cancelled' })

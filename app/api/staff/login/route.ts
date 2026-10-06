@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { findActiveStaffByEmail, verifySecret, setStaffCookie } from '@/lib/staff-auth'
 import type { StaffRole } from '@/lib/staff-permissions'
 import { audit } from '@/lib/audit'
+import { staffAuthLocked, recordStaffAuthFailure, STAFF_LOCKED_MSG } from '@/lib/staff-lockout'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,9 +21,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 })
   }
 
+  // DB-backed lockout per email (2026-10-06) — see lib/staff-lockout.ts.
+  const target = email.toLowerCase()
+  if (await staffAuthLocked(target)) return NextResponse.json({ error: STAFF_LOCKED_MSG }, { status: 429 })
+
   const staff = await findActiveStaffByEmail(email)
   // Same generic message whether the email is unknown or the password is wrong.
   if (!staff || !verifySecret(password, staff.password_hash)) {
+    await recordStaffAuthFailure(target, 'login')
     return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 })
   }
 
