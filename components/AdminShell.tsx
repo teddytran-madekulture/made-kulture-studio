@@ -1,4 +1,5 @@
 'use client'
+import AppleSecretBanner from '@/components/AppleSecretBanner'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
@@ -153,7 +154,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       }}>
         <SidebarInner />
       </aside>
-      <div style={{ marginLeft: isMobile ? 0 : 220, paddingTop: isMobile ? 52 : 0, minHeight: 'var(--vh-full)' }}>{children}</div>
+      <div style={{ marginLeft: isMobile ? 0 : 220, paddingTop: isMobile ? 52 : 0, minHeight: 'var(--vh-full)' }}><AppleSecretBanner />{children}</div>
     </>
   )
 }

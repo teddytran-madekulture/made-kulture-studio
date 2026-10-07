@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from '@/lib/agreements'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import ReviewSettingsCard from '@/components/ReviewSettingsCard'
+import AppleSecretBanner from '@/components/AppleSecretBanner'
 import AdminCardCharge from '@/components/AdminCardCharge'
 import AddSetModal from '@/components/AddSetModal'
 import AddChargeModal from '@/components/AddChargeModal'
@@ -2057,6 +2058,7 @@ export default function AdminDashboard() {
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
       <div style={{ marginLeft: isMobile ? 0 : 220 }}>
+        <AppleSecretBanner />
       <div style={{ maxWidth: view === 'calendar' ? '100%' : 1200, margin: '0 auto', padding: isMobile ? '70px 14px 0' : '40px 40px 0' }}>
 
         {/* Stats */}
