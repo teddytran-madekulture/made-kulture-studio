@@ -63,6 +63,20 @@ export default function SecurityPage() {
     setEmSaving(false)
   }
 
+  // Delete account (2026-10-07 — required by Apple for the App Store app)
+  const [delOpen, setDelOpen] = useState(false); const [delText, setDelText] = useState('')
+  const [delBusy, setDelBusy] = useState(false); const [delErr, setDelErr] = useState('')
+  const deleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault(); setDelErr('')
+    if (delText.trim().toUpperCase() !== 'DELETE') { setDelErr('Type DELETE to confirm.'); return }
+    setDelBusy(true)
+    const r = await fetch('/api/account/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: delText.trim() }) })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { setDelErr(d.error || 'Could not delete your account.'); setDelBusy(false); return }
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+    window.location.href = '/?account=deleted'
+  }
+
   return (
     <div>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 32px' }}>LOGIN &amp; SECURITY</h1>
@@ -107,6 +121,38 @@ export default function SecurityPage() {
           <button type="submit" disabled={emSaving} style={btnStyle(emSaving)}>{emSaving ? 'SENDING…' : 'UPDATE EMAIL'}</button>
         </form>
       </div>
+      </div>
+
+      {/* Delete account */}
+      <div style={{ marginTop: 32, background: 'var(--t-surface-lo)', border: '1px solid rgba(255,60,60,0.25)', borderRadius: 8, padding: '24px', maxWidth: 480 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Delete account</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 1.55, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', marginBottom: 16 }}>
+          Permanently deletes your login, profile, directory listing, portfolio, messages, saved cards and any studio credit. Plus membership ends with no refund. Past booking receipts are kept for our records. This can’t be undone.
+        </div>
+        {!delOpen ? (
+          <button type="button" onClick={() => { setDelOpen(true); setDelErr('') }}
+            style={{ ...btnStyle(false), background: 'transparent', color: 'var(--t-err)', border: '1px solid var(--t-err)' }}>
+            DELETE MY ACCOUNT
+          </button>
+        ) : (
+          <form onSubmit={deleteAccount} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {delErr && <div style={errBox}>{delErr}</div>}
+            <div>
+              <label style={labelStyle}>TYPE DELETE TO CONFIRM</label>
+              <input value={delText} onChange={e => setDelText(e.target.value)} autoCapitalize="characters" autoComplete="off" placeholder="DELETE" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="submit" disabled={delBusy}
+                style={{ ...btnStyle(delBusy), background: 'var(--t-err)', color: '#fff' }}>
+                {delBusy ? 'DELETING…' : 'PERMANENTLY DELETE'}
+              </button>
+              <button type="button" disabled={delBusy} onClick={() => { setDelOpen(false); setDelText(''); setDelErr('') }}
+                style={{ ...btnStyle(false), background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))' }}>
+                CANCEL
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   )
