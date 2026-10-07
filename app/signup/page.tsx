@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { isNativeApp, nativeOAuthSignIn } from '@/lib/native-auth'
 import { CREATIVE_ROLES, SERVICE_ROLES } from '@/lib/roles'
 import { cleanIgHandle } from '@/lib/directory-listing'
 import RolePicker from '@/components/RolePicker'
@@ -73,6 +74,13 @@ export default function SignupPage() {
 
   const signInGoogle = async () => {
     setLoading(true)
+    // Inside the iPhone/Android app Google must run in the native sign-in
+    // sheet, not this web view -- see lib/native-auth.ts. (2026-10-07)
+    if (isNativeApp()) {
+      await nativeOAuthSignIn(supabase, 'google', nextUrl, (msg) => setError(msg))
+      setLoading(false)
+      return
+    }
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
