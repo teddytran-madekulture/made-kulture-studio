@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   // Abuse guard: tickets land in Teddy's inbox and cost a June draft each.
   const rl = await rateLimit(user ? `ticket:u:${user.id}` : `ticket:ip:${clientIp(req)}`, user ? 6 : 3, 60 * 60_000, {
-    message: 'You’ve sent a few requests already. We’ll get back to you soon, or text (832) 408-1631 if it’s urgent.',
+    message: 'You’ve sent a few requests already. We’ll get back to you soon, — at the studio, tap GET THE TEAM on the set tablet.',
   })
   if (!rl.allowed) return NextResponse.json({ error: rl.message }, { status: 429 })
 
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   }).select('id').single()
   if (cErr || !convo) {
     console.error('[support/ticket] create failed:', cErr)
-    return NextResponse.json({ error: 'Could not send your request. Please text (832) 408-1631.' }, { status: 500 })
+    return NextResponse.json({ error: 'Could not send your request. Please email info@madekulture.com.' }, { status: 500 })
   }
   const ref = convo.id.slice(0, 6).toUpperCase()
 
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   if (mErr) {
     console.error('[support/ticket] message insert failed:', mErr)
     await service.from('agent_conversations').delete().eq('id', convo.id)
-    return NextResponse.json({ error: 'Could not send your request. Please text (832) 408-1631.' }, { status: 500 })
+    return NextResponse.json({ error: 'Could not send your request. Please email info@madekulture.com.' }, { status: 500 })
   }
 
   // June drafts. A failure leaves the ticket in the inbox as needs_teddy with no
