@@ -24,11 +24,23 @@ function b64url(input: Buffer | string) {
   return Buffer.from(input).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')
 }
 
+// The .p8 pasted into Vercel's one-line value box loses its line breaks (or
+// keeps them as literal \n). Rebuild a proper PEM either way: take the base64
+// body, re-wrap at 64 chars, put the header/footer back.
+function normalizePem(raw: string): string {
+  const body = raw
+    .replace(/\\n/g, '\n')
+    .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----/g, '')
+    .replace(/\s+/g, '')
+  const lines = body.match(/.{1,64}/g) ?? []
+  return `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`
+}
+
 // Apple wants the provider token refreshed at most every 20 min and at least
 // every 60 — reuse for 45.
 function providerToken(): string {
   if (jwtCache && Date.now() - jwtCache.at < 45 * 60_000) return jwtCache.token
-  const key = (process.env.APNS_PRIVATE_KEY || '').replace(/\\n/g, '\n').trim()
+  const key = normalizePem(process.env.APNS_PRIVATE_KEY || '')
   const header = b64url(JSON.stringify({ alg: 'ES256', kid: process.env.APNS_KEY_ID }))
   const claims = b64url(JSON.stringify({ iss: process.env.APNS_TEAM_ID || '3WWCP2ML95', iat: Math.floor(Date.now() / 1000) }))
   const sig = crypto.sign('sha256', Buffer.from(`${header}.${claims}`), { key, dsaEncoding: 'ieee-p1363' })
