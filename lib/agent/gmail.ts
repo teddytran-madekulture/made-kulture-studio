@@ -224,7 +224,9 @@ export async function fetchNewEmails(max = 10): Promise<InboundEmail[]> {
     const fromEmail = (match ? match[2] : from).trim().toLowerCase()
     const fromName = (match ? match[1].replace(/^"|"$/g, '') : '').trim()
     // Skip automated senders.
-    if (/no-?reply|mailer-daemon|postmaster|notifications?@|noreply/i.test(fromEmail)) {
+    // no_reply@ (Apple) and donotreply@ / do-not-reply@ slipped past the old
+    // no-?reply pattern -- widened 2026-10-07.
+    if (/no[-_.]?reply|do[-_.]?not[-_.]?reply|mailer-daemon|postmaster|notifications?@/i.test(fromEmail)) {
       await markProcessed(m.id)
       continue
     }
@@ -235,7 +237,12 @@ export async function fetchNewEmails(max = 10): Promise<InboundEmail[]> {
     const listUnsub  = header(full.payload, 'List-Unsubscribe')
     const precedence = header(full.payload, 'Precedence').toLowerCase()
     const gmailLabels: string[] = full.labelIds ?? []
-    if (listUnsub || /bulk|list/.test(precedence) || gmailLabels.includes('CATEGORY_PROMOTIONS')) {
+    // Auto-Submitted (RFC 3834) marks system-generated mail -- receipts, alerts,
+    // verification codes -- even from normal-looking addresses. Any value other
+    // than 'no' means a machine sent it. Added 2026-10-07.
+    const autoSubmitted = header(full.payload, 'Auto-Submitted').trim().toLowerCase()
+    const isAuto = !!autoSubmitted && autoSubmitted !== 'no'
+    if (listUnsub || isAuto || /bulk|list/.test(precedence) || gmailLabels.includes('CATEGORY_PROMOTIONS')) {
       await markProcessed(m.id)
       continue
     }
