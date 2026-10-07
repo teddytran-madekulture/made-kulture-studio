@@ -32,6 +32,7 @@ export const APP_AUTH_REDIRECT = 'com.madekulture.app://auth/callback'
 
 type Cap = {
   isNativePlatform?: () => boolean
+  isPluginAvailable?: (name: string) => boolean
   nativePromise: (plugin: string, method: string, opts?: unknown) => Promise<any>
   nativeCallback: (plugin: string, method: string, opts: unknown, cb: (data: any, err?: any) => void) => string
 }
@@ -59,6 +60,13 @@ export async function nativeOAuthSignIn(
 ): Promise<void> {
   const c = cap()
   if (!c) { onError('Not running in the app.'); return }
+  // An older app build without the Browser plugin would hang forever on
+  // nativePromise('Browser', ...) -- the website updates instantly but the
+  // installed app only updates through TestFlight/App Store. (2026-10-07)
+  if (c.isPluginAvailable && !c.isPluginAvailable('Browser')) {
+    onError('Please update the Made Kulture app to sign in with Google, or use email and password.')
+    return
+  }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
@@ -97,7 +105,12 @@ export async function nativeOAuthSignIn(
   })
 
   try {
-    await c.nativePromise('Browser', 'open', { url: data.url, presentationStyle: 'popover' })
+    // Never leave the button stuck on "Signing in..." if the native side
+    // doesn't answer.
+    await Promise.race([
+      c.nativePromise('Browser', 'open', { url: data.url, presentationStyle: 'popover' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('The sign-in window did not open. Please try again.')), 8000)),
+    ])
   } catch (e: any) {
     stop()
     onError(e?.message || 'Could not open the sign-in window.')
