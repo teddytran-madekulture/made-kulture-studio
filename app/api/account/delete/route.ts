@@ -3,6 +3,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { sendOwnerPush } from '@/lib/push'
+import { getCreditBalance } from '@/lib/credits'
+import { plusActive } from '@/lib/short-notice'
 
 // 2026-10-07 — customer self-service account deletion.
 // Apple requires it (App Store guideline 5.1.1(v)) for any app with sign-up.
@@ -11,6 +13,11 @@ import { sendOwnerPush } from '@/lib/push'
 //              directory listing, portfolio, messages, follows, castings,
 //              store credit, push subscriptions (all ON DELETE CASCADE) —
 //              plus every saved card in Square (disabled).
+// Plus:        auto-renew is switched OFF (no more charges or renewal texts);
+//              the paid-through date is left alone, so Plus is still there if
+//              they come back with the same email before it runs out. No refund.
+// Credit:      forfeited (the ledger cascades). The balance is shown on the
+//              confirm screen first and reported in the owner push.
 // What stays:  the `customers` row and its bookings. Those are the studio's
 //              transaction records (tax, disputes, Square reconciliation) and
 //              were never part of the login; they're keyed by email.
@@ -31,6 +38,31 @@ function getSquare() {
     accessToken: process.env.SQUARE_ACCESS_TOKEN!,
     environment: process.env.SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox,
   })
+}
+
+type CustRow = { id: string; pricing_overrides: any }
+
+async function customerRows(email: string): Promise<{ rows: CustRow[]; error: boolean }> {
+  if (!email) return { rows: [], error: false }
+  const { data, error } = await service.from('customers').select('id, pricing_overrides').eq('email', email)
+  return { rows: (data ?? []) as CustRow[], error: !!error }
+}
+
+function plusSummary(rows: CustRow[]): { active: boolean; expiresAt: string | null } {
+  const row = rows.find(r => plusActive(r.pricing_overrides))
+  return { active: !!row, expiresAt: row?.pricing_overrides?.plus_expires_at ?? null }
+}
+
+const money = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
+
+// What the customer is about to give up — shown on the confirm screen.
+export async function GET() {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { rows } = await customerRows((user.email ?? '').toLowerCase())
+  const creditCents = Math.max(0, await getCreditBalance(user.id))
+  return NextResponse.json({ creditCents, plus: plusSummary(rows) })
 }
 
 export async function POST(req: NextRequest) {
@@ -56,11 +88,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Gate 2: no upcoming bookings. A failed lookup must REFUSE, never pass.
-  const { data: custRows, error: cErr } = email
-    ? await service.from('customers').select('id').eq('email', email)
-    : { data: [] as { id: string }[], error: null }
+  const { rows: custRows, error: cErr } = await customerRows(email)
   if (cErr) return NextResponse.json({ error: 'Could not check your bookings. Please try again.' }, { status: 500 })
-  const custIds = (custRows ?? []).map(c => c.id)
+  const custIds = custRows.map(c => c.id)
   const orFilter = [`auth_user_id.eq.${user.id}`]
   if (custIds.length) orFilter.push(`customer_id.in.(${custIds.join(',')})`)
 
@@ -81,6 +111,28 @@ export async function POST(req: NextRequest) {
   // Details for the owner alert, read before anything is removed.
   const { data: prof } = await service
     .from('customer_profiles').select('full_name, square_customer_id').eq('id', user.id).maybeSingle()
+
+  // Credit balance and Plus status, captured for the owner's record before the
+  // ledger cascades away.
+  const creditCents = Math.max(0, await getCreditBalance(user.id))
+  const plus = plusSummary(custRows)
+
+  // ── Plus: stop auto-renew on every customer row that has it on. Must land
+  //    BEFORE the delete — otherwise the renewal job would try to charge a card
+  //    that's about to be removed. A failed write refuses the whole delete.
+  for (const r of custRows) {
+    const po = r.pricing_overrides
+    if (!po || po.plus_auto_renew !== true) continue
+    const { data: upd, error: pErr } = await service
+      .from('customers')
+      .update({ pricing_overrides: { ...po, plus_auto_renew: false } })
+      .eq('id', r.id)
+      .select('id')
+    if (pErr || !upd?.length) {
+      console.error('[account/delete] Plus auto-renew off failed:', pErr)
+      return NextResponse.json({ error: 'Could not delete your account. Please try again or email info@madekulture.com.' }, { status: 500 })
+    }
+  }
 
   // ── Saved cards: disable every card on the Square customer. Non-fatal, but
   //    a failure is reported to the owner so it can be cleaned up by hand.
@@ -128,7 +180,10 @@ export async function POST(req: NextRequest) {
 
   await sendOwnerPush({
     title: 'Account deleted',
-    body: `${prof?.full_name || 'A customer'} (${email || 'no email'}) deleted their account — ${cardNote}. Booking history kept.`,
+    body: `${prof?.full_name || 'A customer'} (${email || 'no email'}) deleted their account — ${cardNote}`
+      + (creditCents > 0 ? `, ${money(creditCents)} credit forfeited` : '')
+      + (plus.active ? `, Plus auto-renew off (paid through ${plus.expiresAt ? new Date(plus.expiresAt).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }) : 'no end date'})` : '')
+      + '. Booking history kept.',
     tag: 'account-delete',
   }).catch(() => {})
 

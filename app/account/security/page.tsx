@@ -66,6 +66,14 @@ export default function SecurityPage() {
   // Delete account (2026-10-07 — required by Apple for the App Store app)
   const [delOpen, setDelOpen] = useState(false); const [delText, setDelText] = useState('')
   const [delBusy, setDelBusy] = useState(false); const [delErr, setDelErr] = useState('')
+  const [delInfo, setDelInfo] = useState<{ creditCents: number; plus: { active: boolean; expiresAt: string | null } } | null>(null)
+  const openDelete = async () => {
+    setDelOpen(true); setDelErr(''); setDelInfo(null)
+    const r = await fetch('/api/account/delete', { cache: 'no-store' }).catch(() => null)
+    if (r?.ok) setDelInfo(await r.json().catch(() => null))
+  }
+  const fmtMoney = (c: number) => `$${(c / 100).toFixed(c % 100 ? 2 : 0)}`
+  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   const deleteAccount = async (e: React.FormEvent) => {
     e.preventDefault(); setDelErr('')
     if (delText.trim().toUpperCase() !== 'DELETE') { setDelErr('Type DELETE to confirm.'); return }
@@ -127,16 +135,26 @@ export default function SecurityPage() {
       <div style={{ marginTop: 32, background: 'var(--t-surface-lo)', border: '1px solid rgba(255,60,60,0.25)', borderRadius: 8, padding: '24px', maxWidth: 480 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Delete account</div>
         <div style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 1.55, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', marginBottom: 16 }}>
-          Permanently deletes your login, profile, directory listing, portfolio, messages, saved cards and any studio credit. Plus membership ends with no refund. Past booking receipts are kept for our records. This can’t be undone.
+          Permanently deletes your login, profile, directory listing, portfolio, messages, saved cards and any studio credit. Plus stops renewing and isn’t refunded. Past booking receipts are kept for our records. This can’t be undone.
         </div>
         {!delOpen ? (
-          <button type="button" onClick={() => { setDelOpen(true); setDelErr('') }}
+          <button type="button" onClick={openDelete}
             style={{ ...btnStyle(false), background: 'transparent', color: 'var(--t-err)', border: '1px solid var(--t-err)' }}>
             DELETE MY ACCOUNT
           </button>
         ) : (
           <form onSubmit={deleteAccount} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {delErr && <div style={errBox}>{delErr}</div>}
+            {delInfo && (delInfo.creditCents > 0 || delInfo.plus.active) && (
+              <div style={{ ...errBox, lineHeight: 1.55 }}>
+                {delInfo.creditCents > 0 && <div>You have <b>{fmtMoney(delInfo.creditCents)}</b> in studio credit. Deleting your account forfeits it.</div>}
+                {delInfo.plus.active && (
+                  <div style={{ marginTop: delInfo.creditCents > 0 ? 8 : 0 }}>
+                    Your Plus membership {delInfo.plus.expiresAt ? <>is paid through <b>{fmtDate(delInfo.plus.expiresAt)}</b></> : 'is active'}. It won’t renew and isn’t refunded. If you come back with this email before then, it’ll still be there.
+                  </div>
+                )}
+              </div>
+            )}
             <div>
               <label style={labelStyle}>TYPE DELETE TO CONFIRM</label>
               <input value={delText} onChange={e => setDelText(e.target.value)} autoCapitalize="characters" autoComplete="off" placeholder="DELETE" style={inputStyle} />
