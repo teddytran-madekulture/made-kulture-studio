@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { normEmail } from '@/lib/customer-email'
 import { EMAIL_RE } from '@/lib/email-change'
 import { standingForEmail } from '@/lib/standing'
+import { sendSimpleEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -47,5 +48,22 @@ export async function POST(req: NextRequest) {
     await db.from('customer_email_changes').update({ status: 'cancelled', note: error.message }).eq('id', row.id)
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
+
+  // 2026-10-07: tell the CURRENT address too. If the account was taken over,
+  // this is how the real owner finds out before the link is clicked.
+  const safe = n.replace(/[<>&"]/g, '')
+  await sendSimpleEmail({
+    to: o,
+    subject: 'Your Made Kulture email is being changed',
+    heading: 'Email change requested',
+    paragraphs: [
+      `Someone signed in to your Made Kulture account asked to change its email to <strong style="color:#fff">${safe}</strong>. Nothing changes until the confirmation link sent to that address is clicked.`,
+      'If this was you, there’s nothing else to do. If it wasn’t, contact us right away and we’ll secure your account.',
+    ],
+    ctaText: 'Contact support',
+    ctaUrl: 'https://madekulture.com/support',
+    label: 'email_change_notice',
+  }).catch(e => console.error('[account/email] old-address notice failed:', e))
+
   return NextResponse.json({ ok: true, email: n })
 }

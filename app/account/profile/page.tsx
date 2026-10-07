@@ -225,17 +225,27 @@ function ProfileSettings() {
   const set = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // 2026-10-07: changing an existing phone number needs a texted code — the
+  // server replies 409 { needsPhoneCode } and texts the new number.
+  const [phoneSentTo, setPhoneSentTo] = useState<string | null>(null)
+  const [phoneCode, setPhoneCode] = useState('')
+
+  const save = async (e?: React.FormEvent, code?: string) => {
+    e?.preventDefault()
     setSaving(true); setError(''); setSaved(false)
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '', credits: form.credits.filter(c => c.title.trim()), cv_url: form.cv_url ?? '' }),
+      body: JSON.stringify({ ...(code ? { phone_code: code } : {}), full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '', credits: form.credits.filter(c => c.title.trim()), cv_url: form.cv_url ?? '' }),
     })
     const data = await res.json()
+    if (res.status === 409 && data.needsPhoneCode) {
+      setPhoneSentTo(data.sentTo || ''); setPhoneCode(''); setSaving(false)
+      return
+    }
     if (!res.ok) { setError(data.error ?? 'Save failed'); setSaving(false) }
     else {
+      setPhoneSentTo(null); setPhoneCode('')
       setSaved(true); setSaving(false)
       loadFounding() // saving may have just completed the profile → claims a Founding spot
     }
@@ -415,7 +425,26 @@ function ProfileSettings() {
           <input value={form.email} disabled style={{ ...inputStyle, opacity: 0.4 }} />
         </Field>
         <Field label="PHONE">
-          <input value={form.phone} onChange={set('phone')} placeholder="(832) 000-0000" style={inputStyle} />
+          <input value={form.phone} onChange={e => { set('phone')(e); setPhoneSentTo(null) }} placeholder="(832) 000-0000" style={inputStyle} />
+          {phoneSentTo !== null && (
+            <div style={{ marginTop: 10, border: '1px solid rgba(var(--t-gold-rgb), 0.45)', background: 'rgba(var(--t-gold-rgb), 0.07)', borderRadius: 8, padding: '12px 14px', fontFamily: 'Inter' }}>
+              <div style={{ fontSize: 13, color: 'var(--t-fg)', marginBottom: 10, lineHeight: 1.5 }}>
+                We texted a 6-digit code to the number ending in <strong>{phoneSentTo}</strong>. Enter it to confirm your new number.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input value={phoneCode} onChange={e => setPhoneCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric" autoComplete="one-time-code" placeholder="123456" style={{ ...inputStyle, width: 140, letterSpacing: '0.2em' }} />
+                <button type="button" disabled={saving || phoneCode.length !== 6} onClick={() => save(undefined, phoneCode)}
+                  style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4, padding: '0 18px', fontFamily: 'Inter', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer', opacity: saving || phoneCode.length !== 6 ? 0.5 : 1 }}>
+                  VERIFY &amp; SAVE
+                </button>
+                <button type="button" disabled={saving} onClick={() => save()}
+                  style={{ background: 'transparent', color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 4, padding: '0 14px', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer' }}>
+                  SEND A NEW CODE
+                </button>
+              </div>
+            </div>
+          )}
         </Field>
         {!isCustomer && (<>
         <Field label="INSTAGRAM">

@@ -50,6 +50,50 @@ const btn = (primary = false): React.CSSProperties => ({
   background: primary ? '#fff' : 'transparent', color: primary ? '#080808' : 'rgba(255,255,255,0.75)',
 })
 
+// 2026-10-07: recent name / phone / Instagram / email changes (migration 147).
+// Collapsed by default; loads only when opened.
+type Change = { userId: string | null; name: string | null; field: string; from: string | null; to: string | null; at: string; note: string | null }
+const FIELD_LABEL: Record<string, string> = { full_name: 'Name', phone: 'Phone', instagram: 'Instagram', email: 'Email' }
+function AccountChanges() {
+  const [open, setOpen] = useState(false)
+  const [rows, setRows] = useState<Change[] | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    if (!open || rows) return
+    fetch('/api/admin/profile-changes', { cache: 'no-store' })
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to load'); setRows(d.changes || []) })
+      .catch(e => setErr(e.message))
+  }, [open, rows])
+  const when = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return (
+    <div style={{ ...card, padding: '14px 16px', margin: '0 0 16px' }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.7)' }}>
+        <span>{open ? '▾' : '▸'}</span> RECENT ACCOUNT CHANGES
+      </button>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          {err && <p style={{ ...text, color: '#ff8a8a' }}>{err}</p>}
+          {!rows && !err && <p style={text}>Loading…</p>}
+          {rows && rows.length === 0 && <p style={text}>No changes yet.</p>}
+          {rows && rows.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 360, overflowY: 'auto' }}>
+              {rows.map((r, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px 160px 90px 1fr', gap: 10, fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.75)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '6px 0' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.45)' }}>{when(r.at)}</span>
+                  <span style={{ color: '#fff' }}>{r.name || '—'}</span>
+                  <span style={{ color: '#e6c07a' }}>{FIELD_LABEL[r.field] || r.field}</span>
+                  <span>{r.from || '(none)'} → {r.to || '(none)'}{r.note ? <span style={{ color: 'rgba(255,255,255,0.4)' }}> · {r.note}</span> : null}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminDirectoryPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [counts, setCounts] = useState<Counts | null>(null)
@@ -130,6 +174,8 @@ export default function AdminDirectoryPage() {
         directory can actually see them — a profile that is opted in but unfinished shows up nowhere, including here
         on the customer side, which is what the <strong style={{ color: '#e6c07a' }}>needs info</strong> filter is for.
       </p>
+
+      <div style={{ marginTop: 18 }}><AccountChanges /></div>
 
       {counts && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '18px 0 14px' }}>

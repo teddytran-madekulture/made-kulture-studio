@@ -275,7 +275,7 @@ export const CATEGORIES: Category[] = [
           'Change your ACCOUNT TYPE (Customer, Creative, Vendor or Brand), FULL NAME, PHONE, INSTAGRAM, BIO (up to 600 characters) or LINKS.',
           'Tap SAVE CHANGES.',
         ],
-        notes: ['Customer accounts see only the basics. Switch to Creative, Vendor or Brand to unlock the directory fields.', 'Your email is changed in Login & security, not here.'] },
+        notes: ['Changing your phone number? We text a 6-digit code to the new number — enter it and tap VERIFY & SAVE.', 'Directory members can change their name and Instagram once every 30 days.', 'Customer accounts see only the basics. Switch to Creative, Vendor or Brand to unlock the directory fields.', 'Your email is changed in Login & security, not here.'] },
       { slug: 'profile-photo', q: 'How do I change my profile photo?', tags: 'avatar profile picture logo headshot',
         steps: [SETTINGS, 'In Edit profile, under PROFILE PHOTO (LOGO for brands), tap UPLOAD PHOTO or CHANGE PHOTO.', 'Tap SAVE CHANGES — the photo isn’t kept until you do.'],
         notes: ['Up to 25 MB. Location data is removed automatically.'] },
