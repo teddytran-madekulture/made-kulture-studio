@@ -716,6 +716,10 @@ export default function AdminDashboard() {
     name: '', email: '', phone: '', notes: '', totalAmount: 0, sendSms: true,
   })
   const [manualAnyTime, setManualAnyTime] = useState(false)
+  // 2026-10-07: TOTAL AMOUNT fills itself (hours × the set's rate, or the
+  // buyout rate) until you type over it. Kept as a string so the field can be
+  // cleared — a number input bound to 0 would never let the 0 go.
+  const [manualTotalTyped, setManualTotalTyped] = useState<string | null>(null)
   const [submitting,   setSubmitting]   = useState(false)
   const [submitError,  setSubmitError]  = useState('')
   const [submitSuccess,setSubmitSuccess]= useState(false)
@@ -1349,16 +1353,30 @@ export default function AdminDashboard() {
   const resetModal = () => {
     clearCustomer()
     setManual({ setSlug: 'set-a', date: tomorrow(), startHour: 10, endHour: 12, name: '', email: '', phone: '', notes: '', totalAmount: 0, sendSms: true })
-    setManualAnyTime(false)
+    setManualAnyTime(false); setManualTotalTyped(null)
     setSubmitError(''); setSubmitSuccess(false)
   }
+
+  // Manual booking price: hours × rate (buyout rate for a Full Studio Takeover).
+  const manualRate = manual.setSlug === 'studio'
+    ? (Number(buyoutRate) || 400)
+    : effectiveRateFor(SETS.find(x => x.id === manual.setSlug)?.name || '', null)
+  const manualAutoTotal = Math.max(Math.round(spanHours(manual.startHour, manual.endHour) * manualRate * 100) / 100, 0)
+  const manualTotal = manualTotalTyped === null ? manualAutoTotal : (Number(manualTotalTyped) || 0)
+  // The buyout rate is otherwise only loaded on the Sets tab.
+  useEffect(() => {
+    fetch('/api/admin/settings?key=buyout_rate')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.value) setBuyoutRate(String(d.value)) })
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSubmitting(true); setSubmitError('')
     const endpoint = (chargeMode === 'card-on-file' && selectedCard) ? '/api/admin/charge' : '/api/admin/bookings'
     const body = chargeMode === 'card-on-file' && selectedCard
-      ? { squareCardId: selectedCard.id, squareCustomerId: selectedCustomer?.squareCustomerId, ...manual }
-      : manual
+      ? { squareCardId: selectedCard.id, squareCustomerId: selectedCustomer?.squareCustomerId, ...manual, totalAmount: manualTotal }
+      : { ...manual, totalAmount: manualTotal }
     const res  = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json()
     if (!res.ok) { setSubmitError(data.error || 'Failed'); setSubmitting(false); return }
@@ -5231,8 +5249,13 @@ export default function AdminDashboard() {
                 )}
 
                 <Field label="TOTAL AMOUNT ($)">
-                  <input type="number" min={0} step={0.01} value={manual.totalAmount}
-                    onChange={e => setManual(m => ({ ...m, totalAmount: Number(e.target.value) }))} style={inputStyle} />
+                  <input type="text" inputMode="decimal" value={manualTotalTyped ?? String(manualAutoTotal)}
+                    onChange={e => setManualTotalTyped(e.target.value.replace(/[^\d.]/g, ''))} style={inputStyle} />
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
+                    {manualTotalTyped === null
+                      ? `Auto: ${spanHours(manual.startHour, manual.endHour)} hr × $${manualRate}/hr. Type to override.`
+                      : <>Custom amount. <button type="button" onClick={() => setManualTotalTyped(null)} style={{ background: 'none', border: 'none', color: '#e6c07a', cursor: 'pointer', padding: 0, fontSize: 11 }}>Use auto (${manualAutoTotal})</button></>}
+                  </div>
                 </Field>
 
                 <Field label="NOTES (optional)">
