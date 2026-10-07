@@ -360,7 +360,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           <div>
             <div className="label" style={{ marginBottom:24 }}>STUDIO</div>
             {/* Pricing lives on the sets page — there is no /pricing route. */}
-            {[['Sets','/sets'],['Pricing','/sets'],['Book','/book'],['Directory','/directory'],['Contact','/contact']].map(([l, href]) => (
+            {[['Sets','/sets'],['Pricing','/sets'],['Book','/book'],['Directory','/directory'],['Support & contact','/support']]  /* /contact never existed (404) — 2026-10-07 */.map(([l, href]) => (
               <div key={l} style={{ marginBottom:14 }}>
                 <Link href={href} style={{ fontSize:14, color:'rgba(255,255,255,0.5)', textDecoration:'none' }}>{l}</Link>
               </div>
@@ -384,8 +384,15 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
             </div>
           </div>
         </div>
-        <div style={{ borderTop:'1px solid rgba(255,255,255,0.08)', paddingTop:24, display:'flex', justifyContent:'space-between' }}>
+        <div style={{ borderTop:'1px solid rgba(255,255,255,0.08)', paddingTop:24, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:16 }}>
           <span className="label">© 2026 MADEKULTURE STUDIO</span>
+          {/* 2026-10-07: Support + legal links — App Store / Google Play reviewers
+              (and guests without an account) look for these in the footer. */}
+          <span style={{ display:'flex', gap:22, flexWrap:'wrap' }}>
+            {[['SUPPORT','/support'],['PRIVACY','/privacy-policy'],['TERMS','/terms']].map(([l, href]) => (
+              <Link key={l} href={href} className="label" style={{ textDecoration:'none' }}>{l}</Link>
+            ))}
+          </span>
           <span className="label">ALL RIGHTS RESERVED</span>
         </div>
       </footer>
