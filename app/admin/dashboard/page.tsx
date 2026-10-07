@@ -675,6 +675,11 @@ export default function AdminDashboard() {
 
   // Edit booking modal
   const [editBooking, setEditBooking] = useState<Booking | null>(null)
+  // 2026-10-07: "Share the floor" — lets a buyout be saved over bookings the
+  // buyout client agreed to share with. Only offered after the server refuses
+  // with overridable:true; sends force:true, which waives ONLY the buyout check.
+  const [editShareFloor, setEditShareFloor] = useState(false)
+  const [editOverridable, setEditOverridable] = useState(false)
   const [editState,   setEditState]   = useState({ setName: '', date: '', startHour: 9, endHour: 11, notes: '', sendSms: true })
   const [editAnyTime, setEditAnyTime] = useState(false)
   // What this booking's CURRENT window is worth in set time alone — the baseline
@@ -1490,10 +1495,29 @@ export default function AdminDashboard() {
     }
   }
 
+  // 2026-10-07: a full-warehouse buyout has no set (set_id null). The modal used
+  // to show it as "Set A" (first option, since '' matched nothing) and price
+  // added time at the $40 set rate instead of the buyout rate. It now has its
+  // own option and rate. 'Full Studio Takeover' is the name the PATCH route
+  // already maps back to set_id null.
+  const setNameOf = (b: Booking) => b.sets?.name || 'Full Studio Takeover'
+  const editRateFor = (name: string, b: Booking | null) =>
+    name === 'Full Studio Takeover' ? (Number(buyoutRate) || 400) : effectiveRateFor(name, b)
+
   const openEdit = async (b: Booking) => {
+    // The buyout rate is otherwise only loaded on the Sets tab — fetch it before
+    // the modal prices anything, so both sides of editDiff use the real rate.
+    let buyoutHr = Number(buyoutRate) || 400
+    if (!b.sets) {
+      try {
+        const r = await fetch('/api/admin/settings?key=buyout_rate')
+        const d = r.ok ? await r.json() : null
+        if (d?.value) { buyoutHr = Number(d.value) || buyoutHr; setBuyoutRate(String(d.value)) }
+      } catch { /* keep the default */ }
+    }
     setEditBooking(b)
     setEditState({
-      setName:   b.sets?.name || '',
+      setName:   setNameOf(b),
       date:      localDateStr(b.start_time),
       startHour: localHour(b.start_time),
       endHour:   localHour(b.end_time),
@@ -1509,7 +1533,7 @@ export default function AdminDashboard() {
     // Uses the booking's ORIGINAL set; changing the set in the form is supposed
     // to move the difference, changing nothing is not.
     setEditOrigTotal(Math.max(
-      spanHours(localHour(b.start_time), localHour(b.end_time)) * effectiveRateFor(b.sets?.name || '', b),
+      spanHours(localHour(b.start_time), localHour(b.end_time)) * (b.sets ? editRateFor(setNameOf(b), b) : buyoutHr),
       0,
     ))
     // A booking already outside business hours has to open with the full clock
@@ -1518,6 +1542,7 @@ export default function AdminDashboard() {
     setEditAnyTime(!inBusinessHours(localHour(b.start_time)) || !inBusinessHours(localHour(b.end_time)))
     setEditCards([]); setEditCard(null); setEditSquareCustId(null)
     setEditPayLink(null); setEditError(''); setEditAction(null); setEditCopied(false)
+    setEditShareFloor(false); setEditOverridable(false)
     setEditSmsStatus(null); setEditChargeSuccess(false); setTextConfirmMsg(null)
     setEditDoorCode(null)
 
@@ -1574,6 +1599,7 @@ export default function AdminDashboard() {
         end_time:     endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:      editState.setName,
         notes:        editState.notes,
+        force:        editShareFloor || undefined,
         // ⚠️ total_amount is deliberately NOT sent. This used to write
         // editNewTotal — the modal's own SET_RATES arithmetic — on a button
         // that moves no money, so shortening a booking silently rewrote what
@@ -1588,7 +1614,7 @@ export default function AdminDashboard() {
       }),
     })
     const data = await res.json()
-    if (!res.ok) { setEditError(data.error || 'Failed to save'); setEditAction(null); return }
+    if (!res.ok) { setEditError(data.error || 'Failed to save'); setEditOverridable(!!data.overridable); setEditAction(null); return }
     setEditAction(null)
     fetchBookings()
     // A moved window mints a fresh door code and the old one dies at the old end
@@ -1612,11 +1638,12 @@ export default function AdminDashboard() {
         end_time:   endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:    editState.setName,
         notes:      editState.notes,
+        force:      editShareFloor || undefined,
       }),
     })
     if (!saveRes.ok) {
       const d = await saveRes.json()
-      setEditError(d.error || 'Failed to update booking'); setEditAction(null); return
+      setEditError(d.error || 'Failed to update booking'); setEditOverridable(!!d.overridable); setEditAction(null); return
     }
     // Create payment link
     const linkRes = await fetch(`/api/admin/bookings/${editBooking.id}/payment-link`, {
@@ -1672,11 +1699,12 @@ export default function AdminDashboard() {
         end_time:   endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:    editState.setName,
         notes:      editState.notes,
+        force:      editShareFloor || undefined,
       }),
     })
     if (!saveRes.ok) {
       const d = await saveRes.json()
-      setEditError(d.error || 'Failed to update booking'); setEditAction(null); return
+      setEditError(d.error || 'Failed to update booking'); setEditOverridable(!!d.overridable); setEditAction(null); return
     }
     // Charge card
     const chargeRes = await fetch(`/api/admin/bookings/${editBooking.id}/charge`, {
@@ -1722,11 +1750,12 @@ export default function AdminDashboard() {
         end_time:   endHourToISO(editState.date, editState.startHour, editState.endHour),
         setName:    editState.setName,
         notes:      editState.notes,
+        force:      editShareFloor || undefined,
       }),
     })
     if (!saveRes.ok) {
       const d = await saveRes.json().catch(() => ({}))
-      setEditError(d.error || 'Failed to update booking'); setEditAction(null); return
+      setEditError(d.error || 'Failed to update booking'); setEditOverridable(!!d.overridable); setEditAction(null); return
     }
     setEditAction(null)
     setChargeCardFor({
@@ -1800,7 +1829,7 @@ export default function AdminDashboard() {
     : manualSlots.filter(h => h > manual.startHour)
   const editDuration = spanHours(editState.startHour, editState.endHour)
   // The rate THIS customer pays, guest surcharge included — see effectiveRateFor.
-  const editRate     = effectiveRateFor(editState.setName, editBooking)
+  const editRate     = editRateFor(editState.setName, editBooking)
   const editNewTotal = Math.max(editDuration * editRate, 0)
 
   // ⚠️ The baseline is the booking's ORIGINAL SET TIME, not total_amount.
@@ -1833,7 +1862,7 @@ export default function AdminDashboard() {
     : 0
   const editIsPureExtension = !!editBooking
     && editAddedHours > 0
-    && editState.setName === (editBooking.sets?.name || '')
+    && editState.setName === setNameOf(editBooking)
     && editState.date === localDateStr(editBooking.start_time)
     && editState.startHour === localHour(editBooking.start_time)
 
@@ -4784,6 +4813,7 @@ export default function AdminDashboard() {
                 <select value={editState.setName} onChange={e => setEditState(s => ({ ...s, setName: e.target.value }))}
                   style={{ ...inputStyle, appearance: 'none' as const }}>
                   {CAL_SETS.map(n => <option key={n} value={n} style={{ background: '#111' }}>{n}</option>)}
+                  <option value={'Full Studio Takeover'} style={{ background: '#111' }}>Full Studio Takeover (whole warehouse)</option>
                 </select>
               </Field>
 
@@ -4954,6 +4984,12 @@ export default function AdminDashboard() {
 
             {editError && (
               <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 12 }}>{editError}</div>
+            )}
+            {editOverridable && (
+              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.75)', cursor: 'pointer', lineHeight: 1.5 }}>
+                <input type="checkbox" checked={editShareFloor} onChange={e => setEditShareFloor(e.target.checked)} style={{ marginTop: 2 }} />
+                <span>The buyout customer agreed to share the floor with those bookings — save anyway. Then press the button again.</span>
+              </label>
             )}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' as const }}>
