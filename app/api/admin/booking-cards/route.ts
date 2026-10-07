@@ -27,20 +27,37 @@ const supabase = createClient(
 export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // ?bookingId=… (Edit Booking) or ?email=… (Manual Booking, 2026-10-07 — a
+  // guest's card lives on their past booking, not their customer record, so
+  // the old customer-record check never found it).
   const bookingId = req.nextUrl.searchParams.get('bookingId')
-  if (!bookingId) return NextResponse.json({ cards: [] })
+  const emailParam = (req.nextUrl.searchParams.get('email') || '').trim().toLowerCase()
+  if (!bookingId && !emailParam) return NextResponse.json({ cards: [] })
 
   try {
-    // Booking → customer email + square_customer_id + the card stored on the booking.
-    const { data: b } = await supabase
-      .from('bookings')
-      .select('square_card_on_file_id, customers ( email, square_customer_id )')
-      .eq('id', bookingId)
-      .maybeSingle()
-
-    const customer = (b?.customers as any) || null
+    let customer: any = null
+    let bookingCardId: string | null = null
+    if (bookingId) {
+      // Booking → customer email + square_customer_id + the card stored on the booking.
+      const { data: b } = await supabase
+        .from('bookings')
+        .select('square_card_on_file_id, customers ( email, square_customer_id )')
+        .eq('id', bookingId)
+        .maybeSingle()
+      customer = (b?.customers as any) || null
+      bookingCardId = (b?.square_card_on_file_id as string | null) || null
+    } else {
+      const { data: c } = await supabase.from('customers')
+        .select('id, email, square_customer_id').eq('email', emailParam).limit(1).maybeSingle()
+      customer = c ?? { email: emailParam, square_customer_id: null }
+      if (c?.id) {
+        const { data: lb } = await supabase.from('bookings').select('square_card_on_file_id')
+          .eq('customer_id', c.id).not('square_card_on_file_id', 'is', null)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle()
+        bookingCardId = (lb?.square_card_on_file_id as string | null) || null
+      }
+    }
     const email = customer?.email as string | undefined
-    const bookingCardId = (b?.square_card_on_file_id as string | null) || null
 
     // Candidate Square profiles: the linked one + every profile sharing the email.
     const candidateIds = new Set<string>()

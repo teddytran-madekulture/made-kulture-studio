@@ -671,7 +671,11 @@ export default function AdminDashboard() {
   const [cards,       setCards]       = useState<SquareCard[]>([])
   const [loadingCards,setLoadingCards]= useState(false)
   const [selectedCard,setSelectedCard]= useState<SquareCard | null>(null)
-  const [chargeMode,  setChargeMode]  = useState<'card-on-file' | 'log-only'>('log-only')
+  const [chargeMode,  setChargeMode]  = useState<'card-on-file' | 'log-only' | 'link'>('log-only')
+  // Manual booking overlap override (2026-10-07) — see lib/admin-manual-check.
+  const [manualShareFloor, setManualShareFloor] = useState(false)
+  const [manualOverridable, setManualOverridable] = useState(false)
+  const [manualLinkUrl, setManualLinkUrl] = useState<string | null>(null)
 
   // Edit booking modal
   const [editBooking, setEditBooking] = useState<Booking | null>(null)
@@ -1330,18 +1334,21 @@ export default function AdminDashboard() {
     setSearchQuery(c.name)
     setSearchResults([])
     setManual(m => ({ ...m, name: c.name, email: c.email, phone: c.phone }))
-    if (c.hasCardOnFile && c.squareCustomerId) {
-      setLoadingCards(true)
-      setChargeMode('card-on-file')
-      const res  = await fetch(`/api/admin/square-cards?customerId=${c.squareCustomerId}`)
-      const data = await res.json()
+    // 2026-10-07: look cards up by EMAIL across every Square profile and past
+    // booking (the same robust lookup Edit Booking uses). The old check only saw
+    // a card saved on the customer record, so guests' cards never showed.
+    setLoadingCards(true)
+    try {
+      const res  = await fetch(`/api/admin/booking-cards?email=${encodeURIComponent(c.email || '')}`)
+      const data = await res.json().catch(() => ({}))
       const list: SquareCard[] = data.cards || []
       setCards(list)
       setSelectedCard(list[0] ?? null)
-      setLoadingCards(false)
-    } else {
+      setChargeMode(list.length ? 'card-on-file' : 'log-only')
+    } catch {
       setCards([]); setSelectedCard(null); setChargeMode('log-only')
     }
+    setLoadingCards(false)
   }
 
   const clearCustomer = () => {
@@ -1354,6 +1361,7 @@ export default function AdminDashboard() {
     clearCustomer()
     setManual({ setSlug: 'set-a', date: tomorrow(), startHour: 10, endHour: 12, name: '', email: '', phone: '', notes: '', totalAmount: 0, sendSms: true })
     setManualAnyTime(false); setManualTotalTyped(null)
+    setManualShareFloor(false); setManualOverridable(false); setManualLinkUrl(null)
     setSubmitError(''); setSubmitSuccess(false)
   }
 
@@ -1372,14 +1380,37 @@ export default function AdminDashboard() {
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setSubmitting(true); setSubmitError('')
-    const endpoint = (chargeMode === 'card-on-file' && selectedCard) ? '/api/admin/charge' : '/api/admin/bookings'
-    const body = chargeMode === 'card-on-file' && selectedCard
-      ? { squareCardId: selectedCard.id, squareCustomerId: selectedCustomer?.squareCustomerId, ...manual, totalAmount: manualTotal }
-      : { ...manual, totalAmount: manualTotal }
+    e.preventDefault(); setSubmitting(true); setSubmitError(''); setManualLinkUrl(null)
+    const charging = chargeMode === 'card-on-file' && !!selectedCard
+    const linking  = chargeMode === 'link'
+    if ((charging || linking) && !(manualTotal > 0)) { setSubmitError('Enter an amount above $0 to charge or send a link.'); setSubmitting(false); return }
+    const endpoint = charging ? '/api/admin/charge' : '/api/admin/bookings'
+    const force = manualShareFloor || undefined
+    const body = charging
+      ? { squareCardId: selectedCard!.id, squareCustomerId: selectedCard!.squareCustomerId || selectedCustomer?.squareCustomerId, ...manual, totalAmount: manualTotal, force }
+      // A link booking starts at $0 — the Square webhook adds the amount once they pay.
+      : { ...manual, totalAmount: linking ? 0 : manualTotal, force }
     const res  = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const data = await res.json()
-    if (!res.ok) { setSubmitError(data.error || 'Failed'); setSubmitting(false); return }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { setSubmitError(data.error || 'Failed'); setManualOverridable(!!data.overridable); setSubmitting(false); return }
+    if (linking && data.bookingId) {
+      const setLabel = SETS.find(x => x.id === manual.setSlug)?.name || 'Booking'
+      const hrs = spanHours(manual.startHour, manual.endHour)
+      const lr = await fetch(`/api/admin/bookings/${data.bookingId}/payment-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: manualTotal,
+          description: `Made Kulture — ${setLabel} ${manual.date}`,
+          phone: manual.phone, customerName: manual.name, sendSms: true,
+          lines: [{ amount: manualTotal, quantity: 1, label: `${setLabel} · ${hrs} hr · ${manual.date}` }],
+        }),
+      })
+      const ld = await lr.json().catch(() => ({}))
+      setSubmitting(false); fetchBookings()
+      if (!lr.ok) { setSubmitError(`Booked, but the payment link failed: ${ld.error || 'unknown error'}. Send one from the booking.`); return }
+      setManualLinkUrl(ld.url || null)
+      return
+    }
     setSubmitSuccess(true)
     setTimeout(() => { setSubmitSuccess(false); setShowManual(false); resetModal(); fetchBookings() }, 1500)
   }
@@ -1830,8 +1861,9 @@ export default function AdminDashboard() {
   const submitLabel = submitSuccess ? 'BOOKING ADDED'
     : submitting ? 'PROCESSING...'
     : chargeMode === 'card-on-file' && selectedCard
-      ? `CHARGE ${selectedCard.brand?.replace('_', ' ')} **** ${selectedCard.last4}`
-      : 'ADD BOOKING'
+      ? `BOOK & CHARGE ${selectedCard.brand?.replace('_', ' ')} **** ${selectedCard.last4} · $${manualTotal}`
+      : chargeMode === 'link' ? `BOOK & TEXT $${manualTotal} LINK`
+      : 'ADD BOOKING (NO CHARGE)'
 
   // Edit modal derived values
   const editSlots     = editAnyTime ? ANY_TIME_SLOTS : TIME_SLOTS
@@ -5263,19 +5295,28 @@ export default function AdminDashboard() {
                     rows={3} style={{ ...inputStyle, resize: 'none' as const }} />
                 </Field>
 
-                {selectedCustomer?.hasCardOnFile && (
+                {(
                   <div style={{ background: 'rgba(255,255,255,0.04)', padding: '14px 16px', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <label style={labelStyle}>PAYMENT METHOD</label>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
                         <input type="radio" name="chargeMode" checked={chargeMode === 'log-only'} onChange={() => setChargeMode('log-only')} />
                         Log only (no charge)
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
                         <input type="radio" name="chargeMode" checked={chargeMode === 'card-on-file'} onChange={() => setChargeMode('card-on-file')} />
-                        Charge card on file
+                        Charge card on file{!loadingCards && cards.length === 0 ? ' (none found)' : ''}
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                        <input type="radio" name="chargeMode" checked={chargeMode === 'link'} onChange={() => setChargeMode('link')} />
+                        Text a payment link
                       </label>
                     </div>
+                    {chargeMode === 'link' && (
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
+                        Books it now and texts {manual.phone || 'them'} a ${manualTotal} Square link. The booking shows paid once they pay.
+                      </div>
+                    )}
                     {chargeMode === 'card-on-file' && (
                       loadingCards ? (
                         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>LOADING CARDS...</div>
@@ -5303,6 +5344,17 @@ export default function AdminDashboard() {
 
                 {submitError && (
                   <div style={{ color: '#ff6b6b', fontSize: 12 }}>{submitError}</div>
+                )}
+                {manualOverridable && (
+                  <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12, color: 'rgba(255,255,255,0.75)', cursor: 'pointer', lineHeight: 1.5 }}>
+                    <input type="checkbox" checked={manualShareFloor} onChange={e => setManualShareFloor(e.target.checked)} style={{ marginTop: 2 }} />
+                    <span>They agreed to share the floor with those bookings — book anyway. Then press the button again.</span>
+                  </label>
+                )}
+                {manualLinkUrl && (
+                  <div style={{ fontSize: 12, color: '#4ade80', lineHeight: 1.5 }}>
+                    Booked, and the payment link was texted. <a href={manualLinkUrl} target="_blank" rel="noreferrer" style={{ color: '#e6c07a' }}>Open link</a>
+                  </div>
                 )}
 
                 <button type="submit" disabled={submitting || submitSuccess}

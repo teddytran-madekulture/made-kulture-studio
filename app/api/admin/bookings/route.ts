@@ -1,3 +1,4 @@
+import { manualBookingConflict, SLUG_TO_NAME } from '@/lib/admin-manual-check'
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
 import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
@@ -114,12 +115,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { setSlug, date, startHour, endHour, name, email, phone, notes, totalAmount, sendSms } = body
 
-  const SLUG_TO_NAME: Record<string, string> = {
-    'set-a': 'Set A', 'set-b': 'Set B', 'set-c': 'Set C', 'set-d': 'Set D',
-    'concrete': 'Concrete', 'vintage': 'Vintage', 'cottage': 'Cottage',
-    'watering-hole': 'The Watering Hole', 'studio-one': 'Studio One',
-    'studio': 'Full Studio Takeover',
-  }
+  const clash = await manualBookingConflict(supabase, { setSlug, date, startHour, endHour, force: !!body.force })
+  if (clash) return NextResponse.json(clash.body, { status: clash.status })
+
 
   // Upsert customer
   const { data: customerData } = await upsertCustomerByEmail(supabase, { email, name, phone }, { trusted: true })

@@ -1,3 +1,4 @@
+import { manualBookingConflict, SLUG_TO_NAME } from '@/lib/admin-manual-check'
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
 import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
@@ -44,12 +45,6 @@ function fmt12(h: number) {
   return `${h12}:${mins}${ampm}`
 }
 
-const SLUG_TO_NAME: Record<string, string> = {
-  'set-a': 'Set A', 'set-b': 'Set B', 'set-c': 'Set C', 'set-d': 'Set D',
-  'concrete': 'Concrete', 'vintage': 'Vintage', 'cottage': 'Cottage',
-  'watering-hole': 'The Watering Hole', 'studio-one': 'Studio One',
-  'studio': 'Full Studio Takeover',
-}
 
 // POST /api/admin/charge
 export async function POST(req: NextRequest) {
@@ -68,7 +63,12 @@ export async function POST(req: NextRequest) {
     phone,
     notes,
     sendSms,
+    force,
   } = await req.json()
+
+  // Check the window BEFORE taking any money.
+  const clash = await manualBookingConflict(supabase, { setSlug, date, startHour, endHour, force: !!force })
+  if (clash) return NextResponse.json(clash.body, { status: clash.status })
 
   const amountCents = Math.round(totalAmount * 100)
   const setName = SLUG_TO_NAME[setSlug] ?? 'Studio'
