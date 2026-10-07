@@ -7,7 +7,7 @@
 // copy is the record from that point on). That lives here once.
 
 import { createClient } from '@supabase/supabase-js'
-import { sendReply, type OutboundAttachment } from '@/lib/agent/gmail'
+import { sendReplyDetailed, type OutboundAttachment } from '@/lib/agent/gmail'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -151,6 +151,8 @@ export interface SendEmailResult {
   // which is how a broken link survived unnoticed until someone opened June's
   // own mailbox to check.
   sentBody: string
+  // The Gmail thread the email went out on — new when threadId was null.
+  threadId: string | null
 }
 
 // Sends, then links + cleans up. `messageId` is the agent_messages row that
@@ -158,7 +160,7 @@ export interface SendEmailResult {
 export async function sendConversationEmail(opts: {
   conversationId: string
   messageId: string
-  threadId: string
+  threadId: string | null   // null = start a new thread (support tickets)
   to: string
   subject: string
   body: string
@@ -171,8 +173,8 @@ export async function sendConversationEmail(opts: {
 
   const sentBody = demarkdownLinks(opts.body)
 
-  const sentId = await sendReply({
-    threadId: opts.threadId,
+  const sent = await sendReplyDetailed({
+    threadId: opts.threadId ?? undefined,
     to: opts.to,
     subject: opts.subject,
     body: sentBody,
@@ -181,6 +183,8 @@ export async function sendConversationEmail(opts: {
     attachments: files,
     inReplyToMsgId: opts.inReplyToMsgId,
   })
+  const sentId = sent.id
+
 
   // Only past this point is the mail actually gone. Link the rows to the message
   // and clear storage_path so the transcript still lists what was sent while the
@@ -198,5 +202,5 @@ export async function sendConversationEmail(opts: {
     }
   }
 
-  return { sentId, attachmentCount: staged.length, sentBody }
+  return { sentId, attachmentCount: staged.length, sentBody, threadId: sent.threadId ?? opts.threadId ?? null }
 }

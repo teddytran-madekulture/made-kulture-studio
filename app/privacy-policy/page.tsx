@@ -4,6 +4,8 @@ import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
 // Content mirrors "Made Kulture - Privacy Policy.md" (last updated Jun 26 2026).
+// 2026-10-07: added accounts / Google & Apple sign-in, the mobile app, push
+// notifications and in-app account deletion (App Store + Google Play review).
 
 const sec: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 500, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.25)' }
 const body: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 15, color: 'rgba(255,255,255,0.62)', lineHeight: 1.8, margin: '0 0 16px' }
@@ -47,8 +49,8 @@ export default function PrivacyPolicyPage() {
           <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(52px, 9vw, 96px)', color: '#fff', lineHeight: 0.9, letterSpacing: '0.02em', margin: '0 0 24px' }}>
             PRIVACY<br />POLICY
           </h1>
-          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Last updated: June 26, 2026</p>
-          <p style={{ ...body, marginTop: 16, maxWidth: 580 }}>Made Kulture (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) operates the creative studio rental space located at 4825 Gulf Freeway, Houston TX 77023, and the website madekulture.com. This Privacy Policy explains how we collect, use, and protect your information.</p>
+          <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Last updated: October 7, 2026</p>
+          <p style={{ ...body, marginTop: 16, maxWidth: 580 }}>Made Kulture (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) operates the creative studio rental space located at 4825 Gulf Freeway, Houston TX 77023, the website madekulture.com, and the Made Kulture mobile app for iPhone and Android. This Privacy Policy explains how we collect, use, and protect your information.</p>
         </div>
       </section>
 
@@ -65,6 +67,14 @@ export default function PrivacyPolicyPage() {
               'Booking details (date, time, set, add-ons)',
               'Any notes or special requests you provide',
             ]} />
+            <P>When you create an account, we also collect:</P>
+            <UL items={[
+              'Your login details — an email and password, or your name and email from Google or Apple if you choose “Continue with Google” or “Continue with Apple” (if you use Apple’s “Hide My Email,” we only receive the private relay address)',
+              'Profile details you choose to add — photo, bio, roles, Instagram handle, links and portfolio images',
+              'Messages you send to other members, castings you post or apply to, and members you follow',
+              'Studio credit and Plus membership status',
+            ]} />
+            <P>If you allow notifications in the app, we store a device token so we can send you booking and message alerts. You can turn these off at any time in your phone’s settings.</P>
             <P>When you use the member community (creative directory, profiles, portfolios, messages and castings) while signed in, we also record how it is used: searches and filters, which profiles and castings are viewed, portfolio photos opened, and buttons clicked (such as Message, Follow or Instagram). We use this only to improve the community features. We do not record the content of your messages for this purpose, and this activity data is deleted after 12 months.</P>
           </Section>
 
@@ -102,12 +112,16 @@ export default function PrivacyPolicyPage() {
             <UL items={[
               <><strong style={{ color: '#fff' }}>Square</strong> — to process payments</>,
               <><strong style={{ color: '#fff' }}>Twilio</strong> — to send SMS notifications</>,
+              <><strong style={{ color: '#fff' }}>Google and Apple</strong> — only if you choose to sign in with them, and to deliver app notifications</>,
+              <><strong style={{ color: '#fff' }}>Supabase and Vercel</strong> — to host our website, app and database</>,
               'As required by law',
             ]} />
           </Section>
 
           <Section title="DATA RETENTION">
-            <P>We retain booking records for up to 3 years for business and tax purposes. You may request deletion of your personal data by contacting us at teddytran@madekulture.com.</P>
+            <P>We retain booking records for up to 3 years for business and tax purposes.</P>
+            <P><strong style={{ color: '#fff' }}>Deleting your account:</strong> you can delete your account at any time in the app or on the website under Settings &rarr; Login &amp; Security &rarr; Delete account. This permanently removes your login, profile, directory listing, portfolio, messages, saved cards and studio credit. Past booking records are kept for the period above. You may also request deletion of your personal data by contacting us at teddytran@madekulture.com.</P>
+            <P>We do not use your information for advertising, and we do not track you across other companies’ apps or websites.</P>
           </Section>
 
           <Section title="CONTACT">
@@ -120,6 +134,7 @@ export default function PrivacyPolicyPage() {
           </Section>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', paddingTop: 8 }}>
+            <Link href="/support" style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.2)', padding: '12px 24px', textDecoration: 'none' }}>SUPPORT</Link>
             <Link href="/terms" style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.2)', padding: '12px 24px', textDecoration: 'none' }}>TERMS &amp; CONDITIONS</Link>
             <Link href="/studio-rules" style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.2)', padding: '12px 24px', textDecoration: 'none' }}>STUDIO RULES</Link>
           </div>

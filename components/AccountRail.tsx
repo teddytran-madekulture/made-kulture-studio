@@ -23,6 +23,8 @@ const ITEMS: Item[] = [
 // Membership, Login & Security, Payment Methods and the profile editor live
 // under Settings (components/SettingsShell) — Instagram-style second menu.
 const SETTINGS: Item = { href: '/account/profile', label: 'Settings', icon: 'gear' }
+// 2026-10-07: Support Center (searchable FAQ + contact support tickets).
+const SUPPORT: Item = { href: '/account/support', label: 'Help & Support', icon: 'help' }
 const MOBILE_BAR = ['/account', '/account/directory', '/account/castings', '/account/messages', '/account/me']
 
 const PATHS: Record<string, React.ReactNode> = {
@@ -40,6 +42,7 @@ const PATHS: Record<string, React.ReactNode> = {
   out: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
   site: <><path d="M15 3h6v6M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></>,
   gear: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></>,
+  help: <><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6" /><path d="M12 17h.01" /></>,
   more: <><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></>,
 }
 const Icon = ({ name, active }: { name: string; active?: boolean }) => (
@@ -158,6 +161,9 @@ export default function AccountRail() {
           ))}
         </nav>
         <div className="ar-bot">
+          <Link href={SUPPORT.href} className={`ar-it${isActive(SUPPORT.href) ? ' on' : ''}`} title={SUPPORT.label}>
+            <Icon name="help" active={isActive(SUPPORT.href)} /><span className="lbl">{SUPPORT.label}</span>
+          </Link>
           <Link href={SETTINGS.href} className={`ar-it${isActive(SETTINGS.href) ? ' on' : ''}`} title="Settings">
             <Icon name="gear" active={isActive(SETTINGS.href)} /><span className="lbl">Settings</span>
           </Link>
@@ -193,7 +199,7 @@ export default function AccountRail() {
         <>
           <div className="am-scrim" onClick={() => setMoreOpen(false)} />
           <div className="am-sheet">
-            {[...ITEMS.filter(i => !MOBILE_BAR.includes(i.href)), SETTINGS].map(it => (
+            {[...ITEMS.filter(i => !MOBILE_BAR.includes(i.href)), SUPPORT, SETTINGS].map(it => (
               <Link key={it.href} href={it.href} className={`ar-it${isActive(it.href) ? ' on' : ''}`}><Icon name={it.icon} /><span>{it.label}</span></Link>
             ))}
             <Link href="/" className="ar-it"><Icon name="site" /><span>Made Kulture home</span></Link>

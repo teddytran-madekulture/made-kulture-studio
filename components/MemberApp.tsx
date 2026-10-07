@@ -18,10 +18,15 @@
 // offers notifications inside the installed app.
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { inNativeApp, nativePushAvailable, nativePushPermission, nativePushStatus, nativePushEnable, nativePushDisable, bootNativePush } from '@/lib/native-push'
 
 declare global { interface Window { __mkInstall?: any } }
 
 export function InstallCatcher() {
+  // Inside the App Store app: push taps, token refresh, first-time ask.
+  const pathname = usePathname() || '/'
+  useEffect(() => { bootNativePush(pathname).catch(() => {}) }, [pathname])
   useEffect(() => {
     const onPrompt = (e: Event) => { e.preventDefault(); window.__mkInstall = e; window.dispatchEvent(new Event('mk-install-ready')) }
     const onInstalled = () => { window.__mkInstall = undefined; window.dispatchEvent(new Event('mk-install-ready')) }
@@ -46,14 +51,24 @@ export type AppState = {
   pushSupported: boolean
   pushOn: boolean
   permission: NotificationPermission | 'unsupported'
+  native: boolean        // running inside the App Store / Play app
+  needsUpdate: boolean   // app build too old for notifications
 }
 
 export function useMemberApp() {
-  const [s, setS] = useState<AppState>({ ready: false, standalone: false, ios: false, canPrompt: false, pushSupported: false, pushOn: false, permission: 'unsupported' })
+  const [s, setS] = useState<AppState>({ ready: false, standalone: false, ios: false, canPrompt: false, pushSupported: false, pushOn: false, permission: 'unsupported', native: false, needsUpdate: false })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
   const refresh = useCallback(async () => {
+    if (inNativeApp()) {
+      const available = nativePushAvailable()
+      const perm = available ? await nativePushPermission() : 'denied'
+      const on = available ? await nativePushStatus() : false
+      setS({ ready: true, ios: true, standalone: true, canPrompt: false, pushSupported: available, pushOn: on,
+        permission: perm === 'prompt' ? 'default' : perm, native: true, needsUpdate: !available })
+      return
+    }
     const ua = navigator.userAgent
     const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
     const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true
@@ -70,7 +85,7 @@ export function useMemberApp() {
         }
       } catch { /* treat as off */ }
     }
-    setS({ ready: true, ios, standalone, canPrompt: !!window.__mkInstall, pushSupported, pushOn, permission: pushSupported ? Notification.permission : 'unsupported' })
+    setS({ ready: true, ios, standalone, canPrompt: !!window.__mkInstall, pushSupported, pushOn, permission: pushSupported ? Notification.permission : 'unsupported', native: false, needsUpdate: false })
   }, [])
 
   useEffect(() => {
@@ -91,6 +106,11 @@ export function useMemberApp() {
 
   const enable = async () => {
     setBusy(true); setMsg('')
+    if (inNativeApp()) {
+      const r = await nativePushEnable(true)
+      setMsg(r.ok ? 'Notifications are on for this phone.' : (r.error || 'Couldn’t turn on notifications.'))
+      setBusy(false); refresh(); return
+    }
     try {
       const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
       if (!vapid) { setMsg('Notifications aren’t set up yet.'); return }
@@ -110,6 +130,11 @@ export function useMemberApp() {
 
   const disable = async () => {
     setBusy(true); setMsg('')
+    if (inNativeApp()) {
+      await nativePushDisable()
+      setMsg('Notifications are off for this phone.')
+      setBusy(false); refresh(); return
+    }
     try {
       const reg = await navigator.serviceWorker.getRegistration('/')
       const sub = reg ? await reg.pushManager.getSubscription() : null
@@ -172,7 +197,9 @@ export function GetAppCard() {
   )
 
   const iosNeedsInstall = s.ios && !s.standalone
-  const notifBody = iosNeedsInstall ? (
+  const notifBody = s.needsUpdate ? (
+    <>Update the Made Kulture app from the App Store to turn on notifications.</>
+  ) : iosNeedsInstall ? (
     <>On iPhone, notifications work once the app is on your home screen. Finish step 1, open the app, and turn them on there.</>
   ) : !s.pushSupported ? (
     <>This browser doesn’t support notifications. You’ll still get every request and message by email.</>
@@ -183,10 +210,12 @@ export function GetAppCard() {
   return (
     <div style={{ fontFamily: 'Inter', maxWidth: 560 }}>
       <p style={{ fontSize: 14, color: muted, lineHeight: 1.6, marginTop: 0 }}>
-        Made Kulture works like an app on your phone, straight from the website. No App Store: your bookings, door codes, the directory and your messages, one tap away.
+        {s.native
+          ? 'You’re in the Made Kulture app. Turn on notifications to hear about messages and requests the moment they land.'
+          : 'Made Kulture works like an app on your phone, straight from the website. No App Store: your bookings, door codes, the directory and your messages, one tap away.'}
       </p>
-      {step(1, 'Put Made Kulture on your home screen', s.standalone, installBody)}
-      {step(2, 'Turn on notifications', s.pushOn, notifBody)}
+      {!s.native && step(1, 'Put Made Kulture on your home screen', s.standalone, installBody)}
+      {step(s.native ? 1 : 2, 'Turn on notifications', s.pushOn, notifBody)}
       {s.pushOn && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
           <button type="button" onClick={test} disabled={busy} style={btn}>SEND A TEST</button>
@@ -209,7 +238,7 @@ export function GetAppBanner({ reason, storageKey = 'mk-app-banner' }: { reason:
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(var(--t-gold-rgb), 0.45)', background: 'rgba(var(--t-gold-rgb), 0.07)', borderRadius: 10, padding: '12px 14px', margin: '0 0 16px', fontFamily: 'Inter' }}>
       <div style={{ flex: 1, fontSize: 13, color: fg, lineHeight: 1.45 }}>
-        <strong>Get the Made Kulture app.</strong> <span style={{ color: muted }}>{reason}</span>
+        <strong>{s.native ? 'Turn on notifications.' : 'Get the Made Kulture app.'}</strong> <span style={{ color: muted }}>{reason}</span>
       </div>
       <Link href="/account/app" style={{ ...btn, padding: '9px 14px', fontSize: 11, textDecoration: 'none', whiteSpace: 'nowrap' }}>SET UP</Link>
       <button type="button" aria-label="Dismiss" onClick={() => { setHidden(true); try { localStorage.setItem(storageKey, '1') } catch {} }}

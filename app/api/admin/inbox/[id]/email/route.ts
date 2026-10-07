@@ -30,9 +30,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: convo } = await supabase
     .from('agent_conversations')
-    .select('id, gmail_thread_id, contact_email, subject')
+    .select('id, channel, gmail_thread_id, contact_email, subject')
     .eq('id', params.id).single()
-  if (!convo?.gmail_thread_id || !convo.contact_email) {
+  // A support ticket (channel 'email', page 'support') has a contact email but
+  // no Gmail thread until its first reply — that reply starts one. (2026-10-07)
+  if (!convo?.contact_email || (!convo.gmail_thread_id && convo.channel !== 'email')) {
     return NextResponse.json({ error: 'Not an email conversation' }, { status: 400 })
   }
 
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
 
   try {
-    const { sentId, attachmentCount, sentBody } = await sendConversationEmail({
+    const { sentId, attachmentCount, sentBody, threadId: sentThread } = await sendConversationEmail({
       conversationId: params.id,
       messageId: msg.id,
       threadId: convo.gmail_thread_id,
@@ -86,7 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .update({ external_id: sentId, content: sentBody })
       .eq('id', msg.id)
     await supabase.from('agent_conversations')
-      .update({ human_takeover: true, status: 'open', subject, last_message_at: new Date().toISOString() })
+      .update({ ...(!convo.gmail_thread_id && sentThread ? { gmail_thread_id: sentThread } : {}), human_takeover: true, status: 'open', subject, last_message_at: new Date().toISOString() })
       .eq('id', convo.id)
 
     return NextResponse.json({ success: true, attachmentCount })

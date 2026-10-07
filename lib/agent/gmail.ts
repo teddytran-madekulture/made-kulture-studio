@@ -297,7 +297,14 @@ function splitBase64(b64: string): string {
   return b64.replace(/(.{76})/g, '$1\r\n')
 }
 
-export async function sendReply(opts: {
+export async function sendReply(opts: Parameters<typeof sendReplyDetailed>[0]): Promise<string | null> {
+  return (await sendReplyDetailed(opts)).id
+}
+
+// Same send, but also returns the Gmail thread id. A support ticket starts with
+// NO thread (2026-10-07): its first reply creates one, and the caller saves it so
+// the customer's answer threads back into the same conversation.
+export async function sendReplyDetailed(opts: {
   threadId?: string
   to: string
   subject: string
@@ -306,9 +313,9 @@ export async function sendReply(opts: {
   bcc?: string[]
   attachments?: OutboundAttachment[]
   inReplyToMsgId?: string    // Gmail message id we're replying to (for headers)
-}): Promise<string | null> {
+}): Promise<{ id: string | null; threadId: string | null }> {
   const c = creds()
-  if (!c) return null
+  if (!c) return { id: null, threadId: null }
 
   // Fetch RFC822 Message-ID of the original for proper threading headers.
   let refHeader = ''
@@ -383,7 +390,7 @@ export async function sendReply(opts: {
       ...(opts.threadId ? { threadId: opts.threadId } : {}),
     }),
   })
-  return sent.id ?? null
+  return { id: sent.id ?? null, threadId: sent.threadId ?? null }
 }
 
 // ── Spam ───────────────────────────────────────────────────────────────────────
