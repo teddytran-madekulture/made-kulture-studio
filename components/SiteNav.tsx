@@ -29,9 +29,24 @@ export default function SiteNav({ active }: { active?: string }) {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => setAuthed(!!user))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setAuthed(!!s?.user))
-    return () => subscription.unsubscribe()
+    const check = () => supabase.auth.getUser().then(({ data: { user } }) => setAuthed(!!user))
+    check()
+    // INITIAL_SESSION is ignored on purpose: inside the iPhone app the cookie
+    // read behind it can come back empty a beat before getUser() answers, and
+    // it was flipping a signed-in nav back to LOG IN. (2026-10-07)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event !== 'INITIAL_SESSION') setAuthed(!!s?.user)
+    })
+    // The app (and a long-open tab) can come back to a page whose nav was
+    // rendered before sign-in finished; re-check when it's shown again.
+    const onShow = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onShow)
+    window.addEventListener('pageshow', onShow)
+    return () => {
+      subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', onShow)
+      window.removeEventListener('pageshow', onShow)
+    }
   }, [])
 
   useEffect(() => {
