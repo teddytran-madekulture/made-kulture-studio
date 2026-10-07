@@ -1,0 +1,35 @@
+{
+  "appId": "com.madekulture.app",
+  "appName": "Made Kulture",
+  "webDir": "www",
+  "server": {
+    "url": "https://madekulture.com",
+    "cleartext": false,
+    "errorPath": "index.html",
+    "allowNavigation": [
+      "madekulture.com",
+      "*.madekulture.com"
+    ]
+  },
+  "ios": {
+    "contentInset": "never",
+    "limitsNavigationsToAppBoundDomains": false,
+    "scheme": "Made Kulture"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "backgroundColor": "#0d0d0d",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0d0d0d",
+      "overlaysWebView": false
+    }
+  }
+}

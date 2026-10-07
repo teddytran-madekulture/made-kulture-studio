@@ -1,0 +1,47 @@
+# Codemagic cloud builds for the Made Kulture app (mobile/ folder).
+# Added 2026-10-07. Builds happen on Codemagic's Macs, so no local Mac/Xcode
+# is needed. The website (Vercel) ignores this file and the mobile/ folder.
+#
+# Run it from codemagic.io -> made-kulture-studio -> Start new build ->
+# workflow "iOS -> TestFlight". It does NOT run on every push (no triggering
+# block) so website pushes never burn build minutes.
+
+workflows:
+  ios-testflight:
+    name: iOS -> TestFlight
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    integrations:
+      # Name of the App Store Connect API key added in
+      # Codemagic -> Team/Personal settings -> Integrations -> Developer Portal
+      app_store_connect: Made Kulture ASC
+    environment:
+      node: 22
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.madekulture.app
+    scripts:
+      - name: Install app dependencies
+        working_directory: mobile
+        script: npm ci
+      - name: Sync Capacitor into the iOS project
+        working_directory: mobile
+        script: npx cap sync ios
+      - name: Apply signing profiles
+        script: xcode-project use-profiles
+      - name: Set build number
+        working_directory: mobile/ios/App
+        script: agvtool new-version -all $((BUILD_NUMBER + 1))
+      - name: Build the .ipa
+        script: |
+          xcode-project build-ipa \
+            --project "mobile/ios/App/App.xcodeproj" \
+            --scheme "App"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
