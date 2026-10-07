@@ -72,6 +72,23 @@ export default function SignupPage() {
     setSuccess(true)
   }
 
+  // Sign in with Apple (2026-10-07). Apple requires it in the iPhone app
+  // because we offer Google. Same two paths as Google: native sheet inside
+  // the app (lib/native-auth.ts), normal OAuth redirect on the website.
+  const signInApple = async () => {
+    setLoading(true); setError('')
+    if (isNativeApp()) {
+      await nativeOAuthSignIn(supabase, 'apple', nextUrl, (msg) => setError(msg))
+      setLoading(false)
+      return
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'apple',
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}` },
+    })
+    if (error) { setError(error.message); setLoading(false) }
+  }
+
   const signInGoogle = async () => {
     setLoading(true)
     // Inside the iPhone/Android app Google must run in the native sign-in
@@ -136,6 +153,17 @@ export default function SignupPage() {
         }}>
           <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
           SIGN UP WITH GOOGLE
+        </button>
+
+        <button onClick={signInApple} disabled={loading} style={{
+          width: '100%', background: '#fff', color: '#000', border: 'none',
+          borderRadius: 4, padding: '14px 16px', fontFamily: 'Inter', fontSize: 13,
+          fontWeight: 600, letterSpacing: '0.1em', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          marginTop: -12, marginBottom: 24,
+        }}>
+          <svg width="17" height="20" viewBox="0 0 17 20" aria-hidden="true"><path fill="#000" d="M14.04 10.63c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.66zM11.77 3.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.01.61-2.66 1.37-.58.67-1.09 1.76-.95 2.79 1.01.08 2.04-.51 2.67-1.27z"/></svg>
+          SIGN UP WITH APPLE
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
