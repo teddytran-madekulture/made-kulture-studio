@@ -56,7 +56,13 @@ export const DESIGNS: EmailDesign[] = [
 
   <!-- hero: photo melts into the page, headline baked in -->
   <tr><td style="padding:0;">
-    <a href="https://madekulture.com"><img src="https://madekulture.com/email/2026-10-launch/hero.jpg" width="900" alt="The new Made Kulture. Now live at madekulture.com." style="display:block;width:100%;max-width:900px;height:auto;border:0;"></a>
+    <a href="https://madekulture.com/signup?next=%2Faccount%2Fdirectory"><img src="https://madekulture.com/email/2026-10-launch/hero.jpg" width="900" alt="The new Made Kulture. Now live at madekulture.com." style="display:block;width:100%;max-width:900px;height:auto;border:0;"></a>
+  </td></tr>
+
+  <!-- primary CTA: visible on the first screen -->
+  <tr><td class="pad" align="left" style="padding:6px 60px 0;">
+    <a href="https://madekulture.com/signup?next=%2Faccount%2Fdirectory" style="display:inline-block;background:#ffffff;color:#000000;font-family:'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:3px;text-decoration:none;padding:17px 28px;">JOIN THE DIRECTORY &rarr;</a>
+    <div style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:12.5px;color:#6f6f6f;margin-top:12px;">Free. Your account also gets you member rates on every set.</div>
   </td></tr>
 
   <!-- the launch + the directory -->
@@ -84,10 +90,6 @@ export const DESIGNS: EmailDesign[] = [
           </td>
         </tr></table>
       </td></tr>
-      <tr><td style="padding:30px 0 0;">
-        <a href="https://madekulture.com/signup?next=%2Faccount%2Fdirectory" style="display:inline-block;background:#ffffff;color:#000000;font-family:'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:3px;text-decoration:none;padding:17px 28px;">JOIN THE DIRECTORY &rarr;</a>
-        <div style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:12.5px;color:#6f6f6f;margin-top:12px;">Free. Your account also gets you member rates on every set.</div>
-      </td></tr>
     </table>
   </td></tr>
 
@@ -110,6 +112,13 @@ export const DESIGNS: EmailDesign[] = [
     </table>
   </td></tr>
 
+  <!-- closing CTA -->
+  <tr><td class="pad" align="left" style="padding:56px 60px 0;">
+    <div style="font-family:'Courier New',monospace;font-size:10.5px;letter-spacing:4px;color:#c9b27e;">FREE TO JOIN</div>
+    <div class="h2" style="font-family:Anton,Impact,'Arial Narrow',Arial,sans-serif;font-size:46px;line-height:0.95;color:#ffffff;margin:14px 0 22px;">PUT YOUR NAME<br>IN THE DIRECTORY.</div>
+    <a href="https://madekulture.com/signup?next=%2Faccount%2Fdirectory" style="display:inline-block;background:#ffffff;color:#000000;font-family:'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:3px;text-decoration:none;padding:17px 28px;">JOIN THE DIRECTORY &rarr;</a>
+  </td></tr>
+
   <!-- booking one-liner -->
   <tr><td class="pad" align="left" style="padding:0 60px;">
     <table role="presentation" class="col" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;">
@@ -122,7 +131,7 @@ export const DESIGNS: EmailDesign[] = [
   <!-- footer -->
   <tr><td class="pad" style="padding:22px 60px 30px;border-top:1px solid #1d1d1d;">
     <div style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.7;color:#5f5f5f;">
-      Made Kulture · 4825 Gulf Freeway, Houston TX 77023 · Cover: The Patient, photographed by Teddy Tran<br>
+      Made Kulture · 4825 Gulf Freeway, Houston TX 77023 · Cover: The Patient · Photographer <a href="https://www.instagram.com/musebyteddy/" style="color:#8a8a8a;">@musebyteddy</a> · Model <a href="https://www.instagram.com/ariellelovex/" style="color:#8a8a8a;">@ariellelovex</a><br>
       You're getting this because you've booked with us. <a href="{{UNSUBSCRIBE_URL}}" style="color:#8a8a8a;">Unsubscribe</a>
     </div>
   </td></tr>
