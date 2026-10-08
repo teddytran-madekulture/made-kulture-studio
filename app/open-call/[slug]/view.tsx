@@ -10,40 +10,15 @@
 
 import type { Metadata } from 'next'
 import SiteNav from '@/components/SiteNav'
-import { supabaseAdmin } from '@/lib/supabase'
-import { centralDate, openCallPhase, type OpenCall, type OpenCallPhase } from '@/lib/open-calls'
+import { loadActiveCalls, callStatusLabel } from '@/lib/open-calls-server'
+import { centralDate, type OpenCall, type OpenCallPhase } from '@/lib/open-calls'
 import SubmissionsBoard, { type BoardCall } from './SubmissionsBoard'
-
-const COLS = 'id, slug, title, tagline, set_slug, set_name, prize, cover_url, opens_at, closes_at, voting_opens_at, voting_closes_at, max_images, status, rolling'
-const SHOWN: OpenCallPhase[] = ['open', 'voting', 'reviewing', 'upcoming']
-const ORDER: Record<string, number> = { open: 0, voting: 1, reviewing: 2, upcoming: 3 }
 
 export const pathFor = (slug: string) => `/submissions#${slug}`
 
-async function loadAll() {
-  const sb = supabaseAdmin()
-  const { data } = await sb.from('open_calls').select(COLS).neq('status', 'draft')
-  const calls = ((data ?? []) as OpenCall[])
-    .map(c => ({ c, phase: openCallPhase(c) }))
-    .filter(x => SHOWN.includes(x.phase))
-  // Covers fall back to the set's own photo.
-  const slugs = Array.from(new Set(calls.filter(x => !x.c.cover_url && x.c.set_slug).map(x => x.c.set_slug!)))
-  const setPhotos: Record<string, string | null> = {}
-  if (slugs.length) {
-    const { data: sets } = await sb.from('sets').select('slug, photo_url').in('slug', slugs)
-    for (const s of sets ?? []) setPhotos[s.slug] = s.photo_url ?? null
-  }
-  return calls
-    .map(x => ({ ...x, cover: x.c.cover_url || (x.c.set_slug ? setPhotos[x.c.set_slug] : null) || null }))
-    .sort((a, b) =>
-      Number(!!a.c.rolling) - Number(!!b.c.rolling) ||          // limited-run sets first
-      ORDER[a.phase] - ORDER[b.phase] ||
-      (a.c.closes_at ?? '').localeCompare(b.c.closes_at ?? ''))  // soonest deadline first
-}
-
 export async function submissionsMetadata(): Promise<Metadata> {
   const desc = 'Submit work shot at Made Kulture. Open calls for our limited-run sets come with a vote and a prize; the best series become the featured editorial.'
-  const calls = await loadAll()
+  const calls = await loadActiveCalls()
   const img = calls.find(x => x.cover)?.cover
   return { title: 'Submissions', description: desc, openGraph: { title: 'Submissions — Made Kulture', description: desc, images: img ? [img] : undefined } }
 }
@@ -53,7 +28,7 @@ const anton = 'Anton, "Bebas Neue", sans-serif'
 const GOLD = '#c9b27e'
 
 export async function SubmissionsView() {
-  const calls = await loadAll()
+  const calls = await loadActiveCalls()
   const limited = calls.filter(x => !x.c.rolling)
   const board: BoardCall[] = calls.map(({ c, phase, cover }) => toBoard(c, phase, cover))
 
@@ -75,13 +50,6 @@ export async function SubmissionsView() {
         : <SubmissionsBoard calls={board} />}
     </main>
   )
-}
-
-function label(c: OpenCall, phase: OpenCallPhase): string {
-  if (phase === 'open') return c.closes_at ? `CLOSES ${centralDate(c.closes_at, { month: 'short', day: 'numeric' }).toUpperCase()}` : 'ANY SET'
-  if (phase === 'voting') return 'VOTING NOW'
-  if (phase === 'upcoming') return c.status === 'announced' || !c.closes_at ? 'TBA' : `OPENS ${centralDate(c.opens_at, { month: 'short', day: 'numeric' }).toUpperCase()}`
-  return 'IN REVIEW'
 }
 
 // Everything the tile + panel need, worked out here so the client gets plain data.
@@ -110,7 +78,7 @@ function toBoard(call: OpenCall, phase: OpenCallPhase, cover: string | null): Bo
 
   return {
     slug: call.slug, title: call.title, tagline: call.tagline, prize: call.prize, cover,
-    kind: call.rolling ? 'ALWAYS OPEN' : 'OPEN CALL', status: label(call, phase), phase, tba, steps,
+    kind: call.rolling ? 'ALWAYS OPEN' : 'OPEN CALL', status: callStatusLabel(call, phase), phase, tba, steps,
     setName: call.set_name, setSlug: call.set_slug, maxImages: call.max_images, closes, rolling: !!call.rolling,
   }
 }

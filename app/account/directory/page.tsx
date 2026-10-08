@@ -9,6 +9,7 @@ import { Instrument_Serif } from 'next/font/google'
 import DirectoryHeader from '@/components/DirectoryHeader'
 import FinishProfileCard from '@/components/FinishProfileCard'
 import ServicesShowcase, { type ShowcaseListing } from '@/components/ServicesShowcase'
+import SubmissionsRow, { type SubmissionCall } from '@/components/SubmissionsRow'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
 const serif = Instrument_Serif({ subsets: ['latin'], weight: '400', style: ['normal', 'italic'] })
@@ -18,6 +19,7 @@ type Home = {
   me: { name: string | null; avatar: string | null; foundingNumber: number | null; optedIn: boolean; listed: boolean; blockers: string[]; photos: number }
   editorial: { title: string; subtitle: string; setName: string; setSlug: string; postUrl: string; photos: string[]; credits: Credit[] } | null
   total: number
+  submissions?: SubmissionCall[]
   newMembers?: { id: string; name: string; roles: string[]; account_type?: string; photo: string | null; isNew: boolean }[]
   fresh?: { id: string; url: string; memberId: string; name: string }[]
   services?: ShowcaseListing[]
@@ -121,6 +123,11 @@ export default function DirectoryHome() {
           </div>
         </section>
       )}
+
+      {/* SUBMISSIONS — open calls + the always-open Featured Editorial. Shown to
+          everyone (submitting needs no listing; the vote is a reason to finish one). */}
+      <SubmissionsRow calls={d.submissions ?? []} isMobile={isMobile} serifClass={serif.className} listed={d.me.listed}
+        sectionStyle={section} head={<SectionHead title="Submissions" href="/submissions" link="All submissions" />} />
 
       {d.me.listed && <>
         {/* NEW THIS WEEK */}

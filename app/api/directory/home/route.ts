@@ -6,6 +6,9 @@
 //                 that match a member's Instagram link to their profile.
 // • services   — the "Production services" row: featured first, then newest,
 //                 3 max, same visibility rule as the Services page.
+// • submissions — always: the open calls + the always-open Featured Editorial
+//                 (same list as /submissions). Shown to unlisted members too —
+//                 submitting doesn't need a listing, and the vote is a reason to finish one.
 // • newMembers, castings, fresh, services — ONLY when the viewer is listed. Same rule as
 //   /api/directory (lib/directory-access.ts): no listing, no browsing.
 import { createClient } from '@/lib/supabase/server'
@@ -17,6 +20,7 @@ import { isProfileComplete, cleanIgHandle } from '@/lib/directory-listing'
 import { pickEditorialForVisit } from '@/lib/featured-editorial-server'
 import { loadVisibleListings, showcaseOrder } from '@/lib/service-listings'
 import { blockedIds } from '@/lib/blocks'
+import { loadActiveCalls, callStatusLabel } from '@/lib/open-calls-server'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -32,9 +36,10 @@ export async function GET() {
   try { access = await memberAccess(service, user.id) }
   catch { return NextResponse.json({ error: 'Could not load your listing.' }, { status: 500 }) }
 
-  const [{ data: mine }, editorial] = await Promise.all([
+  const [{ data: mine }, editorial, calls] = await Promise.all([
     service.from('customer_profiles').select('full_name, avatar_url, founding_number').eq('id', user.id).maybeSingle(),
     pickEditorialForVisit(),
+    loadActiveCalls(),
   ])
 
   // Everyone opted in (one query) — used to link editorial credits and, for a
@@ -84,6 +89,10 @@ export async function GET() {
       credits: editorial.credits.map(c => ({ role: c.role, handle: c.handle, memberId: byHandle.get(c.handle.toLowerCase()) ?? null })),
     } : null,
     total: listed.length,
+    submissions: calls.map(({ c, phase, cover }) => ({
+      slug: c.slug, title: c.title, tagline: c.tagline, cover, rolling: !!c.rolling, phase,
+      status: callStatusLabel(c, phase), hasPrize: !!c.prize,
+    })),
   }
 
   if (!access.listed) return NextResponse.json(out)
