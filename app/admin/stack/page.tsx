@@ -19,16 +19,14 @@ interface Svc {
 
 const SERVICES: Svc[] = [
   // ── Core platform ──────────────────────────────────────────────────────
-  { group: 'Core platform', name: 'Vercel', role: 'Hosts the booking website + all APIs. Deploys automatically on every git push. Environment variables (API keys the site uses) are stored here.', url: 'https://vercel.com/made-kulture/made-kulture-studio', cost: 'Free (Hobby plan)', creds: 'Login via GitHub account' },
+  { group: 'Core platform', name: 'Vercel', role: 'Hosts the booking website + all APIs. Deploys automatically on every git push. Environment variables (API keys the site uses) are stored here.', url: 'https://vercel.com/made-kulture/made-kulture-studio', cost: 'Pro plan, $20/mo (includes $20 usage credit; $200 spend budget set)', creds: 'Login via GitHub account' },
   { group: 'Core platform', name: 'GitHub', role: 'Code repository for made-kulture-studio + runs the nightly automated database backup (Actions).', url: 'https://github.com', cost: 'Free', creds: 'Bitwarden: GitHub (2FA on)' },
-  { group: 'Core platform', name: 'Supabase', role: 'The database (bookings, customers, props, June conversations & knowledge, tours), user logins, photo storage, realtime chat, and the 5-minute cron jobs (session reminders, June email polling).', url: 'https://supabase.com/dashboard/project/vvaftjcjydxdlkojnrfm', cost: 'Free plan', creds: 'Bitwarden: Supabase (DB password + 2FA)' },
-  { group: 'Core platform', name: 'Squarespace', role: 'The original madekulture.com marketing site (layout, rules, terms pages) + the domain.', url: 'https://squarespace.com', cost: 'Subscription (existing)', creds: 'Bitwarden: Squarespace' },
-  { group: 'Core platform', name: 'Acuity Scheduling', role: 'Legacy booking calendar — the site two-way syncs blocks with it so old-channel bookings and website bookings never collide.', url: 'https://acuityscheduling.com', cost: 'Via Squarespace subscription', creds: 'Bitwarden: Acuity' },
+  { group: 'Core platform', name: 'Supabase', role: 'The database (bookings, customers, props, June conversations & knowledge, tours), user logins, photo storage, realtime chat, and the 5-minute cron jobs (session reminders, June email polling).', url: 'https://supabase.com/dashboard/project/vvaftjcjydxdlkojnrfm', cost: 'Pro plan, $25/mo (upgraded Oct 8, 2026 after the Free plan hit its image-egress limit)', creds: 'Bitwarden: Supabase (DB password + 2FA)' },
 
   // ── Money & messages ───────────────────────────────────────────────────
   { group: 'Money & messages', name: 'Square', role: 'All card payments — website checkout, cards on file, admin charges. Register hardware for the front desk (Phase 3, shelved).', url: 'https://squareup.com', cost: 'Per-transaction fees', creds: 'Bitwarden: Square (2FA on)' },
   { group: 'Money & messages', name: 'Twilio', role: 'Customer SMS: booking confirmations, session reminders, tour confirmations/cancellations. Toll-free number +1 (866) 329-7069.', url: 'https://console.twilio.com', cost: 'Pay per message (~1¢) + number fee', creds: 'Bitwarden: Twilio (2FA on)' },
-  { group: 'Money & messages', name: 'Resend', role: 'Sends the transactional emails — booking confirmations, reminders, casting notifications.', url: 'https://resend.com', cost: 'Free tier', creds: 'API key in Vercel env' },
+  { group: 'Money & messages', name: 'Resend', role: 'Sends the transactional emails (booking confirmations, reminders, casting notifications) AND the marketing campaigns from hello@news.madekulture.com, with open/click tracking.', url: 'https://resend.com', cost: 'Pro plan, $20/mo', creds: 'API key in Vercel env' },
   { group: 'Money & messages', name: 'Google Voice', role: 'The public (832) 408-1631 text line (forwards to you).', url: 'https://voice.google.com', cost: 'Free', creds: 'Google account' },
 
   // ── Google ─────────────────────────────────────────────────────────────
@@ -48,6 +46,13 @@ const SERVICES: Svc[] = [
   // ── Marketing & community ──────────────────────────────────────────────
   { group: 'Marketing & community', name: 'Instagram', role: '@madekulture — main marketing channel. (Future June channel: DMs.)', url: 'https://www.instagram.com/madekulture/', cost: 'Free', creds: 'Bitwarden: Instagram' },
   { group: 'Marketing & community', name: 'Sharegrid', role: 'Off-site equipment rental listings (in-studio gear rents through the site instead).', url: 'https://www.sharegrid.com/p/teddy_tran2', cost: 'Free listing', creds: 'Bitwarden: Sharegrid' },
+
+  // ── Retiring (2026-10-08) ─────────────────────────────────────────────
+  // madekulture.com now serves the new site (DNS on GoDaddy) and Acuity was
+  // switched off 2026-10-02. Both stay paid only until the last Acuity booking
+  // has run, then cancel the Squarespace subscription (Acuity rides on it).
+  { group: 'Retiring', name: 'Squarespace', role: 'RETIRED. Was the old madekulture.com site. Still billed only because Acuity rides on it; cancel after the last Acuity booking.', url: 'https://squarespace.com', cost: 'Subscription (cancel after the last Acuity booking)', creds: 'Bitwarden: Squarespace' },
+  { group: 'Retiring', name: 'Acuity Scheduling', role: 'RETIRED. Old booking calendar, switched off Oct 2, 2026. A few already-made Acuity bookings still run; the website keeps their door codes and blocks.', url: 'https://acuityscheduling.com', cost: 'Via Squarespace (ends with it)', creds: 'Bitwarden: Acuity' },
 ]
 
 export default function AdminStackPage() {
