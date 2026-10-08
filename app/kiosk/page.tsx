@@ -150,7 +150,7 @@ export default function KioskPage() {
   // time, which on a clock people are timing a shoot by reads as broken. This
   // is a local setInterval and makes ZERO network calls — it is not the
   // polling cost the jukebox note warns about.
-  const [nowMs, setNowMs] = useState(() => Date.now())
+  const [nowMs, setNowMs] = useState(() => Date.now()) // safe: nothing renders before `booted`
   useEffect(() => {
     const iv = setInterval(() => setNowMs(Date.now()), 5_000)
     return () => clearInterval(iv)
@@ -898,6 +898,16 @@ export default function KioskPage() {
       {urgency && <div style={{ flexBasis: '100%', fontSize: 14, color: 'rgba(255,255,255,0.72)' }}>Wrap up and return props · past 15 minutes over is charged an extra hour</div>}
     </div>
   )
+
+  // 2026-10-08 HYDRATION FIX. This page used to server-render a full home screen
+  // with the wall clock frozen at build/render time and setSlug unknown (so the
+  // header read FRONT DESK). The browser's first render never matched it, React
+  // threw #418/#423/#425 and threw the server HTML away to re-render from
+  // scratch. On a slow Fire tablet that recovery could stall until the next
+  // tap, leaving FRONT DESK on a set tablet and the showcase timer never
+  // starting. Rendering nothing until the URL has been read means the server
+  // and the first client render are identical: a blank dark screen.
+  if (!booted) return <main style={{ position: 'fixed', inset: 0, background: INK }} />
 
   // PORTAL HUB — the QR on top, one tile per Portal feature underneath (same
   // tile style as the home screen). Mood board is the first; a new feature is a
