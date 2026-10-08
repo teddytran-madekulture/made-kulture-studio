@@ -93,22 +93,18 @@ export const DESIGNS: EmailDesign[] = [
     </table>
   </td></tr>
 
-  <!-- the hook: The Patient -->
+  <!-- the hook: The Patient (headline baked into the image, melts into the page) -->
   <tr><td style="padding:56px 0 0;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0d1018;">
-      <tr>
-        <td class="stack" width="360" valign="top" style="width:360px;padding:0;">
-          <a href="https://madekulture.com/submissions#the-patient"><img class="hookimg" src="https://madekulture.com/email/2026-10-launch/hook.jpg" width="360" height="480" alt="The Patient, Studio One" style="display:block;width:360px;height:480px;border:0;"></a>
-        </td>
-        <td class="stack pad" valign="middle" style="padding:40px 56px 40px 36px;">
-          <div style="font-family:'Courier New',monospace;font-size:10.5px;letter-spacing:4px;color:#c9b27e;">FIRST UP · THE PATIENT</div>
-          <div class="h2" style="font-family:Anton,Impact,'Arial Narrow',Arial,sans-serif;font-size:46px;line-height:0.95;color:#ffffff;margin:14px 0 16px;">SHOOT IT.<br>SUBMIT IT.<br>WE ALL VOTE.</div>
-          <div style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#b5b5b5;">
-            Our Halloween set is up in Studio One until Oct 31. Make something there, submit your series, and the Directory picks the feature. The winner gets a year of Plus.
-          </div>
-          <a href="https://madekulture.com/submissions#the-patient" style="display:inline-block;margin-top:22px;font-family:'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:3px;color:#ffffff;text-decoration:none;border-bottom:1px solid #c9b27e;padding-bottom:4px;">SEE THE OPEN CALL &rarr;</a>
-        </td>
-      </tr>
+    <a href="https://madekulture.com/submissions#the-patient"><img src="https://madekulture.com/email/2026-10-launch/hook-v4.jpg" width="900" alt="First up: The Patient. Shoot it. Submit it. We all vote." style="display:block;width:100%;max-width:900px;height:auto;border:0;"></a>
+  </td></tr>
+  <tr><td class="pad" align="left" style="padding:0 60px;">
+    <table role="presentation" class="col" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;">
+      <tr><td style="padding:22px 0 0;font-family:Inter,Helvetica,Arial,sans-serif;font-size:15.5px;line-height:1.65;color:#b5b5b5;">
+        Our Halloween set is up in Studio One until Oct 31. Make something there, submit your series, and the Directory picks the feature. The winner gets a year of Plus.
+      </td></tr>
+      <tr><td style="padding:22px 0 0;">
+        <a href="https://madekulture.com/submissions#the-patient" style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:3px;color:#ffffff;text-decoration:none;border-bottom:1px solid #c9b27e;padding-bottom:4px;">SEE THE OPEN CALL &rarr;</a>
+      </td></tr>
     </table>
   </td></tr>
 
