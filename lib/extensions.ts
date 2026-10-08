@@ -52,7 +52,7 @@ export function normalizeHours(raw: unknown): number | null {
 }
 
 const SELECT = `
-  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount,
+  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount, guest_fee_amount,
   customer_id, auth_user_id, gcal_event_id,
   square_card_on_file_id, door_code, door_code_back, checked_out_at, check_in_token,
   sets ( name ),

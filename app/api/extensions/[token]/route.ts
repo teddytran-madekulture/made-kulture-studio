@@ -27,6 +27,7 @@ import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { notifyCoverageGap } from '@/lib/coverage'
 import { isPhoneProof } from '@/lib/extension-link'
+import { guestAmountsForWindow } from '@/lib/guest-rate'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -275,7 +276,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
 
   if (kind === 'extend') {
     const { error: upErr } = await db.from('bookings')
-      .update({ end_time: p.newEndISO, ...(newTotal != null ? { total_amount: newTotal } : {}) })
+      // Keep the guest surcharge / extra-person fee at the same per-hour rate,
+      // or the next extension divides them over more hours and undercharges.
+      .update({ end_time: p.newEndISO, ...guestAmountsForWindow(b, b.start_time, p.newEndISO), ...(newTotal != null ? { total_amount: newTotal } : {}) })
       .eq('id', r.booking_id)
     if (upErr) {
       console.error('[extension] CRITICAL: charged but extend failed', upErr)

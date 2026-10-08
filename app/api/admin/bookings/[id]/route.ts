@@ -14,6 +14,7 @@ import { notifyCoverageGap } from '@/lib/coverage'
 import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { issueDoorCodes } from '@/lib/igloohome'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
+import { guestAmountsForWindow } from '@/lib/guest-rate'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -71,6 +72,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.start_time   !== undefined) updates.start_time   = body.start_time
   if (body.end_time     !== undefined) updates.end_time     = body.end_time
   if (body.notes        !== undefined) updates.notes        = body.notes
+  // Moving or resizing the window keeps the guest surcharge and extra-person
+  // fee at the per-hour rates the booking was sold at (lib/guest-rate). Without
+  // this the stored totals stay put while the hours change, and every later
+  // add-time divides them into the wrong per-hour price.
+  if (body.status !== 'cancelled' && (body.start_time !== undefined || body.end_time !== undefined)) {
+    const { data: g, error: gErr } = await supabase
+      .from('bookings').select('start_time, end_time, guest_surcharge_amount, guest_fee_amount').eq('id', params.id).maybeSingle()
+    if (gErr) console.error('[admin booking PATCH] guest amount lookup failed (amounts left as-is):', gErr)
+    else if (g) Object.assign(updates, guestAmountsForWindow(g as any, body.start_time ?? (g as any).start_time, body.end_time ?? (g as any).end_time))
+  }
   if (body.total_amount !== undefined) updates.total_amount = body.total_amount
   // Manual check-in / check-out (admin override). Pass ISO string or null.
   if (body.checked_in_at  !== undefined) updates.checked_in_at  = body.checked_in_at

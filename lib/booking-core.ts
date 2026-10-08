@@ -25,6 +25,7 @@ import { pushVisitLine } from '@/lib/visits'
 import { rewardRateForEmail } from '@/lib/rewards'
 import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
 import { screenBooking } from '@/lib/identity-match'
+import { guestSharesByLine } from '@/lib/guest-rate'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,9 @@ export interface PricedOrder {
   guestCount:   number
   guestFeeDollars: number
   guestSurchargeDollars: number
+  /** Per-row shares of the two above (lib/guest-rate guestSharesByLine). */
+  guestFeeByLine: number[]
+  guestSurchargeByLine: number[]
   equipRates:   Record<string, number>
   customerPricingOverrides: any
   primary:      OrderLine
@@ -336,6 +340,12 @@ export async function validateAndPriceOrder(
   //     buyouts are a flat rate and are not surcharged.
   const setHours = body.type === 'studio' ? 0 : lines.reduce((s, l) => s + (l.endHour - l.startHour), 0)
   const guestSurchargeDollars = opts.isMember ? 0 : guestSurchargePerHour * setHours
+  // Each row carries its OWN share (2026-10-08) — see guestSharesByLine.
+  const shares = guestSharesByLine(lines, {
+    guestCount, capacity: guestCapacity, perPersonFee, feeTotal: guestFeeDollars,
+    surchargePerHour: opts.isMember ? 0 : guestSurchargePerHour, surchargeTotal: guestSurchargeDollars,
+    isStudio: body.type === 'studio',
+  })
 
   // 7. Server-side price verification
   const equipCustom = equipmentDollars(body.equipment, equipRates, customerPricingOverrides)
@@ -391,7 +401,7 @@ export async function validateAndPriceOrder(
 
   return {
     ok: true,
-    order: { lines, verifiedCents, guestCount, guestFeeDollars, guestSurchargeDollars, equipRates, customerPricingOverrides, primary },
+    order: { lines, verifiedCents, guestCount, guestFeeDollars, guestSurchargeDollars, guestFeeByLine: shares.fee, guestSurchargeByLine: shares.surcharge, equipRates, customerPricingOverrides, primary },
   }
 }
 
@@ -639,6 +649,9 @@ export async function insertBookingRows(
   opts: InsertRowsOptions
 ): Promise<InsertRowsResult> {
   const { lines, guestCount, guestFeeDollars, guestSurchargeDollars, equipRates } = order
+  // Older callers may hand in an order without per-row shares: bank on row 0.
+  const feeByLine = order.guestFeeByLine ?? lines.map((_, i) => (i === 0 ? guestFeeDollars : 0))
+  const surByLine = order.guestSurchargeByLine ?? lines.map((_, i) => (i === 0 ? guestSurchargeDollars : 0))
   const orderGroup = opts.orderGroup ?? randomUUID()
   const equipment  = opts.equipment ?? []
   const equipTotal = equipment.reduce(
@@ -653,7 +666,7 @@ export async function insertBookingRows(
   const bookingIds: string[] = []
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]
-    const rowTotal = l.spaceDollars + (i === 0 ? equipTotal + guestFeeDollars + guestSurchargeDollars : 0)
+    const rowTotal = l.spaceDollars + (i === 0 ? equipTotal : 0) + feeByLine[i] + surByLine[i]
     const rewardBasis = Math.round((l.spaceDollars + (i === 0 ? equipTotal : 0)) * 100)
     const { data: row, error: insErr } = await supabase
       .from('bookings')
@@ -668,15 +681,15 @@ export async function insertBookingRows(
         extras_amount:    i === 0 ? equipTotal : 0,
         total_amount:     rowTotal,
         guest_count:      guestCount || null,
-        guest_fee_amount: i === 0 ? guestFeeDollars : 0,
+        guest_fee_amount: feeByLine[i],
         // The non-member surcharge, recorded instead of vanishing into
         // total_amount. Everything that later re-derives a price for this
         // booking (extensions, the admin edit modal) reads it to work out what
         // the customer's real hourly rate was — without it they all fell back
         // to the member rate and undercharged. Migration 100.
-        // ⚠️ Like the fees above it, this lands on the FIRST row of a multi-set
-        // order only; siblings record 0 so the order still sums correctly.
-        guest_surcharge_amount: i === 0 ? guestSurchargeDollars : 0,
+        // Since 2026-10-08 each row carries its own share (it used to be banked
+        // on the first row, which made add-time price siblings wrong).
+        guest_surcharge_amount: surByLine[i],
         order_group:      orderGroup,
         source:           opts.source,
         notes:            opts.notes ?? null,

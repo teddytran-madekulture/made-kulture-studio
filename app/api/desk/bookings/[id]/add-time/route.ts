@@ -20,9 +20,10 @@ const square = new Client({
 // rate. Importing the shared helper is the point: the next pricing rule only has
 // to be taught once. See migration 100.
 import { effectiveHourlyRate } from '@/lib/extensions'
+import { guestAmountsForWindow } from '@/lib/guest-rate'
 
 const SELECT = `
-  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount,
+  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount, guest_fee_amount,
   customer_id, square_card_on_file_id,
   sets ( name ),
   customers ( name, email, phone, square_customer_id, pricing_overrides )
@@ -126,7 +127,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Extend the booking end time (+ bump stored total for the space charge).
   const newTotal = b.total_amount != null ? Number(b.total_amount) + p.rate * hours : null
   const { error: upErr } = await db.from('bookings')
-    .update({ end_time: p.newEndISO, ...(newTotal != null ? { total_amount: newTotal } : {}) })
+    // Keep the guest surcharge / extra-person fee at the same per-hour rate.
+    .update({ end_time: p.newEndISO, ...guestAmountsForWindow(b as any, b.start_time, p.newEndISO), ...(newTotal != null ? { total_amount: newTotal } : {}) })
     .eq('id', params.id)
   if (upErr) {
     const conflict = upErr.code === '23P01' || /overlap|conflict/i.test(upErr.message || '')

@@ -17,7 +17,7 @@ import { bookingHourToISO } from '@/lib/booking-times'
 // ⚠️ lib/guest-rate is deliberately dependency-free so this client component can
 // share the API routes' pricing instead of keeping a fourth copy of the rate
 // table. Do not import from lib/extensions here — that one pulls in Supabase.
-import { RATE_BY_NAME, guestSurchargePerHourOf, effectiveHourlyRate } from '@/lib/guest-rate'
+import { RATE_BY_NAME, guestSurchargePerHourOf, guestFeePerHourOf, effectiveHourlyRate } from '@/lib/guest-rate'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -344,7 +344,7 @@ const SET_RATES = RATE_BY_NAME
 // too), and it cancels out of editDiff as long as both sides agree. The server
 // is the authority on what any button actually charges.
 const effectiveRateFor = (setName: string, b: Booking | null) =>
-  (SET_RATES[setName] ?? 40) + (b ? guestSurchargePerHourOf(b) : 0)
+  (SET_RATES[setName] ?? 40) + (b ? guestSurchargePerHourOf(b) + guestFeePerHourOf(b) : 0)
 const SLOT_H     = 44    // px per 30-min slot → 88px/hr
 const CAL_START  = 9
 const CAL_END    = 22

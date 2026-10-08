@@ -26,6 +26,7 @@ import { rewardRateForEmail, rowBasisCents, rewardFor } from '@/lib/rewards'
 import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
 import { screenBooking, rememberCard } from '@/lib/identity-match'
 import { validatePromo, recordPromoRedemption } from '@/lib/promo'
+import { guestSharesByLine } from '@/lib/guest-rate'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -488,6 +489,12 @@ export async function POST(req: NextRequest) {
     //       Studio buyouts are a flat rate and are not surcharged.
     const setHours = body.type === 'studio' ? 0 : lines.reduce((s, l) => s + (l.endHour - l.startHour), 0)
     const guestSurchargeDollars = isMember ? 0 : guestSurchargePerHour * setHours
+    // Each row carries its OWN share (2026-10-08) — see guestSharesByLine.
+    const shares = guestSharesByLine(lines, {
+      guestCount, capacity: guestCapacity, perPersonFee, feeTotal: guestFeeDollars,
+      surchargePerHour: isMember ? 0 : guestSurchargePerHour, surchargeTotal: guestSurchargeDollars,
+      isStudio: body.type === 'studio',
+    })
 
     // ── 7. Verify price server-side (prevent tampering) ────────────────────
     const equipCustom = equipmentDollars(body.equipment, equipRates, customerPricingOverrides)
@@ -805,7 +812,7 @@ export async function POST(req: NextRequest) {
       if (rewardRate != null && rewardBasis != null) rewardTotalCents += rewardFor(rewardBasis, rewardRate)
       // Promo discount lands on the first row (like equipment/guest fees) so the
       // stored total reflects the post-promo price.
-      const rowTotal = Math.max(0, l.spaceDollars + (i === 0 ? equipDollars + guestFeeDollars + guestSurchargeDollars - promoDiscountCents / 100 : 0))
+      const rowTotal = Math.max(0, l.spaceDollars + shares.fee[i] + shares.surcharge[i] + (i === 0 ? equipDollars - promoDiscountCents / 100 : 0))
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
         .insert({
@@ -819,7 +826,7 @@ export async function POST(req: NextRequest) {
           extras_amount:      i === 0 ? equipDollars : 0,
           total_amount:       rowTotal,
           guest_count:        guestCount || null,
-          guest_fee_amount:   i === 0 ? guestFeeDollars : 0,
+          guest_fee_amount:   shares.fee[i],
           // See the matching note in lib/booking-core.ts insertBookingRows.
           // Recorded so extensions and the admin edit modal can tell a guest
           // booking from a member one; without it they priced everything at the
@@ -827,7 +834,7 @@ export async function POST(req: NextRequest) {
           // ⚠️ This is the surcharge as CHARGED, before the promo discount that
           // rowTotal applies — it describes the rate this customer books at, not
           // what the line finally settled for.
-          guest_surcharge_amount: i === 0 ? guestSurchargeDollars : 0,
+          guest_surcharge_amount: shares.surcharge[i],
           square_payment_id:      squarePaymentId,
           square_card_on_file_id: savedCardId,
           order_group:            orderGroup,
