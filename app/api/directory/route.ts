@@ -6,6 +6,7 @@ import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { isProfileComplete } from '@/lib/directory-listing'
 import { publicAccountType } from '@/lib/roles'
 import { claimFoundingSpots, FOUNDING_CAP } from '@/lib/founding'
+import { blockedIds } from '@/lib/blocks'
 
 // Service client to read across profiles; we only ever expose opted-in members
 // and never return email/phone.
@@ -83,7 +84,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Blocked either way (migration 148) → neither sees the other.
+  let hidden: Set<string>
+  try { hidden = await blockedIds(service, user.id) }
+  catch { return NextResponse.json({ error: 'Could not load the directory.' }, { status: 500 }) }
+
   const members = listed
+    .filter(m => !hidden.has(m.id))
     .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: publicAccountType(m.account_type), founding_number: m.founding_number ?? null, profile_color: m.profile_color ?? null, photos: feedPhotos.get(m.id) ?? [] }))
 
   return NextResponse.json({ members, founding: { cap: FOUNDING_CAP, taken: Math.min(taken, FOUNDING_CAP) } })

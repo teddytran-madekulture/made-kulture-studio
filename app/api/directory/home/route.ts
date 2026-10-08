@@ -16,6 +16,7 @@ import { memberAccess } from '@/lib/directory-access'
 import { isProfileComplete, cleanIgHandle } from '@/lib/directory-listing'
 import { pickEditorialForVisit } from '@/lib/featured-editorial-server'
 import { loadVisibleListings, showcaseOrder } from '@/lib/service-listings'
+import { blockedIds } from '@/lib/blocks'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -48,7 +49,11 @@ export async function GET() {
   if (pErr || picErr) return NextResponse.json({ error: 'Could not load the directory.' }, { status: 500 })
 
   const withPhotos = new Set((pics ?? []).map(p => p.user_id))
-  const listed = (profiles ?? []).filter(p => isProfileComplete(p as any, withPhotos.has(p.id)))
+  // Blocked either way (migration 148) → left out of every row below.
+  let hidden: Set<string>
+  try { hidden = await blockedIds(service, user.id) }
+  catch { return NextResponse.json({ error: 'Could not load the directory.' }, { status: 500 }) }
+  const listed = (profiles ?? []).filter(p => !hidden.has(p.id) && isProfileComplete(p as any, withPhotos.has(p.id)))
   const listedById = new Map(listed.map(p => [p.id, p]))
   const byHandle = new Map<string, string>()
   for (const p of listed) { const h = cleanIgHandle(p.instagram).toLowerCase(); if (h) byHandle.set(h, p.id) }
@@ -124,7 +129,7 @@ export async function GET() {
   // Non-fatal: if listings can't load, the row just doesn't render — the rest
   // of the home page still works. (The Services page itself reports the error.)
   try {
-    const all = await loadVisibleListings(service, user.id)
+    const all = (await loadVisibleListings(service, user.id)).filter(l => !hidden.has(l.vendor.id))
     out.services = showcaseOrder(all).slice(0, 3)
     out.servicesTotal = all.length
   } catch (e: any) { console.error('[directory/home] services', e?.message) }

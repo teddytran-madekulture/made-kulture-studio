@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { loadVisibleListings } from '@/lib/service-listings'
+import { blockedIds } from '@/lib/blocks'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -22,7 +23,8 @@ export async function GET() {
 
   let listings
   // A failed read must never render as "no services yet".
-  try { listings = await loadVisibleListings(service, user.id) }
+  // Blocked either way (migration 148) → their listings stay out of view.
+  try { const hidden = await blockedIds(service, user.id); listings = (await loadVisibleListings(service, user.id)).filter(l => !hidden.has(l.vendor.id)) }
   catch (e: any) { return NextResponse.json({ error: e?.message || 'Could not load services.' }, { status: 500 }) }
   return NextResponse.json({ listings })
 }

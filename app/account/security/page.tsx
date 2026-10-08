@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTurnstile } from '@/components/Turnstile'
+import BlockedMembers from '@/components/BlockedMembers'
 
 const inputStyle: React.CSSProperties = {
   width: '100%', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))',
@@ -130,6 +131,8 @@ export default function SecurityPage() {
         </form>
       </div>
       </div>
+
+      <BlockedMembers />
 
       {/* Delete account */}
       <div style={{ marginTop: 32, background: 'var(--t-surface-lo)', border: '1px solid rgba(255,60,60,0.25)', borderRadius: 8, padding: '24px', maxWidth: 480 }}>

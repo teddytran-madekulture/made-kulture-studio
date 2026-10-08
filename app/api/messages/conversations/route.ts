@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { blockedIds } from '@/lib/blocks'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -23,7 +24,11 @@ export async function GET() {
     .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
     .order('last_message_at', { ascending: false, nullsFirst: false })
 
-  const list = convs ?? []
+  // Blocked either way (migration 148) → the thread leaves both inboxes.
+  let hidden: Set<string>
+  try { hidden = await blockedIds(service, user.id) }
+  catch { return NextResponse.json({ error: 'Could not load messages.' }, { status: 500 }) }
+  const list = (convs ?? []).filter(c => !hidden.has(c.user_a === user.id ? c.user_b : c.user_a))
   const otherIds = [...new Set(list.map(c => (c.user_a === user.id ? c.user_b : c.user_a)))]
   const profs: Record<string, { full_name: string | null; avatar_url: string | null }> = {}
   if (otherIds.length) {

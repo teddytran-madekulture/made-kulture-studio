@@ -221,7 +221,15 @@ export function useJukeboxPlayer(opts: {
           onReady: () => { ytReady.current = true; applyVolume(); if (lastState.current) apply(lastState.current) },
           onStateChange: (e: any) => {
             const YT = (window as any).YT
-            if (e.data === YT.PlayerState.PLAYING) setNeedsTap(false)
+            // 2026-10-07: Android WebView (Fully Kiosk) lets YouTube autoplay
+            // only MUTED — it reports PLAYING while the room is silent, which
+            // cleared the "tap to start" prompt with no sound (Set D, 10/07).
+            // Muted-but-playing still needs a tap; the tap unmutes (nudge).
+            if (e.data === YT.PlayerState.PLAYING) {
+              let muted = false
+              try { muted = !!yt.current?.isMuted?.() } catch {}
+              setNeedsTap(muted)
+            }
             if (e.data === YT.PlayerState.PLAYING && modeRef.current === 'house' && currentSource.current === 'youtube') {
               if (!shuffled.current) {
                 try { yt.current.setShuffle(true); yt.current.setLoop(true); shuffled.current = true; yt.current.nextVideo() } catch {}
@@ -282,7 +290,12 @@ export function useJukeboxPlayer(opts: {
   const ytPlay = (id: string) => { if (ytLoaded.current === id && modeRef.current === 'request') return; try { yt.current?.loadVideoById(id) } catch {}; ytLoaded.current = id; shuffled.current = false }
   const ytHouse = (pid: string) => { shuffled.current = false; ytLoaded.current = null; try { yt.current?.loadPlaylist({ list: pid, listType: 'playlist' }) } catch {} }
   const ytStop = () => { try { yt.current?.pauseVideo() } catch {} }
-  const ytResume = () => { try { yt.current?.playVideo() } catch {} }
+  const ytResume = () => {
+    try { yt.current?.unMute?.() } catch {}
+    try { yt.current?.playVideo() } catch {}
+    // Re-apply the saved volume (unMute alone keeps it) and re-check after the tap.
+    setTimeout(() => { try { if (yt.current?.isMuted?.()) setNeedsTap(true); else setNeedsTap(false) } catch {} }, 1200)
+  }
 
   // ── Spotify engine ──
   useEffect(() => {

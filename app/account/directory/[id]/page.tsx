@@ -37,6 +37,8 @@ type Member = {
   followers: number
   following: number
   is_following: boolean
+  /** Migration 148 — I blocked this member; the API sends a name-only stub. */
+  blocked_by_me?: boolean
 }
 
 // Turn a YouTube/Vimeo watch URL into an embeddable one. Returns null if we
@@ -169,6 +171,23 @@ export default function MemberProfilePage() {
     }
   }
 
+  // Block / unblock (migration 148). Two taps to block so it can't happen by
+  // accident; the other member is never told.
+  const [blockArmed, setBlockArmed] = useState(false)
+  const [blockBusy, setBlockBusy] = useState(false)
+  const setBlocked = async (block: boolean) => {
+    if (!member || blockBusy) return
+    if (block && !blockArmed) { setBlockArmed(true); setTimeout(() => setBlockArmed(false), 4000); return }
+    setBlockBusy(true)
+    const res = block
+      ? await fetch('/api/directory/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: member.id }) })
+      : await fetch(`/api/directory/block?userId=${encodeURIComponent(member.id)}`, { method: 'DELETE' })
+    const d = await res.json().catch(() => ({}))
+    setBlockBusy(false); setBlockArmed(false)
+    if (res.ok) window.location.reload()
+    else setError((d as any).error ?? 'Could not update. Try again.')
+  }
+
   const startChat = async () => {
     if (!member || starting) return
     trackNow('contact_click', { target_id: member.id, meta: { what: 'message' } })
@@ -236,6 +255,20 @@ export default function MemberProfilePage() {
     </div>
   )
 
+  if (member.blocked_by_me) return (
+    <div style={{ paddingTop: 20, maxWidth: 520 }}>
+      <Link href="/account/directory" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Back to directory</Link>
+      <div style={{ fontFamily: 'Inter', fontSize: 21, fontWeight: 700, color: 'var(--t-fg)', paddingTop: 24 }}>{member.full_name}</div>
+      <div style={{ fontFamily: 'Inter', fontSize: 14, lineHeight: 1.55, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', padding: '8px 0 18px' }}>
+        You blocked this member. You won't see each other in the directory, and neither of you can message the other.
+      </div>
+      <button type="button" onClick={() => setBlocked(false)} disabled={blockBusy}
+        style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 8, padding: '9px 20px', fontFamily: 'Inter', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', opacity: blockBusy ? 0.6 : 1 }}>
+        {blockBusy ? 'Unblocking…' : 'Unblock'}
+      </button>
+    </div>
+  )
+
   const embed = member.video_url ? embedUrl(member.video_url) : null
   const hasMature = member.portfolio.some(p => p.is_mature)
 
@@ -274,6 +307,10 @@ export default function MemberProfilePage() {
       {myCastings.length > 0 && (
         <button type="button" onClick={() => setInviteOpen(o => !o)} style={btn(false)}>Invite {inviteOpen ? '▴' : '▾'}</button>
       )}
+      <button type="button" onClick={() => setBlocked(true)} disabled={blockBusy}
+        style={{ ...btn(false), background: blockArmed ? 'var(--t-err, #d9534f)' : 'transparent', color: blockArmed ? '#fff' : 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', opacity: blockBusy ? 0.6 : 1 }}>
+        {blockBusy ? 'Blocking…' : blockArmed ? 'Tap to confirm block' : 'Block'}
+      </button>
     </>
   )
   const stats = (

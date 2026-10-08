@@ -358,6 +358,12 @@ export const CATEGORIES: Category[] = [
         notes: ['Both are off by default and only ever shown to signed-in members.', 'Unticking “List me in the creative directory” takes you out of the directory — and you lose browsing and messaging too.'] },
       { slug: 'message-alerts', q: 'How do I get texts or emails about new messages?', tags: 'message notifications email text alerts',
         steps: [SETTINGS + ' Then choose Directory & notifications.', 'Tick “Email me about new messages and casting interest” and/or “Text me about new messages and casting interest”.', 'Tap SAVE CHANGES.'] },
+      { slug: 'block', q: 'How do I block someone?', tags: 'block unblock harassment abuse stop messages safety',
+        steps: [
+          'Open their profile and tap Block, then tap again to confirm. Or open your message thread with them and tap Block at the top.',
+          'To unblock, go to Account → Settings → Blocked members and tap Unblock.',
+        ],
+        notes: ['Blocking works both ways: you won’t see each other in the directory, your thread leaves both inboxes, and neither of you can message the other. They aren’t told. If someone is harassing you, also email info@madekulture.com so we can look into it.'] },
       { slug: 'report', q: 'How do I report a photo or listing?', tags: 'report flag inappropriate abuse spam',
         steps: [
           'Photo: open it on the member’s profile, tap ⋯, then Report. Pick a reason and tap Send report.',

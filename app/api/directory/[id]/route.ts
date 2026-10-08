@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { publicAccountType } from '@/lib/roles'
 import { creditsForImages, photosTaggingMember } from '@/lib/photo-credits'
+import { blockState } from '@/lib/blocks'
 
 const service = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,6 +33,25 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   // reached by URL either.
   if (!p || !(p.id === user.id || (await memberAccess(service, p.id)).listed)) {
     return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
+  }
+
+  // Blocks (migration 148). Blocked BY them → the profile simply isn't there.
+  // Blocked by ME → a stub with just the name, so I can unblock.
+  let block = { byMe: false, byThem: false }
+  if (p.id !== user.id) {
+    try { block = await blockState(service, user.id, p.id) }
+    catch { return NextResponse.json({ error: 'Could not load profile.' }, { status: 500 }) }
+  }
+  if (block.byThem) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
+  if (block.byMe) {
+    return NextResponse.json({
+      member: {
+        id: p.id, full_name: p.full_name, account_type: publicAccountType(p.account_type), roles: [], instagram: null,
+        avatar_url: null, bio: '', links: [], video_url: null, email: null, phone: null, portfolio: [], tagged: [],
+        listings: [], founding_number: null, profile_color: null, credits: [], cv_url: null, cover_url: null,
+        is_self: false, followers: 0, following: 0, is_following: false, blocked_by_me: true,
+      },
+    })
   }
 
   const { data: images } = await service

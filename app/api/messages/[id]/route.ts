@@ -5,6 +5,7 @@ import { sendMemberPush } from '@/lib/member-push'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendNewMessageEmail } from '@/lib/email'
 import { sendMessageSMS } from '@/lib/sms'
+import { blockState } from '@/lib/blocks'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -31,6 +32,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const otherId = c.user_a === user.id ? c.user_b : c.user_a
+  let block = { byMe: false, byThem: false }
+  try { block = await blockState(service, user.id, otherId) }
+  catch { return NextResponse.json({ error: 'Could not load conversation.' }, { status: 500 }) }
+  // Blocked by them → as if the thread doesn't exist (they never learn it).
+  if (block.byThem) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const { data: prof } = await service
     .from('customer_profiles').select('id, full_name, avatar_url').eq('id', otherId).maybeSingle()
   const { data: messages } = await service
@@ -42,6 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       id: params.id,
       me: user.id,
       other: { id: otherId, name: prof?.full_name || '(member)', avatar_url: prof?.avatar_url || null },
+      blocked_by_me: block.byMe,
     },
     messages: messages ?? [],
   })
@@ -63,6 +70,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const [meAcc, themAcc] = await Promise.all([memberAccess(service, user.id), memberAccess(service, other)])
   if (!meAcc.listed) return notListedResponse(meAcc, 'send messages')
   if (!themAcc.listed) return NextResponse.json({ error: 'This member is no longer in the directory.' }, { status: 403 })
+  try {
+    const block = await blockState(service, user.id, other)
+    if (block.byMe) return NextResponse.json({ error: 'You blocked this member. Unblock them to send a message.' }, { status: 403 })
+    if (block.byThem) return NextResponse.json({ error: "This message can't be sent." }, { status: 403 })
+  } catch { return NextResponse.json({ error: 'Could not send. Try again.' }, { status: 500 }) }
 
   const { body } = await req.json().catch(() => ({}))
   const text = String(body ?? '').trim().slice(0, 2000)

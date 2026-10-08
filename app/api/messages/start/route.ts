@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
+import { blockState } from '@/lib/blocks'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,12 @@ export async function POST(req: NextRequest) {
   const me = await memberAccess(service, user.id)
   if (!me.listed) return notListedResponse(me, 'message members')
   if (!(await memberAccess(service, toUserId)).listed) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
+
+  try {
+    const block = await blockState(service, user.id, toUserId)
+    if (block.byMe) return NextResponse.json({ error: 'You blocked this member. Unblock them to send a message.' }, { status: 403 })
+    if (block.byThem) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
+  } catch { return NextResponse.json({ error: 'Could not open the conversation. Try again.' }, { status: 500 }) }
 
   const [a, b] = [user.id, toUserId].sort()
 

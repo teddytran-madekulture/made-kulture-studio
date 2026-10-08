@@ -17,7 +17,7 @@ import { linkify } from '@/lib/linkify'
 import { useIsMobile } from '@/lib/use-is-mobile'
 
 type Msg = { id: string; sender_id: string; body: string; created_at: string }
-type Meta = { id: string; me: string; other: { id: string; name: string; avatar_url: string | null } }
+type Meta = { id: string; me: string; other: { id: string; name: string; avatar_url: string | null }; blocked_by_me?: boolean }
 
 const muted = (a: number) => `rgba(var(--t-fg-rgb), calc(${a} * var(--t-a)))`
 const hair = `1px solid ${muted(0.1)}`
@@ -110,6 +110,23 @@ export default function ThreadView({ id, pane = false }: { id: string; pane?: bo
 
   // Scroll only the message box, never the page.
   useEffect(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight }, [messages.length, vv?.h, loading])
+
+  // Block / unblock from the thread (migration 148). Two taps to block.
+  const [blockArmed, setBlockArmed] = useState(false)
+  const [blockBusy, setBlockBusy] = useState(false)
+  const setBlocked = async (block: boolean) => {
+    if (!meta || blockBusy) return
+    if (block && !blockArmed) { setBlockArmed(true); setTimeout(() => setBlockArmed(false), 4000); return }
+    setBlockBusy(true); setError('')
+    const res = block
+      ? await fetch('/api/directory/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: meta.other.id }) })
+      : await fetch(`/api/directory/block?userId=${encodeURIComponent(meta.other.id)}`, { method: 'DELETE' })
+    const d = await res.json().catch(() => ({}))
+    setBlockBusy(false); setBlockArmed(false)
+    if (!res.ok) { setError((d as any).error ?? 'Could not update. Try again.'); return }
+    setMeta(m => m ? { ...m, blocked_by_me: block } : m)
+  }
+  const blocked = !!meta?.blocked_by_me
 
   const send = async () => {
     const text = input.trim()
@@ -204,6 +221,12 @@ export default function ThreadView({ id, pane = false }: { id: string; pane?: bo
             </div>
           </Link>
         )}
+        {meta && (
+          <button type="button" onClick={() => setBlocked(!blocked)} disabled={blockBusy}
+            style={{ marginLeft: 'auto', flexShrink: 0, background: blockArmed ? 'var(--t-err, #d9534f)' : 'transparent', color: blockArmed ? '#fff' : muted(0.55), border: `1px solid ${blockArmed ? 'transparent' : muted(0.18)}`, borderRadius: 16, padding: '6px 12px', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: blockBusy ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+            {blockBusy ? '…' : blocked ? 'Unblock' : blockArmed ? 'Tap to confirm' : 'Block'}
+          </button>
+        )}
       </div>
 
       {/* Messages */}
@@ -216,8 +239,14 @@ export default function ThreadView({ id, pane = false }: { id: string; pane?: bo
 
       {error && meta && <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-err)', padding: `4px ${pad}px`, flexShrink: 0 }}>{error}</div>}
 
+      {blocked && (
+        <div style={{ fontFamily: 'Inter', fontSize: 12.5, lineHeight: 1.5, color: muted(0.55), padding: phone ? '10px 0 0' : `10px ${pad}px 0`, borderTop: hair, flexShrink: 0 }}>
+          You blocked {meta?.other.name.split(' ')[0]}. Neither of you can message the other, and this thread is hidden from your inbox. Unblock to talk again.
+        </div>
+      )}
+
       {/* Reply box */}
-      <div style={{ display: 'flex', gap: 8, padding: phone ? '10px 0 0' : `12px ${pad}px 16px`, borderTop: hair, flexShrink: 0, alignItems: 'center' }}>
+      {!blocked && <div style={{ display: 'flex', gap: 8, padding: phone ? '10px 0 0' : `12px ${pad}px 16px`, borderTop: hair, flexShrink: 0, alignItems: 'center' }}>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -237,7 +266,7 @@ export default function ThreadView({ id, pane = false }: { id: string; pane?: bo
           style={{ flexShrink: 0, height: 44, background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 22, padding: '0 20px', fontFamily: 'Inter', fontSize: 14, fontWeight: 600, cursor: (sending || !input.trim()) ? 'default' : 'pointer', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
           Send
         </button>
-      </div>
+      </div>}
     </div>
   )
 }
