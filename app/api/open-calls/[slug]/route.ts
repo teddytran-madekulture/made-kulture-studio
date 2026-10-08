@@ -81,8 +81,23 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const credits = cleanCredits(b.credits)
   const mature = b.mature === true
 
-  const missing = [!title && 'series title', !photographer && 'photographer'].filter(Boolean)
+  const missing = [!title && 'series title', !photographer && 'photographer', !shootDate && 'shoot date'].filter(Boolean)
   if (missing.length) return NextResponse.json({ error: `Missing: ${missing.join(', ')}` }, { status: 400 })
+
+  // NEW WORK ONLY (Teddy, 2026-10-08): nothing from a previous year's run of a
+  // set. An open call takes shoots dated inside its own window; the always-open
+  // call takes the last 12 months. Dates compared as Central calendar days.
+  const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(iso))
+  const today = day(new Date().toISOString())
+  const earliest = call.rolling || !call.closes_at
+    ? day(new Date(Date.now() - 365 * 864e5).toISOString())
+    : day(call.opens_at)
+  const latest = call.rolling || !call.closes_at ? today : (day(call.closes_at) < today ? day(call.closes_at) : today)
+  if (shootDate! < earliest || shootDate! > latest) {
+    return NextResponse.json({ error: call.rolling
+      ? 'Featured Editorial takes new work: the shoot date must be within the last 12 months.'
+      : `This open call takes new work only: the shoot date must be between ${centralDate(call.opens_at)} and today.` }, { status: 400 })
+  }
 
   // Every consent is load-bearing: featuring work without them is the thing
   // Teddy's "vet it first" rule exists to prevent.

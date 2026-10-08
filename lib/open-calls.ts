@@ -8,6 +8,8 @@
 export const OPEN_CALL_BUCKET = 'open-call-media'
 export const OPEN_CALL_MIN_IMAGES = 3
 export const OPEN_CALL_MAX_CREDITS = 10
+// Submission requirement: originals at least this many px on the long side.
+export const OPEN_CALL_MIN_EDGE = 2000
 // Long edge after the browser shrinks a photo. Big enough to run as a featured
 // editorial, small enough (~1–2 MB) that a phone on studio wifi gets it up.
 export const OPEN_CALL_IMAGE_EDGE = 2400

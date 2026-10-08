@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { shrinkImage } from '@/lib/shrink-image'
-import { OPEN_CALL_BUCKET, OPEN_CALL_IMAGE_EDGE, OPEN_CALL_MAX_CREDITS, OPEN_CALL_MIN_IMAGES, type OpenCallPhase } from '@/lib/open-calls'
+import { OPEN_CALL_BUCKET, OPEN_CALL_IMAGE_EDGE, OPEN_CALL_MIN_EDGE, OPEN_CALL_MAX_CREDITS, OPEN_CALL_MIN_IMAGES, type OpenCallPhase } from '@/lib/open-calls'
 
 const GOLD = '#c9b27e'
 const mono = '"JetBrains Mono", ui-monospace, monospace'
@@ -128,13 +128,13 @@ export default function OpenCallClient({ slug, title, setName, setSlug, maxImage
 
   return (
     <section style={wrap}>
-      <EntryForm slug={slug} setName={setName} setSlug={setSlug} maxImages={maxImages} onDone={async () => { setDone(true); await load() }} />
+      <EntryForm slug={slug} setName={setName} setSlug={setSlug} maxImages={maxImages} rolling={rolling} onDone={async () => { setDone(true); await load() }} />
       <FinePrint title={title} setName={setName} closes={closes} rolling={rolling} />
     </section>
   )
 }
 
-function EntryForm({ slug, setName, setSlug, maxImages, onDone }: { slug: string; setName: string | null; setSlug: string | null; maxImages: number; onDone: () => void }) {
+function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slug: string; setName: string | null; setSlug: string | null; maxImages: number; rolling: boolean; onDone: () => void }) {
   const [imgs, setImgs] = useState<Img[]>([])
   const [uploading, setUploading] = useState(0)
   const [credits, setCredits] = useState<Credit[]>([{ role: 'Model', name: '', handle: '' }, { role: 'MUA', name: '', handle: '' }])
@@ -147,7 +147,14 @@ function EntryForm({ slug, setName, setSlug, maxImages, onDone }: { slug: string
 
   const addFiles = async (list: File[]) => {
     setErr(null)
-    const files = list.filter(f => f.type.startsWith('image/'))
+    const all = list.filter(f => f.type.startsWith('image/'))
+    // Requirement: at least OPEN_CALL_MIN_EDGE px on the long side, checked on
+    // the ORIGINAL before the browser shrinks it. Screenshots and images saved
+    // from Instagram fail here, which is the point.
+    const sized = await Promise.all(all.map(async f => ({ f, edge: await longEdge(f) })))
+    const small = sized.filter(x => x.edge > 0 && x.edge < OPEN_CALL_MIN_EDGE)
+    const files = sized.filter(x => !(x.edge > 0 && x.edge < OPEN_CALL_MIN_EDGE)).map(x => x.f)
+    if (small.length) setErr(`${small.length} image${small.length > 1 ? 's are' : ' is'} under ${OPEN_CALL_MIN_EDGE}px on the long side and ${small.length > 1 ? 'were' : 'was'} skipped. Use the full-resolution export.`)
     const room = maxImages - imgs.length
     if (room <= 0) { setErr(`Up to ${maxImages} images.`); return }
     const batch = files.slice(0, room)
@@ -216,6 +223,19 @@ function EntryForm({ slug, setName, setSlug, maxImages, onDone }: { slug: string
       <div style={{ ...lbl, color: GOLD }}>YOUR ENTRY</div>
       <h2 style={{ fontFamily: anton, fontSize: 'clamp(30px, 5vw, 44px)', margin: '0 0 28px', letterSpacing: '0.02em' }}>SUBMIT YOUR SERIES</h2>
 
+      <div style={{ border: LINE, padding: '16px 18px', marginBottom: 28, background: 'rgba(255,255,255,0.02)' }}>
+        <span style={{ ...lbl, color: GOLD }}>TO QUALIFY</span>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7, color: 'rgba(255,255,255,0.65)' }}>
+          <li>New work: {rolling ? 'shot in the last 12 months' : `shot on this year's ${setName || 'set'}, during this open call. Nothing from previous years`}</li>
+          <li>One series: {OPEN_CALL_MIN_IMAGES}–{maxImages} images from the same shoot</li>
+          <li>Full resolution, at least {OPEN_CALL_MIN_EDGE}px on the long side. No screenshots</li>
+          <li>No watermarks, logos, text, borders or collages</li>
+          <li>{setName ? `${setName} recognisable in most frames` : 'Shot on a Made Kulture set'}</li>
+          <li>Photographer and everyone pictured credited</li>
+        </ul>
+        <a href="/submissions/rules" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 8, fontSize: 12.5, color: GOLD }}>Full rules ↗</a>
+      </div>
+
       <div style={{ marginBottom: 34 }}>
         <span style={lbl}>IMAGES ({imgs.length}/{maxImages})</span>
         <p style={help}>{OPEN_CALL_MIN_IMAGES}–{maxImages} finished frames, in the order you want them seen. The first one is your cover.</p>
@@ -249,7 +269,7 @@ function EntryForm({ slug, setName, setSlug, maxImages, onDone }: { slug: string
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginBottom: 26 }}>
         <div><span style={lbl}>SERIES TITLE</span><input name="title" required maxLength={120} style={field} placeholder="What do you call it?" /></div>
-        <div><span style={lbl}>SHOOT DATE</span><input name="shoot_date" type="date" style={field} /></div>
+        <div><span style={lbl}>SHOOT DATE</span><input name="shoot_date" type="date" required style={field} /></div>
         <div><span style={lbl}>PHOTOGRAPHER</span><input name="photographer" required maxLength={80} style={field} placeholder="Name for the byline" /></div>
         <div><span style={lbl}>PHOTOGRAPHER INSTAGRAM</span><input name="photographer_ig" maxLength={40} style={field} placeholder="@handle" /></div>
       </div>
@@ -285,7 +305,7 @@ function EntryForm({ slug, setName, setSlug, maxImages, onDone }: { slug: string
         <Check consents={consents} setConsents={setConsents} k="shotHere">These images were shot {setName ? `in ${setName} ` : ''}at Made Kulture.</Check>
         <Check consents={consents} setConsents={setConsents} k="rights">I took these images or have the photographer&rsquo;s permission to submit them, and everyone credited agreed to be submitted.</Check>
         <Check consents={consents} setConsents={setConsents} k="adults">Everyone pictured is 18 or older.</Check>
-        <Check consents={consents} setConsents={setConsents} k="feature">If it&rsquo;s picked, Made Kulture may show this series, with credits, on madekulture.com, the studio kiosks, Instagram and email{setName ? ', and to directory members for the vote' : ''}.</Check>
+        <Check consents={consents} setConsents={setConsents} k="feature">I agree to the <a href="/submissions/rules" target="_blank" rel="noreferrer" style={{ color: GOLD }}>submission rules</a>. If it&rsquo;s picked, Made Kulture may show this series, with credits, on madekulture.com, the studio kiosks, Instagram and email{setName ? ', and to directory members for the vote' : ''}.</Check>
       </div>
 
       {err && <p style={{ color: '#ff8a80', fontSize: 14, margin: '0 0 16px' }}>{err}</p>}
@@ -306,6 +326,16 @@ function Check({ k, consents, setConsents, children }: { k: keyof Consents; cons
   )
 }
 
+// Long edge of an image file in px, or 0 if the browser can't read it (HEIC on
+// some browsers) — unreadable files are let through and reviewed by hand.
+async function longEdge(file: File): Promise<number> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url })
+    return Math.max(img.naturalWidth, img.naturalHeight)
+  } catch { return 0 } finally { URL.revokeObjectURL(url) }
+}
+
 const tiny: React.CSSProperties = { background: 'transparent', border: 'none', color: '#fff', padding: '6px 10px', cursor: 'pointer', fontSize: 13 }
 
 function FinePrint({ title, setName, closes, rolling }: { title: string; setName: string | null; closes: string | null; rolling: boolean }) {
@@ -314,7 +344,7 @@ function FinePrint({ title, setName, closes, rolling }: { title: string; setName
     <div style={{ marginTop: 56, borderTop: LINE, paddingTop: 28, maxWidth: 760 }}>
       <span style={lbl}>THE FINE PRINT</span>
       <ul style={{ paddingLeft: 18, margin: 0 }}>
-        <li style={li}>Open to Made Kulture members, for work shot at the studio. One series under review at a time.</li>
+        <li style={li}>Open to Made Kulture members, for new work shot at the studio. One series under review at a time. <a href="/submissions/rules" style={{ color: GOLD }}>Full rules</a>.</li>
         <li style={li}>Every series is reviewed by hand. Nothing is shown publicly unless we pick it, and featured work is always credited.</li>
         <li style={li}>You keep the rights to your work.</li>
         <li style={li}>Shooting on one of our limited-run sets? Check its own open call: those come with a vote and a prize.</li>
@@ -329,7 +359,7 @@ function FinePrint({ title, setName, closes, rolling }: { title: string; setName
         <li style={li}>Work must be shot in {setName || 'the set'} for this open call.</li>
         <li style={li}>Every entry is reviewed by hand. Nothing is shown publicly unless it&rsquo;s shortlisted.</li>
         <li style={li}>Shortlisted series go to a vote by listed directory members, one vote each. The studio confirms the final result.</li>
-        <li style={li}>You keep the rights to your work. Featured work is always credited.</li>
+        <li style={li}>You keep the rights to your work. Featured work is always credited. <a href="/submissions/rules" style={{ color: GOLD }}>Full rules</a>.</li>
       </ul>
     </div>
   )
