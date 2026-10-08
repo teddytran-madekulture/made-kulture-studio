@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import type { OpenCallPhase } from '@/lib/open-calls'
 import OpenCallClient from './OpenCallClient'
+import VotePanel from './VotePanel'
 
 export interface BoardCall {
   slug: string; title: string; tagline: string | null; prize: string | null; cover: string | null
@@ -111,7 +112,7 @@ function Tile({ c, onOpen }: { c: BoardCall; onOpen: () => void }) {
         <div style={{ fontFamily: anton, fontSize: 32, lineHeight: 0.95, letterSpacing: '0.01em' }}>{c.title.toUpperCase()}</div>
         {c.prize && !c.tba && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12.5, color: 'rgba(255,255,255,0.7)', marginTop: 8 }}>Directory vote · winner gets a prize</div>}
         <div style={{ fontFamily: mono, fontSize: 10.5, letterSpacing: '0.16em', marginTop: 12, color: hover ? GOLD : 'rgba(255,255,255,0.75)' }}>
-          {c.tba ? 'DETAILS SOON' : c.phase === 'open' ? 'VIEW & SUBMIT →' : 'VIEW →'}
+          {c.tba ? 'DETAILS SOON' : c.phase === 'open' ? 'VIEW & SUBMIT →' : c.phase === 'voting' ? 'SEE THE SHORTLIST & VOTE →' : 'VIEW →'}
         </div>
       </div>
     </button>
@@ -161,7 +162,8 @@ function Panel({ c, onClose }: { c: BoardCall; onClose: () => void }) {
           )}
         </div>
 
-        {!c.tba && (
+        {c.phase === 'voting' && <VotePanel slug={c.slug} />}
+        {!c.tba && c.phase !== 'voting' && (
           <OpenCallClient slug={c.slug} title={c.title} setName={c.setName} setSlug={c.setSlug}
             maxImages={c.maxImages} closes={c.closes} rolling={c.rolling} path={`/submissions#${c.slug}`} inPanel />
         )}

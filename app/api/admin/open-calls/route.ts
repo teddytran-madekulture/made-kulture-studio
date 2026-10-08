@@ -55,10 +55,22 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Votes (migration 151), split by whether the voter's account existed
+    // before voting opened. A missing table (migration not run) reads as no votes.
+    const tally: Record<string, { total: number; existing: number; fresh: number }> = {}
+    if (subs?.length) {
+      const { data: votes, error: vErr } = await sb.from('open_call_votes').select('submission_id, voter_new').eq('call_id', c.id)
+      if (vErr && (vErr as any).code !== '42P01') return NextResponse.json({ error: vErr.message }, { status: 500 })
+      for (const v of votes ?? []) {
+        const t = (tally[v.submission_id] ??= { total: 0, existing: 0, fresh: 0 })
+        t.total++; if (v.voter_new) t.fresh++; else t.existing++
+      }
+    }
+
     const entries = []
     for (const s of subs ?? []) {
       const { data: signed } = await sb.storage.from(OPEN_CALL_BUCKET).createSignedUrls(s.image_paths ?? [], 60 * 60)
-      entries.push({ ...s, images: (signed ?? []).map(x => x.signedUrl).filter(Boolean), hasBooking: booked.has(s.auth_user_id) })
+      entries.push({ ...s, images: (signed ?? []).map(x => x.signedUrl).filter(Boolean), hasBooking: booked.has(s.auth_user_id), votes: tally[s.id] ?? { total: 0, existing: 0, fresh: 0 } })
     }
     out.push({ ...c, phase: openCallPhase(c), entries })
   }

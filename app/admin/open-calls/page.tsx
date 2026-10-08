@@ -19,6 +19,7 @@ interface Entry {
   id: string; email: string; title: string; photographer: string; photographer_ig: string | null
   credits: { role: string; name: string; handle: string }[]; shoot_date: string | null; note: string | null
   mature: boolean; status: string; admin_note: string | null; created_at: string; images: string[]; hasBooking: boolean
+  votes: { total: number; existing: number; fresh: number }
 }
 interface Call {
   id: string; slug: string; title: string; tagline: string | null; set_slug: string | null; set_name: string | null
@@ -82,7 +83,7 @@ export default function OpenCallsAdmin() {
         </select>
         {call && <a href={`/submissions#${call.slug}`} target="_blank" rel="noreferrer" style={{ ...small, color: C.accent }}>View public page ↗</a>}
       </div>
-      <p style={{ ...small, marginBottom: 20 }}>Picking a winner doesn&rsquo;t publish anything. Feature it in Website Editor → Featured Editorial and comp the Plus year from the customer&rsquo;s Plus panel.</p>
+      <p style={{ ...small, marginBottom: 20 }}>Members only see the shortlist during voting, and never see the counts. Picking a winner doesn&rsquo;t publish anything. Feature it in Website Editor → Featured Editorial and comp the Plus year from the customer&rsquo;s Plus panel.</p>
       {msg && <p style={{ color: C.red, fontSize: 13 }}>{msg}</p>}
 
       {call && (
@@ -119,6 +120,12 @@ export default function OpenCallsAdmin() {
                         ? (e.hasBooking ? `✓ Submitter has a ${call.set_name || 'set'} booking since the call opened` : `✗ No booking on this set under the submitter's account (the booker may be someone else)`)
                         : (e.hasBooking ? '✓ Submitter has booked the studio before' : `✗ No bookings under the submitter's account (the booker may be someone else)`)}
                     </div>
+                    {(e.status === 'shortlisted' || e.status === 'winner' || e.votes.total > 0) && (
+                      <div style={{ ...small, color: C.text, marginTop: 4 }}>
+                        <b style={{ color: C.accent }}>{e.votes.total} vote{e.votes.total === 1 ? '' : 's'}</b>
+                        {e.votes.total > 0 && ` · ${e.votes.existing} from members who joined before voting opened · ${e.votes.fresh} from accounts made during the vote`}
+                      </div>
+                    )}
                     {e.mature && <div style={{ ...small, color: C.accent }}>Flagged 18+ by submitter</div>}
                     {e.credits?.length > 0 && <div style={{ ...small, marginTop: 6 }}>{e.credits.map(c => `${c.role}: ${c.name || ''}${c.handle ? ` @${c.handle}` : ''}`).join(' · ')}</div>}
                     {e.note && <p style={{ ...small, color: C.text, opacity: 0.8, margin: '8px 0 0' }}>{e.note}</p>}
