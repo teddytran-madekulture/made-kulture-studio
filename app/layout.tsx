@@ -9,7 +9,11 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
+  // 2026-10-08: was 5. iOS zooms the page in whenever a text field under 16px
+  // is tapped, and inside the App Store app (WKWebView) it never zooms back
+  // out — every screen after sign-up stayed cropped on the right. 1 stops that
+  // auto-zoom. Safari on iPhone still lets people pinch-zoom the website.
+  maximumScale: 1,
 }
 
 export const metadata: Metadata = {
