@@ -462,6 +462,21 @@ const hourToISO = bookingHourToISO
 function endHourToISO(date: string, startHour: number, endHour: number): string {
   return hourToISO(endHour <= startHour ? addDays(date, 1) : date, endHour)
 }
+// 2026-10-07: money still owed on a booking — unpaid charge lines (e.g. a
+// payment link texted from Manual Booking). total_amount only counts money
+// that has actually come in, so a link booking reads $0 until it's paid; show
+// "$400 pending" instead of a bare $0.
+function pendingOf(b: { booking_add_ons?: { rate?: number | null; quantity?: number | null; paid?: boolean | null }[] | null }): number {
+  return (b.booking_add_ons ?? []).filter(a => !a.paid).reduce((s, a) => s + Number(a.rate || 0) * Number(a.quantity || 1), 0)
+}
+function moneyLabel(b: { total_amount?: number | null; booking_add_ons?: any[] | null }): string {
+  const total = Number(b.total_amount || 0)
+  const pending = pendingOf(b)
+  if (pending > 0 && total === 0) return `$${pending.toLocaleString()} pending`
+  if (pending > 0) return `$${total.toLocaleString()} + $${pending.toLocaleString()} pending`
+  return `$${total.toLocaleString()}`
+}
+
 function spanHours(startHour: number, endHour: number): number {
   return endHour <= startHour ? endHour + 24 - startHour : endHour - startHour
 }
@@ -1858,12 +1873,18 @@ export default function AdminDashboard() {
   const revLoaded       = revenue !== null
   const money0          = (n: number) => `$${Math.round(n).toLocaleString()}`
 
+  // 2026-10-07: the date goes on the button — the form opens on tomorrow, and a
+  // booking meant for the 19th went in for the 8th because nobody re-read it.
+  const manualDateLabel = (() => {
+    const d = new Date(`${manual.date}T12:00:00`)
+    return isNaN(d.getTime()) ? '' : ' · ' + d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' }).replace(',', '').toUpperCase()
+  })()
   const submitLabel = submitSuccess ? 'BOOKING ADDED'
     : submitting ? 'PROCESSING...'
     : chargeMode === 'card-on-file' && selectedCard
-      ? `BOOK & CHARGE ${selectedCard.brand?.replace('_', ' ')} **** ${selectedCard.last4} · $${manualTotal}`
-      : chargeMode === 'link' ? `BOOK & TEXT $${manualTotal} LINK`
-      : 'ADD BOOKING (NO CHARGE)'
+      ? `BOOK & CHARGE ${selectedCard.brand?.replace('_', ' ')} **** ${selectedCard.last4} · $${manualTotal}${manualDateLabel}`
+      : chargeMode === 'link' ? `BOOK & TEXT $${manualTotal} LINK${manualDateLabel}`
+      : `ADD BOOKING (NO CHARGE)${manualDateLabel}`
 
   // Edit modal derived values
   const editSlots     = editAnyTime ? ANY_TIME_SLOTS : TIME_SLOTS
@@ -2507,7 +2528,7 @@ export default function AdminDashboard() {
                           {fmtTime(b.start_time)} – {fmtTime(b.end_time)}
                         </div>
                         <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, color: '#fff' }}>
-                          ${b.total_amount?.toLocaleString()}
+                          {moneyLabel(b)}
                         </div>
                         <div style={{
                           fontSize: 10, fontWeight: 500, letterSpacing: '0.12em', textAlign: 'center', padding: '4px 10px',
@@ -3097,7 +3118,7 @@ export default function AdminDashboard() {
                                 <div style={{ fontSize: 11, color: '#8ec5ff', marginTop: 3, whiteSpace: 'normal' }}>NOTE · {noteSummary(b!, 160)}</div>
                               )}
                             </div>
-                            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b!.start_time)}–{fmtTime(b!.end_time)}</div>{b!.total_amount != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>${b!.total_amount}</div>}</div>
+                            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(b!.start_time)}–{fmtTime(b!.end_time)}</div>{b!.total_amount != null && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{moneyLabel(b!)}</div>}</div>
                           </div>
                         )}
                       </div>
@@ -4637,7 +4658,7 @@ export default function AdminDashboard() {
                       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{fmtDate(b.start_time)}</div>
                     </div>
                     <div style={{ textAlign: 'right' as const }}>
-                      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 2 }}>${(b.total_amount ?? 0).toLocaleString()}</div>
+                      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 2 }}>{moneyLabel(b)}</div>
                       <span style={{ fontSize: 10, color: b.status === 'confirmed' ? '#4ade80' : b.status === 'cancelled' ? '#ef4444' : 'rgba(255,255,255,0.35)', letterSpacing: '0.08em' }}>
                         {b.status.toUpperCase()}
                       </span>
@@ -4739,7 +4760,7 @@ export default function AdminDashboard() {
             <Detail label="DATE"     value={fmtDate(detailBooking.start_time)} />
             <Detail label="TIME"     value={`${fmtTime(detailBooking.start_time)} – ${fmtTime(detailBooking.end_time)}`} />
             <Detail label="DURATION" value={fmtDuration(detailBooking.start_time, detailBooking.end_time)} />
-            <Detail label="TOTAL"    value={`$${detailBooking.total_amount?.toLocaleString()}`} />
+            <Detail label="TOTAL"    value={moneyLabel(detailBooking)} />
             <Detail label="STATUS"   value={detailBooking.status.toUpperCase()} />
             <Detail label="SOURCE"   value={detailBooking.source || '—'} />
             {detailBooking.notes && <Detail label="NOTES" value={detailBooking.notes} />}

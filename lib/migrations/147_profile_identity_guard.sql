@@ -40,7 +40,8 @@ alter table phone_verifications enable row level security;
 create or replace function guard_profile_identity_columns()
   returns trigger language plpgsql as $$
 begin
-  if coalesce(auth.role(), '') <> 'service_role' then
+  -- service role (the API) and direct SQL as postgres (admin fixes) may change them.
+  if coalesce(auth.role(), '') <> 'service_role' and current_user not in ('postgres', 'supabase_admin') then
     new.full_name            := old.full_name;
     new.phone                := old.phone;
     new.instagram            := old.instagram;
