@@ -20,6 +20,7 @@ export interface ShowcaseEditorial {
   id?: string
   setSlug?: string
   title: string; subtitle: string; setName: string; postUrl: string
+  promoLabel?: string; promoUrl?: string; promoCta?: string   // editorial used as an ad
   credits: { role: string; handle: string }[]; photos: string[]; intervalSec: number
 }
 
@@ -83,14 +84,18 @@ function One({ e, onDismiss, portrait, onCycleDone, footer }: { e: ShowcaseEdito
     return () => clearInterval(t)
   }, [n, e.intervalSec])
 
+  // A promo QR (e.g. The Patient → /submissions) takes precedence over the post.
+  // Relative links become absolute: a phone scanning it isn't on this site.
+  const qrTarget = e.promoUrl ? (e.promoUrl.startsWith('/') ? `https://madekulture.com${e.promoUrl}` : e.promoUrl) : e.postUrl
+  const promo = !!(e.promoLabel || e.promoUrl)
   const qr = useMemo(() => {
-    if (!e.postUrl) return null
-    const q = qrcode(0, 'M'); q.addData(e.postUrl); q.make()
+    if (!qrTarget) return null
+    const q = qrcode(0, 'M'); q.addData(qrTarget); q.make()
     const size = q.getModuleCount()
     let d = ''
     for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (q.isDark(r, c)) d += `M${c},${r}h1v1h-1z`
     return { n: size, d }
-  }, [e.postUrl])
+  }, [qrTarget])
 
   const credits = e.credits.filter(c => c.handle || c.role)
   const twoCol = credits.length > 4
@@ -111,8 +116,8 @@ function One({ e, onDismiss, portrait, onCycleDone, footer }: { e: ShowcaseEdito
       ...(portrait ? { padding: '22px 30px 30px' } : { width: '38%', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-end', padding: '40px 36px' }),
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.32em', color: CHAMP_DIM }}>
-          FEATURED EDITORIAL{e.setName ? ` · ${e.setName.toUpperCase()}` : ''}
+        <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.32em', color: promo ? CHAMP : CHAMP_DIM }}>
+          {e.promoLabel ? e.promoLabel.toUpperCase() : `FEATURED EDITORIAL${e.setName ? ` · ${e.setName.toUpperCase()}` : ''}`}
         </div>
         <div style={{ fontFamily: 'Anton, "Bebas Neue", Inter, sans-serif', fontSize: portrait ? 54 : 60, lineHeight: 1, marginTop: 10, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.01em' }}>
           {e.title}
@@ -131,12 +136,12 @@ function One({ e, onDismiss, portrait, onCycleDone, footer }: { e: ShowcaseEdito
       </div>
       {qr && (
         <div style={{ flexShrink: 0, textAlign: 'center', ...(portrait ? {} : { alignSelf: 'flex-start', marginTop: 20 }) }}>
-          <div style={{ background: '#fff', padding: 8, borderRadius: 8, width: portrait ? 112 : 128 }}>
+          <div style={{ background: '#fff', padding: 8, borderRadius: 8, width: promo ? (portrait ? 144 : 160) : (portrait ? 112 : 128) }}>
             <svg viewBox={`0 0 ${qr.n} ${qr.n}`} style={{ display: 'block', width: '100%', height: 'auto' }} shapeRendering="crispEdges">
               <path d={qr.d} fill="#0b0b0d" />
             </svg>
           </div>
-          <div style={{ fontSize: 10, letterSpacing: '0.22em', color: CHAMP_DIM, marginTop: 8 }}>SEE THE POST</div>
+          <div style={{ fontSize: promo ? 12 : 10, fontWeight: promo ? 700 : 400, letterSpacing: '0.22em', color: promo ? CHAMP : CHAMP_DIM, marginTop: 8 }}>{(e.promoCta || 'SEE THE POST').toUpperCase()}</div>
         </div>
       )}
     </div>

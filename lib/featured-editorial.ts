@@ -24,6 +24,11 @@ export interface FeaturedEditorial {
   setSlug: string          // the set's slug, for the BOOK button (blank = no button)
   showInHero: boolean      // also run as a slide in the home hero carousel
   postUrl: string          // the Instagram post
+  // Kiosk promo (2026-10-08): turn an editorial into an ad, e.g. The Patient →
+  // "OPEN CALL · SUBMIT BY NOV 30" with the QR going to /submissions. Blank = normal.
+  promoLabel: string       // replaces "FEATURED EDITORIAL" above the title
+  promoUrl: string         // the QR goes here instead of the post
+  promoCta: string         // caption under the QR (default "SEE THE POST")
   credits: EditorialCredit[]  // first one is the byline under the title
   photos: string[]         // public URLs in the 'site' bucket, in order
   intervalSec: number      // crossfade timing
@@ -32,7 +37,7 @@ export interface FeaturedEditorial {
 
 export const EDITORIAL_DEFAULTS: FeaturedEditorial = {
   id: 'e0', pinned: false, startDate: null, endDate: null,
-  enabled: false, title: '', subtitle: '', setName: '', setSlug: '', showInHero: false, postUrl: '',
+  enabled: false, title: '', subtitle: '', setName: '', setSlug: '', showInHero: false, postUrl: '', promoLabel: '', promoUrl: '', promoCta: '',
   credits: [], photos: [], intervalSec: 5, updatedAt: null,
 }
 
@@ -87,6 +92,9 @@ export function sanitize(input: any): FeaturedEditorial {
     setSlug: str(x.setSlug, 60).toLowerCase().replace(/[^a-z0-9-]/g, ''),
     showInHero: !!x.showInHero,
     postUrl: safeLink(x.postUrl),
+    promoLabel: str(x.promoLabel, 48),
+    promoUrl: safeLink(x.promoUrl),
+    promoCta: str(x.promoCta, 24),
     credits,
     photos,
     intervalSec: Number.isFinite(iv) ? Math.min(15, Math.max(3, Math.round(iv))) : EDITORIAL_DEFAULTS.intervalSec,

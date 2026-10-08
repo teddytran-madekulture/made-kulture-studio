@@ -2070,6 +2070,7 @@ export default function AdminDashboard() {
           {navHdr('COMMUNITY')}
           {navLink('/admin/poses', '◐', 'Pose Guide')}
           {navLink('/admin/portfolio', '🖼', 'Portfolio')}
+          {navLink('/admin/open-calls', '◎', 'Open Calls')}
           {navLink('/admin/directory', '✦', 'Creative Directory')}
           {navLink('/admin/listings', '🏷', 'Service Listings')}
           {navLink('/admin/community', '📈', 'Community')}

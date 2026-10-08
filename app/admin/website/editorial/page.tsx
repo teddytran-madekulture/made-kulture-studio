@@ -263,6 +263,15 @@ export default function FeaturedEditorialPage() {
           <label><span style={lbl}>Seconds per photo</span><input type="number" min={3} max={15} value={e.intervalSec} onChange={ev => set({ intervalSec: Number(ev.target.value) })} style={inp} /></label>
         </div>
         <label style={{ display: 'block', marginTop: 12 }}><span style={lbl}>Instagram post link</span><input value={e.postUrl} onChange={ev => set({ postUrl: ev.target.value })} placeholder="https://www.instagram.com/p/…" style={inp} /></label>
+        <details open={!!(e.promoLabel || e.promoUrl || e.promoCta)} style={{ marginTop: 16 }}>
+          <summary style={{ ...small, color: C.accent, cursor: 'pointer' }}>Use this editorial as an ad on the kiosks (optional)</summary>
+          <p style={{ ...small, margin: '8px 0 10px' }}>Swaps the &ldquo;Featured Editorial&rdquo; label and points the QR somewhere else, e.g. an open call. Leave blank to show it normally.</p>
+          <div style={grid2}>
+            <label><span style={lbl}>Label above the title</span><input value={e.promoLabel} maxLength={48} onChange={ev => set({ promoLabel: ev.target.value })} placeholder="OPEN CALL · SUBMIT BY NOV 30" style={inp} /></label>
+            <label><span style={lbl}>QR goes to</span><input value={e.promoUrl} onChange={ev => set({ promoUrl: ev.target.value })} placeholder="/submissions#the-patient" style={inp} /></label>
+            <label><span style={lbl}>Under the QR</span><input value={e.promoCta} maxLength={24} onChange={ev => set({ promoCta: ev.target.value })} placeholder="SCAN TO SUBMIT" style={inp} /></label>
+          </div>
+        </details>
       </div>
 
       {/* ── Credits ── */}
