@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { setAdminCookie } from '@/lib/admin-auth'
+import { safeAuthCookies } from '@/lib/supabase/safe-cookies'
 
 const ADMIN_EMAIL = 'teddytran@madekulture.com'
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll()          { return req.cookies.getAll() },
+        getAll()          { return safeAuthCookies(req.cookies.getAll()).cookies },
         setAll(cookies)   { cookies.forEach(({ name, value, options }) => tempRes.cookies.set(name, value, options)) },
       },
     }

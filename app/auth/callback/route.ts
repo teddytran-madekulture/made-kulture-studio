@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { reconcileEmailChange } from '@/lib/email-change'
+import { safeAuthCookies } from '@/lib/supabase/safe-cookies'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() { return request.cookies.getAll() },
+          getAll() { return safeAuthCookies(request.cookies.getAll()).cookies },
           setAll(cookiesToSet) {
             // Set session cookies directly on the redirect response
             cookiesToSet.forEach(({ name, value, options }) =>

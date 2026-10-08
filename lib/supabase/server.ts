@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { safeAuthCookies } from '@/lib/supabase/safe-cookies'
 
 export function createClient() {
   const cookieStore = cookies()
@@ -8,7 +9,7 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
+        getAll() { return safeAuthCookies(cookieStore.getAll()).cookies },
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
