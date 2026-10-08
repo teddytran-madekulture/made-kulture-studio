@@ -13,7 +13,7 @@ import { sendOwnerPush } from '@/lib/push'
 import { sendSimpleEmail } from '@/lib/email'
 import { rateLimit } from '@/lib/rate-limit'
 import {
-  OPEN_CALL_BUCKET, OPEN_CALL_MIN_IMAGES, cleanCredits, cleanHandle, centralDate, openCallPhase, type OpenCall,
+  OPEN_CALL_BUCKET, OPEN_CALL_MIN_IMAGES, matchingImages, cleanCredits, cleanHandle, centralDate, openCallPhase, type OpenCall,
 } from '@/lib/open-calls'
 
 export const dynamic = 'force-dynamic'
@@ -130,10 +130,29 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const absent = paths.filter(p => !present.has(p))
   if (absent.length) return NextResponse.json({ error: `${absent.length} image(s) didn't finish uploading. Please re-add them.` }, { status: 400 })
 
+  // ONE SERIES = ONE ENTRY (migration 152). Hashes are aligned with `images`;
+  // a hash is only trusted if it looks like one. Two or more images matching
+  // another member's live entry in this call ⇒ it's the same series, refused.
+  const rawHashes: unknown[] = Array.isArray(b.hashes) ? b.hashes : []
+  const hashes = paths.map(p => {
+    const i = (Array.isArray(b.images) ? b.images : []).indexOf(p)
+    const h = String(rawHashes[i] ?? '')
+    return /^[0-9a-f]{16}$/.test(h) ? h : ''
+  }).filter(Boolean)
+  if (hashes.length) {
+    const { data: others } = await sb.from('open_call_submissions')
+      .select('title, photographer, image_hashes').eq('call_id', call.id)
+      .neq('auth_user_id', user.id).neq('status', 'withdrawn')
+    const dup = (others ?? []).find(o => matchingImages(hashes, o.image_hashes ?? []) >= 2)
+    if (dup) {
+      return NextResponse.json({ error: `These images match "${dup.title}", already submitted by ${dup.photographer}. A series can only be entered once, so if you worked on it together, the team shares that entry.` }, { status: 409 })
+    }
+  }
+
   const { data: row, error } = await sb.from('open_call_submissions').insert({
     call_id: call.id, auth_user_id: user.id, email: (user.email || '').toLowerCase(),
     title, photographer, photographer_ig: photographerIg, credits, shoot_date: shootDate, note,
-    image_paths: paths, mature, consents_at: new Date().toISOString(),
+    image_paths: paths, image_hashes: hashes, mature, consents_at: new Date().toISOString(),
   }).select('id').single()
 
   if (error) {

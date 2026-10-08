@@ -21,7 +21,7 @@ const btnPrimary: React.CSSProperties = { background: '#fff', color: '#000', bor
 const btnGhost: React.CSSProperties = { ...btnPrimary, background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.35)' }
 
 interface Mine { id: string; title: string; photographer: string; status: string; created_at: string; images: string[] }
-interface Img { key: string; preview: string; path: string | null; error?: string }
+interface Img { key: string; preview: string; path: string | null; hash?: string; error?: string }
 interface Credit { role: string; name: string; handle: string }
 
 const STATUS_COPY: Record<string, string> = {
@@ -175,10 +175,11 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
       setImgs(cur => [...cur, { key, preview, path: null }])
       try {
         const blob = await shrinkImage(file, OPEN_CALL_IMAGE_EDGE, 0.88)
+        const hash = await dHash(blob).catch(() => '')
         const t = tickets[i]
         const { error } = await sb.current.storage.from(OPEN_CALL_BUCKET).uploadToSignedUrl(t.path, t.token, blob, { contentType: 'image/jpeg' })
         if (error) throw error
-        setImgs(cur => cur.map(x => x.key === key ? { ...x, path: t.path } : x))
+        setImgs(cur => cur.map(x => x.key === key ? { ...x, path: t.path, hash } : x))
       } catch {
         setImgs(cur => cur.map(x => x.key === key ? { ...x, error: 'Failed. Remove and re-add.' } : x))
       } finally {
@@ -208,6 +209,7 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
           title: fd.get('title'), photographer: fd.get('photographer'), photographer_ig: fd.get('photographer_ig'),
           shoot_date: fd.get('shoot_date'), note: fd.get('note'), credits, mature, consents,
           images: ready.map(i => i.path),
+          hashes: ready.map(i => i.hash || ''),
         }),
       })
       const d = await r.json().catch(() => ({}))
@@ -276,7 +278,7 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
 
       <div style={{ marginBottom: 26 }}>
         <span style={lbl}>CREDITS</span>
-        <p style={help}>Everyone who made it: model, MUA, stylist, set design, assistants. They&rsquo;re credited if it&rsquo;s featured.</p>
+        <p style={help}>Everyone who made it: model, MUA, stylist, set design, assistants. Add their @handle: if the series wins or is featured, every credited directory member gets a Featured Editorial badge on their profile.{!rolling && ' Submitting for a team? Agree who submits first. The prize goes to the person who submits.'}</p>
         {credits.map((c, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(90px, 1fr) minmax(120px, 1.4fr) minmax(110px, 1.2fr) 40px', gap: 6, marginBottom: 6 }}>
             <input value={c.role} onChange={e => setCredits(cs => cs.map((x, j) => j === i ? { ...x, role: e.target.value } : x))} placeholder="Role" style={field} />
@@ -324,6 +326,25 @@ function Check({ k, consents, setConsents, children }: { k: keyof Consents; cons
       <span>{children}</span>
     </label>
   )
+}
+
+// 64-bit difference hash (migration 152): 9x8 greyscale, each bit = is this
+// pixel brighter than its right neighbour. Survives resizing and re-encoding,
+// so the same frame submitted twice by two team members hashes a few bits apart.
+async function dHash(blob: Blob): Promise<string> {
+  const bmp = await createImageBitmap(blob)
+  const c = document.createElement('canvas'); c.width = 9; c.height = 8
+  const ctx = c.getContext('2d')!
+  ctx.drawImage(bmp, 0, 0, 9, 8)
+  const d = ctx.getImageData(0, 0, 9, 8).data
+  const g = (x: number, y: number) => { const i = (y * 9 + x) * 4; return d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114 }
+  let hex = ''
+  for (let y = 0; y < 8; y++) {
+    let byte = 0
+    for (let x = 0; x < 8; x++) byte = (byte << 1) | (g(x, y) > g(x + 1, y) ? 1 : 0)
+    hex += byte.toString(16).padStart(2, '0')
+  }
+  return hex
 }
 
 // Long edge of an image file in px, or 0 if the browser can't read it (HEIC on

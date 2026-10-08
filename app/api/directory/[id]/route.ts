@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { featuredBadgesFor } from '@/lib/open-calls-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
@@ -78,6 +79,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   // OTHER members' portfolios that credit this member (the TAGGED tab).
   const credits = await creditsForImages(service, (images ?? []).map(i => i.id))
   const tagged = await photosTaggingMember(service, params.id, p.instagram ?? null)
+  // Featured Editorial badges — anyone credited on a winning/picked series.
+  const featured = await featuredBadgesFor(params.id, p.instagram ?? null)
 
   // Email lives in auth, not the profile row — fetch it only when shown.
   let email: string | null = null
@@ -108,6 +111,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       phone: p.show_phone ? (p.phone ?? null) : null,
       portfolio: (images ?? []).map(i => ({ id: i.id, url: i.url, is_mature: i.is_mature, credits: credits.get(i.id) ?? [] })),
       tagged,
+      featured,
       listings: listingRows ?? [],
       founding_number: p.founding_number ?? null,
       profile_color: p.profile_color ?? null,

@@ -18,6 +18,7 @@ type Member = {
   full_name: string
   account_type?: string
   founding_number?: number | null
+  featured?: { title: string; call: string }[]
   profile_color?: string | null
   cover_url?: string | null
   credits?: Credit[]
@@ -391,6 +392,9 @@ export default function MemberProfilePage() {
             <div className="ig-d" style={{ display: 'flex', gap: 8, marginLeft: 8 }}>{actions}</div>
           </div>
           {no ? <div className="ig-no">FIRST 100 · NO. {no}</div> : null}
+          {member.featured?.map((f, i) => (
+            <div key={i} className="ig-no" title={f.title} style={{ color: 'var(--t-gold)' }}>★ FEATURED EDITORIAL{f.call ? ` · ${f.call.toUpperCase()}` : ''}</div>
+          ))}
           {stats}
           {/* Desktop: details sit here beside the photo */}
           <div className="ig-d">

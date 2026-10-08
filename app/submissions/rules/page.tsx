@@ -106,7 +106,9 @@ export default async function RulesPage() {
 
           <Section n="05" title="How to enter an open call">
             <UL items={[
-              'Shoot on the open call’s set during a session booked at Made Kulture. Several people may work on one series; one person submits it.',
+              'Shoot on the open call’s set during a session booked at Made Kulture.',
+              <><b style={{ color: '#fff' }}>Teams.</b> Editorials are usually made by a team. One person submits the series on the team&rsquo;s behalf and is the entrant. The team must agree who submits before entering; if there is a disagreement later, we deal only with the person who submitted and do not decide disputes between team members.</>,
+              <><b style={{ color: '#fff' }}>One series, one entry.</b> The same series, or a substantially similar edit of it, can only be entered once per open call. If team members submit it separately, we keep the earliest entry and decline the others. Deliberately entering the same work more than once can disqualify every copy.</>,
               'Submit your series, meeting the requirements below, from your account on madekulture.com/submissions before the deadline.',
               'One entry per member per open call. You can withdraw and resubmit until the deadline. Late, incomplete or corrupted entries are not accepted.',
               'Normal retouching and editing are fine. Images must be photographs made on the set; work that is mostly AI-generated, or composited from images not shot on the set, is not eligible.',
@@ -150,7 +152,8 @@ export default async function RulesPage() {
           <Section n="09" title="Prize">
             <UL items={[
               'The prize for each open call is listed above and on its page. For The Patient: one 12-month Made Kulture Plus membership (approximate retail value $149) and the winning series shown as the Featured Editorial on madekulture.com and the studio kiosks. If the winner already has Plus, their membership is extended by 12 months.',
-              'One prize per open call, awarded to the member who submitted the winning series. The prize is not transferable and cannot be exchanged for cash. We may substitute a prize of equal or greater value if needed.',
+              'One prize per open call, awarded only to the member who submitted the winning series, not to each team member. The prize is not transferable and cannot be exchanged for cash. We may substitute a prize of equal or greater value if needed.',
+              'Everyone credited on the winning series is named wherever it is featured, and credited members of the Made Kulture directory receive a Featured Editorial badge on their profile. The same badge goes to everyone credited on work we pick for Featured Editorial. Credits are matched by Instagram handle, so include them.',
               'We will contact the winner by email within 7 days after voting closes. If the winner doesn’t reply within 7 days, is ineligible, or can’t accept the prize, we may award it to the next eligible series.',
               'Any taxes on a prize are the winner’s responsibility.',
             ]} />

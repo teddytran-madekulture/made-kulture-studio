@@ -41,3 +41,24 @@ export function callStatusLabel(c: OpenCall, phase: OpenCallPhase): string {
   if (phase === 'upcoming') return c.status === 'announced' || !c.closes_at ? 'TBA' : `OPENS ${centralDate(c.opens_at, { month: 'short', day: 'numeric' }).toUpperCase()}`
   return 'IN REVIEW'
 }
+
+/** The "Featured Editorial" badge (Teddy, 2026-10-08): the prize goes to the
+ *  submitter only, but EVERYONE on a winning (or picked) series gets credit on
+ *  their directory profile. Matched on the submitter's account, the
+ *  photographer's Instagram, or any credit's @handle — Instagram handles are
+ *  case-insensitive, so compare lowercased. A credit with no handle can't be
+ *  matched to a member. Derived at read time: nothing to keep in sync. */
+export async function featuredBadgesFor(memberId: string, instagram: string | null): Promise<{ title: string; call: string }[]> {
+  const sb = supabaseAdmin()
+  const { data, error } = await sb.from('open_call_submissions')
+    .select('auth_user_id, title, photographer_ig, credits, open_calls(title)')
+    .eq('status', 'winner')
+  if (error) { if ((error as any).code !== '42P01') console.error('[open-calls] badges failed:', error); return [] }
+  const ig = String(instagram ?? '').replace(/^@+/, '').trim().toLowerCase()
+  return (data ?? [])
+    .filter((s: any) =>
+      s.auth_user_id === memberId ||
+      (ig && String(s.photographer_ig ?? '').toLowerCase() === ig) ||
+      (ig && Array.isArray(s.credits) && s.credits.some((c: any) => String(c?.handle ?? '').toLowerCase() === ig)))
+    .map((s: any) => ({ title: s.title as string, call: (Array.isArray(s.open_calls) ? s.open_calls[0]?.title : s.open_calls?.title) ?? '' }))
+}

@@ -20,6 +20,7 @@ interface Entry {
   credits: { role: string; name: string; handle: string }[]; shoot_date: string | null; note: string | null
   mature: boolean; status: string; admin_note: string | null; created_at: string; images: string[]; hasBooking: boolean
   votes: { total: number; existing: number; fresh: number }
+  duplicates: { title: string; photographer: string; earlier: boolean }[]
 }
 interface Call {
   id: string; slug: string; title: string; tagline: string | null; set_slug: string | null; set_name: string | null
@@ -126,14 +127,17 @@ export default function OpenCallsAdmin() {
                         {e.votes.total > 0 && ` · ${e.votes.existing} from members who joined before voting opened · ${e.votes.fresh} from accounts made during the vote`}
                       </div>
                     )}
+                    {e.duplicates?.map((d, i) => (
+                      <div key={i} style={{ ...small, color: C.red }}>⚠ Shares images with &ldquo;{d.title}&rdquo; by {d.photographer} ({d.earlier ? 'submitted earlier' : 'submitted later'}). One series = one entry: keep one, decline the other.</div>
+                    ))}
                     {e.mature && <div style={{ ...small, color: C.accent }}>Flagged 18+ by submitter</div>}
                     {e.credits?.length > 0 && <div style={{ ...small, marginTop: 6 }}>{e.credits.map(c => `${c.role}: ${c.name || ''}${c.handle ? ` @${c.handle}` : ''}`).join(' · ')}</div>}
                     {e.note && <p style={{ ...small, color: C.text, opacity: 0.8, margin: '8px 0 0' }}>{e.note}</p>}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
-                      <span style={{ ...small, color: STATUS_COLOR[e.status], fontWeight: 600, marginRight: 6 }}>{e.status.toUpperCase()}</span>
+                      <span style={{ ...small, color: STATUS_COLOR[e.status], fontWeight: 600, marginRight: 6 }}>{(call.rolling && e.status === 'winner' ? 'featured' : e.status).toUpperCase()}</span>
                       {e.status !== 'shortlisted' && <button style={btn} onClick={() => patch({ submissionId: e.id, status: 'shortlisted' })}>Shortlist</button>}
                       {e.status !== 'declined' && <button style={btn} onClick={() => patch({ submissionId: e.id, status: 'declined' })}>Decline</button>}
-                      {e.status !== 'winner' && <button style={btn} onClick={() => { if (confirm(`Mark "${e.title}" as the winner?`)) patch({ submissionId: e.id, status: 'winner' }) }}>Winner</button>}
+                      {e.status !== 'winner' && <button style={btn} onClick={() => { if (confirm(call.rolling ? `Feature "${e.title}"? Everyone credited gets the Featured Editorial badge.` : `Mark "${e.title}" as the winner? The submitter gets the prize; everyone credited gets the Featured Editorial badge.`)) patch({ submissionId: e.id, status: 'winner' }) }}>{call.rolling ? 'Feature' : 'Winner'}</button>}
                       {e.status !== 'pending' && <button style={btn} onClick={() => patch({ submissionId: e.id, status: 'pending' })}>Back to pending</button>}
                     </div>
                     <input defaultValue={e.admin_note ?? ''} placeholder="Private note" onBlur={ev => { if (ev.target.value !== (e.admin_note ?? '')) patch({ submissionId: e.id, admin_note: ev.target.value }) }} style={{ ...inp, marginTop: 8 }} />

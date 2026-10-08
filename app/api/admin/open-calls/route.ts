@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { OPEN_CALL_BUCKET, openCallPhase } from '@/lib/open-calls'
+import { OPEN_CALL_BUCKET, openCallPhase, matchingImages } from '@/lib/open-calls'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const out = []
   for (const c of calls ?? []) {
     const { data: subs, error: sErr } = await sb.from('open_call_submissions')
-      .select('id, auth_user_id, email, title, photographer, photographer_ig, credits, shoot_date, note, image_paths, mature, status, admin_note, created_at')
+      .select('id, auth_user_id, email, title, photographer, photographer_ig, credits, shoot_date, note, image_paths, image_hashes, mature, status, admin_note, created_at')
       .eq('call_id', c.id).neq('status', 'withdrawn').order('created_at', { ascending: true })
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
 
@@ -70,7 +70,11 @@ export async function GET(req: NextRequest) {
     const entries = []
     for (const s of subs ?? []) {
       const { data: signed } = await sb.storage.from(OPEN_CALL_BUCKET).createSignedUrls(s.image_paths ?? [], 60 * 60)
-      entries.push({ ...s, images: (signed ?? []).map(x => x.signedUrl).filter(Boolean), hasBooking: booked.has(s.auth_user_id), votes: tally[s.id] ?? { total: 0, existing: 0, fresh: 0 } })
+      entries.push({ ...s, images: (signed ?? []).map(x => x.signedUrl).filter(Boolean), hasBooking: booked.has(s.auth_user_id),
+        // Possible duplicate: shares at least one image with another entry here.
+        duplicates: (subs ?? []).filter(o => o.id !== s.id && matchingImages(s.image_hashes ?? [], o.image_hashes ?? []) >= 1)
+          .map(o => ({ title: o.title, photographer: o.photographer, earlier: o.created_at < s.created_at })),
+        votes: tally[s.id] ?? { total: 0, existing: 0, fresh: 0 } })
     }
     out.push({ ...c, phase: openCallPhase(c), entries })
   }

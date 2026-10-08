@@ -74,3 +74,19 @@ export function cleanCredits(raw: unknown): OpenCallCredit[] {
     handle: cleanHandle(c?.handle ?? ''),
   })).filter(c => c.role && (c.name || c.handle))
 }
+
+// ── Duplicate detection (migration 152) ────────────────────────────────────
+// dHash: 64 bits as 16 hex chars. Bits apart ≤ this ⇒ treat as the same image.
+export const HASH_MATCH_BITS = 5
+
+export function hashDistance(a: string, b: string): number {
+  if (!/^[0-9a-f]{16}$/.test(a) || !/^[0-9a-f]{16}$/.test(b)) return 64
+  let x = BigInt('0x' + a) ^ BigInt('0x' + b), n = 0
+  while (x) { n += Number(x & BigInt(1)); x >>= BigInt(1) }
+  return n
+}
+
+/** How many images in `mine` match an image in `theirs`. */
+export function matchingImages(mine: string[], theirs: string[]): number {
+  return mine.filter(h => theirs.some(t => hashDistance(h, t) <= HASH_MATCH_BITS)).length
+}
