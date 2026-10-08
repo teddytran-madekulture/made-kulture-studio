@@ -83,13 +83,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       for (const e of ev ?? []) already.add(String(e.email || '').trim().toLowerCase())
       if (!ev || ev.length < 1000) break
     }
-    // ⚠️ If fewer people are on record than the campaign says it reached, some
-    // webhook events haven't arrived yet — resuming now would re-mail them.
     const reached = Number(c.recipient_count || 0)
-    if (already.size < reached) {
-      return NextResponse.json({ error: `Only ${already.size} of the ${reached} people already sent are confirmed so far. Give it a few minutes and try again, so nobody gets it twice.` }, { status: 409 })
-    }
     const all = await getSegmentRecipients(c.segment_key as SegmentKey)
+    // Backstop for addresses whose delivery event hasn't arrived (a slow or
+    // deferring mail server can hold it for hours — Issue 01 sat at 99 of 100).
+    // The original send went out in the segment's own deterministic order
+    // (customers by id, de-duped), so its first `reached` addresses are the ones
+    // it mailed. Skipping them as well covers anyone not yet on record.
+    // Applies only when the original send was in that order — i.e. campaigns
+    // stopped before 'sent' events were recorded per address.
+    if (already.size < reached) {
+      for (const r of all.slice(0, reached)) already.add(String(r.email || '').trim().toLowerCase())
+    }
+    // ⚠️ Still short ⇒ the list changed shape since the first send; refuse
+    // rather than risk re-mailing someone.
+    if (already.size < reached) {
+      return NextResponse.json({ error: `Only ${already.size} of the ${reached} people already sent are on record. Give it a few minutes and try again, so nobody gets it twice.` }, { status: 409 })
+    }
     const rest = all.filter(r => !already.has(String(r.email || '').trim().toLowerCase()))
     if (rest.length === 0) return NextResponse.json({ error: 'Everyone in this segment already has it.' }, { status: 409 })
 
