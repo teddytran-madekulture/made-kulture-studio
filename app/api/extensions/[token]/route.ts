@@ -26,6 +26,7 @@ import { createBookingPin, createBackDoorPin, checkInUrl } from '@/lib/igloohome
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { notifyCoverageGap } from '@/lib/coverage'
+import { isPhoneProof } from '@/lib/extension-link'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -113,7 +114,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   // passer-by could add time to a stranger's card. A phone confirm is different:
   // the link went to the number on the booking, so possession is the proof. And a
   // KEYED card proves itself. Only the kiosk + stored-card path needs this.
-  if (r.created_by === 'kiosk' && !keyedSourceId) {
+  // The texted link carries ?p= (lib/extension-link) — opened on the booking
+  // phone, so possession IS the proof and there is no last 4 to ask for.
+  const fromPhone = isPhoneProof(params.token, body?.p)
+  if (r.created_by === 'kiosk' && !keyedSourceId && !fromPhone) {
     const wanted = String(customer?.phone ?? '').replace(/\D/g, '').slice(-4)
     const given  = String(body?.last4 ?? '').replace(/\D/g, '').slice(-4)
     const tries  = Number(r.confirm_attempts ?? 0)

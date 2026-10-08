@@ -111,7 +111,8 @@ export default function ExtendConfirmPage() {
       const r = await fetch(`/api/extensions/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload ?? {}),
+        // p = the phone proof from the texted link (lib/extension-link).
+        body: JSON.stringify({ ...(payload ?? {}), p: new URLSearchParams(window.location.search).get('p') ?? undefined }),
       })
       const d = await r.json()
       if (r.ok && d.success) {

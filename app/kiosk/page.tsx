@@ -1383,7 +1383,9 @@ export default function KioskPage() {
       // ⚠️ A Square PROFILE is not a saved CARD. hasCardOnFile is optimistic, so
       // this miss is expected and is not the guest's fault — hand them the link.
       else if (d.needsCard) { setExtStep('phone'); setExtError('') }
-      else setExtError(d.error || 'That did not go through.')
+      // Clear the digits on a miss: left filled in, a second tap re-sent the
+      // same wrong number and burned another of the 5 tries (Set B, 2026-10-08).
+      else { setExt4(''); setExtError(d.error || 'That did not go through.') }
     } catch { setExtError('Could not reach the studio system.') }
     setBusy(false)
   }
@@ -1453,8 +1455,8 @@ export default function KioskPage() {
               </div>
               <button disabled={busy || ext4.length < 4} onClick={confirmTime}
                 style={{ ...champBtn, marginTop: 22, padding: '24px 56px', fontSize: 16,
-                         opacity: ext4.length < 4 ? 0.35 : 1 }}>
-                {busy ? '…' : 'CONFIRM & CHARGE'}
+                         opacity: busy ? 0.6 : ext4.length < 4 ? 0.35 : 1 }}>
+                {busy ? 'CHECKING…' : 'CONFIRM & CHARGE'}
               </button>
               <button onClick={() => { setExtStep('pick'); setExtReq(null) }}
                 style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter, sans-serif', fontSize: 14, letterSpacing: '0.12em', marginTop: 18, cursor: 'pointer' }}>

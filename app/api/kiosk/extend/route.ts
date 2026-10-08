@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { findActiveBookingBySet, createExtensionRequest, normalizeHours, durationLabel } from '@/lib/extensions'
 import { sendSMS, toE164 } from '@/lib/sms'
+import { phoneProof } from '@/lib/extension-link'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
     // number and tried", NOT "it arrived". The tablet must not promise delivery.
     await sendSMS(
       phone,
-      `Made Kulture: add ${durationLabel(hours)} on ${made.setName} for $${(made.priceCents / 100).toFixed(2)}. Confirm here: ${url}`,
+      `Made Kulture: add ${durationLabel(hours)} on ${made.setName} for $${(made.priceCents / 100).toFixed(2)}. Confirm here: ${url}?p=${phoneProof(made.token)}`,
     ).catch(() => {})
     smsSent = true
   }
