@@ -84,6 +84,24 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
       const ed = liveEditorial(editorial)
       if (!ed || !ed.showInHero) return []
       const by = ed.credits[0]
+      // Used as an ad (e.g. The Patient → open call): the slide sells the call,
+      // not the editorial. Same photo and credits, ad copy + a button to the link.
+      if (ed.promoLabel || ed.promoUrl) {
+        const toCall = /submissions|open-call/.test(ed.promoUrl)
+        return [{
+          key: 'featured-editorial',
+          imageUrl: ed.photos[0],
+          objectPosition: 'center top',
+          eyebrow: (ed.promoLabel || 'OPEN CALL').toUpperCase(),
+          headline: ed.promoHeadline || ed.title,
+          paragraph: ed.promoText || ed.subtitle,
+          primary: ed.promoUrl ? { label: toCall ? 'See the open call' : 'Learn more', href: ed.promoUrl } : { label: 'View the editorial', href: '#editorial' },
+          secondary: ed.setSlug ? { label: `Book ${ed.setName || 'this set'}`, href: `/book?type=set&set=${ed.setSlug}` } : null,
+          finePrint: creditsLine(ed),
+          finePrintCase: 'none' as const,
+          spread: ed.photos,
+        } as CarouselSlide]
+      }
       return [{
         key: 'featured-editorial',
         imageUrl: ed.photos[0],

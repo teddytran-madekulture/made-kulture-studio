@@ -29,6 +29,8 @@ export interface FeaturedEditorial {
   promoLabel: string       // replaces "FEATURED EDITORIAL" above the title
   promoUrl: string         // the QR goes here instead of the post
   promoCta: string         // caption under the QR (default "SEE THE POST")
+  promoHeadline: string    // big ad text over the photo (newlines = line breaks); blank = title
+  promoText: string        // one line under the ad headline
   credits: EditorialCredit[]  // first one is the byline under the title
   photos: string[]         // public URLs in the 'site' bucket, in order
   intervalSec: number      // crossfade timing
@@ -37,7 +39,7 @@ export interface FeaturedEditorial {
 
 export const EDITORIAL_DEFAULTS: FeaturedEditorial = {
   id: 'e0', pinned: false, startDate: null, endDate: null,
-  enabled: false, title: '', subtitle: '', setName: '', setSlug: '', showInHero: false, postUrl: '', promoLabel: '', promoUrl: '', promoCta: '',
+  enabled: false, title: '', subtitle: '', setName: '', setSlug: '', showInHero: false, postUrl: '', promoLabel: '', promoUrl: '', promoCta: '', promoHeadline: '', promoText: '',
   credits: [], photos: [], intervalSec: 5, updatedAt: null,
 }
 
@@ -95,6 +97,8 @@ export function sanitize(input: any): FeaturedEditorial {
     promoLabel: str(x.promoLabel, 48),
     promoUrl: safeLink(x.promoUrl),
     promoCta: str(x.promoCta, 24),
+    promoHeadline: str(x.promoHeadline, 80),
+    promoText: str(x.promoText, 200),
     credits,
     photos,
     intervalSec: Number.isFinite(iv) ? Math.min(15, Math.max(3, Math.round(iv))) : EDITORIAL_DEFAULTS.intervalSec,

@@ -21,6 +21,7 @@ export interface ShowcaseEditorial {
   setSlug?: string
   title: string; subtitle: string; setName: string; postUrl: string
   promoLabel?: string; promoUrl?: string; promoCta?: string   // editorial used as an ad
+  promoHeadline?: string; promoText?: string                  // big ad text over the photo
   credits: { role: string; handle: string }[]; photos: string[]; intervalSec: number
 }
 
@@ -146,6 +147,59 @@ function One({ e, onDismiss, portrait, onCycleDone, footer }: { e: ShowcaseEdito
       )}
     </div>
   )
+
+  // AD LAYOUT (2026-10-08, Teddy): an editorial used as an ad must READ as an
+  // ad from across the room, so the photo goes full bleed and a huge headline
+  // sits over its lower half (darkened so white text holds over anything).
+  if (promo) {
+    const headline = (e.promoHeadline || e.title || '').toUpperCase()
+    const byline = credits.filter(c => c.handle).map(c => `${c.role ? c.role + ' ' : ''}@${c.handle}`).join('  ·  ')
+    return (
+      <div onClick={onDismiss} role="button" aria-label="Tap to return"
+        style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#050505', color: '#fff', fontFamily: 'Inter, sans-serif',
+                 display: 'flex', flexDirection: 'column', cursor: 'pointer', userSelect: 'none' }}>
+        <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          {e.photos.map((src, k) => (
+            <img key={src} src={src} alt="" draggable={false}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top',
+                       opacity: k === i ? 1 : 0, transition: 'opacity 1.6s ease' }} />
+          ))}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+            background: portrait
+              ? 'linear-gradient(to bottom, rgba(5,5,5,0) 30%, rgba(5,5,5,0.55) 52%, rgba(5,5,5,0.92) 72%, #050505 100%)'
+              : 'linear-gradient(to right, #050505 0%, rgba(5,5,5,0.9) 34%, rgba(5,5,5,0.35) 62%, rgba(5,5,5,0) 80%)' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, ...(portrait ? { padding: '0 44px 40px' } : { top: 0, right: '38%', padding: '48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }) }}>
+            <div style={{ fontSize: portrait ? 18 : 17, fontWeight: 700, letterSpacing: '0.32em', color: CHAMP }}>
+              {(e.promoLabel || 'OPEN CALL').toUpperCase()}
+            </div>
+            <div style={{ fontFamily: 'Anton, "Bebas Neue", Inter, sans-serif', fontSize: portrait ? 112 : 104, lineHeight: 0.92, marginTop: 16,
+                          color: '#fff', whiteSpace: 'pre-line', letterSpacing: '0.005em', textShadow: '0 4px 30px rgba(0,0,0,0.45)' }}>
+              {headline}
+            </div>
+            {e.promoText && (
+              <div style={{ fontSize: portrait ? 23 : 21, lineHeight: 1.45, color: 'rgba(255,255,255,0.82)', marginTop: 22, maxWidth: 640 }}>{e.promoText}</div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 28, marginTop: 28 }}>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 14, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.5)' }}>
+                {byline}
+              </div>
+              {qr && (
+                <div style={{ flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ background: '#fff', padding: 10, borderRadius: 10, width: portrait ? 176 : 168 }}>
+                    <svg viewBox={`0 0 ${qr.n} ${qr.n}`} style={{ display: 'block', width: '100%', height: 'auto' }} shapeRendering="crispEdges">
+                      <path d={qr.d} fill="#0b0b0d" />
+                    </svg>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.22em', color: CHAMP, marginTop: 10 }}>{(e.promoCta || 'SCAN ME').toUpperCase()}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {footer && <div onClick={ev => ev.stopPropagation()} style={{ flexShrink: 0, cursor: 'default' }}>{footer}</div>}
+      </div>
+    )
+  }
 
   return (
     <div onClick={onDismiss} role="button" aria-label="Tap to return"
