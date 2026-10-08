@@ -56,7 +56,7 @@ export const DESIGNS: EmailDesign[] = [
 
   <!-- hero: photo melts into the page, headline baked in -->
   <tr><td style="padding:0;">
-    <a href="https://madekulture.com/signup?next=%2Faccount%2Fdirectory"><img src="https://madekulture.com/email/2026-10-launch/hero.jpg" width="900" alt="The new Made Kulture. Now live at madekulture.com." style="display:block;width:100%;max-width:900px;height:auto;border:0;"></a>
+    <a href="https://madekulture.com/signup?next=%2Faccount%2Fdirectory"><img src="https://madekulture.com/email/2026-10-launch/hero-v4.jpg" width="900" alt="The new Made Kulture. Now live at madekulture.com." style="display:block;width:100%;max-width:900px;height:auto;border:0;"></a>
   </td></tr>
 
   <!-- primary CTA: visible on the first screen -->
