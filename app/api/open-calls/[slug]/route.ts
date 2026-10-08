@@ -79,23 +79,21 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const note = String(b.note ?? '').trim().slice(0, 1500) || null
   const shootDate = /^\d{4}-\d{2}-\d{2}$/.test(String(b.shoot_date ?? '')) ? String(b.shoot_date) : null
   const credits = cleanCredits(b.credits)
-  const mature = b.mature === true
 
   const missing = [!title && 'series title', !photographer && 'photographer', !shootDate && 'shoot date'].filter(Boolean)
   if (missing.length) return NextResponse.json({ error: `Missing: ${missing.join(', ')}` }, { status: 400 })
 
-  // NEW WORK ONLY (Teddy, 2026-10-08): nothing from a previous year's run of a
-  // set. An open call takes shoots dated inside its own window; the always-open
-  // call takes the last 12 months. Dates compared as Central calendar days.
+  // NEW WORK ONLY for open calls (Teddy, 2026-10-08): nothing from a previous
+  // year's run of a set — shoots must be dated inside the call's own window.
+  // Featured Editorial takes any past shoot (Teddy picks; newer is favoured),
+  // so only a future date is refused. Dates compared as Central calendar days.
   const day = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(iso))
   const today = day(new Date().toISOString())
-  const earliest = call.rolling || !call.closes_at
-    ? day(new Date(Date.now() - 365 * 864e5).toISOString())
-    : day(call.opens_at)
+  const earliest = call.rolling || !call.closes_at ? '2000-01-01' : day(call.opens_at)
   const latest = call.rolling || !call.closes_at ? today : (day(call.closes_at) < today ? day(call.closes_at) : today)
   if (shootDate! < earliest || shootDate! > latest) {
     return NextResponse.json({ error: call.rolling
-      ? 'Featured Editorial takes new work: the shoot date must be within the last 12 months.'
+      ? "The shoot date can't be in the future."
       : `This open call takes new work only: the shoot date must be between ${centralDate(call.opens_at)} and today.` }, { status: 400 })
   }
 
@@ -149,10 +147,17 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     }
   }
 
+  // Per-image 18+ (migration 153): only paths that are in this entry count, and
+  // at least OPEN_CALL_MIN_IMAGES frames must be public-safe.
+  const maturePaths = Array.from(new Set<string>((Array.isArray(b.mature_images) ? b.mature_images : []).map((p: any) => String(p)))).filter(p => paths.includes(p))
+  if (paths.length - maturePaths.length < OPEN_CALL_MIN_IMAGES) {
+    return NextResponse.json({ error: `At least ${OPEN_CALL_MIN_IMAGES} images must be free of nudity, so the series can be shown publicly if it's picked.` }, { status: 400 })
+  }
+
   const { data: row, error } = await sb.from('open_call_submissions').insert({
     call_id: call.id, auth_user_id: user.id, email: (user.email || '').toLowerCase(),
     title, photographer, photographer_ig: photographerIg, credits, shoot_date: shootDate, note,
-    image_paths: paths, image_hashes: hashes, mature, consents_at: new Date().toISOString(),
+    image_paths: paths, image_hashes: hashes, mature_paths: maturePaths, mature: maturePaths.length > 0, consents_at: new Date().toISOString(),
   }).select('id').single()
 
   if (error) {

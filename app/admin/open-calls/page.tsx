@@ -21,6 +21,7 @@ interface Entry {
   mature: boolean; status: string; admin_note: string | null; created_at: string; images: string[]; hasBooking: boolean
   votes: { total: number; existing: number; fresh: number }
   duplicates: { title: string; photographer: string; earlier: boolean }[]
+  matureIdx: number[]
 }
 interface Call {
   id: string; slug: string; title: string; tagline: string | null; set_slug: string | null; set_name: string | null
@@ -105,7 +106,7 @@ export default function OpenCallsAdmin() {
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: open === e.id ? '100%' : 340, cursor: 'pointer' }} onClick={() => setOpen(o => o === e.id ? null : e.id)}>
                     {(open === e.id ? e.images : e.images.slice(0, 3)).map((u, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img key={i} src={u} alt="" style={{ height: open === e.id ? 360 : 130, width: 'auto', background: '#000' }} />
+                      <img key={i} src={u} alt="" style={{ height: open === e.id ? 360 : 130, width: 'auto', background: '#000' , outline: e.matureIdx?.includes(i) ? '2px solid #ff8a80' : 'none', outlineOffset: -2 }} />
                     ))}
                     {open !== e.id && e.images.length > 3 && <span style={{ ...small, alignSelf: 'center' }}>+{e.images.length - 3}</span>}
                   </div>
@@ -130,7 +131,7 @@ export default function OpenCallsAdmin() {
                     {e.duplicates?.map((d, i) => (
                       <div key={i} style={{ ...small, color: C.red }}>⚠ Shares images with &ldquo;{d.title}&rdquo; by {d.photographer} ({d.earlier ? 'submitted earlier' : 'submitted later'}). One series = one entry: keep one, decline the other.</div>
                     ))}
-                    {e.mature && <div style={{ ...small, color: C.accent }}>Flagged 18+ by submitter</div>}
+                    {e.mature && <div style={{ ...small, color: C.accent }}>{e.matureIdx?.length || 'Some'} frame{e.matureIdx?.length === 1 ? '' : 's'} marked 18+ (red outline). Never use those on the home page, kiosks, Instagram or email.</div>}
                     {e.credits?.length > 0 && <div style={{ ...small, marginTop: 6 }}>{e.credits.map(c => `${c.role}: ${c.name || ''}${c.handle ? ` @${c.handle}` : ''}`).join(' · ')}</div>}
                     {e.note && <p style={{ ...small, color: C.text, opacity: 0.8, margin: '8px 0 0' }}>{e.note}</p>}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>

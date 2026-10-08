@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
   }
 
   const { data: subs, error } = await sb.from('open_call_submissions')
-    .select('id, auth_user_id, title, photographer, photographer_ig, credits, note, image_paths, mature')
+    .select('id, auth_user_id, title, photographer, photographer_ig, credits, note, image_paths, mature_paths')
     .eq('call_id', call.id).in('status', ['shortlisted', 'winner']).order('created_at', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -52,8 +52,8 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
     const { data: signed } = await sb.storage.from(OPEN_CALL_BUCKET).createSignedUrls(s.image_paths ?? [], 60 * 60)
     entries.push({
       id: s.id, title: s.title, photographer: s.photographer, photographer_ig: s.photographer_ig,
-      credits: s.credits ?? [], note: s.note, mature: s.mature, mine: s.auth_user_id === user.id,
-      images: (signed ?? []).map(x => x.signedUrl).filter(Boolean),
+      credits: s.credits ?? [], note: s.note, mine: s.auth_user_id === user.id,
+      images: (signed ?? []).filter(x => x.signedUrl).map(x => ({ url: x.signedUrl, mature: (s.mature_paths ?? []).includes(x.path ?? '') })),
     })
   }
   const { data: vote } = await sb.from('open_call_votes').select('submission_id').eq('call_id', call.id).eq('voter_id', user.id).maybeSingle()

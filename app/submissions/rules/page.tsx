@@ -118,9 +118,11 @@ export default async function RulesPage() {
           <Section n="06" title="Submission requirements">
             <P>An entry has to meet all of these to qualify. Entries that don&rsquo;t are declined, and for an open call you can fix it and resubmit before the deadline.</P>
             <UL items={[
-              <><b style={{ color: '#fff' }}>New work.</b> Open calls take work shot during that open call, on that year&rsquo;s set. Images from a previous year&rsquo;s run of a set, or anything shot before the open call opened, are not eligible. Featured Editorial takes work shot in the last 12 months. The shoot date is required.</>,
+              <><b style={{ color: '#fff' }}>New work.</b> Open calls take work shot during that open call, on that year&rsquo;s set. Images from a previous year&rsquo;s run of a set, or anything shot before the open call opened, are not eligible. Featured Editorial takes work from any shoot at Made Kulture; we choose what to feature and tend to favour recent work. The shoot date is required for both.</>,
+              <><b style={{ color: '#fff' }}>Already posted is fine.</b> You can share your work anywhere before, during and after you submit, on Instagram for Halloween or anywhere else; it doesn&rsquo;t have to be unpublished. Tagging @madekulture is appreciated but not required. Submit the original full-resolution files, not images saved from a post.</>,
               <><b style={{ color: '#fff' }}>One series.</b> 3 to 8 images from the same shoot and concept, in the order you want them seen. Not a portfolio sampler.</>,
               <><b style={{ color: '#fff' }}>Full resolution.</b> Every image at least 2000 pixels on its longest side (JPG, PNG or HEIC). Screenshots and images saved from social media are not accepted.</>,
+              <><b style={{ color: '#fff' }}>Nudity.</b> Artistic nudity is allowed; sexually explicit work is not. Every frame with nudity must be marked 18+ when you submit. Those frames are shown only to voters who confirm they are 18 or older, and are never used on the website, member profiles, the studio kiosks, social media or email. At least 3 frames in the series must be free of nudity, so it can be shown publicly if it wins or is picked. A frame with nudity that isn&rsquo;t marked can get the entry declined.</>,
               <><b style={{ color: '#fff' }}>Clean frames.</b> No watermarks, logos, text overlays, borders, frames or collages.</>,
               <><b style={{ color: '#fff' }}>Finished work.</b> Edited, final images. No unedited previews or contact sheets.</>,
               <><b style={{ color: '#fff' }}>Shot here.</b> For an open call, the set must be recognisable in most of the images. Featured Editorial work must be shot on a Made Kulture set.</>,
@@ -134,7 +136,7 @@ export default async function RulesPage() {
               'You took the images, or you have the photographer’s permission to submit them.',
               'Everyone pictured is 18 or older, agreed to be photographed, and agreed to the images being submitted and shown as described here.',
               'Everyone you credit agreed to be credited. Credits are accurate.',
-              'The work does not infringe anyone’s copyright, trademark, privacy or publicity rights, and follows the Community & Member Content rules in our Terms. Sexually explicit work is not accepted; artistic nudity must be flagged 18+ when you submit.',
+              'The work does not infringe anyone’s copyright, trademark, privacy or publicity rights, and follows the Community & Member Content rules in our Terms. Sexually explicit work is not accepted.',
               'You are responsible for any claim that these promises were not true.',
             ]} />
           </Section>
@@ -153,7 +155,7 @@ export default async function RulesPage() {
             <UL items={[
               'The prize for each open call is listed above and on its page. For The Patient: one 12-month Made Kulture Plus membership (approximate retail value $149) and the winning series shown as the Featured Editorial on madekulture.com and the studio kiosks. If the winner already has Plus, their membership is extended by 12 months.',
               'One prize per open call, awarded only to the member who submitted the winning series, not to each team member. The prize is not transferable and cannot be exchanged for cash. We may substitute a prize of equal or greater value if needed.',
-              'Everyone credited on the winning series is named wherever it is featured, and credited members of the Made Kulture directory receive a Featured Editorial badge on their profile. The same badge goes to everyone credited on work we pick for Featured Editorial. Credits are matched by Instagram handle, so include them.',
+              'Everyone credited on the winning series is named wherever it is featured. Credited members of the Made Kulture directory get a Featured Editorial badge and the series (without any 18+ frames) on their directory profile. The same goes for everyone credited on work we pick for Featured Editorial. Credits are matched by Instagram handle, so include them.',
               'We will contact the winner by email within 7 days after voting closes. If the winner doesn’t reply within 7 days, is ineligible, or can’t accept the prize, we may award it to the next eligible series.',
               'Any taxes on a prize are the winner’s responsibility.',
             ]} />

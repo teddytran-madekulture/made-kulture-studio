@@ -18,7 +18,7 @@ type Member = {
   full_name: string
   account_type?: string
   founding_number?: number | null
-  featured?: { title: string; call: string }[]
+  featured?: { id: string; title: string; call: string; photographer: string; photographer_ig: string | null; credits: { role: string; name: string; handle: string }[]; images: string[] }[]
   profile_color?: string | null
   cover_url?: string | null
   credits?: Credit[]
@@ -412,6 +412,27 @@ export default function MemberProfilePage() {
           <div className="ig-mbtns">{actions}</div>
         </div>
       </div>
+
+      {/* FEATURED EDITORIAL — series this member was credited on that won an open
+          call or was picked for Featured Editorial (never 18+ frames). */}
+      {!!member.featured?.length && member.featured.map(f => (
+        <section key={f.id} style={{ margin: '28px 0 8px', paddingBottom: 24, borderBottom: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))' }}>
+          <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, letterSpacing: '0.18em', color: 'var(--t-gold)', marginBottom: 6 }}>
+            ★ FEATURED EDITORIAL{f.call ? ` · ${f.call.toUpperCase()}` : ''}
+          </div>
+          <div style={{ fontFamily: 'Inter', fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{f.title}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', marginBottom: 14, lineHeight: 1.6 }}>
+            Photographed by {f.photographer}{f.photographer_ig ? ` (@${f.photographer_ig})` : ''}
+            {f.credits.length > 0 && ' · ' + f.credits.map(c => `${c.role} ${c.handle ? '@' + c.handle : c.name}`).join(' · ')}
+          </div>
+          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', scrollSnapType: 'x mandatory' }}>
+            {f.images.map((u, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={u} alt={`${f.title} ${i + 1}`} loading="lazy" style={{ height: 300, width: 'auto', flexShrink: 0, scrollSnapAlign: 'start', borderRadius: 4, background: 'var(--t-surface-hi)' }} />
+            ))}
+          </div>
+        </section>
+      ))}
 
       {inviteOpen && myCastings.length > 0 && (
         <div style={{ margin: '12px 0 0', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 8, padding: 8, maxWidth: 380, background: 'var(--t-surface)' }}>

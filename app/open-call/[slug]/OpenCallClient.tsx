@@ -21,7 +21,7 @@ const btnPrimary: React.CSSProperties = { background: '#fff', color: '#000', bor
 const btnGhost: React.CSSProperties = { ...btnPrimary, background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.35)' }
 
 interface Mine { id: string; title: string; photographer: string; status: string; created_at: string; images: string[] }
-interface Img { key: string; preview: string; path: string | null; hash?: string; error?: string }
+interface Img { key: string; preview: string; path: string | null; hash?: string; mature?: boolean; error?: string }
 interface Credit { role: string; name: string; handle: string }
 
 const STATUS_COPY: Record<string, string> = {
@@ -139,7 +139,6 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
   const [uploading, setUploading] = useState(0)
   const [credits, setCredits] = useState<Credit[]>([{ role: 'Model', name: '', handle: '' }, { role: 'MUA', name: '', handle: '' }])
   const [consents, setConsents] = useState<Consents>({ shotHere: false, rights: false, adults: false, feature: false })
-  const [mature, setMature] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -199,6 +198,7 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
     const ready = imgs.filter(i => i.path)
     if (uploading > 0) { setErr('Hang on, images are still uploading.'); return }
     if (ready.length < OPEN_CALL_MIN_IMAGES) { setErr(`Add at least ${OPEN_CALL_MIN_IMAGES} images.`); return }
+    if (ready.filter(i => !i.mature).length < OPEN_CALL_MIN_IMAGES) { setErr(`At least ${OPEN_CALL_MIN_IMAGES} images must be free of nudity, so the series can be shown publicly if it's picked.`); return }
     if (!Object.values(consents).every(Boolean)) { setErr('Please tick all four confirmations.'); return }
     const fd = new FormData(e.currentTarget)
     setBusy(true)
@@ -207,7 +207,8 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: fd.get('title'), photographer: fd.get('photographer'), photographer_ig: fd.get('photographer_ig'),
-          shoot_date: fd.get('shoot_date'), note: fd.get('note'), credits, mature, consents,
+          shoot_date: fd.get('shoot_date'), note: fd.get('note'), credits, consents,
+          mature_images: ready.filter(i => i.mature).map(i => i.path),
           images: ready.map(i => i.path),
           hashes: ready.map(i => i.hash || ''),
         }),
@@ -228,7 +229,8 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
       <div style={{ border: LINE, padding: '16px 18px', marginBottom: 28, background: 'rgba(255,255,255,0.02)' }}>
         <span style={{ ...lbl, color: GOLD }}>TO QUALIFY</span>
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7, color: 'rgba(255,255,255,0.65)' }}>
-          <li>New work: {rolling ? 'shot in the last 12 months' : `shot on this year's ${setName || 'set'}, during this open call. Nothing from previous years`}</li>
+          <li>{rolling ? 'Any shoot at Made Kulture. Newer work is more likely to be picked' : `New work: shot on this year's ${setName || 'set'}, during this open call. Nothing from previous years`}</li>
+          <li>Already posted it? That's fine. Send us the full-resolution files</li>
           <li>One series: {OPEN_CALL_MIN_IMAGES}–{maxImages} images from the same shoot</li>
           <li>Full resolution, at least {OPEN_CALL_MIN_EDGE}px on the long side. No screenshots</li>
           <li>No watermarks, logos, text, borders or collages</li>
@@ -240,7 +242,7 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
 
       <div style={{ marginBottom: 34 }}>
         <span style={lbl}>IMAGES ({imgs.length}/{maxImages})</span>
-        <p style={help}>{OPEN_CALL_MIN_IMAGES}–{maxImages} finished frames, in the order you want them seen. The first one is your cover.</p>
+        <p style={help}>{OPEN_CALL_MIN_IMAGES}–{maxImages} finished frames, in the order you want them seen. The first one is your cover. Artistic nudity is allowed: tap <b>18+</b> on every frame that has it. Those frames are only shown to voters who confirm they&rsquo;re 18+, and never on the website, kiosks, Instagram or email. At least {OPEN_CALL_MIN_IMAGES} frames must be free of nudity.</p>
         <div
           onDragOver={e => e.preventDefault()}
           onDrop={e => { e.preventDefault(); addFiles(Array.from(e.dataTransfer.files)) }}
@@ -250,6 +252,10 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={im.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: im.path ? 1 : 0.4 }} />
               {i === 0 && <span style={{ position: 'absolute', top: 6, left: 6, fontFamily: mono, fontSize: 9, letterSpacing: '0.15em', background: GOLD, color: '#000', padding: '3px 6px' }}>COVER</span>}
+              <button type="button" onClick={() => setImgs(cur => cur.map(x => x.key === im.key ? { ...x, mature: !x.mature } : x))} aria-pressed={!!im.mature}
+                style={{ position: 'absolute', top: 6, right: 6, fontFamily: mono, fontSize: 9, letterSpacing: '0.12em', padding: '4px 6px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.6)', background: im.mature ? '#ff8a80' : 'rgba(0,0,0,0.55)', color: im.mature ? '#000' : '#fff' }}>
+                {im.mature ? '18+ ✓' : '18+'}
+              </button>
               {!im.path && !im.error && <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontFamily: mono, fontSize: 10, letterSpacing: '0.15em' }}>UPLOADING…</span>}
               {im.error && <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 12, color: '#ff8a80', textAlign: 'center', padding: 8 }}>{im.error}</span>}
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.6)' }}>
@@ -297,10 +303,6 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
         <textarea name="note" maxLength={1500} rows={4} style={{ ...field, resize: 'vertical' }} placeholder="The concept, the story, anything you want us to know." />
       </div>
 
-      <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.55, marginBottom: 26, cursor: 'pointer' }}>
-        <input type="checkbox" checked={mature} onChange={e => setMature(e.target.checked)} style={{ marginTop: 4, accentColor: GOLD, width: 16, height: 16 }} />
-        <span>This series includes artistic nudity (18+). It will only be shown to members who confirm they&rsquo;re 18+.</span>
-      </label>
 
       <div style={{ borderTop: LINE, paddingTop: 24, marginBottom: 26 }}>
         <span style={lbl}>CONFIRM</span>

@@ -14,7 +14,7 @@ const anton = 'Anton, "Bebas Neue", sans-serif'
 interface Entry {
   id: string; title: string; photographer: string; photographer_ig: string | null
   credits: { role: string; name: string; handle: string }[]; note: string | null
-  mature: boolean; mine: boolean; images: string[]
+  mine: boolean; images: { url: string; mature: boolean }[]
 }
 interface State {
   signedIn?: boolean; listed?: boolean; optedIn?: boolean; blockers?: string[]
@@ -90,19 +90,20 @@ export default function VotePanel({ slug }: { slug: string }) {
       <div style={{ display: 'grid', gap: 28 }}>
         {s.entries.map(e => {
           const chosen = s.myVote === e.id
-          const blur = e.mature && !adult
           return (
             <article key={e.id} style={{ border: `1px solid ${chosen ? GOLD : 'rgba(255,255,255,0.1)'}`, background: chosen ? 'rgba(201,178,126,0.06)' : '#0b0b0d' }}>
               <div style={{ position: 'relative', display: 'flex', gap: 4, overflowX: 'auto', scrollSnapType: 'x mandatory' }}>
-                {e.images.map((u, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={u} alt="" loading="lazy" style={{ height: 340, width: 'auto', flexShrink: 0, scrollSnapAlign: 'start', filter: blur ? 'blur(28px)' : 'none', background: '#000' }} />
+                {e.images.map((m, i) => (
+                  <div key={i} style={{ position: 'relative', flexShrink: 0, scrollSnapAlign: 'start', overflow: 'hidden' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.url} alt="" loading="lazy" style={{ height: 340, width: 'auto', display: 'block', filter: m.mature && !adult ? 'blur(28px)' : 'none', background: '#000' }} />
+                    {m.mature && !adult && (
+                      <button onClick={() => setAdult(true)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', border: 'none', color: '#fff', cursor: 'pointer', fontFamily: mono, fontSize: 10.5, letterSpacing: '0.14em', padding: 12 }}>
+                        18+ · TAP IF YOU&rsquo;RE 18 OR OLDER
+                      </button>
+                    )}
+                  </div>
                 ))}
-                {blur && (
-                  <button onClick={() => setAdult(true)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', border: 'none', color: '#fff', cursor: 'pointer', fontFamily: mono, fontSize: 11, letterSpacing: '0.16em' }}>
-                    18+ · I&rsquo;M 18 OR OLDER, SHOW IT
-                  </button>
-                )}
               </div>
               <div style={{ padding: '16px 18px 18px' }}>
                 <div style={{ fontFamily: anton, fontSize: 26, letterSpacing: '0.02em', lineHeight: 1 }}>{e.title.toUpperCase()}</div>

@@ -42,23 +42,39 @@ export function callStatusLabel(c: OpenCall, phase: OpenCallPhase): string {
   return 'IN REVIEW'
 }
 
-/** The "Featured Editorial" badge (Teddy, 2026-10-08): the prize goes to the
- *  submitter only, but EVERYONE on a winning (or picked) series gets credit on
- *  their directory profile. Matched on the submitter's account, the
- *  photographer's Instagram, or any credit's @handle — Instagram handles are
- *  case-insensitive, so compare lowercased. A credit with no handle can't be
- *  matched to a member. Derived at read time: nothing to keep in sync. */
-export async function featuredBadgesFor(memberId: string, instagram: string | null): Promise<{ title: string; call: string }[]> {
+/** Featured Editorial on member profiles (Teddy, 2026-10-08): the prize goes
+ *  to the submitter only, but EVERYONE credited on a winning (or picked) series
+ *  gets the badge AND the series on their directory profile. Matched on the
+ *  submitter's account, the photographer's Instagram, or any credit's @handle —
+ *  Instagram handles are case-insensitive, so compare lowercased. A credit with
+ *  no handle can't be matched. Derived at read time: nothing to keep in sync.
+ *  ⚠️ 18+ frames (migration 153) are NEVER included — profiles are a public
+ *  placement for this purpose. */
+export interface FeaturedSeries {
+  id: string; title: string; call: string; photographer: string; photographer_ig: string | null
+  credits: { role: string; name: string; handle: string }[]; images: string[]
+}
+export async function featuredFor(memberId: string, instagram: string | null): Promise<FeaturedSeries[]> {
   const sb = supabaseAdmin()
   const { data, error } = await sb.from('open_call_submissions')
-    .select('auth_user_id, title, photographer_ig, credits, open_calls(title)')
-    .eq('status', 'winner')
-  if (error) { if ((error as any).code !== '42P01') console.error('[open-calls] badges failed:', error); return [] }
+    .select('id, auth_user_id, title, photographer, photographer_ig, credits, image_paths, mature_paths, reviewed_at, open_calls(title)')
+    .eq('status', 'winner').order('reviewed_at', { ascending: false })
+  if (error) { if ((error as any).code !== '42P01') console.error('[open-calls] featured lookup failed:', error); return [] }
   const ig = String(instagram ?? '').replace(/^@+/, '').trim().toLowerCase()
-  return (data ?? [])
-    .filter((s: any) =>
-      s.auth_user_id === memberId ||
-      (ig && String(s.photographer_ig ?? '').toLowerCase() === ig) ||
-      (ig && Array.isArray(s.credits) && s.credits.some((c: any) => String(c?.handle ?? '').toLowerCase() === ig)))
-    .map((s: any) => ({ title: s.title as string, call: (Array.isArray(s.open_calls) ? s.open_calls[0]?.title : s.open_calls?.title) ?? '' }))
+  const mine = (data ?? []).filter((s: any) =>
+    s.auth_user_id === memberId ||
+    (ig && String(s.photographer_ig ?? '').toLowerCase() === ig) ||
+    (ig && Array.isArray(s.credits) && s.credits.some((c: any) => String(c?.handle ?? '').toLowerCase() === ig)))
+  const out: FeaturedSeries[] = []
+  for (const s of mine as any[]) {
+    const safe = (s.image_paths ?? []).filter((p: string) => !(s.mature_paths ?? []).includes(p))
+    const { data: signed } = safe.length ? await sb.storage.from('open-call-media').createSignedUrls(safe, 60 * 60) : { data: [] as any[] }
+    out.push({
+      id: s.id, title: s.title, photographer: s.photographer, photographer_ig: s.photographer_ig ?? null,
+      call: (Array.isArray(s.open_calls) ? s.open_calls[0]?.title : s.open_calls?.title) ?? '',
+      credits: Array.isArray(s.credits) ? s.credits : [],
+      images: (signed ?? []).map((x: any) => x.signedUrl).filter(Boolean),
+    })
+  }
+  return out
 }
