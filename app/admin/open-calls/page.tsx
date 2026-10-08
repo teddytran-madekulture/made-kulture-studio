@@ -19,6 +19,7 @@ interface Entry {
   id: string; email: string; title: string; photographer: string; photographer_ig: string | null
   credits: { role: string; name: string; handle: string }[]; shoot_date: string | null; note: string | null
   mature: boolean; status: string; admin_note: string | null; created_at: string; images: string[]; hasBooking: boolean
+  bookingCheck: { status: 'shoot_day' | 'other_day' | 'none'; who?: string; via?: string; date?: string; bookedBy?: string } | null
   votes: { total: number; existing: number; fresh: number }
   duplicates: { title: string; photographer: string; earlier: boolean }[]
   matureIdx: number[]
@@ -117,11 +118,22 @@ export default function OpenCallsAdmin() {
                       {e.email} · submitted {new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(e.created_at))}
                       {e.shoot_date ? ` · shot ${e.shoot_date}` : ''}
                     </div>
-                    <div style={{ ...small, color: e.hasBooking ? C.green : C.red, marginTop: 4 }}>
-                      {call.set_slug
-                        ? (e.hasBooking ? `✓ Submitter has a ${call.set_name || 'set'} booking since the call opened` : `✗ No booking on this set under the submitter's account (the booker may be someone else)`)
-                        : (e.hasBooking ? '✓ Submitter has booked the studio before' : `✗ No bookings under the submitter's account (the booker may be someone else)`)}
-                    </div>
+                    {call.set_slug && e.bookingCheck ? (() => {
+                      const b = e.bookingCheck!
+                      const color = b.status === 'shoot_day' ? C.green : b.status === 'other_day' ? C.accent : C.red
+                      const how = b.via === 'name' ? ' (matched by name only, so double-check)' : b.via === 'instagram' ? ' (matched by Instagram)' : ''
+                      return (
+                        <div style={{ ...small, color, marginTop: 4 }}>
+                          {b.status === 'shoot_day' && `✓ Booking found on the shoot date (${b.date}) · ${b.who}${b.bookedBy ? `, booked as ${b.bookedBy}` : ''}${how}`}
+                          {b.status === 'other_day' && `⚠ ${call.set_name || 'Set'} booking on ${b.date}, but not on the stated shoot date · ${b.who}${b.bookedBy ? `, booked as ${b.bookedBy}` : ''}${how}`}
+                          {b.status === 'none' && `✗ No booking found for anyone on this entry. Checked the submitter's account and email, plus credited names and Instagram handles. Not refused; your call.`}
+                        </div>
+                      )
+                    })() : (
+                      <div style={{ ...small, color: e.hasBooking ? C.green : C.red, marginTop: 4 }}>
+                        {e.hasBooking ? '✓ Submitter has booked the studio before' : `✗ No bookings under the submitter's account (the booker may be someone else)`}
+                      </div>
+                    )}
                     {(e.status === 'shortlisted' || e.status === 'winner' || e.votes.total > 0) && (
                       <div style={{ ...small, color: C.text, marginTop: 4 }}>
                         <b style={{ color: C.accent }}>{e.votes.total} vote{e.votes.total === 1 ? '' : 's'}</b>

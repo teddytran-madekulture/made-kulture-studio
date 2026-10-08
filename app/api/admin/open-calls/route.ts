@@ -11,7 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { OPEN_CALL_BUCKET, openCallPhase, matchingImages } from '@/lib/open-calls'
+import { OPEN_CALL_BUCKET, openCallPhase, matchingImages, cleanHandle, centralDate } from '@/lib/open-calls'
+import { selectAll } from '@/lib/select-all'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -35,24 +36,21 @@ export async function GET(req: NextRequest) {
       .eq('call_id', c.id).neq('status', 'withdrawn').order('created_at', { ascending: true })
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
 
-    // Booking check — one query for the whole call.
-    // No set (a rolling call): has the submitter booked ANY session, ever.
+    // Booking check — a vetting aid, never a gate (see the header). Rolling
+    // call: has the submitter booked ANY session, ever. Set call: lib below.
     let booked = new Set<string>()
+    let setChecks: Record<string, BookingCheck> = {}
     if (!c.set_slug && subs?.length) {
-      const { data: bk } = await sb.from('bookings').select('auth_user_id')
+      const { data: bk, error: bErr } = await sb.from('bookings').select('auth_user_id')
         .in('auth_user_id', subs.map(s => s.auth_user_id)).neq('status', 'cancelled')
+      if (bErr) return NextResponse.json({ error: `Booking check failed: ${bErr.message}` }, { status: 500 })
       booked = new Set((bk ?? []).map(b => b.auth_user_id as string))
     }
     if (c.set_slug && subs?.length) {
-      const { data: set } = await sb.from('sets').select('id').eq('slug', c.set_slug).maybeSingle()
-      if (set) {
-        const { data: bk } = await sb.from('bookings').select('auth_user_id')
-          .in('auth_user_id', subs.map(s => s.auth_user_id))
-          .or(`set_id.eq.${set.id},set_id.is.null`)   // a buyout includes the set
-          .neq('status', 'cancelled')
-          .gte('start_time', c.opens_at)
-        booked = new Set((bk ?? []).map(b => b.auth_user_id as string))
-      }
+      const r = await checkSetBookings(sb, c, subs)
+      if ('error' in r) return NextResponse.json({ error: `Booking check failed: ${r.error}` }, { status: 500 })
+      setChecks = r.checks
+      booked = new Set(subs.filter(s => setChecks[s.id]?.status !== 'none').map(s => s.auth_user_id))
     }
 
     // Votes (migration 151), split by whether the voter's account existed
@@ -71,7 +69,7 @@ export async function GET(req: NextRequest) {
     for (const s of subs ?? []) {
       const { data: signed } = await sb.storage.from(OPEN_CALL_BUCKET).createSignedUrls(s.image_paths ?? [], 60 * 60)
       entries.push({ ...s, images: (signed ?? []).map(x => x.signedUrl).filter(Boolean),
-        matureIdx: (s.image_paths ?? []).map((p: string, i: number) => (s.mature_paths ?? []).includes(p) ? i : -1).filter((i: number) => i >= 0), hasBooking: booked.has(s.auth_user_id),
+        matureIdx: (s.image_paths ?? []).map((p: string, i: number) => (s.mature_paths ?? []).includes(p) ? i : -1).filter((i: number) => i >= 0), hasBooking: booked.has(s.auth_user_id), bookingCheck: setChecks[s.id] ?? null,
         // Possible duplicate: shares at least one image with another entry here.
         duplicates: (subs ?? []).filter(o => o.id !== s.id && matchingImages(s.image_hashes ?? [], o.image_hashes ?? []) >= 1)
           .map(o => ({ title: o.title, photographer: o.photographer, earlier: o.created_at < s.created_at })),
@@ -141,4 +139,97 @@ export async function PATCH(req: NextRequest) {
   }
 
   return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+}
+
+// ── Set-call booking check (Teddy, 2026-10-08) ─────────────────────────────
+// Entries must come from a session BOOKED on the call's set, but editorials are
+// team work: the model may have booked while the photographer submits. So we
+// look for a booking on the set (or a buyout, which includes it) inside the
+// call's window under ANYONE on the entry — the submitter's account or email,
+// or a credited person matched by Instagram handle (via their profile) or by
+// exact name. A booking on the stated shoot date is the strong signal.
+// Nothing is refused here; Teddy decides.
+type BookingCheck = {
+  status: 'shoot_day' | 'other_day' | 'none'
+  who?: string          // "Submitter" | "Model: Jane Doe"
+  via?: string          // account | email | instagram | name
+  date?: string         // "Oct 22"
+  bookedBy?: string     // the customer name on the booking
+}
+
+const normName = (s: string) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+const dayOf = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(iso))
+
+async function checkSetBookings(sb: any, call: any, subs: any[]): Promise<{ checks: Record<string, BookingCheck> } | { error: string }> {
+  const { data: set, error: setErr } = await sb.from('sets').select('id').eq('slug', call.set_slug).maybeSingle()
+  if (setErr) return { error: setErr.message }
+  if (!set) return { error: `No set with slug "${call.set_slug}"` }
+
+  // Every live booking on the set (or a buyout) inside the call's window.
+  const { data: bookings, error: bErr } = await selectAll(() => {
+    let q = sb.from('bookings').select('auth_user_id, start_time, customers(name, email, alt_emails)')
+      .or(`set_id.eq.${set.id},set_id.is.null`).neq('status', 'cancelled')
+      .gte('start_time', call.opens_at)
+    if (call.closes_at) q = q.lte('start_time', call.closes_at)
+    return q.order('start_time', { ascending: true })
+  })
+  if (bErr) return { error: bErr.message }
+
+  // Profiles: submitters' (for their name/IG) and anyone whose IG is credited.
+  const handles = new Set<string>()
+  for (const s of subs) {
+    if (s.photographer_ig) handles.add(cleanHandle(s.photographer_ig).toLowerCase())
+    for (const cr of s.credits ?? []) if (cr?.handle) handles.add(cleanHandle(cr.handle).toLowerCase())
+  }
+  handles.delete('')
+  const { data: profiles, error: pErr } = await sb.from('customer_profiles').select('id, full_name, instagram')
+    .in('id', subs.map(s => s.auth_user_id))
+  if (pErr) return { error: pErr.message }
+  const { data: igRows, error: igErr } = await selectAll(() => sb.from('customer_profiles').select('id, instagram').not('instagram', 'is', null))
+  if (igErr) return { error: igErr.message }
+  const idByHandle = new Map<string, string>()
+  for (const r of igRows ?? []) {
+    const h = cleanHandle(r.instagram || '').toLowerCase()
+    if (h && handles.has(h)) idByHandle.set(h, r.id)
+  }
+  const profileById = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]))
+
+  const checks: Record<string, BookingCheck> = {}
+  for (const s of subs) {
+    // People on this entry, strongest identity first.
+    type Person = { who: string; ids: Set<string>; emails: Set<string>; names: Set<string> }
+    const people: Person[] = []
+    const prof = profileById.get(s.auth_user_id)
+    people.push({ who: 'Submitter', ids: new Set([s.auth_user_id]), emails: new Set([String(s.email || '').toLowerCase()]),
+      names: new Set([normName(prof?.full_name || '')].filter(Boolean)) })
+    const credited = [{ role: 'Photographer', name: s.photographer, handle: s.photographer_ig || '' }, ...(s.credits ?? [])]
+    for (const cr of credited) {
+      const h = cleanHandle(cr.handle || '').toLowerCase()
+      const id = h ? idByHandle.get(h) : undefined
+      people.push({ who: `${cr.role}: ${cr.name || '@' + h}`, ids: new Set(id ? [id] : []), emails: new Set(), names: new Set([normName(cr.name || '')].filter(n => n.includes(' '))) })
+    }
+
+    const shootDay = s.shoot_date || ''
+    let best: BookingCheck = { status: 'none' }
+    for (const b of bookings ?? []) {
+      const cust = Array.isArray(b.customers) ? b.customers[0] : b.customers
+      const bEmails = [cust?.email, ...(cust?.alt_emails ?? [])].map((e: any) => String(e || '').toLowerCase()).filter(Boolean)
+      const bName = normName(cust?.name || '')
+      for (const p of people) {
+        const via = b.auth_user_id && p.ids.has(b.auth_user_id) ? 'account'
+          : bEmails.some(e => p.emails.has(e)) ? 'email'
+          : bName && p.names.has(bName) ? 'name' : null
+        if (!via) continue
+        const onDay = dayOf(b.start_time) === shootDay
+        if (onDay || best.status === 'none') {
+          best = { status: onDay ? 'shoot_day' : 'other_day', who: p.who, via: via === 'account' && p.who !== 'Submitter' ? 'instagram' : via,
+            date: centralDate(b.start_time, { month: 'short', day: 'numeric' }), bookedBy: cust?.name || undefined }
+        }
+        if (onDay) break
+      }
+      if (best.status === 'shoot_day') break
+    }
+    checks[s.id] = best
+  }
+  return { checks }
 }

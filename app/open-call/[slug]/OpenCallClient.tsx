@@ -306,7 +306,9 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
 
       <div style={{ borderTop: LINE, paddingTop: 24, marginBottom: 26 }}>
         <span style={lbl}>CONFIRM</span>
-        <Check consents={consents} setConsents={setConsents} k="shotHere">These images were shot {setName ? `in ${setName} ` : ''}at Made Kulture.</Check>
+        <Check consents={consents} setConsents={setConsents} k="shotHere">{setName
+          ? <>These images were shot during a <b>booked session on {setName}</b> at Made Kulture (by me or someone on my team). They&rsquo;re real photographs, not AI-generated; normal retouching is fine.</>
+          : <>These images were shot at Made Kulture. They&rsquo;re real photographs, not AI-generated; normal retouching is fine.</>}</Check>
         <Check consents={consents} setConsents={setConsents} k="rights">I took these images or have the photographer&rsquo;s permission to submit them, and everyone credited agreed to be submitted.</Check>
         <Check consents={consents} setConsents={setConsents} k="adults">Everyone pictured is 18 or older.</Check>
         <Check consents={consents} setConsents={setConsents} k="feature">I agree to the <a href="/submissions/rules" target="_blank" rel="noreferrer" style={{ color: GOLD }}>submission rules</a>. If it&rsquo;s picked, Made Kulture may show this series, with credits, on madekulture.com, the studio kiosks, Instagram and email{setName ? ', and to directory members for the vote' : ''}.</Check>
