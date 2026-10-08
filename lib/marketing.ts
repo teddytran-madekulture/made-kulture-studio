@@ -60,7 +60,7 @@ export async function getSegmentRecipients(segment: SegmentKey): Promise<Recipie
     fetchAll((from, to) => db.from('bookings').select('customer_id, auth_user_id, start_time').neq('status', 'cancelled').order('id').range(from, to)),
     fetchAll((from, to) => db.from('email_suppressions').select('email').order('email').range(from, to)),
   ])
-  const supp = new Set((suppressed ?? []).map((s: any) => (s.email || '').toLowerCase()))
+  const supp = new Set((suppressed ?? []).map((s: any) => cleanEmail(s.email || '')))
 
   // Per-customer: latest booking + whether ever booked with an account.
   const latest: Record<string, number> = {}
@@ -78,7 +78,7 @@ export async function getSegmentRecipients(segment: SegmentKey): Promise<Recipie
 
   const out: Recipient[] = []
   for (const c of customers ?? []) {
-    const email = ((c as any).email || '').toLowerCase().trim()
+    const email = cleanEmail((c as any).email || '')
     if (!email || supp.has(email)) continue
     const cid = (c as any).id
     const last = latest[cid]
@@ -118,7 +118,27 @@ function unsubUrl(email: string, campaignId?: string): string {
 // reject the whole batch of 100 (2026-10-08, Issue 01: batch 2 failed on an
 // "Invalid `to` field" and the send stopped at 100 of ~1,400), so anything that
 // doesn't look like a plain address is skipped up front and reported.
+// Clean an address as stored: some customer emails carry INVISIBLE characters
+// (zero-width spaces, BOMs, non-breaking spaces, control chars — usually from
+// copy-paste or the old Acuity import). They look normal on screen, fail Resend
+// and failed 18 Issue 01 recipients on 2026-10-08. Also strips stray <>, quotes,
+// mailto: and trailing punctuation. Lowercased so every comparison agrees.
+export function cleanEmail(raw: string): string {
+  return String(raw ?? '')
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001F\u007F-\u009F\u00A0\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u2000-\u200F\u2028-\u202F\u205F-\u206F\u3000\uFEFF]/g, '')
+    .replace(/^mailto:/i, '')
+    .replace(/^[<"'\s]+|[>"'\s.,;:]+$/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+}
+
+// Resend refuses reserved test domains (example.com etc.) and rejects the WHOLE
+// batch over one — that is what failed ~200 Issue 01 recipients.
+const TEST_DOMAIN = /@(?:[^@]*\.)?(?:example\.(?:com|net|org)|example|test|invalid|localhost)$/i
+
 export function isSendableEmail(e: string): boolean {
+  if (TEST_DOMAIN.test(e)) return false
   return /^[^\s@<>(),;:"\[\]\\]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/.test(e)
 }
 
@@ -138,7 +158,7 @@ export async function sendCampaignEmails(
   }
   const clean: Recipient[] = []
   for (const r of recipients) {
-    const e = String(r.email || '').trim()
+    const e = cleanEmail(r.email)
     if (isSendableEmail(e)) clean.push({ ...r, email: e })
     else skipped.push(r.email)
   }
