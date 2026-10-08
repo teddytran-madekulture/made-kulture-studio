@@ -114,23 +114,45 @@ function unsubUrl(email: string, campaignId?: string): string {
   return campaignId ? `${base}&c=${campaignId}` : base
 }
 
+// A recipient address Resend will accept. ONE malformed address makes Resend
+// reject the whole batch of 100 (2026-10-08, Issue 01: batch 2 failed on an
+// "Invalid `to` field" and the send stopped at 100 of ~1,400), so anything that
+// doesn't look like a plain address is skipped up front and reported.
+export function isSendableEmail(e: string): boolean {
+  return /^[^\s@<>(),;:"\[\]\\]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/.test(e)
+}
+
 // Send to a list. Chunks of 100 via Resend batch. Returns count actually queued.
 // campaignId (when sending a real campaign) tags each email so the Resend webhook
-// can attribute opens/clicks back to the campaign.
+// can attribute opens/clicks back to the campaign, AND records a 'sent' event per
+// address the moment its batch is accepted — that record is what RESUME uses to
+// never mail the same person twice.
 export async function sendCampaignEmails(
   subject: string, bodyHtml: string, recipients: Recipient[], campaignId?: string, templateId?: string | null
-): Promise<{ sent: number; error?: string }> {
-  if (!process.env.RESEND_API_KEY) return { sent: 0, error: 'RESEND_API_KEY not set.' }
+): Promise<{ sent: number; error?: string; skipped: string[]; failedBatches: number }> {
+  const skipped: string[] = []
+  if (!process.env.RESEND_API_KEY) return { sent: 0, error: 'RESEND_API_KEY not set.', skipped, failedBatches: 0 }
   // A designed email MUST carry the unsubscribe token or nobody can opt out.
   if (getTemplate(templateId)?.fullDocument && !bodyHtml.includes(UNSUB_TOKEN)) {
-    return { sent: 0, error: 'This design has no unsubscribe link — refusing to send.' }
+    return { sent: 0, error: 'This design has no unsubscribe link — refusing to send.', skipped, failedBatches: 0 }
   }
+  const clean: Recipient[] = []
+  for (const r of recipients) {
+    const e = String(r.email || '').trim()
+    if (isSendableEmail(e)) clean.push({ ...r, email: e })
+    else skipped.push(r.email)
+  }
+  if (skipped.length) console.warn('[marketing] skipping unsendable addresses:', skipped)
+
   const resend = new Resend(process.env.RESEND_API_KEY)
+  const db = supabaseAdmin()
   let sent = 0
-  for (let i = 0; i < recipients.length; i += 100) {
+  let failedBatches = 0
+  let lastError: string | undefined
+  for (let i = 0; i < clean.length; i += 100) {
     // Stay under Resend's per-second API rate limit between batches.
     if (i > 0) await new Promise(r => setTimeout(r, 600))
-    const chunk = recipients.slice(i, i + 100)
+    const chunk = clean.slice(i, i + 100)
     const batch = chunk.map(r => ({
       from: MARKETING_FROM,
       to: r.email,
@@ -141,12 +163,20 @@ export async function sendCampaignEmails(
     }))
     try {
       const { error } = await resend.batch.send(batch as any)
-      if (error) { console.error('[marketing] batch error', error); return { sent, error: (error as any).message } }
+      // Keep going: one bad batch no longer stops the rest of the list. The
+      // addresses in it get no 'sent' record, so RESUME picks them up.
+      if (error) { console.error('[marketing] batch error', error); lastError = (error as any).message; failedBatches++; continue }
       sent += chunk.length
+      if (campaignId) {
+        const { error: evErr } = await db.from('marketing_events')
+          .insert(chunk.map(r => ({ campaign_id: campaignId, email: r.email.toLowerCase(), type: 'sent' })))
+        if (evErr) console.error('[marketing] could not record sent events (RESUME may re-mail this batch):', evErr)
+      }
     } catch (e: any) {
       console.error('[marketing] send failed', e)
-      return { sent, error: e?.message || 'Send failed.' }
+      lastError = e?.message || 'Send failed.'
+      failedBatches++
     }
   }
-  return { sent }
+  return { sent, skipped, failedBatches, ...(lastError ? { error: lastError } : {}) }
 }

@@ -46,8 +46,17 @@ export async function GET(req: NextRequest) {
     // Engagement: unique opens / clicks / unsubscribes / bounces from the event log.
     let opened = 0, clicked = 0, unsubscribed = 0, bounced = 0
     if (c.sent_at) {
-      const { data: ev } = await db.from('marketing_events')
-        .select('email, type').eq('campaign_id', c.id)
+      // Paged: a full send writes a 'sent' row per recipient plus delivery and
+      // open rows, which passes PostgREST's silent 1,000-row cap fast.
+      const ev: any[] = []
+      for (let from = 0; from < 100_000; from += 1000) {
+        const { data: page, error: pErr } = await db.from('marketing_events')
+          .select('email, type').eq('campaign_id', c.id).in('type', ['opened', 'clicked', 'unsubscribed', 'bounced'])
+          .order('id').range(from, from + 999)
+        if (pErr) { console.error('[marketing] stats page failed', pErr); break }
+        ev.push(...(page ?? []))
+        if (!page || page.length < 1000) break
+      }
       const uniq: Record<string, Set<string>> = { opened: new Set(), clicked: new Set(), unsubscribed: new Set(), bounced: new Set() }
       for (const e of ev ?? []) if (uniq[(e as any).type]) uniq[(e as any).type].add((e as any).email)
       opened = uniq.opened.size; clicked = uniq.clicked.size

@@ -11,14 +11,17 @@ export const maxDuration = 300
 // POST /api/admin/marketing/[id]/send  { test?: boolean, testEmail?: string }
 // test=true → send a single preview to testEmail (no status change).
 // otherwise → send to the whole segment (minus unsubscribes) and mark sent.
+// { resume: true } on a SENT campaign → send to everyone in the segment who has
+// no record of receiving it yet (2026-10-08: Issue 01 stopped at 100 of ~1,400
+// when one bad address failed a batch). Never re-mails a recorded recipient.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  let b: { test?: boolean; testEmail?: string } = {}
+  let b: { test?: boolean; testEmail?: string; resume?: boolean } = {}
   try { b = await req.json() } catch { /* real send */ }
 
   const db = supabaseAdmin()
   const { data: c } = await db.from('marketing_campaigns')
-    .select('id, subject, body_html, template_id, template_data, segment_key, status, promo_id').eq('id', params.id).maybeSingle()
+    .select('id, subject, body_html, template_id, template_data, segment_key, status, promo_id, recipient_count').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Campaign not found.' }, { status: 404 })
 
   // Resolve the attached promo code (rendered inside the template's promo block).
@@ -66,6 +69,48 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: true, test: true, sent: r.sent })
   }
 
+  // ── RESUME: finish a campaign that stopped part-way ──────────────────────
+  if (b.resume) {
+    if (c.status !== 'sent') return NextResponse.json({ error: 'Only a sent campaign can be resumed.' }, { status: 409 })
+    // Everyone with ANY event on this campaign got it: 'sent' (recorded at send
+    // time since 2026-10-08) or a Resend webhook event (delivered, opened,
+    // bounced…) — the only record the earliest sends have.
+    const already = new Set<string>()
+    for (let from = 0; ; from += 1000) {
+      const { data: ev, error: evErr } = await db.from('marketing_events').select('email')
+        .eq('campaign_id', c.id).order('id').range(from, from + 999)
+      if (evErr) return NextResponse.json({ error: `Could not check who already got it: ${evErr.message}` }, { status: 500 })
+      for (const e of ev ?? []) already.add(String(e.email || '').trim().toLowerCase())
+      if (!ev || ev.length < 1000) break
+    }
+    // ⚠️ If fewer people are on record than the campaign says it reached, some
+    // webhook events haven't arrived yet — resuming now would re-mail them.
+    const reached = Number(c.recipient_count || 0)
+    if (already.size < reached) {
+      return NextResponse.json({ error: `Only ${already.size} of the ${reached} people already sent are confirmed so far. Give it a few minutes and try again, so nobody gets it twice.` }, { status: 409 })
+    }
+    const all = await getSegmentRecipients(c.segment_key as SegmentKey)
+    const rest = all.filter(r => !already.has(String(r.email || '').trim().toLowerCase()))
+    if (rest.length === 0) return NextResponse.json({ error: 'Everyone in this segment already has it.' }, { status: 409 })
+
+    // Claim sent → sending so two clicks can't both resume.
+    const { data: claimedR, error: claimErrR } = await db.from('marketing_campaigns')
+      .update({ status: 'sending' }).eq('id', params.id).eq('status', 'sent').select('id')
+    if (claimErrR) return NextResponse.json({ error: claimErrR.message }, { status: 500 })
+    if (!claimedR?.length) return NextResponse.json({ error: 'This campaign is already sending.' }, { status: 409 })
+
+    const invErrR = await inviteRecipients(rest.map(r => r.email))
+    if (invErrR) {
+      await db.from('marketing_campaigns').update({ status: 'sent' }).eq('id', params.id)
+      return NextResponse.json({ error: invErrR }, { status: 500 })
+    }
+    const rr = await sendCampaignEmails(c.subject, body, rest, c.id, c.template_id as string | null)
+    const { error: stampErrR } = await db.from('marketing_campaigns')
+      .update({ status: 'sent', recipient_count: reached + rr.sent }).eq('id', params.id)
+    if (stampErrR) console.error('[marketing resume] SENT BUT NOT STAMPED —', params.id, stampErrR)
+    return NextResponse.json({ success: true, resumed: true, sent: rr.sent, total: reached + rr.sent, skipped: rr.skipped, partialError: rr.error ?? null })
+  }
+
   // Real send.
   if (c.status === 'sent') return NextResponse.json({ error: 'This campaign was already sent.' }, { status: 409 })
   const recipients = await getSegmentRecipients(c.segment_key as SegmentKey)
@@ -111,5 +156,5 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // claim above, so the worst case is a stuck row — never a second mailing.
   if (stampErr) console.error('[marketing send] SENT BUT NOT STAMPED —', params.id, stampErr)
 
-  return NextResponse.json({ success: true, sent: r.sent, partialError: r.error ?? null })
+  return NextResponse.json({ success: true, sent: r.sent, skipped: r.skipped, partialError: r.error ?? null })
 }

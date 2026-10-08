@@ -98,7 +98,21 @@ export default function MarketingPage() {
     if (!confirm(`Send "${c.name}" to ${n} recipient(s) in "${c.segment_key}"?\n\nThis emails real customers. Make sure you sent yourself a test first.`)) return
     const r = await fetch(`/api/admin/marketing/${c.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
     const d = await r.json()
-    alert(r.ok ? `Sent to ${d.sent} recipient(s).${d.partialError ? ' (some failed: ' + d.partialError + ')' : ''}` : `Send failed: ${d.error}`)
+    alert(r.ok ? `Sent to ${d.sent} recipient(s).${d.skipped?.length ? `\n\nSkipped ${d.skipped.length} invalid address(es): ${d.skipped.join(', ')}` : ''}${d.partialError ? ' (some failed: ' + d.partialError + ')' : ''}` : `Send failed: ${d.error}`)
+    load()
+  }
+
+  // Finish a campaign that stopped part-way — mails only people with no record
+  // of getting it (the server works that out; it refuses if records are still
+  // arriving, so nobody is mailed twice).
+  const resumeSend = async (c: Campaign) => {
+    const left = Math.max(0, (counts[c.segment_key] ?? 0) - (c.recipient_count ?? 0))
+    if (!confirm(`Finish sending "${c.name}"?\n\nIt went to ${c.recipient_count} so far. This sends to the remaining ~${left} people in "${c.segment_key}" and skips everyone who already has it.`)) return
+    const r = await fetch(`/api/admin/marketing/${c.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resume: true }) })
+    const d = await r.json().catch(() => ({}))
+    alert(r.ok
+      ? `Sent to ${d.sent} more (${d.total} total).${d.skipped?.length ? `\n\nSkipped ${d.skipped.length} invalid address(es): ${d.skipped.join(', ')}` : ''}${d.partialError ? `\n\nSome failed: ${d.partialError}` : ''}`
+      : `Resume failed: ${d.error}`)
     load()
   }
 
@@ -231,7 +245,16 @@ export default function MarketingPage() {
                         </div>
                       </div>
                       {c.status === 'sent'
-                        ? <span style={{ fontSize: 11, color: '#6bffaa', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>SENT</span>
+                        ? ((counts[c.segment_key] ?? 0) > (c.recipient_count ?? 0)
+                          ? (
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+                              <span style={{ fontSize: 11, color: C.accent, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>PARTLY SENT</span>
+                              <button onClick={() => resumeSend(c)} style={{ background: C.accent, border: 'none', color: '#0b0b0d', borderRadius: 6, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                FINISH SENDING · {(counts[c.segment_key] ?? 0) - (c.recipient_count ?? 0)} LEFT
+                              </button>
+                            </div>
+                          )
+                          : <span style={{ fontSize: 11, color: '#6bffaa', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>SENT</span>)
                         : c.status === 'sending'
                         ? <span style={{ fontSize: 11, color: C.accent, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>SENDING…</span>
                         : (
