@@ -49,17 +49,52 @@ export function safeAuthCookies<T extends C>(all: T[]): { cookies: T[]; bad: str
   const bad: string[] = []
   byBase.forEach((parts, base) => {
     const whole = parts.find((p) => p.name === base)
-    let joined = whole ? whole.value : ''
-    if (!whole) {
-      for (let i = 0; ; i++) {
-        const p = parts.find((x) => x.name === `${base}.${i}`)
-        if (!p) break
-        joined += p.value
-      }
+    if (whole) {
+      // An unchunked cookie wins; any numbered chunks beside it are leftovers.
+      if (!decodes(whole.value)) bad.push(whole.name)
+      parts.forEach((p) => { if (p !== whole) bad.push(p.name) })
+      return
     }
-    if (!joined || !decodes(joined)) parts.forEach((p) => bad.push(p.name))
+    const chunks: T[] = []
+    for (let i = 0; ; i++) {
+      const p = parts.find((x) => x.name === `${base}.${i}`)
+      if (!p) break
+      chunks.push(p)
+    }
+    // The common corruption is a LEFTOVER chunk: a session that needed 3
+    // chunks (Google/Apple tokens are long) is replaced by one that needs 2,
+    // and the old .2 is never deleted, so the library glues it on the end.
+    // Find the first run .0..k that decodes, keep it, drop the rest.
+    let keep = 0
+    let joined = ''
+    for (let k = 0; k < chunks.length; k++) {
+      joined += chunks[k].value
+      if (decodes(joined)) { keep = k + 1; break }
+    }
+    parts.forEach((p) => { if (!chunks.slice(0, keep).includes(p)) bad.push(p.name) })
   })
   if (!bad.length) return { cookies: all, bad }
   console.warn('[auth] dropped unreadable session cookies:', bad.join(', '))
   return { cookies: all.filter((c) => !bad.includes(c.name)), bad }
+}
+
+/** Every Supabase auth cookie name present (session chunks + PKCE verifier). */
+export function authCookieNames(all: C[]): string[] {
+  return all.filter((c) => AUTH_RE.test(c.name)).map((c) => c.name)
+}
+
+/** Browser side: delete unreadable/leftover auth cookies from document.cookie. */
+export function cleanBrowserAuthCookies(): void {
+  if (typeof document === 'undefined') return
+  try {
+    const all = document.cookie.split(';').map((p) => {
+      const i = p.indexOf('=')
+      const name = p.slice(0, i).trim()
+      let value = p.slice(i + 1).trim()
+      try { value = decodeURIComponent(value) } catch {}
+      return { name, value }
+    }).filter((c) => c.name)
+    const { bad } = safeAuthCookies(all)
+    bad.forEach((n) => { document.cookie = `${n}=; Max-Age=0; path=/` })
+  } catch {}
 }

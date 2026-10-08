@@ -9,7 +9,12 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return safeAuthCookies(cookieStore.getAll()).cookies },
+        getAll() {
+          const { cookies: ok, bad } = safeAuthCookies(cookieStore.getAll())
+          // Only allowed in route handlers / server actions; pages just skip it.
+          bad.forEach((n) => { try { cookieStore.delete(n) } catch {} })
+          return ok
+        },
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
