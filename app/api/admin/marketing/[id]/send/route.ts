@@ -5,6 +5,8 @@ import { getSegmentRecipients, sendCampaignEmails, type SegmentKey } from '@/lib
 import { renderTemplateBody } from '@/lib/email-templates'
 
 export const dynamic = 'force-dynamic'
+// ~1,400 recipients = 15 Resend batches; give the send room to finish.
+export const maxDuration = 300
 
 // POST /api/admin/marketing/[id]/send  { test?: boolean, testEmail?: string }
 // test=true → send a single preview to testEmail (no status change).

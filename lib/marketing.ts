@@ -38,13 +38,27 @@ export function readUnsubToken(token: string): string | null {
   } catch { return null }
 }
 
+// Page through a Supabase query 1,000 rows at a time. Throws on error so a failed
+// read can never look like a smaller audience.
+async function fetchAll(page: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: any }>): Promise<any[]> {
+  const out: any[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await page(from, from + 999)
+    if (error) throw new Error(`Audience query failed: ${error.message}`)
+    out.push(...(data ?? []))
+    if (!data || data.length < 1000) return out
+  }
+}
+
 // ── Audience segmentation ─────────────────────────────────────────────────────
 export async function getSegmentRecipients(segment: SegmentKey): Promise<Recipient[]> {
   const db = supabaseAdmin()
-  const [{ data: customers }, { data: bookings }, { data: suppressed }] = await Promise.all([
-    db.from('customers').select('id, email, name'),
-    db.from('bookings').select('customer_id, auth_user_id, start_time').neq('status', 'cancelled'),
-    db.from('email_suppressions').select('email'),
+  // Supabase returns at most 1,000 rows per request, so page through every table.
+  // (Before this, "All customers" silently stopped at ~1,000 of 1,400+.)
+  const [customers, bookings, suppressed] = await Promise.all([
+    fetchAll((from, to) => db.from('customers').select('id, email, name').order('id').range(from, to)),
+    fetchAll((from, to) => db.from('bookings').select('customer_id, auth_user_id, start_time').neq('status', 'cancelled').order('id').range(from, to)),
+    fetchAll((from, to) => db.from('email_suppressions').select('email').order('email').range(from, to)),
   ])
   const supp = new Set((suppressed ?? []).map((s: any) => (s.email || '').toLowerCase()))
 
@@ -114,6 +128,8 @@ export async function sendCampaignEmails(
   const resend = new Resend(process.env.RESEND_API_KEY)
   let sent = 0
   for (let i = 0; i < recipients.length; i += 100) {
+    // Stay under Resend's per-second API rate limit between batches.
+    if (i > 0) await new Promise(r => setTimeout(r, 600))
     const chunk = recipients.slice(i, i + 100)
     const batch = chunk.map(r => ({
       from: MARKETING_FROM,
