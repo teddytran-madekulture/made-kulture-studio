@@ -82,7 +82,7 @@ export default function DirectoryHome() {
               <p style={{ fontSize: 15, lineHeight: 1.6, margin: '0 0 16px', color: 'rgba(var(--t-fg-rgb), calc(0.75 * var(--t-a)))' }}>
                 {d.total} members are in the directory. Turn on your listing to see who&apos;s here, get found, and answer castings.
               </p>
-              <Link href="/account/profile" style={btn(true)}>Turn on my listing</Link>
+              <Link href="/account/profile?s=privacy" style={btn(true)}>Turn on my listing</Link>
             </div>
           )}
         </div>

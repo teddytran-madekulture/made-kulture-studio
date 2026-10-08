@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { PROFILE_SECTIONS } from '@/lib/settings-sections'
-import { CREATIVE_ROLES, SERVICE_ROLES } from '@/lib/roles'
+import { CREATIVE_ROLES, SERVICE_ROLES, isServiceMember } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/client'
 import RolePicker from '@/components/RolePicker'
 import PortfolioManager from '@/components/PortfolioManager'
@@ -108,6 +108,7 @@ function ProfileSettings() {
           credits: Array.isArray(d.profile.credits) ? d.profile.credits : [],
           cv_url: d.profile.cv_url ?? null,
         })
+        if (d.profile) setVendorSigned(!!d.profile.vendor_terms_accepted_at)
         setLoading(false)
       })
     fetch('/api/roles').then(r => (r.ok ? r.json() : null))
@@ -117,12 +118,17 @@ function ProfileSettings() {
   // Minimum profile to be listed/browsable in the directory.
   const isBrand = form.account_type === 'brand'
   const isCustomer = form.account_type === 'customer'
+  // Offering a Production Services role means signing the Vendor Agreement
+  // before you list (lib/directory-listing.ts) — it belongs in the checklist.
+  const [vendorSigned, setVendorSigned] = useState(true)
+  const needsVendorAgreement = isServiceMember(form.roles) && !vendorSigned
   const missing: string[] = []
   if (!(form.full_name ?? '').trim()) missing.push(isBrand ? 'your company name' : 'your name')
   if (!isBrand && (form.roles?.length ?? 0) === 0) missing.push('at least one role')
   if (!(form.bio ?? '').trim()) missing.push(isBrand ? 'a short about' : 'a short bio')
   if (portfolioCount === 0 && (form.links?.length ?? 0) === 0 && !(form.instagram ?? '').trim())
     missing.push('a portfolio photo, a link, or Instagram')
+  if (needsVendorAgreement) missing.push('the Vendor Agreement')
 
   // Downscale + compress in the browser before upload. Avatars only ever show
   // at ~44–72px, so capping the longest side at 512px and re-encoding as JPEG
@@ -299,11 +305,14 @@ function ProfileSettings() {
                 ...(!isBrand ? [{ done: (form.roles?.length ?? 0) > 0, label: 'Pick at least one role' }] : []),
                 { done: !!(form.bio ?? '').trim(), label: isBrand ? 'Write a short about' : 'Write a short bio' },
                 { done: portfolioCount > 0 || (form.links?.length ?? 0) > 0 || !!(form.instagram ?? '').trim(), label: 'Add a portfolio photo, a link, or Instagram' },
-                { done: form.directory_opt_in, label: 'Turn on the directory listing (Directory & notifications)' },
-              ].map((s, i) => (
+                ...(isServiceMember(form.roles) ? [{ done: vendorSigned, label: 'Sign the Vendor Agreement (Service listings)', href: '/account/profile?s=listings' }] : []),
+                { done: form.directory_opt_in, label: 'Turn on the directory listing (Directory & notifications)', href: '/account/profile?s=privacy' },
+              ].map((s: { done: boolean; label: string; href?: string }, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'Inter', fontSize: 13, color: s.done ? 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))' : 'var(--t-fg)' }}>
                   <span style={{ width: 16, height: 16, flexShrink: 0, borderRadius: '50%', border: `1px solid ${s.done ? 'var(--t-ok)' : 'rgba(var(--t-gold-rgb), 0.5)'}`, color: 'var(--t-ok)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>{s.done ? '✓' : ''}</span>
-                  <span style={{ textDecoration: s.done ? 'line-through' : 'none' }}>{s.label}</span>
+                  {s.href && !s.done
+                    ? <Link href={s.href} style={{ color: 'inherit', textDecoration: 'underline' }}>{s.label}</Link>
+                    : <span style={{ textDecoration: s.done ? 'line-through' : 'none' }}>{s.label}</span>}
                 </div>
               ))}
             </div>

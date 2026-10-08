@@ -26,10 +26,36 @@ export default function SecurityPage() {
   // The current-password check is a signInWithPassword, so it needs a bot token too.
   const bot = useTurnstile('auto')
   const [currentEmail, setCurrentEmail] = useState('')
+  // 2026-10-07: people who signed up with Google or Apple have no password, so
+  // the "current password" form could never work for them. They get a
+  // "set a password" card instead, which emails them the reset link (proves
+  // they own the inbox, and needs no current password).
+  const [oauthOnly, setOauthOnly] = useState(false)
+  const [oauthName, setOauthName] = useState('Google')
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setCurrentEmail(data.user?.email ?? ''))
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentEmail(data.user?.email ?? '')
+      const providers: string[] = (data.user?.app_metadata as any)?.providers ?? [(data.user?.app_metadata as any)?.provider].filter(Boolean)
+      const hasEmail = providers.includes('email') || (data.user?.identities ?? []).some(i => i.provider === 'email')
+      setOauthOnly(!!data.user && !hasEmail)
+      setOauthName(providers.includes('apple') ? 'Apple' : 'Google')
+    })
   }, [supabase])
+
+  const [linkBusy, setLinkBusy] = useState(false); const [linkMsg, setLinkMsg] = useState(''); const [linkErr, setLinkErr] = useState('')
+  const sendSetPassword = async () => {
+    if (!currentEmail) return
+    setLinkBusy(true); setLinkMsg(''); setLinkErr('')
+    const { error } = await supabase.auth.resetPasswordForEmail(currentEmail, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/account/reset-password`,
+      captchaToken: bot.token,
+    })
+    bot.reset()
+    setLinkBusy(false)
+    if (error) setLinkErr(error.message)
+    else setLinkMsg(`We emailed a link to ${currentEmail}. Open it to choose your password. After that you can sign in with your email and password, or keep using ${oauthName}.`)
+  }
 
   // Password
   const [curPw, setCurPw] = useState(''); const [pw, setPw] = useState(''); const [pwc, setPwc] = useState('')
@@ -91,7 +117,21 @@ export default function SecurityPage() {
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 32px' }}>LOGIN &amp; SECURITY</h1>
 
       <div className="sec-grid">
-      {/* Change password */}
+      {/* Change password — or, for Google/Apple sign-ins, set one */}
+      {oauthOnly ? (
+      <div style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '24px', maxWidth: 480 }}>
+        <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Set a password</div>
+        <div style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 1.55, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', marginBottom: 16 }}>
+          You sign in with {oauthName}, so your account doesn&apos;t have a password yet. Add one if you&apos;d like to sign in with your email too. We&apos;ll email you a link to set it.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {linkErr && <div style={errBox}>{linkErr}</div>}
+          {linkMsg && <div style={okBox}>{linkMsg}</div>}
+          {bot.widget}
+          <button type="button" onClick={sendSetPassword} disabled={linkBusy || bot.waiting || !currentEmail} style={btnStyle(linkBusy)}>{linkBusy ? 'SENDING…' : 'EMAIL ME A LINK'}</button>
+        </div>
+      </div>
+      ) : (
       <div style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '24px', maxWidth: 480 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Change password</div>
         <form onSubmit={changePw} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -113,6 +153,7 @@ export default function SecurityPage() {
           <button type="submit" disabled={pwSaving || bot.waiting} style={btnStyle(pwSaving)}>{pwSaving ? 'UPDATING…' : 'UPDATE PASSWORD'}</button>
         </form>
       </div>
+      )}
 
       {/* Change email */}
       <div style={{ background: 'var(--t-surface-lo)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.08 * var(--t-a)))', borderRadius: 8, padding: '24px', maxWidth: 480 }}>

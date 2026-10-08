@@ -16,7 +16,10 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setLoading(true); setError('')
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/account/reset-password`,
+      // 2026-10-07: the link must go through /auth/callback, which swaps the
+      // recovery code for a session. Pointed straight at /account/reset-password
+      // it arrived signed out, so the middleware bounced it to /login.
+      redirectTo: `${window.location.origin}/auth/callback?next=/account/reset-password`,
       captchaToken: bot.token,
     })
     bot.reset()   // tokens are single-use
