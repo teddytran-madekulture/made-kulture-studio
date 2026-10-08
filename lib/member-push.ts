@@ -4,6 +4,7 @@
 // faster one on top. Dead endpoints (404/410) are pruned.
 import { createClient } from '@supabase/supabase-js'
 import { sendApns } from '@/lib/apns'
+import { sendFcm } from '@/lib/fcm'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -22,20 +23,26 @@ export async function sendMemberPush(userId: string, opts: PushMsg): Promise<num
   return native + web
 }
 
-// 2026-10-07 — iPhone app via APNs. Android (FCM) rows are stored but not sent
-// to until the Android build ships.
+// 2026-10-07 — the store apps. iPhone tokens go straight to Apple (APNs);
+// Android tokens go through Google's Firebase Cloud Messaging (lib/fcm.ts).
 async function sendNativePush(userId: string, opts: PushMsg): Promise<number> {
   try {
-    const { data: rows, error } = await supabase.from('native_push_tokens').select('id, token').eq('user_id', userId).eq('platform', 'ios')
+    const { data: rows, error } = await supabase.from('native_push_tokens').select('id, token, platform').eq('user_id', userId)
     if (error) { console.error('[member-push] native lookup failed:', error.message); return 0 }
     if (!rows?.length) return 0
-    const results = await sendApns(rows.map((r: any) => r.token), opts)
+    const ios = rows.filter((r: any) => r.platform === 'ios').map((r: any) => r.token)
+    const android = rows.filter((r: any) => r.platform === 'android').map((r: any) => r.token)
+    const [a, g] = await Promise.all([
+      ios.length ? sendApns(ios, opts) : Promise.resolve([]),
+      android.length ? sendFcm(android, opts) : Promise.resolve([]),
+    ])
+    const results = [...a, ...g]
     const ok = results.filter(r => r.ok).map(r => r.token)
     const dead = results.filter(r => r.dead).map(r => r.token)
     if (ok.length) await supabase.from('native_push_tokens').update({ last_sent_at: new Date().toISOString() }).in('token', ok)
     if (dead.length) {
       await supabase.from('native_push_tokens').delete().in('token', dead)
-      console.warn('[member-push] pruned', dead.length, 'dead iOS token(s) for', userId)
+      console.warn('[member-push] pruned', dead.length, 'dead app token(s) for', userId)
     }
     return ok.length
   } catch (e) {

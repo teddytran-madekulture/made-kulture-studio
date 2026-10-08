@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "497495825870",
+    "project_id": "made-kulture-2acf8",
+    "storage_bucket": "made-kulture-2acf8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:497495825870:android:16d99ad43901f97b091f9f",
+        "android_client_info": {
+          "package_name": "com.madekulture.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGQz_UBNg5BQquZVswMh6NRjENM0IHQTM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -48,3 +48,39 @@ workflows:
         # get every build without this. true = also submit for EXTERNAL beta
         # review, which needs Test Information filled in App Store Connect.
         submit_to_testflight: false
+
+  # Android → .aab for Google Play (2026-10-07). Run it the same way as the iOS
+  # one: codemagic.io → Start new build → "Android → Play bundle".
+  # Needs, set up once in Codemagic:
+  #   • Code signing identities → Android keystores → the upload keystore,
+  #     saved under the reference name "mk_upload" (below).
+  # And in the repo: mobile/android/app/google-services.json from Firebase,
+  # or push notifications won't register on Android.
+  # The first .aab is uploaded to Play Console by hand (Google requires it);
+  # after that, a Play service account can be added here to publish
+  # automatically to the internal testing track.
+  android-play:
+    name: Android -> Play bundle
+    max_build_duration: 40
+    instance_type: linux_x2
+    environment:
+      node: 22
+      java: 21
+      android_signing:
+        - mk_upload
+    scripts:
+      - name: Install app dependencies
+        working_directory: mobile
+        script: npm ci
+      - name: Sync Capacitor into the Android project
+        working_directory: mobile
+        script: npx cap sync android
+      - name: Build the signed .aab
+        working_directory: mobile/android
+        # chmod: a gradlew committed from Windows loses its execute bit.
+        script: |
+          chmod +x gradlew
+          ./gradlew bundleRelease
+    artifacts:
+      - mobile/android/app/build/outputs/bundle/release/*.aab
+      - mobile/android/app/build/outputs/**/mapping.txt

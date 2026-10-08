@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Made Kulture</string>
+    <string name="title_activity_main">Made Kulture</string>
+    <string name="package_name">com.madekulture.app</string>
+    <string name="custom_url_scheme">com.madekulture.app</string>
+</resources>
