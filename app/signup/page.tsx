@@ -63,7 +63,7 @@ export default function SignupPage() {
           directory_opt_in: accountType === 'customer' ? false : directoryOptIn,
           account_type: accountType,
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`,
         captchaToken: bot.token,
       },
     })
@@ -84,7 +84,7 @@ export default function SignupPage() {
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}` },
     })
     if (error) { setError(error.message); setLoading(false) }
   }
@@ -101,7 +101,7 @@ export default function SignupPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`,
         // Always show Google's account chooser (same as the admin login) so a
         // browser with several Google accounts can't silently sign in as the
         // wrong one. (2026-10-04)
@@ -140,7 +140,7 @@ export default function SignupPage() {
         </h1>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 32 }}>
           Already have one?{' '}
-          <Link href={`/login?next=${nextUrl}`} style={{ color: '#fff', textDecoration: 'underline' }}>Sign in</Link>
+          <Link href={`/login?next=${encodeURIComponent(nextUrl)}`} style={{ color: '#fff', textDecoration: 'underline' }}>Sign in</Link>
         </p>
 
         {/* Google */}

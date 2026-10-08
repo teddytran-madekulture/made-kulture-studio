@@ -47,7 +47,7 @@ export default function LoginPage() {
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}` },
     })
     if (error) { setError(error.message); setLoading(false) }
   }
@@ -64,7 +64,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${nextUrl}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`,
         // Always show Google's account chooser (same as the admin login) so a
         // browser with several Google accounts can't silently sign in as the
         // wrong one. (2026-10-04)
@@ -93,7 +93,7 @@ export default function LoginPage() {
         </h1>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 32 }}>
           New here?{' '}
-          <Link href={`/signup?next=${nextUrl}`} style={{ color: '#fff', textDecoration: 'underline' }}>Create an account</Link>
+          <Link href={`/signup?next=${encodeURIComponent(nextUrl)}`} style={{ color: '#fff', textDecoration: 'underline' }}>Create an account</Link>
         </p>
 
         {/* Google */}

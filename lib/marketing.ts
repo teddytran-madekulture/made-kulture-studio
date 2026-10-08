@@ -6,7 +6,8 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase'
-import { renderShell } from '@/lib/email-templates'
+import { finalizeEmail, getTemplate } from '@/lib/email-templates'
+import { UNSUB_TOKEN } from '@/lib/email-designs'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 // Keep marketing OFF the transactional sender to protect booking-email deliverability.
@@ -103,9 +104,13 @@ function unsubUrl(email: string, campaignId?: string): string {
 // campaignId (when sending a real campaign) tags each email so the Resend webhook
 // can attribute opens/clicks back to the campaign.
 export async function sendCampaignEmails(
-  subject: string, bodyHtml: string, recipients: Recipient[], campaignId?: string
+  subject: string, bodyHtml: string, recipients: Recipient[], campaignId?: string, templateId?: string | null
 ): Promise<{ sent: number; error?: string }> {
   if (!process.env.RESEND_API_KEY) return { sent: 0, error: 'RESEND_API_KEY not set.' }
+  // A designed email MUST carry the unsubscribe token or nobody can opt out.
+  if (getTemplate(templateId)?.fullDocument && !bodyHtml.includes(UNSUB_TOKEN)) {
+    return { sent: 0, error: 'This design has no unsubscribe link — refusing to send.' }
+  }
   const resend = new Resend(process.env.RESEND_API_KEY)
   let sent = 0
   for (let i = 0; i < recipients.length; i += 100) {
@@ -114,7 +119,7 @@ export async function sendCampaignEmails(
       from: MARKETING_FROM,
       to: r.email,
       subject,
-      html: renderShell(bodyHtml, unsubUrl(r.email, campaignId)),
+      html: finalizeEmail(templateId, bodyHtml, unsubUrl(r.email, campaignId)),
       headers: { 'List-Unsubscribe': `<${unsubUrl(r.email, campaignId)}>` },
       ...(campaignId ? { tags: [{ name: 'campaign_id', value: campaignId }] } : {}),
     }))

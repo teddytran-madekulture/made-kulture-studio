@@ -59,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // The test address joins the guest list too, so the owner can try the code.
     const invErr = await inviteRecipients([to])
     if (invErr) return NextResponse.json({ error: invErr }, { status: 500 })
-    const r = await sendCampaignEmails(c.subject, body, [{ email: to, name: 'Test' }])
+    const r = await sendCampaignEmails(`[TEST] ${c.subject}`, body, [{ email: to, name: 'Test' }], undefined, c.template_id as string | null)
     if (r.error) return NextResponse.json({ error: r.error }, { status: 502 })
     return NextResponse.json({ success: true, test: true, sent: r.sent })
   }
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: invErr }, { status: 500 })
   }
 
-  const r = await sendCampaignEmails(c.subject, body, recipients, c.id)
+  const r = await sendCampaignEmails(c.subject, body, recipients, c.id, c.template_id as string | null)
 
   // Nothing went out — release the claim so it can be retried.
   if (r.error && r.sent === 0) {

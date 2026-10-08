@@ -5,6 +5,8 @@
 // + unsubscribe) is applied by renderShell so every send stays CAN-SPAM-clean no
 // matter which template is used.
 
+import { DESIGNS, UNSUB_TOKEN } from '@/lib/email-designs'
+
 const ADDRESS = '4825 Gulf Freeway, Houston TX 77023'
 const GOLD = '#c9b27e'
 
@@ -21,6 +23,10 @@ export interface EmailTemplate {
   fields: TemplateField[]
   defaults: Record<string, string>
   render: (v: Record<string, string>, promoCode?: string) => string
+  // A full designed email (lib/email-designs.ts): sent as-is, no shell; the
+  // unsubscribe link goes in at UNSUB_TOKEN. Promo codes don't apply.
+  fullDocument?: boolean
+  subject?: string
 }
 
 // ── small building blocks ─────────────────────────────────────────────────────
@@ -64,7 +70,7 @@ export function renderShell(bodyHtml: string, unsubUrl: string): string {
       </td></tr>
       <tr><td>${bodyHtml}</td></tr>
       <tr><td style="padding:22px 28px;border-top:1px solid #2a2a2a;color:#777777;font-size:11px;line-height:1.7;font-family:Helvetica,Arial,sans-serif;">
-        Made Kulture · ${ADDRESS} · by appointment · (832) 408-1631<br/>
+        Made Kulture · ${ADDRESS}<br/>
         You're receiving this because you've booked with us. <a href="${unsubUrl}" style="color:#999999;">Unsubscribe</a>.
       </td></tr>
     </table>
@@ -173,6 +179,19 @@ export const TEMPLATES: EmailTemplate[] = [
   },
 ]
 
+// Designed emails join the picker as templates with no fields.
+for (const d of DESIGNS) {
+  TEMPLATES.push({ id: d.id, name: d.name, blurb: d.blurb, fields: [], defaults: {}, fullDocument: true, subject: d.subject, render: () => d.html })
+}
+
+/** The final HTML for one recipient: a designed email gets its unsubscribe link
+ *  swapped in; everything else is wrapped in the compliance shell. */
+export function finalizeEmail(templateId: string | null | undefined, bodyHtml: string, unsubUrl: string): string {
+  const t = getTemplate(templateId)
+  if (t?.fullDocument) return bodyHtml.split(UNSUB_TOKEN).join(unsubUrl)
+  return renderShell(bodyHtml, unsubUrl)
+}
+
 export function getTemplate(id?: string | null): EmailTemplate | undefined {
   return TEMPLATES.find(t => t.id === id)
 }
@@ -186,5 +205,5 @@ export function renderTemplateBody(templateId: string, values: Record<string, st
 
 // Full email (shell + body) — used for the live preview with a dummy unsubscribe.
 export function renderTemplateEmail(templateId: string, values: Record<string, string>, promoCode?: string): string {
-  return renderShell(renderTemplateBody(templateId, values, promoCode), '#')
+  return finalizeEmail(templateId, renderTemplateBody(templateId, values, promoCode), '#')
 }

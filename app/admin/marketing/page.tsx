@@ -53,7 +53,8 @@ export default function MarketingPage() {
   // Switching template resets its fields to that template's starter copy.
   const pickTemplate = (id: string) => {
     const t = TEMPLATES.find(x => x.id === id) ?? TEMPLATES[0]
-    setF({ ...f, template_id: id, values: { ...t.defaults, ...f.values } })
+    // A designed email brings its own subject (only if none is typed) and takes no promo.
+    setF({ ...f, template_id: id, values: { ...t.defaults, ...f.values }, subject: f.subject || t.subject || '', promo_id: t.fullDocument ? '' : f.promo_id })
   }
   const setVal = (key: string, val: string) => setF({ ...f, values: { ...f.values, [key]: val } })
   const payload = () => ({ name: f.name, segment_key: f.segment_key, subject: f.subject, template_id: f.template_id, template_data: f.values, promo_id: f.promo_id })
@@ -166,6 +167,11 @@ export default function MarketingPage() {
               {/* Layout: fields + live preview */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 14 }}>
                 <div>
+                  {template.fullDocument && (
+                    <div style={{ fontSize: 12.5, color: C.dim, lineHeight: 1.6, marginBottom: 12 }}>
+                      This is a finished design: it sends exactly as previewed, with each person&rsquo;s unsubscribe link added automatically. Nothing to fill in. Always send yourself a test first.
+                    </div>
+                  )}
                   {template.fields.map(fld => (
                     <div key={fld.key} style={{ marginBottom: 12 }}>
                       <span style={lbl}>{fld.label}</span>
@@ -174,19 +180,19 @@ export default function MarketingPage() {
                         : <input style={inp} value={f.values[fld.key] ?? ''} onChange={e => setVal(fld.key, e.target.value)} placeholder={fld.placeholder} />}
                     </div>
                   ))}
-                  <div style={{ marginBottom: 4 }}><span style={lbl}>Attach promo code (optional)</span>
+                  {!template.fullDocument && <div style={{ marginBottom: 4 }}><span style={lbl}>Attach promo code (optional)</span>
                     <select style={inp} value={f.promo_id} onChange={e => setF({ ...f, promo_id: e.target.value })}>
                       <option value="">None</option>
                       {promos.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
                     </select>
-                  </div>
+                  </div>}
                 </div>
                 <div>
                   <span style={lbl}>Live preview</span>
                   <div style={{ border: `1px solid ${C.line}`, borderRadius: 8, overflow: 'hidden', background: '#0a0a0b' }}>
-                    <iframe title="preview" style={{ width: '100%', height: 640, border: 'none', display: 'block' }} srcDoc={renderTemplateEmail(f.template_id, f.values, promoCode)} />
+                    <iframe title="preview" style={{ width: '100%', height: template.fullDocument ? 900 : 640, border: 'none', display: 'block' }} srcDoc={renderTemplateEmail(f.template_id, f.values, promoCode)} />
                   </div>
-                  <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Header, address & unsubscribe are added to every send automatically.</div>
+                  <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>{template.fullDocument ? 'Unsubscribe link is added to every send automatically.' : 'Header, address & unsubscribe are added to every send automatically.'}</div>
                 </div>
               </div>
               {err && <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 12 }}>{err}</div>}
