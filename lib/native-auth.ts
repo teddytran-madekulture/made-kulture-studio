@@ -99,9 +99,21 @@ export async function nativeOAuthSignIn(
       onError(q.get('error_description') || 'Sign-in was cancelled.')
       return
     }
-    // Same route the website uses -- the PKCE verifier cookie lives in this
-    // web view, so the server-side exchange finds it.
-    window.location.href = `/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent(nextUrl)}`
+    // 2026-10-08: exchange the code HERE, in the web view's own JavaScript,
+    // instead of sending it to /auth/callback. That route sets the session
+    // cookies with Set-Cookie on a redirect response, and the iPhone app's
+    // web view did not keep them: the account page rendered once, then the
+    // very next requests had no session and the app bounced to Sign in (and
+    // Sign out had nothing to clear). Cookies written from JavaScript are the
+    // same path email/password sign-in uses, which has always stuck.
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) {
+        // Fall back to the server exchange rather than stranding the person.
+        window.location.href = `/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent(nextUrl)}`
+        return
+      }
+      window.location.href = nextUrl.startsWith('/') ? nextUrl : '/account'
+    })
   })
 
   try {
