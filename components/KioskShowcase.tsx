@@ -13,7 +13,7 @@
 // credits band below); a landscape door screen puts the credits beside it.
 // Full brightness, no dimming — Teddy's call: the tablets aren't bright enough
 // to affect a shoot.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import qrcode from 'qrcode-generator'
 
 export interface ShowcaseEditorial {
@@ -28,62 +28,76 @@ export interface ShowcaseEditorial {
 const CHAMP = '#c9b27e'
 const CHAMP_DIM = 'rgba(201,178,126,0.6)'
 
-// Cycles through EVERY editorial in rotation: each plays through its photos
-// with its own credits, then the next one takes over (the website shows one per
-// visit; an idle tablet has time for all of them).
-// ── Which order THIS tablet plays them in (2026-09-30) ──────────────────────
-// 1. Editorials shot on this tablet's own set come first — standing in Rosé,
-//    you see real work made in Rosé.
-// 2. The rest follow, each tablet starting at a different point so two idle
-//    tablets side by side don't show the same shoot.
-// The stagger is a fixed per-set offset (not random, not a hash): with only a
-// couple of editorials, a hash put Set A and Set C — the two tablets actually
-// mounted — on the SAME one. Order = the order tablets went up; add new sets at
-// the end. A tablet with no ?set= (door) uses offset 0.
+// ── CLOCK SCHEDULE (2026-10-08) ─────────────────────────────────────────────
+// Every tablet works out what to show from the WALL CLOCK, not from when its
+// own screen went idle. Before this, each tablet started at a different
+// editorial but then ran on its own timer from its own idle moment, so within
+// a few minutes two tablets side by side were on the same shoot.
+//
+// Time is cut into fixed SLOT_MS slots. Slot s on a tablet at position k shows
+// playlist[(s + k) % playlist.length], so at any instant neighbouring tablets
+// show DIFFERENT editorials and all switch together. Photos inside a slot are
+// clock-driven too: a tablet that goes idle mid-slot lands on the right photo.
+//
+// Ads get extra air time: every editorial used as an ad (promoLabel/promoUrl)
+// is played between each regular one — [AD, A, AD, B, AD, C] — so the ad shows
+// as often as all the regular editorials combined. Tablets one position apart
+// never collide; two apart can both be on the ad at once (it's on every other
+// slot), which is the price of the ad running half the time.
+//
+// Position = order in STAGGER_ORDER (order the tablets went up; add new sets at
+// the END). A tablet with no ?set= (door) is position 0.
 const STAGGER_ORDER = ['set-a', 'set-c', 'set-b', 'set-d', 'concrete', 'vintage', 'cottage', 'studio-one', 'watering-hole', 'the-tank']
+export const SLOT_MS = 35_000          // one editorial per slot
+const MIN_PHOTO_MS = 5_000             // never flash a photo faster than this
 
-export function orderForTablet<T extends { setSlug?: string }>(items: T[], setSlug: string | null): T[] {
-  const own = setSlug ? items.filter(e => e.setSlug === setSlug) : []
-  const rest = setSlug ? items.filter(e => e.setSlug !== setSlug) : items.slice()
-  if (rest.length > 1) {
-    const idx = setSlug ? Math.max(0, STAGGER_ORDER.indexOf(setSlug)) : 0
-    const off = idx % rest.length
-    rest.push(...rest.splice(0, off))
-  }
-  return [...own, ...rest]
+const isAd = (e: ShowcaseEditorial) => !!(e.promoLabel || e.promoUrl)
+
+export function buildPlaylist<T extends ShowcaseEditorial>(items: T[]): T[] {
+  const ads = items.filter(isAd)
+  const regular = items.filter(e => !isAd(e))
+  if (!ads.length || !regular.length) return items.slice()
+  const out: T[] = []
+  let a = 0
+  for (const r of regular) { out.push(ads[a++ % ads.length], r) }
+  return out
+}
+
+export function tabletPosition(setSlug: string | null): number {
+  return setSlug ? Math.max(0, STAGGER_ORDER.indexOf(setSlug)) : 0
+}
+
+// What this tablet shows at `now`: which editorial, which photo, and a key that
+// changes exactly when the editorial does.
+export function scheduleAt<T extends ShowcaseEditorial>(playlist: T[], setSlug: string | null, now: number) {
+  if (!playlist.length) return null
+  const slot = Math.floor(now / SLOT_MS)
+  const idx = (slot + tabletPosition(setSlug)) % playlist.length
+  const e = playlist[idx]
+  const n = Math.max(1, e.photos.length)
+  const shown = Math.max(1, Math.min(n, Math.floor(SLOT_MS / MIN_PHOTO_MS)))
+  const photo = Math.min(shown - 1, Math.floor((now % SLOT_MS) / (SLOT_MS / shown)))
+  return { e, photo, key: `${slot}:${idx}` }
 }
 
 // `footer` (2026-10-06): the NOW PLAYING bar + STAFF/MUSIC buttons stay on
 // screen under the gallery — the showcase used to cover them whenever the set
 // was empty. Taps on the footer do NOT dismiss the showcase.
 export default function KioskShowcase({ items: raw, setSlug = null, onDismiss, portrait, footer }: { items: ShowcaseEditorial[]; setSlug?: string | null; onDismiss: () => void; portrait: boolean; footer?: ReactNode }) {
-  const items = useMemo(() => orderForTablet(raw, setSlug), [raw, setSlug])
-  // A running count, not an index: with ONE editorial the index would stay 0,
-  // nothing would remount, and it would freeze on the last photo.
-  const [turn, setTurn] = useState(0)
-  const cur = items[turn % Math.max(items.length, 1)]
-  if (!cur) return null
-  return <One key={turn} e={cur} onDismiss={onDismiss} portrait={portrait} footer={footer}
-    onCycleDone={() => setTurn(x => x + 1)} />
+  const playlist = useMemo(() => buildPlaylist(raw), [raw])
+  // Local 1s tick — zero network calls.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const at = scheduleAt(playlist, setSlug, now)
+  if (!at) return null
+  return <One key={at.key} e={at.e} i={at.photo} onDismiss={onDismiss} portrait={portrait} footer={footer} />
 }
 
-function One({ e, onDismiss, portrait, onCycleDone, footer }: { e: ShowcaseEditorial; onDismiss: () => void; portrait: boolean; onCycleDone: () => void; footer?: ReactNode }) {
-  const [i, setI] = useState(0)
+function One({ e, i, onDismiss, portrait, footer }: { e: ShowcaseEditorial; i: number; onDismiss: () => void; portrait: boolean; footer?: ReactNode }) {
   const n = e.photos.length
-  // ⚠️ Refs, not deps: the kiosk page re-renders every 5s (its clock tick) and
-  // hands down fresh callbacks each time. With them in the deps the interval
-  // would restart every 5s and a 6s+ step would NEVER fire.
-  const iRef = useRef(0)
-  const doneRef = useRef(onCycleDone)
-  doneRef.current = onCycleDone
-  useEffect(() => {
-    const step = Math.max(4, e.intervalSec + 2) * 1000
-    const t = setInterval(() => {
-      if (iRef.current + 1 >= n) { doneRef.current(); return }   // last photo shown → next editorial
-      iRef.current += 1; setI(iRef.current)
-    }, step)
-    return () => clearInterval(t)
-  }, [n, e.intervalSec])
 
   // A promo QR (e.g. The Patient → /submissions) takes precedence over the post.
   // Relative links become absolute: a phone scanning it isn't on this site.
