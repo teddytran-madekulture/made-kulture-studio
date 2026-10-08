@@ -102,6 +102,15 @@ export default function MarketingPage() {
     load()
   }
 
+  // Drafts only — the server refuses anything that has started sending.
+  const deleteDraft = async (c: Campaign) => {
+    if (!confirm(`Delete the draft "${c.name}"?\n\nThis can't be undone.`)) return
+    const r = await fetch(`/api/admin/marketing/${c.id}`, { method: 'DELETE' })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) alert(`Could not delete: ${d.error || r.status}`)
+    load()
+  }
+
   // Save the current draft and immediately fire a test to an address you enter — one step, no need to hunt for a button.
   const saveAndTest = async () => {
     if (!f.name || !f.subject) { setErr('Add a campaign name and subject first.'); return }
@@ -227,6 +236,7 @@ export default function MarketingPage() {
                         ? <span style={{ fontSize: 11, color: C.accent, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>SENDING…</span>
                         : (
                           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                            <button onClick={() => deleteDraft(c)} title="Delete this draft" style={{ background: 'none', border: '1px solid rgba(255,107,107,0.35)', color: '#ff8a80', borderRadius: 6, padding: '7px 12px', fontSize: 11, cursor: 'pointer' }}>DELETE</button>
                             <button onClick={() => sendTest(c.id)} style={{ background: 'none', border: `1px solid ${C.line}`, color: C.dim, borderRadius: 6, padding: '7px 12px', fontSize: 11, cursor: 'pointer' }}>TEST</button>
                             <button onClick={() => sendReal(c)} style={{ background: C.accent, border: 'none', color: '#0b0b0d', borderRadius: 6, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>SEND →</button>
                           </div>
