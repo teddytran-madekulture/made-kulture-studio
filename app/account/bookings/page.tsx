@@ -1,4 +1,5 @@
 'use client'
+import ShootsTabs from '@/components/ShootsTabs'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
@@ -290,6 +291,7 @@ export default function BookingsPage() {
     <div>
       {MoveModal}
       {SaveModal}
+      <ShootsTabs />
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>MY BOOKINGS</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 32 }}>
         Cancel 48+ hours before your session and the full value comes back as studio credit. Full-warehouse bookings cancelled inside 48 hours carry a 25% late cancellation fee.

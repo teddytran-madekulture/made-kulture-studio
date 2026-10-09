@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { SETTINGS_PAGES } from '@/lib/settings-sections'
+import { SHOOTS_PATHS } from '@/components/ShootsTabs'
 
 // Account area navigation, Instagram-style.
 //   Desktop: a slim icon rail on the far left that slides out (labels + full
@@ -14,10 +15,9 @@ import { SETTINGS_PAGES } from '@/lib/settings-sections'
 type Item = { href: string; label: string; icon: string }
 const ITEMS: Item[] = [
   { href: '/account', label: 'Dashboard', icon: 'home' },
-  { href: '/account/bookings', label: 'My Bookings', icon: 'cal' },
+  // Shoots = My Bookings + Castings + Mini Sessions (tabs: components/ShootsTabs).
+  { href: '/account/bookings', label: 'Shoots', icon: 'cal' },
   { href: '/account/directory', label: 'Directory', icon: 'search' },
-  { href: '/account/castings', label: 'Castings', icon: 'cast' },
-  { href: '/account/minis', label: 'Mini Sessions', icon: 'clock' },
   { href: '/account/messages', label: 'Messages', icon: 'msg' },
   { href: '/account/me', label: 'Profile', icon: 'user' },
 ]
@@ -26,7 +26,7 @@ const ITEMS: Item[] = [
 const SETTINGS: Item = { href: '/account/profile', label: 'Settings', icon: 'gear' }
 // 2026-10-07: Support Center (searchable FAQ + contact support tickets).
 const SUPPORT: Item = { href: '/account/support', label: 'Help & Support', icon: 'help' }
-const MOBILE_BAR = ['/account', '/account/directory', '/account/castings', '/account/messages', '/account/me']
+const MOBILE_BAR = ['/account', '/account/directory', '/account/bookings', '/account/messages', '/account/me']
 
 const PATHS: Record<string, React.ReactNode> = {
   home: <path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
@@ -112,9 +112,10 @@ export default function AccountRail() {
     if (href === '/account/me') return pathname === '/account/me' || onOwnProfile
     if (href === SETTINGS.href) return SETTINGS_PAGES.includes(pathname)
     if (href === '/account/directory' && onOwnProfile) return false
+    if (href === '/account/bookings') return SHOOTS_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
     return pathname === href || pathname.startsWith(href + '/')
   }
-  const countFor = (href: string) => href === '/account/messages' ? unread : href === '/account/castings' ? unseenApplicants : 0
+  const countFor = (href: string) => href === '/account/messages' ? unread : href === '/account/bookings' ? unseenApplicants : 0
   const badge = (href: string) => countFor(href) > 0
   const badgeText = (href: string) => { const n = countFor(href); return n > 9 ? '9+' : String(n) }
 

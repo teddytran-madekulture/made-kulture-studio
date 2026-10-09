@@ -4,6 +4,7 @@ import { track } from '@/lib/track'
 import Link from 'next/link'
 import { CREATIVE_ROLES } from '@/lib/roles'
 import FinishProfileCard from '@/components/FinishProfileCard'
+import ShootsTabs from '@/components/ShootsTabs'
 
 type Casting = {
   id: string
@@ -88,6 +89,7 @@ export default function CastingsPage() {
 
   if (incomplete) return (
     <div>
+      <ShootsTabs />
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 24px' }}>CASTINGS</h1>
       <FinishProfileCard blockers={incomplete} what="The casting board" />
     </div>
@@ -95,6 +97,7 @@ export default function CastingsPage() {
 
   if (optedOut) return (
     <div>
+      <ShootsTabs />
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 8px' }}>CASTINGS</h1>
       <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '24px', maxWidth: 520, marginTop: 16 }}>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.6 * var(--t-a)))', lineHeight: 1.6, margin: '0 0 16px' }}>
@@ -107,6 +110,7 @@ export default function CastingsPage() {
 
   return (
     <div>
+      <ShootsTabs />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>CASTINGS</h1>
         <Link href="/account/castings/new" style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, textDecoration: 'none', padding: '10px 18px', borderRadius: 6 }}>+ Post a casting</Link>

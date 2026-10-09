@@ -24,7 +24,7 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio
 export const STUDIO_ADDRESS = '4825 Gulf Freeway, Houston TX 77023'
 
 export const BOOKING_SELECT = `id, start_time, end_time, status, set_id, guest_count, auth_user_id,
-  customer_id, customers ( name, email, phone ), sets ( name )`
+  customer_id, customers ( name, email, phone ), sets ( name, slug )`
 
 export type OwnedBooking = MiniBooking & {
   auth_user_id: string | null

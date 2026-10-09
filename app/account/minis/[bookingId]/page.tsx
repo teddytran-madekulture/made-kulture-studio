@@ -169,7 +169,10 @@ export default function MiniSetupPage() {
     <div style={{ maxWidth: 760 }}>
       <Link href="/account/minis" style={{ ...font, fontSize: 12, color: muted(0.5), textDecoration: 'none' }}>← Mini Sessions</Link>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '8px 0 4px' }}>{(m?.title || 'MINI SESSIONS').toUpperCase()}</h1>
-      <div style={{ ...font, fontSize: 14, color: muted(0.6), marginBottom: 18 }}>{b.day} · {b.time} · {b.place}</div>
+      <div style={{ ...font, fontSize: 14, color: muted(0.6), marginBottom: 18, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'baseline' }}>
+        <span>{b.day} · {b.time} · {b.place}</span>
+        {b.status !== 'cancelled' && !b.over && <Link href={b.crewLink} style={{ fontSize: 13, color: 'var(--t-gold)', textDecoration: 'none' }}>Need an assistant or MUA? Post a casting for this day →</Link>}
+      </div>
 
       {notice && <div style={{ ...font, fontSize: 13, color: 'var(--t-ok)', marginBottom: 12 }}>{notice}</div>}
       {error && <div style={{ ...font, fontSize: 13, color: 'var(--t-err)', marginBottom: 12 }}>{error}</div>}

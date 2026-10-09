@@ -38,8 +38,18 @@ export default function NewCastingPage() {
 
   // Edit mode: ?id=<castingId> pre-fills the form with the casting's current values.
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('id')
-    if (!id) return
+    const qs = new URLSearchParams(window.location.search)
+    const id = qs.get('id')
+    if (!id) {
+      // Pre-fill from Mini Sessions' "post a casting for this day" link.
+      const m = qs.get('mode')
+      if (m === 'set' || m === 'buyout') setMode(m)
+      if (qs.get('set')) setSetSlug(qs.get('set')!)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(qs.get('date') || '')) setShootDate(qs.get('date')!)
+      if (/^\d{1,2}$/.test(qs.get('start') || '')) setStartHour(qs.get('start')!)
+      if (/^\d+(\.\d)?$/.test(qs.get('hours') || '')) setHours(qs.get('hours')!)
+      return
+    }
     setEditId(id)
     fetch(`/api/castings/${id}`).then(async r => {
       const d = await r.json().catch(() => ({}))

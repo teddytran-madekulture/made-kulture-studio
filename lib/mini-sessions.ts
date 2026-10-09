@@ -75,7 +75,7 @@ export interface MiniBooking {
   status: string
   set_id: string | null
   guest_count: number | null
-  sets?: { name: string | null } | null
+  sets?: { name: string | null; slug?: string | null } | null
 }
 
 // Defaults Teddy picked (2026-10-09): 5-min break, 12-hour cutoff, 90-day

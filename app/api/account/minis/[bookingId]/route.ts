@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { loadForOwner, guestSettings, rosterView, shareUrl, photographerName, settleLinkStatus, feeCentsFor } from '@/lib/mini-sessions-server'
 import { cardBelongsToUser } from '@/lib/card-verify'
+import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { cleanText, maxParty, partyRoom, headcountLimit, extrasFor, slotsFor, signupsClosed, DEFAULTS, fmtDay, fmtTime } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +29,12 @@ export async function GET(_req: NextRequest, { params }: { params: { bookingId: 
     booking: {
       id: b.id, start_time: b.start_time, end_time: b.end_time, status: b.status,
       place: b.set_id ? (b.sets?.name ?? 'Set') : 'Full warehouse', isBuyout: !b.set_id,
+      // For "Find crew for this day" → a new casting pre-filled with this booking.
+      crewLink: `/account/castings/new?${new URLSearchParams({
+        mode: b.set_id ? 'set' : 'buyout', ...(b.sets?.slug ? { set: b.sets.slug } : {}),
+        date: centralDateStr(b.start_time), start: String(Math.floor(centralHourDecimal(b.start_time))),
+        hours: String(Math.round((Date.parse(b.end_time) - Date.parse(b.start_time)) / 360_000) / 10),
+      }).toString()}`,
       day: fmtDay(b.start_time), time: `${fmtTime(b.start_time)} – ${fmtTime(b.end_time)}`,
       over: Date.parse(b.end_time) < Date.now(),
     },

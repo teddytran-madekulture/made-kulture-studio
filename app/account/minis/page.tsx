@@ -3,6 +3,7 @@
 // it into a mini-session day with a sign-up link for your clients.
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import ShootsTabs from '@/components/ShootsTabs'
 
 type Row = { id: string; start_time: string; end_time: string; place: string; mini: { status: string; title: string | null; booked: number } | null }
 
@@ -23,6 +24,7 @@ export default function MinisPage() {
 
   return (
     <div>
+      <ShootsTabs />
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 6px' }}>MINI SESSIONS</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.55), margin: '0 0 22px', maxWidth: 560, lineHeight: 1.6 }}>
         Running minis? Turn a booking into time slots and share one link. Your clients pick a time and tell you how many are coming;
