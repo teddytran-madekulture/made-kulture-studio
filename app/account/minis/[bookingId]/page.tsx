@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { slotsFor, maxParty, SLOT_CHOICES, DEFAULTS, fmtPhone } from '@/lib/mini-sessions'
+import { shrinkImage } from '@/lib/shrink-image'
 
 const muted = (a: number) => `rgba(var(--t-fg-rgb), calc(${a} * var(--t-a)))`
 const font = { fontFamily: 'Inter' }
@@ -30,7 +31,7 @@ export default function MiniSetupPage() {
   const [editing, setEditing] = useState(false)
   const [cards, setCards] = useState<{ id: string; card_brand: string; last_4: string }[] | null>(null)
   useEffect(() => { fetch('/api/account/cards?dedupe=1').then(r => r.ok ? r.json() : { cards: [] }).then(j => setCards(j.cards ?? [])).catch(() => setCards([])) }, [])
-  const [form, setForm] = useState({ title: '', slot_minutes: DEFAULTS.slot_minutes, break_minutes: DEFAULTS.break_minutes, crew_count: DEFAULTS.crew_count, cutoff_hours: DEFAULTS.cutoff_hours, note: '', price_text: '', approve_switches: false, allow_extra_guests: false, extra_card_id: '' })
+  const [form, setForm] = useState({ title: '', slot_minutes: DEFAULTS.slot_minutes, break_minutes: DEFAULTS.break_minutes, crew_count: DEFAULTS.crew_count, cutoff_hours: DEFAULTS.cutoff_hours, note: '', price_text: '', payment_url: '', approve_switches: false, allow_extra_guests: false, extra_card_id: '' })
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/account/minis/${bookingId}`, { cache: 'no-store' })
@@ -40,7 +41,7 @@ export default function MiniSetupPage() {
     if (j.attachedPlan) setNotice(`We attached your planned day to this booking — ${j.attachedPlan.confirmed} client${j.attachedPlan.confirmed === 1 ? '' : 's'} confirmed${j.attachedPlan.bumped ? `, ${j.attachedPlan.bumped} need a new time (listed below)` : ''}.`)
     if (j.mini) setForm({
       title: j.mini.title ?? '', slot_minutes: j.mini.slot_minutes, break_minutes: j.mini.break_minutes,
-      crew_count: j.mini.crew_count, cutoff_hours: j.mini.cutoff_hours, note: j.mini.note ?? '', price_text: j.mini.price_text ?? '',
+      crew_count: j.mini.crew_count, cutoff_hours: j.mini.cutoff_hours, note: j.mini.note ?? '', price_text: j.mini.price_text ?? '', payment_url: j.mini.payment_url ?? '',
       approve_switches: !!j.mini.approve_switches,
       allow_extra_guests: !!j.mini.allow_extra_guests, extra_card_id: '',
     })
@@ -146,6 +147,13 @@ export default function MiniSetupPage() {
           <input style={input} value={form.price_text} maxLength={80} placeholder="e.g. $250 · 20 min · 10 edited photos" onChange={e => setForm({ ...form, price_text: e.target.value })} />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
+          <label style={lbl}>Your pay link (optional)</label>
+          <input style={input} value={form.payment_url} maxLength={300} inputMode="url" placeholder="venmo.com/u/yourname · cash.app/$you · paypal.me/you · Square or Stripe link" onChange={e => setForm({ ...form, payment_url: e.target.value })} />
+          <div style={{ ...font, fontSize: 12, color: muted(0.55), marginTop: 6, lineHeight: 1.5 }}>
+            Clients get a “Pay {d.photographer || 'you'}” button after they book, in their confirmation email and on their slot page. The money goes straight to you — Made Kulture never touches it. Hidden while a day is still pending.
+          </div>
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label style={lbl}>Note for clients (optional)</label>
           <textarea style={{ ...input, minHeight: 80, resize: 'vertical' }} maxLength={600} value={form.note} placeholder="What to wear, how you take payment, what’s included…" onChange={e => setForm({ ...form, note: e.target.value })} />
         </div>
@@ -227,6 +235,8 @@ export default function MiniSetupPage() {
                 : <button style={small} disabled={busy} onClick={() => act({ action: 'open' }, 'Sign-ups reopened.')}>Reopen sign-ups</button>}
             </div>
           </div>
+
+          <ShareKit bookingId={bookingId} m={m} busy={busy} setBusy={setBusy} setError={setError} setNotice={setNotice} reload={load} />
 
           {editing && settings}
 
@@ -445,6 +455,65 @@ function PlanPanel({ d, busy, act, reload, setError, setNotice }: { d: any; busy
             <button style={btn(true)} disabled={!attachId} onClick={attach}>Attach & confirm clients</button>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── Cover photo + flyer (migration 162) ─────────────────────────────────────
+function ShareKit({ bookingId, m, busy, setBusy, setError, setNotice, reload }: {
+  bookingId: string; m: any; busy: boolean; setBusy: (b: boolean) => void
+  setError: (s: string) => void; setNotice: (s: string) => void; reload: () => void
+}) {
+  async function upload(file: File | undefined) {
+    if (!file) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const blob = await shrinkImage(file, 1600, 0.86)
+      const fd = new FormData(); fd.append('photo', new File([blob], 'cover.jpg', { type: 'image/jpeg' }))
+      const r = await fetch(`/api/account/minis/${bookingId}/cover`, { method: 'POST', body: fd })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setError(j.error || 'Upload failed.'); return }
+      setNotice('Cover photo saved — it now tops your sign-up page, link previews and flyers.')
+      reload()
+    } catch { setError('That photo couldn’t be read. Try a JPG or PNG.') }
+    finally { setBusy(false) }
+  }
+  async function remove() {
+    setBusy(true); setError(''); setNotice('')
+    const r = await fetch(`/api/account/minis/${bookingId}/cover`, { method: 'DELETE' })
+    setBusy(false)
+    if (!r.ok) { setError('Could not remove the photo.'); return }
+    setNotice('Cover photo removed.'); reload()
+  }
+  const flyer = (size: 'story' | 'square') => `/api/account/minis/${bookingId}/flyer?size=${size}&download=1&v=${encodeURIComponent(m.updated_at || '')}`
+  return (
+    <div style={card}>
+      <label style={lbl}>Share it like a flyer</label>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ width: 120, height: 150, borderRadius: 6, overflow: 'hidden', background: 'var(--t-surface-lo)', border: `1px solid ${muted(0.12)}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {m.cover_url
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={m.cover_url} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <span style={{ ...font, fontSize: 11, color: muted(0.45), textAlign: 'center', padding: 8 }}>No cover photo yet</span>}
+        </div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <p style={{ ...font, fontSize: 13, color: muted(0.65), margin: '0 0 10px', lineHeight: 1.55 }}>
+            Add a photo from a past mini and your link looks like a flyer everywhere — on the sign-up page and when it’s texted or posted. Download a ready-to-post flyer with a QR code that opens your sign-up page.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <label style={{ ...small, display: 'inline-block', opacity: busy ? 0.5 : 1 }}>
+              {m.cover_url ? 'Change photo' : 'Add cover photo'}
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" style={{ display: 'none' }} disabled={busy}
+                onChange={e => { upload(e.target.files?.[0]); e.currentTarget.value = '' }} />
+            </label>
+            {m.cover_url && <button style={small} disabled={busy} onClick={remove}>Remove</button>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <a href={flyer('story')} style={{ ...btn(true), textDecoration: 'none', display: 'inline-block' }}>Download story flyer</a>
+            <a href={flyer('square')} style={{ ...btn(), textDecoration: 'none', display: 'inline-block' }}>Download square post</a>
+          </div>
+        </div>
       </div>
     </div>
   )

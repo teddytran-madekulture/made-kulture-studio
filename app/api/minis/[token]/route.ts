@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { bookingForMini, guestSettings, photographerName, ctxFor, sendClientConfirmation, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
-import { cleanText, cleanEmail, cleanPhone, partyRoom, slotsFor, signupsClosed, slotLabel, fmtDay, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
+import { cleanText, cleanEmail, cleanPhone, partyRoom, slotsFor, signupsClosed, slotLabel, fmtDay, payHost, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -49,6 +49,11 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     title: mini.title,
     note: mini.note,
     priceText: mini.price_text,
+    coverUrl: mini.cover_url,
+    // The photographer's own pay link — shown once a slot is booked. Hidden while
+    // the day is only planned: nobody should pay for a day that isn't confirmed.
+    payUrl: b.planned ? null : mini.payment_url,
+    payHost: b.planned ? null : payHost(mini.payment_url),
     photographer: await photographerName(db, b, mini.owner_user_id),
     day: fmtDay(b.start_time),
     address: STUDIO_ADDRESS,

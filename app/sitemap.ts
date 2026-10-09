@@ -15,6 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${APP_URL}/studio-rules`, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${APP_URL}/tour`,         changeFrequency: 'monthly', priority: 0.6 },
     { url: `${APP_URL}/availability`, changeFrequency: 'daily',   priority: 0.5 },
+    { url: `${APP_URL}/mini-sessions`, changeFrequency: 'monthly', priority: 0.6 },
   ]
 
   // One landing page per active set.

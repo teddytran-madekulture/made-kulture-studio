@@ -9,7 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { loadForOwner, guestSettings, rosterView, shareUrl, photographerName, settleLinkStatus, feeCentsFor, planConflicts, reconcileMini, validatePlanWindow } from '@/lib/mini-sessions-server'
 import { cardBelongsToUser } from '@/lib/card-verify'
 import { centralDateStr, centralHourDecimal, bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
-import { cleanText, maxParty, partyRoom, headcountLimit, extrasFor, slotsFor, signupsClosed, DEFAULTS, fmtDay, fmtTime } from '@/lib/mini-sessions'
+import { cleanText, maxParty, partyRoom, headcountLimit, extrasFor, slotsFor, signupsClosed, DEFAULTS, fmtDay, fmtTime, cleanPayUrl } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -133,7 +133,9 @@ export async function PUT(req: NextRequest, { params }: { params: { bookingId: s
     cutoff_hours: int(body.cutoff_hours, mini?.cutoff_hours ?? DEFAULTS.cutoff_hours),
     approve_switches: body.approve_switches === undefined ? (mini?.approve_switches ?? false) : !!body.approve_switches,
     allow_extra_guests: body.allow_extra_guests === undefined ? (mini?.allow_extra_guests ?? false) : !!body.allow_extra_guests,
+    payment_url: body.payment_url === undefined ? (mini?.payment_url ?? null) : cleanPayUrl(body.payment_url),
   }
+  if (row.payment_url === 'bad') return NextResponse.json({ error: 'That pay link doesn’t look right. Paste the full https:// link from Venmo, Cash App, PayPal, Square or Stripe.' }, { status: 400 })
   if (!(row.slot_minutes >= 5 && row.slot_minutes <= 240)) return NextResponse.json({ error: 'Slots can be 5 minutes to 4 hours.' }, { status: 400 })
   if (!(row.break_minutes >= 0 && row.break_minutes <= 60)) return NextResponse.json({ error: 'The break can be 0 to 60 minutes.' }, { status: 400 })
   if (!(row.cutoff_hours >= 0 && row.cutoff_hours <= 168)) return NextResponse.json({ error: 'Sign-ups can close 0 to 168 hours before.' }, { status: 400 })

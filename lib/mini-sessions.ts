@@ -24,6 +24,8 @@ export interface MiniSession {
   planned_start: string | null
   planned_end: string | null
   conflict_notified_at: string | null
+  cover_url: string | null            // migration 162 — sign-up page hero, link preview, flyer
+  payment_url: string | null          // migration 162 — the photographer's OWN pay link; MK never touches the money
   owner_user_id: string
   title: string | null
   note: string | null
@@ -178,6 +180,28 @@ export function cleanPhone(v: unknown): string | null {
 export function fmtPhone(d: string | null | undefined): string {
   const s = String(d ?? '')
   return s.length === 10 ? `(${s.slice(0, 3)}) ${s.slice(3, 6)}-${s.slice(6)}` : s
+}
+
+/**
+ * The photographer's own payment link (Venmo, Cash App, PayPal, Square, Stripe…).
+ * Made Kulture only shows it — the money never passes through us.
+ * Returns null for empty, 'bad' for anything that isn't a plain https web link.
+ * A bare "venmo.com/u/name" gets https:// added.
+ */
+export function cleanPayUrl(v: unknown): string | null | 'bad' {
+  let s = String(v ?? '').trim()
+  if (!s) return null
+  if (s.length > 300 || /\s/.test(s)) return 'bad'
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = `https://${s}`
+  try {
+    const u = new URL(s)
+    if (u.protocol !== 'https:' || u.username || u.password || !u.hostname.includes('.')) return 'bad'
+    return u.toString()
+  } catch { return 'bad' }
+}
+/** "venmo.com" — shown beside the pay button so clients see where they're headed. */
+export function payHost(url: string | null | undefined): string | null {
+  try { return url ? new URL(url).hostname.replace(/^www\./, '') : null } catch { return null }
 }
 
 /** HTML-escape for anything a client or photographer typed that lands in an email. */

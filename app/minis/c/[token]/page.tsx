@@ -3,7 +3,7 @@
 // cancel it (until the photographer's cutoff). Linked from their emails.
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { CHAMP, wrap, card, kicker, h1, label, input, option, primary, ghost, body, fine } from '../../minis-ui'
+import { CHAMP, wrap, card, kicker, h1, label, input, option, primary, ghost, body, fine, PayButton, MkFooter, column } from '../../minis-ui'
 
 export default function MiniClientPage() {
   const { token } = useParams<{ token: string }>()
@@ -36,7 +36,7 @@ export default function MiniClientPage() {
 
   const gone = d.status !== 'booked'
   return (
-    <div style={wrap}><div style={card}>
+    <div style={wrap}><div style={column}><div style={card}>
       <div style={kicker}>Your mini session · Made Kulture</div>
       <h1 style={h1}>{d.title || `Mini sessions with ${d.photographer}`}</h1>
       <p style={{ ...body, marginBottom: 18 }}>with <b style={{ color: '#fff' }}>{d.photographer}</b></p>
@@ -55,6 +55,7 @@ export default function MiniClientPage() {
           <p style={body}>Party of {d.party} · {d.address}</p>
           <p style={body}>Arrive at your time and <b style={{ color: '#fff' }}>wait outside until your slot starts</b> — everyone inside counts toward the set’s headcount. Limited parking out front, street parking in the rear.</p>
           {d.note && <p style={{ ...body, whiteSpace: 'pre-wrap', borderLeft: `2px solid ${CHAMP}`, paddingLeft: 12 }}>{d.note}</p>}
+          <PayButton url={d.payUrl} host={d.payHost} photographer={d.photographer} />
 
           {d.canChange ? (
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 18, marginTop: 8 }}>
@@ -90,6 +91,6 @@ export default function MiniClientPage() {
         </>
       )}
       {msg && <p style={{ fontSize: 14, color: CHAMP, marginTop: 16 }}>{msg}</p>}
-    </div></div>
+    </div><MkFooter /></div></div>
   )
 }

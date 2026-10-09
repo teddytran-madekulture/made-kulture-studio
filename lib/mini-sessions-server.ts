@@ -13,7 +13,7 @@ import { sendSMS } from '@/lib/sms'
 import { centralDateStr, centralHourDecimal, bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
 import {
   type MiniSession, type MiniClient, type MiniBooking, type Slot,
-  slotsFor, headcountLimit, partyRoom, extrasFor, fmtTime, fmtDay, fmtDayShort, slotLabel, esc, RETENTION_DAYS,
+  slotsFor, headcountLimit, partyRoom, extrasFor, fmtTime, fmtDay, fmtDayShort, slotLabel, esc, payHost, RETENTION_DAYS,
 } from '@/lib/mini-sessions'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
@@ -218,6 +218,12 @@ function slotOf(ctx: Ctx, idx: number): Slot | null {
   return slotsFor(ctx.booking, ctx.mini).find(s => s.index === idx) ?? null
 }
 const first = (n: string | null) => (n || '').split(' ')[0] || 'there'
+/** The photographer's own pay link, as an email paragraph (MK never handles the money). */
+function payLine(ctx: Ctx): string[] {
+  const url = ctx.mini.payment_url
+  if (!url) return []
+  return [`<b>Pay ${esc(ctx.photographer)}:</b> <a href="${esc(url)}" style="color:#c9b27e">${esc(payHost(url) || 'pay link')}</a> — this goes straight to ${esc(ctx.photographer)}, not Made Kulture.`]
+}
 const titleOf = (ctx: Ctx) => ctx.mini.title || `Mini sessions with ${ctx.photographer}`
 
 async function mail(ctx: Ctx, to: string | null, subject: string, heading: string, paragraphs: string[], cta?: { text: string; url: string }, label = 'mini_session') {
@@ -255,6 +261,7 @@ export async function sendClientConfirmation(ctx: Ctx, c: MiniClient) {
       `Hi ${esc(first(c.name))} — your mini session is set for <b>${esc(fmtDay(s.startISO))}, ${esc(slotLabel(s))}</b> at Made Kulture, ${STUDIO_ADDRESS}.`,
       `Party of ${c.party_size}. ${ARRIVAL}`,
       ...(ctx.mini.note ? [`From ${esc(ctx.photographer)}: ${esc(ctx.mini.note)}`] : []),
+      ...payLine(ctx),
       `Payment and anything about your photos go through ${esc(ctx.photographer)} directly — reply to this email to reach them.`,
     ],
     { text: 'View or change my slot', url: clientUrl(c) }, 'mini_confirm')
@@ -315,6 +322,7 @@ export async function sendClientPlanConfirmed(ctx: Ctx, c: MiniClient) {
     [
       `Hi ${esc(first(c.name))} — ${esc(ctx.photographer)} booked the studio, so your mini session is <b>confirmed for ${esc(fmtDay(s.startISO))}, ${esc(slotLabel(s))}</b> at Made Kulture, ${STUDIO_ADDRESS}.`,
       `Party of ${c.party_size}. ${ARRIVAL}`,
+      ...payLine(ctx),
       `Payment and anything about your photos go through ${esc(ctx.photographer)} directly — reply to this email to reach them.`,
     ],
     { text: 'View or change my slot', url: clientUrl(c) }, 'mini_plan_confirmed')
@@ -898,4 +906,26 @@ export async function settleLinkStatus(db: SupabaseClient, mini: MiniSession): P
   if (!data?.length) return mini
   await db.from('mini_sessions').update({ extra_charge_status: 'charged' }).eq('id', mini.id).eq('extra_charge_status', 'link_sent')
   return { ...mini, extra_charge_status: 'charged' }
+}
+
+// ── Shareable images (migration 162) ───────────────────────────────────────
+/** What the flyer and the link preview show for a mini day. */
+export async function flyerInfoFor(db: SupabaseClient, mini: MiniSession): Promise<{
+  title: string; photographer: string; day: string; time: string; priceText: string | null
+  coverUrl: string | null; link: string; pending: boolean; cancelled: boolean
+} | null> {
+  const b = await bookingForMini(db, mini)
+  if (!b) return null
+  const photographer = await photographerName(db, b, mini.owner_user_id)
+  return {
+    title: mini.title || `Mini sessions with ${photographer}`,
+    photographer,
+    day: fmtDay(b.start_time),
+    time: `${fmtTime(b.start_time)} – ${fmtTime(b.end_time)}`,
+    priceText: mini.price_text,
+    coverUrl: mini.cover_url,
+    link: shareUrl(mini),
+    pending: !!b.planned,
+    cancelled: mini.status === 'cancelled' || b.status === 'cancelled',
+  }
 }

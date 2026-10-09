@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { bookingForMini, ctxFor, notifyPhotographer, sendClientMoved, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
-import { slotsFor, signupsClosed, slotLabel, fmtDay, esc, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
+import { slotsFor, signupsClosed, slotLabel, fmtDay, esc, payHost, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -47,6 +47,9 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     slot: mine ? slotLabel(mine) : null,
     pending: !!(b as any).planned,
     approveSwitches: !!mini.approve_switches,
+    // The photographer's own pay link — not while the day is still pending.
+    payUrl: !cancelled && c.status === 'booked' && !(b as any).planned ? mini.payment_url : null,
+    payHost: !cancelled && c.status === 'booked' && !(b as any).planned ? payHost(mini.payment_url) : null,
     pendingSlot: pending ? slotLabel(pending) : null,
     canChange: !cancelled && c.status === 'booked' && !signupsClosed(b, mini) && mini.status === 'open',
     openSlots: slots.filter(s => !takenSet.has(s.index) && !blocked.has(s.index) && Date.parse(s.startISO) > Date.now())

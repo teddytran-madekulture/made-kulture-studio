@@ -3,7 +3,7 @@
 // account: clients pick a time, say who's coming, and get an email.
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { CHAMP, wrap, card, kicker, h1, label, input, option, primary, body, fine } from '../minis-ui'
+import { CHAMP, wrap, card, kicker, h1, label, input, option, primary, body, fine, Cover, PayButton, MkFooter, column } from '../minis-ui'
 
 export default function MiniSignupPage() {
   const { token } = useParams<{ token: string }>()
@@ -39,6 +39,7 @@ export default function MiniSignupPage() {
   const title = d.title || `Mini sessions with ${d.photographer}`
   const header = (
     <>
+      <Cover url={d.coverUrl} alt={title} />
       <div style={kicker}>Mini sessions · Made Kulture</div>
       <h1 style={h1}>{title}</h1>
       <p style={{ ...body, marginBottom: 6 }}>with <b style={{ color: '#fff' }}>{d.photographer}</b></p>
@@ -54,7 +55,7 @@ export default function MiniSignupPage() {
   )
 
   if (done) return (
-    <div style={wrap}><div style={card}>
+    <div style={wrap}><div style={column}><div style={card}>
       {header}
       <div style={{ ...label, color: CHAMP, marginTop: 8 }}>{d.pending ? 'Requested — pending' : 'You’re booked'}</div>
       <p style={{ ...body, fontSize: 18, color: '#fff' }}>{done.when}</p>
@@ -62,14 +63,15 @@ export default function MiniSignupPage() {
         ? `Your spot is held for you. ${d.photographer} is confirming the day with the studio — we’ll email you the moment it’s confirmed.`
         : 'A confirmation is on its way to your email. Arrive at your time and wait outside until your slot starts — the set has a strict headcount.'}</p>
       <p style={body}>{d.address}</p>
-      <a href={`/minis/c/${done.token}`} style={{ color: CHAMP, fontSize: 14 }}>View or change my slot</a>
+      <PayButton url={d.payUrl} host={d.payHost} photographer={d.photographer} />
+      <a href={`/minis/c/${done.token}`} style={{ color: CHAMP, fontSize: 14, display: 'inline-block', marginTop: 10 }}>View or change my slot</a>
       <p style={{ ...fine, marginTop: 18 }}>Payment and your photos go through {d.photographer} directly.</p>
-    </div></div>
+    </div><MkFooter /></div></div>
   )
 
   const openSlots = d.slots.filter((s: any) => s.open)
   return (
-    <div style={wrap}><div style={card}>
+    <div style={wrap}><div style={column}><div style={card}>
       {header}
 
       {d.state !== 'open' ? (
@@ -119,10 +121,10 @@ export default function MiniSignupPage() {
           {formError && <p style={{ color: '#ff8a8a', fontSize: 14, margin: '16px 0 0' }}>{formError}</p>}
           <button style={{ ...primary, marginTop: 20, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>{busy ? 'Sending…' : d.pending ? 'Request my spot' : 'Book my slot'}</button>
           <p style={{ ...fine, marginTop: 16 }}>
-            Made Kulture, {d.address}. Arrive at your time and wait outside until your slot starts. Payment goes through {d.photographer} directly.
+            Made Kulture, {d.address}. Arrive at your time and wait outside until your slot starts. Payment goes through {d.photographer} directly{d.payUrl ? ' — you’ll get their pay link once you book.' : '.'}
           </p>
         </>
       )}
-    </div></div>
+    </div><MkFooter /></div></div>
   )
 }
