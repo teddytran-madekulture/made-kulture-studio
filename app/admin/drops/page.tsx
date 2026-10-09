@@ -241,7 +241,7 @@ export default function SetDropsAdmin() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginTop: 18 }}>
               {[
-                ['PEOPLE', String(drop.progress.people)],
+                ['RESERVATIONS', String(drop.progress.people)],
                 ['HOURS PLEDGED', String(drop.progress.hours)],
                 ['PROJECTED', `$${drop.progress.dollars.toLocaleString()}`],
                 ['DEPOSITS HELD', dollars(drop.progress.depositsCents)],
@@ -316,7 +316,7 @@ export default function SetDropsAdmin() {
                       return (
                         <tr key={p.id} style={{ borderBottom: `1px solid ${C.line}` }}>
                           <td style={{ padding: '8px', color: C.text }}>{p.customer_name || '—'}<div style={{ fontSize: 11 }}>{p.customer_email}{p.phone ? ` · ${p.phone}` : ''}</div></td>
-                          <td style={{ padding: '8px' }}>{p.hours_wanted}</td>
+                          <td style={{ padding: '8px' }}>{p.hours_wanted ?? '—'}</td>
                           <td style={{ padding: '8px', maxWidth: 220 }}>{p.timing_note || '—'}</td>
                           <td style={{ padding: '8px', color: C.text }}>{dollars(p.deposit_cents)}{p.credit_cents_issued > p.deposit_cents ? <div style={{ fontSize: 11 }}>→ {dollars(p.credit_cents_issued)} credit</div> : null}</td>
                           <td style={{ padding: '8px', color: st.color, fontWeight: 600 }}>{st.label}</td>
@@ -447,12 +447,12 @@ export default function SetDropsAdmin() {
             <Group title="Goal">
               <Field label="Count">
                 <select value={v.goal_type} onChange={e => set('goal_type', e.target.value)} style={inp}>
-                  <option value="people" style={opt}>People</option>
+                  <option value="people" style={opt}>Bookings (one per reservation)</option>
                   <option value="hours" style={opt}>Hours</option>
                   <option value="dollars" style={opt}>Dollars (hours × rate)</option>
                 </select>
               </Field>
-              <Field label={v.goal_type === 'dollars' ? 'Goal ($)' : v.goal_type === 'hours' ? 'Goal (hours)' : 'Goal (people)'}><input type="number" min={1} step={1} value={v.goal_value ?? ''} onChange={e => set('goal_value', Number(e.target.value))} style={inp} /></Field>
+              <Field label={v.goal_type === 'dollars' ? 'Goal ($)' : v.goal_type === 'hours' ? 'Goal (hours)' : 'Goal (bookings)'}><input type="number" min={1} step={1} value={v.goal_value ?? ''} onChange={e => set('goal_value', Number(e.target.value))} style={inp} /></Field>
               <Field label="Show the goal to customers"><Toggle on={!!v.show_goal} onChange={b => set('show_goal', b)} /></Field>
               {v.goal_type !== 'people' && v.deposit_mode === 'flat' && <div style={{ ...small, color: C.amber, gridColumn: '1 / -1' }}>With a flat deposit, an hours or dollars goal is easy to inflate — the max-hours cap above is what keeps it honest.</div>}
             </Group>

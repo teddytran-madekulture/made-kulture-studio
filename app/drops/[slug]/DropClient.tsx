@@ -23,7 +23,7 @@ type PublicDrop = SetDrop & {
   open_call: { slug: string; title: string } | null
   past_gallery: { url: string; credit: string | null }[]
 }
-interface Mine { hours_wanted: number; deposit_cents: number; status: string; timing_note: string | null }
+interface Mine { hours_wanted: number | null; deposit_cents: number; status: string; timing_note: string | null }
 interface Card { id: string; last_4: string; card_brand: string }
 
 const btn: React.CSSProperties = { fontFamily: inter, fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '15px 26px', textDecoration: 'none', border: 'none', cursor: 'pointer', display: 'inline-block' }
@@ -180,7 +180,7 @@ export default function DropClient({ slug }: { slug: string }) {
               <div style={{ border: `1px solid ${GOLD}66`, padding: 24 }}>
                 <div style={{ fontFamily: anton, fontSize: 30 }}>YOU&rsquo;RE IN</div>
                 <p style={{ fontFamily: inter, fontSize: 15, color: dim(0.7), lineHeight: 1.6, margin: '8px 0 0' }}>
-                  Your {dollars(mine.deposit_cents)} deposit is in for about {mine.hours_wanted} hour{mine.hours_wanted === 1 ? '' : 's'}{mine.timing_note ? ` (${mine.timing_note})` : ''}. We&rsquo;ll email you the moment we decide.
+                  Your {dollars(mine.deposit_cents)} deposit is in{mine.hours_wanted ? ` for about ${mine.hours_wanted} hour${mine.hours_wanted === 1 ? '' : 's'}` : ''}{mine.timing_note ? ` (${mine.timing_note})` : ''}. We&rsquo;ll email you the moment we decide.
                 </p>
               </div>
             ) : !signedIn ? (
@@ -210,7 +210,9 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
   const max = Math.max(min, Number(drop.max_hours_per_pledge) || 8)
   const options: number[] = []
   for (let h = min; h <= max + 1e-9; h += 0.5) options.push(Math.round(h * 2) / 2)
-  const [hours, setHours] = useState(min)
+  const flat = drop.deposit_mode !== 'per_hour'
+  // Flat deposit: 0 = "not sure" (optional). Per-hour: required, starts at the minimum.
+  const [hours, setHours] = useState(flat ? 0 : min)
   const [timing, setTiming] = useState('')
   const [agree, setAgree] = useState(false)
   const [cards, setCards] = useState<Card[]>([])
@@ -220,8 +222,8 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
   const cardRef = useRef<HTMLDivElement>(null)
   const [cardObj, setCardObj] = useState<any>(null)
 
-  const terms = dropTerms(drop, hours)
-  const cents = depositFor(drop, hours)
+  const terms = dropTerms(drop, hours || min)
+  const cents = depositFor(drop, hours || min)
 
   useEffect(() => {
     fetch('/api/account/cards?dedupe=1', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
@@ -266,7 +268,7 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
     if (!agree) { setErr('Tick the box to confirm what happens to your deposit.'); return }
     setPaying(true)
     try {
-      const payload: Record<string, unknown> = { hours, timingNote: timing, agree: true, termsShown: terms.full }
+      const payload: Record<string, unknown> = { hours: hours || null, timingNote: timing, agree: true, termsShown: terms.full }
       if (cents > 0) {
         if (cardChoice === 'new') {
           if (!cardObj) throw new Error('The card form is still loading.')
@@ -285,8 +287,9 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
   return (
     <div style={{ border: `1px solid ${dim(0.15)}`, padding: 24, display: 'grid', gap: 20 }}>
       <label>
-        <span style={label}>ABOUT HOW MANY HOURS WOULD YOU BOOK?</span>
+        <span style={label}>ABOUT HOW MANY HOURS WOULD YOU BOOK?{flat ? ' (OPTIONAL)' : ''}</span>
         <select value={hours} onChange={e => setHours(Number(e.target.value))} style={field}>
+          {flat && <option value={0} style={{ background: '#111', color: '#fff' }}>Not sure yet</option>}
           {options.map(h => <option key={h} value={h} style={{ background: '#111', color: '#fff' }}>{h} hour{h === 1 ? '' : 's'}{drop.deposit_mode === 'per_hour' ? ` — ${dollars(depositFor(drop, h))} deposit` : ''}</option>)}
         </select>
       </label>

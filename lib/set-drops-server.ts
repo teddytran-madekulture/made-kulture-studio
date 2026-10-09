@@ -122,7 +122,7 @@ export async function dropContextForCheckout(
           .in('status', ['confirmed', 'pending', 'pending_payment'])
         if (error) throw new Error(`depositor usage lookup failed: ${error.message}`)
         const hoursUsed = (used ?? []).reduce((s: number, b: any) => s + (Date.parse(b.end_time) - Date.parse(b.start_time)) / 3_600_000, 0)
-        if (hoursUsed < Number(pledge!.hours_wanted || 0)) rate = dr
+        if (hoursUsed < Number(pledge!.hours_wanted ?? drop.min_hours ?? 1)) rate = dr
       }
     }
     out.set(setId, { drop, pledge, blocked, depositorRate: rate })
@@ -155,7 +155,7 @@ export async function sendPledgeReceipt(drop: SetDrop, p: DropPledge, terms: str
     subject: `You reserved ${drop.name}`,
     heading: `You're in for ${drop.name}`,
     paragraphs: [
-      `Hi ${esc(first)}, your ${dollars(p.deposit_cents)} deposit is in. You asked for about ${p.hours_wanted} hour${Number(p.hours_wanted) === 1 ? '' : 's'}${p.timing_note ? ` (${esc(p.timing_note)})` : ''}.`,
+      `Hi ${esc(first)}, your ${dollars(p.deposit_cents)} deposit is in${p.hours_wanted ? ` — about ${p.hours_wanted} hour${Number(p.hours_wanted) === 1 ? '' : 's'}` : ''}${p.timing_note ? ` (${esc(p.timing_note)})` : ''}.`,
       drop.pre_reserve_ends_at ? `Reservations close ${esc(fmtInstant(drop.pre_reserve_ends_at))}. We'll email you as soon as we decide whether it's happening.` : `We'll email you as soon as we decide whether it's happening.`,
       `<strong style="color:#fff;">What you agreed to:</strong> ${esc(terms)}`,
     ],

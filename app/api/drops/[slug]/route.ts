@@ -85,7 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
     preview,
     drop: { ...pub, set_slug: setSlug, open_call: openCall },
     signedIn: !!me,
-    mine: mine ? { hours_wanted: Number(mine.hours_wanted), deposit_cents: mine.deposit_cents, status: mine.status, timing_note: mine.timing_note } : null,
+    mine: mine ? { hours_wanted: mine.hours_wanted == null ? null : Number(mine.hours_wanted), deposit_cents: mine.deposit_cents, status: mine.status, timing_note: mine.timing_note } : null,
   })
 }
 
@@ -102,7 +102,13 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   if (!drop) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (dropPhase(drop) !== 'pre_reserve') return NextResponse.json({ error: 'Reservations for this drop are closed.' }, { status: 400 })
 
-  const hours = clampHours(drop, Number(body.hours))
+  // Flat deposit: hours is an optional heads-up (null = not sure). Per-hour
+  // deposit: hours sets the price, so it is required.
+  const flat = drop.deposit_mode !== 'per_hour'
+  const hoursGiven = body.hours != null && body.hours !== '' && Number(body.hours) > 0
+  if (!flat && !hoursGiven) return NextResponse.json({ error: 'Pick about how many hours you’d book.' }, { status: 400 })
+  const hours = clampHours(drop, hoursGiven ? Number(body.hours) : Number(drop.min_hours) || 1)
+  const hoursWanted = hoursGiven ? hours : null
   const cents = depositFor(drop, hours)
   const terms = dropTerms(drop, hours)
   if (body.agree !== true) return NextResponse.json({ error: 'Please tick the box to confirm what happens to your deposit.' }, { status: 400 })
@@ -161,7 +167,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
 
   const { data: pledge, error } = await db.from('set_drop_pledges').insert({
     drop_id: drop.id, auth_user_id: me.id, customer_email: me.email, customer_name: name, phone,
-    hours_wanted: hours, timing_note: timing, deposit_cents: cents,
+    hours_wanted: hoursWanted, timing_note: timing, deposit_cents: cents,
     square_payment_id: paymentId, square_customer_id: squareCustomerId, square_card_id: cardId,
     agreed_terms: terms.full,
   }).select('*').single()

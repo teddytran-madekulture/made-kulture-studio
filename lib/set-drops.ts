@@ -65,7 +65,7 @@ export interface DropPledge {
   customer_email: string
   customer_name: string | null
   phone: string | null
-  hours_wanted: number
+  hours_wanted: number | null   // optional on flat-deposit drops (migration 157)
   timing_note: string | null
   deposit_cents: number
   status: 'active' | 'credited' | 'refunded' | 'pending_choice' | 'refund_failed'
@@ -130,7 +130,7 @@ export function dropProgress(drop: SetDrop, pledges: DropPledge[]): DropProgress
   const current = drop.goal_type === 'people' ? people : drop.goal_type === 'hours' ? hours : projected
   const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0
   const label =
-    drop.goal_type === 'people'  ? `${people} of ${goal} reserved`
+    drop.goal_type === 'people'  ? `${people} of ${goal} bookings reserved`
     : drop.goal_type === 'hours' ? `${fmtNum(hours)} of ${fmtNum(goal)} hours reserved`
     : `$${projected.toLocaleString()} of $${Math.round(goal).toLocaleString()} reserved`
   return { people, hours, dollars: projected, depositsCents, current, goal, pct, label }
