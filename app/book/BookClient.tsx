@@ -219,6 +219,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   const [ratesLoaded, setRatesLoaded] = useState(false)
   const [guestPricing, setGuestPricing] = useState<GuestPricing>(DEFAULT_GUEST_PRICING)
   const [guestSurchargePerHour, setGuestSurchargePerHour] = useState(10)
+  // Set Drops that are live (funded) — a full buyout during their run includes them.
+  const [buyoutDrops, setBuyoutDrops] = useState<{ name: string; runStarts: string; runEnds: string }[]>([])
   useEffect(() => {
     fetch('/api/sets').then(r => r.json()).then(d => {
       setSets(
@@ -239,6 +241,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
       if (d.guestPricing) setGuestPricing({ ...DEFAULT_GUEST_PRICING, ...d.guestPricing })
       if (d.guestSurchargePerHour != null) setGuestSurchargePerHour(Number(d.guestSurchargePerHour))
+      setBuyoutDrops(Object.values(d.drops ?? {}).filter((x: any) => x?.runStarts && x?.runEnds && ['early_access', 'open'].includes(x.phase))
+        .map((x: any) => ({ name: x.name, runStarts: x.runStarts, runEnds: x.runEnds })))
     }).catch(() => {}).finally(() => setRatesLoaded(true))
   }, [])
 
@@ -980,6 +984,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                     <>
                       <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, color: '#fff', lineHeight: 1 }}>${buyoutRate}<span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>/hr</span></div>
                       <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>Full warehouse · {STUDIO_MIN_HOURS}-hour minimum (${buyoutRate * STUDIO_MIN_HOURS} minimum)</div>
+                      {buyoutDrops.map(d => (
+                        <div key={d.name} style={{ fontFamily: 'Inter', fontSize: 12, color: '#e6c07a', marginTop: 6 }}>
+                          Includes {d.name} on {prettyDay(d.runStarts)} – {prettyDay(d.runEnds)}.
+                        </div>
+                      ))}
                     </>
                   ) : (
                     <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em' }}>LOADING RATE…</div>
