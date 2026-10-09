@@ -67,6 +67,7 @@ export interface DropPledge {
   phone: string | null
   hours_wanted: number | null   // optional on flat-deposit drops (migration 157)
   timing_note: string | null
+  plans_minis?: boolean       // migration 158 — visible to Teddy only
   deposit_cents: number
   status: 'active' | 'credited' | 'refunded' | 'pending_choice' | 'refund_failed'
   credit_cents_issued: number

@@ -305,6 +305,7 @@ export default function SetDropsAdmin() {
           {/* ── Depositors ────────────────────────────────────────── */}
           <section style={card}>
             <div style={h2}>DEPOSITS ({drop.pledges.length})</div>
+            {drop.pledges.some((p: any) => p.plans_minis && p.status !== 'refunded') && <div style={{ ...small, color: C.accent, marginBottom: 8 }}>{drop.pledges.filter((p: any) => p.plans_minis && p.status !== 'refunded').length} planning mini sessions — usually a multi-hour booking each.</div>}
             {pendingChoice > 0 && <div style={{ ...small, color: C.amber, marginBottom: 8 }}>{pendingChoice} waiting on a refund-or-credit choice. Anyone who hasn’t chosen after 7 days is refunded automatically each morning.</div>}
             {drop.pledges.length === 0 ? <div style={small}>No deposits yet.</div> : (
               <div style={{ overflowX: 'auto' }}>
@@ -315,7 +316,7 @@ export default function SetDropsAdmin() {
                       const st = PLEDGE[p.status] ?? PLEDGE.active
                       return (
                         <tr key={p.id} style={{ borderBottom: `1px solid ${C.line}` }}>
-                          <td style={{ padding: '8px', color: C.text }}>{p.customer_name || '—'}<div style={{ fontSize: 11 }}>{p.customer_email}{p.phone ? ` · ${p.phone}` : ''}</div></td>
+                          <td style={{ padding: '8px', color: C.text }}>{p.customer_name || '—'}{p.plans_minis && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: C.accent, border: `1px solid ${C.accent}`, padding: '1px 5px' }}>MINIS</span>}<div style={{ fontSize: 11 }}>{p.customer_email}{p.phone ? ` · ${p.phone}` : ''}</div></td>
                           <td style={{ padding: '8px' }}>{p.hours_wanted ?? '—'}</td>
                           <td style={{ padding: '8px', maxWidth: 220 }}>{p.timing_note || '—'}</td>
                           <td style={{ padding: '8px', color: C.text }}>{dollars(p.deposit_cents)}{p.credit_cents_issued > p.deposit_cents ? <div style={{ fontSize: 11 }}>→ {dollars(p.credit_cents_issued)} credit</div> : null}</td>

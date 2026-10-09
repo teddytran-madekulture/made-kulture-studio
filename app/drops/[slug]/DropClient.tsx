@@ -233,6 +233,7 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
   // Flat deposit: 0 = "not sure" (optional). Per-hour: required, starts at the minimum.
   const [hours, setHours] = useState(flat ? 0 : min)
   const [timing, setTiming] = useState('')
+  const [minis, setMinis] = useState(false)
   const [agree, setAgree] = useState(false)
   const [cards, setCards] = useState<Card[]>([])
   const [cardChoice, setCardChoice] = useState<string>('new')
@@ -287,7 +288,7 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
     if (!agree) { setErr('Tick the box to confirm what happens to your deposit.'); return }
     setPaying(true)
     try {
-      const payload: Record<string, unknown> = { hours: hours || null, timingNote: timing, agree: true, termsShown: terms.full }
+      const payload: Record<string, unknown> = { hours: hours || null, timingNote: timing, plansMinis: minis, agree: true, termsShown: terms.full }
       if (cents > 0) {
         if (cardChoice === 'new') {
           if (!cardObj) throw new Error('The card form is still loading.')
@@ -315,6 +316,12 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
       <label>
         <span style={label}>ROUGHLY WHEN? (OPTIONAL)</span>
         <input value={timing} onChange={e => setTiming(e.target.value)} maxLength={200} placeholder="e.g. a weekend evening in mid-December" style={field} />
+      </label>
+      <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
+        <input type="checkbox" checked={minis} onChange={e => setMinis(e.target.checked)} style={{ marginTop: 3, accentColor: GOLD }} />
+        <span style={{ fontFamily: inter, fontSize: 14, color: dim(0.8), lineHeight: 1.6 }}>
+          I’m planning to run mini sessions. <span style={{ color: dim(0.5) }}>Once you book, Mini Sessions gives you a sign-up link for your clients and keeps the day organized.</span>
+        </span>
       </label>
 
       {cents > 0 && (

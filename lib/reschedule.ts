@@ -32,6 +32,7 @@ import { sendSimpleEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { createRescheduleRequest } from '@/lib/reschedule-requests'
+import { reconcileMiniForBooking } from '@/lib/mini-sessions-server'
 
 // A customer may move a booking freely up to this point; inside it, only Plus.
 export const SELF_SERVE_HOURS = 48
@@ -408,6 +409,9 @@ export async function rescheduleBooking(
       url: '/admin/dashboard',
     }).catch(() => {}),
   ])
+
+  // Mini Sessions: tell the photographer's clients their new slot times.
+  await reconcileMiniForBooking(service, bookingId).catch(e => console.error('[reschedule] mini sessions sync failed', e))
 
   return { ok: true, startISO: newStartISO, endISO: newEndISO, when: whenNew, doorCode, doorCodeBack }
 }

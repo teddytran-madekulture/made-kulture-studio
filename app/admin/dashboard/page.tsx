@@ -2121,6 +2121,7 @@ export default function AdminDashboard() {
           {navView('revenue', '📈', 'Revenue')}
           {navView('sets', '▦', 'Products & Pricing')}
           {navLink('/admin/drops', '◇', 'Set Drops')}
+          {navLink('/admin/minis', '◷', 'Mini Sessions')}
           {navLink('/admin/promos', '🏷', 'Promo Codes')}
           {navLink('/admin/jukebox', '♪', 'Jukebox')}
 

@@ -17,6 +17,7 @@ const ITEMS: Item[] = [
   { href: '/account/bookings', label: 'My Bookings', icon: 'cal' },
   { href: '/account/directory', label: 'Directory', icon: 'search' },
   { href: '/account/castings', label: 'Castings', icon: 'cast' },
+  { href: '/account/minis', label: 'Mini Sessions', icon: 'clock' },
   { href: '/account/messages', label: 'Messages', icon: 'msg' },
   { href: '/account/me', label: 'Profile', icon: 'user' },
 ]
@@ -34,6 +35,7 @@ const PATHS: Record<string, React.ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
   cast: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>,
   msg: <><path d="M22 3 2 10l8 3 3 8z" /><path d="m10 13 5-5" /></>,
+  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
   lock: <><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
   card: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>,

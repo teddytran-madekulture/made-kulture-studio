@@ -761,6 +761,8 @@ export async function sendSimpleEmail(opts: {
   ctaText?: string
   ctaUrl?: string
   label?: string
+  /** Replies go here instead of the studio inbox (Mini Sessions: the photographer). */
+  replyTo?: string
 }) {
   const paras = opts.paragraphs
     .map(p => `<p style="margin:0 0 16px;font-size:14px;color:#aaa;line-height:1.6;">${p}</p>`)
@@ -775,7 +777,7 @@ export async function sendSimpleEmail(opts: {
   `
   return sendEmail(opts.label ?? 'simple_notice', {
     from: FROM_EMAIL,
-    reply_to: REPLY_TO,
+    reply_to: opts.replyTo || REPLY_TO,
     to: opts.to,
     subject: opts.subject,
     html: layout(body),

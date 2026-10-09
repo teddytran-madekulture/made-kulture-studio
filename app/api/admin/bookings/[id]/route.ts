@@ -1,4 +1,5 @@
 import { logBookingChange } from '@/lib/booking-changes'
+import { reconcileMiniForBooking } from '@/lib/mini-sessions-server'
 import { NextRequest, NextResponse } from 'next/server'
 import { adjustRewardForRefund } from '@/lib/rewards'
 import { isAdminAuthed } from '@/lib/admin-auth'
@@ -329,5 +330,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
+  // Mini Sessions: a moved or cancelled booking moves/cancels the clients' slots.
+  if (body.status === 'cancelled' || body.start_time !== undefined || body.end_time !== undefined) {
+    await reconcileMiniForBooking(supabase, params.id).catch(e => console.error('[admin booking] mini sessions sync failed', e))
+  }
   return NextResponse.json({ success: true, refund: refundResult, credit: creditResult, doorCode: newDoorCode, doorCodeBack: newDoorCodeBack })
 }

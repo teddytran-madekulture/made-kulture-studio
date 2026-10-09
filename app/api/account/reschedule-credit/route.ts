@@ -8,6 +8,7 @@ import { issueCredit } from '@/lib/credits'
 import { sendSimpleEmail, formatDateLabel } from '@/lib/email'
 import { sendSMS } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
+import { reconcileMiniForBooking } from '@/lib/mini-sessions-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,6 +114,9 @@ export async function POST(req: NextRequest) {
   if (!cancelledRows || cancelledRows.length === 0) {
     return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
   }
+
+  // Mini Sessions: tell the photographer's clients the day is off.
+  await reconcileMiniForBooking(service, booking_id).catch(e => console.error('[reschedule-credit] mini sessions sync failed', e))
 
   // Change log (migration 134) — written once WE won the cancel claim above.
   await logBookingChange(service, {

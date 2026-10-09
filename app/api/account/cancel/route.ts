@@ -13,6 +13,7 @@ import { sendOwnerPush } from '@/lib/push'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { logBookingChange } from '@/lib/booking-changes'
 import { lateChangeMeter } from '@/lib/late-change-meter'
+import { reconcileMiniForBooking } from '@/lib/mini-sessions-server'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -173,6 +174,9 @@ export async function POST(req: NextRequest) {
   if (!cancelledRows || cancelledRows.length === 0) {
     return NextResponse.json({ error: 'This booking is already cancelled.' }, { status: 409 })
   }
+
+  // Mini Sessions: tell the photographer's clients the day is off.
+  await reconcileMiniForBooking(service, booking_id).catch(e => console.error('[cancel] mini sessions sync failed', e))
 
   // ── What comes back ──────────────────────────────────────────────────────
   //

@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/staff-auth'
 import { deleteAcuityBlocks } from '@/lib/acuity-sync'
 import { deleteCalendarEvent } from '@/lib/gcal'
 import { audit } from '@/lib/audit'
+import { reconcileMiniForBooking } from '@/lib/mini-sessions-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,5 +57,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // NOTE: this does not auto-refund. Refunds are gated (manager+) and handled
   // separately in Phase 4 so cancelling never silently moves money.
+  await reconcileMiniForBooking(db, params.id).catch(e => console.error('[desk cancel] mini sessions sync failed', e))
   return NextResponse.json({ success: true })
 }

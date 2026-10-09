@@ -80,6 +80,7 @@ function SidebarInner() {
         <Item href={`${D}revenue`} icon="📈" label="Revenue" />
         <Item href={`${D}sets`} icon="▦" label="Products & Pricing" />
         <Item href="/admin/drops" icon="◇" label="Set Drops" active={on('/admin/drops')} />
+        <Item href="/admin/minis" icon="◷" label="Mini Sessions" active={on('/admin/minis')} />
         <Item href="/admin/promos" icon="🏷" label="Promo Codes" active={on('/admin/promos')} />
         <Item href="/admin/jukebox" icon="♪" label="Jukebox" active={on('/admin/jukebox')} />
 

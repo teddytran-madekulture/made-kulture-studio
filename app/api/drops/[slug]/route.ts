@@ -168,6 +168,8 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const { data: pledge, error } = await db.from('set_drop_pledges').insert({
     drop_id: drop.id, auth_user_id: me.id, customer_email: me.email, customer_name: name, phone,
     hours_wanted: hoursWanted, timing_note: timing, deposit_cents: cents,
+    // Only sent when ticked, so reservations keep working even before migration 158 runs.
+    ...(body.plansMinis ? { plans_minis: true } : {}),
     square_payment_id: paymentId, square_customer_id: squareCustomerId, square_card_id: cardId,
     agreed_terms: terms.full,
   }).select('*').single()

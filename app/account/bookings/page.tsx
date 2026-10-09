@@ -231,6 +231,13 @@ export default function BookingsPage() {
                 + CALENDAR
               </a>
             )}
+            {isUpcoming && !isCancelled && (
+              <a href={`/account/minis/${b.id}`}
+                title="Running minis? Cut this booking into time slots and share one sign-up link with your clients."
+                style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', textDecoration: 'none', border: '1px solid rgba(var(--t-fg-rgb), calc(0.15 * var(--t-a)))', borderRadius: 4, padding: '6px 12px', whiteSpace: 'nowrap' }}>
+                MINI SESSIONS
+              </a>
+            )}
             {isUpcoming && gearCart.length > 0 && (
               <button
                 onClick={() => addGear(b.id)}
