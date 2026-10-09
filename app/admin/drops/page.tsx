@@ -117,6 +117,7 @@ export default function SetDropsAdmin() {
     setMsg(d.warning ?? null); setDraft({}); await load()
   }
 
+  const [refundAsk, setRefundAsk] = useState<string | null>(null)   // per-deposit refund: second tap confirms
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     if (!drop) return
     setBusy(true); setMsg(null)
@@ -306,11 +307,17 @@ export default function SetDropsAdmin() {
           <section style={card}>
             <div style={h2}>DEPOSITS ({drop.pledges.length})</div>
             {drop.pledges.some((p: any) => p.plans_minis && p.status !== 'refunded') && <div style={{ ...small, color: C.accent, marginBottom: 8 }}>{drop.pledges.filter((p: any) => p.plans_minis && p.status !== 'refunded').length} planning mini sessions — usually a multi-hour booking each.</div>}
+            {drop.pledges.some(p => p.status !== 'refunded') && (() => {
+              const live = drop.pledges.filter(p => p.status !== 'refunded')
+              const booked = live.filter(p => p.booked?.count)
+              const hrs = booked.reduce((h, p) => h + (p.booked?.hours || 0), 0)
+              return <div style={{ ...small, color: booked.length ? C.green : C.dim, marginBottom: 8 }}>{booked.length} of {live.length} depositors have booked · {Math.round(hrs * 10) / 10} hours</div>
+            })()}
             {pendingChoice > 0 && <div style={{ ...small, color: C.amber, marginBottom: 8 }}>{pendingChoice} waiting on a refund-or-credit choice. Anyone who hasn’t chosen after 7 days is refunded automatically each morning.</div>}
             {drop.pledges.length === 0 ? <div style={small}>No deposits yet.</div> : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', ...small }}>
-                  <thead><tr style={{ textAlign: 'left' }}>{['WHO', 'HOURS', 'WHEN', 'DEPOSIT', 'STATUS', 'PAID', ''].map(h => <th key={h} style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 10, letterSpacing: '0.1em' }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ textAlign: 'left' }}>{['WHO', 'HOURS', 'WHEN', 'DEPOSIT', 'STATUS', 'BOOKED', 'PAID', ''].map(h => <th key={h} style={{ padding: '6px 8px', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 10, letterSpacing: '0.1em' }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {drop.pledges.map(p => {
                       const st = PLEDGE[p.status] ?? PLEDGE.active
@@ -321,9 +328,15 @@ export default function SetDropsAdmin() {
                           <td style={{ padding: '8px', maxWidth: 220 }}>{p.timing_note || '—'}</td>
                           <td style={{ padding: '8px', color: C.text }}>{dollars(p.deposit_cents)}{p.credit_cents_issued > p.deposit_cents ? <div style={{ fontSize: 11 }}>→ {dollars(p.credit_cents_issued)} credit</div> : null}</td>
                           <td style={{ padding: '8px', color: st.color, fontWeight: 600 }}>{st.label}</td>
+                          <td style={{ padding: '8px', color: p.booked?.count ? C.green : C.dim, fontWeight: p.booked?.count ? 600 : 400 }}>
+                            {p.booked?.count ? `${p.booked.count} · ${p.booked.hours}h` : '—'}
+                          </td>
                           <td style={{ padding: '8px' }}>{new Date(p.created_at).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric' })}</td>
                           <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>
                             {p.status === 'refund_failed' && <button disabled={busy} onClick={() => act('retry_refund', { pledgeId: p.id })} style={btn}>RETRY REFUND</button>}
+                            {drop.status === 'pre_reserve' && p.status === 'active' && (refundAsk === p.id
+                              ? <><button disabled={busy} onClick={() => { setRefundAsk(null); act('refund_one', { pledgeId: p.id }) }} style={{ ...btn, borderColor: C.red, color: C.red }}>CONFIRM REFUND {dollars(p.deposit_cents)}</button>{' '}<button onClick={() => setRefundAsk(null)} style={btn}>KEEP</button></>
+                              : <button disabled={busy} onClick={() => setRefundAsk(p.id)} style={btn}>REFUND</button>)}
                             {p.status === 'pending_choice' && <>
                               <button disabled={busy} onClick={() => act('resolve', { pledgeId: p.id, choice: 'refund' })} style={btn}>REFUND</button>{' '}
                               <button disabled={busy} onClick={() => act('resolve', { pledgeId: p.id, choice: 'credit' })} style={btn}>CREDIT</button>

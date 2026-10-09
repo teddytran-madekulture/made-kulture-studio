@@ -25,8 +25,22 @@ export async function GET(req: NextRequest) {
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
   const { data: calls } = await db.from('open_calls').select('id, slug, title')
 
+  // Which depositors have actually booked the drop's set (2026-10-09): matched
+  // by account id or the booking's email, same identity rule as everywhere else.
+  const setIds = (drops ?? []).map((d: any) => d.set_id).filter(Boolean)
+  const { data: bks, error: bErr } = setIds.length
+    ? await db.from('bookings').select('set_id, auth_user_id, start_time, end_time, customers ( email )').in('set_id', setIds).neq('status', 'cancelled')
+    : { data: [], error: null }
+  if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 })
+
   const out = (drops ?? []).map((d: SetDrop) => {
-    const ps = (pledges ?? []).filter((p: any) => p.drop_id === d.id) as DropPledge[]
+    const mine = (bks ?? []).filter((b: any) => b.set_id === d.set_id)
+    const ps = ((pledges ?? []).filter((p: any) => p.drop_id === d.id) as DropPledge[]).map(p => {
+      const em = (p.customer_email || '').toLowerCase()
+      const hits = mine.filter((b: any) => (p.auth_user_id && b.auth_user_id === p.auth_user_id) || (em && (b.customers?.email || '').toLowerCase() === em))
+      const hours = hits.reduce((h: number, b: any) => h + (Date.parse(b.end_time) - Date.parse(b.start_time)) / 3_600_000, 0)
+      return { ...p, booked: { count: hits.length, hours: Math.round(hours * 10) / 10 } }
+    })
     return { ...d, phase: dropPhase(d), progress: dropProgress(d, ps), pledges: ps }
   })
   return NextResponse.json({ drops: out, sets: sets ?? [], openCalls: calls ?? [] })

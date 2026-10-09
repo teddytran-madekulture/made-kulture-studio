@@ -68,6 +68,7 @@ export interface DropPledge {
   hours_wanted: number | null   // optional on flat-deposit drops (migration 157)
   timing_note: string | null
   plans_minis?: boolean       // migration 158 — visible to Teddy only
+  booked?: { count: number; hours: number }   // admin list only: their bookings on the drop's set
   deposit_cents: number
   status: 'active' | 'credited' | 'refunded' | 'pending_choice' | 'refund_failed'
   credit_cents_issued: number
@@ -211,7 +212,7 @@ export function dropTerms(drop: SetDrop, hours: number): DropTerms {
   }
   const credit = dep + (drop.bonus_credit_cents || 0)
   const creditS = drop.bonus_credit_cents > 0 ? `${dollars(credit)} in studio credit (your ${depS} plus a ${dollars(drop.bonus_credit_cents)} bonus)` : `${depS} in studio credit`
-  const ifFunded = `If ${drop.name} is built, your deposit becomes ${creditS} toward your booking${perks.length ? `, plus ${joinAnd(perks)}` : ''}.`
+  const ifFunded = `If ${drop.name} is built, your deposit becomes ${creditS} toward your booking${perks.length ? `, plus ${joinAnd(perks)}` : ''}. Once it's built, that credit isn't refundable to your card.`
 
   let ifCancelled: string
   switch (drop.cancel_policy) {

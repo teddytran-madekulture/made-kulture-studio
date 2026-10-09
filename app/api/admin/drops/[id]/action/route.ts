@@ -7,6 +7,7 @@
 //   { action: 'process_remaining' }            finish any deposit still unsettled after GO/CANCEL
 //   { action: 'retry_refund', pledgeId }       a refund that failed
 //   { action: 'resolve', pledgeId, choice }    settle one customer's choice for them
+//   { action: 'refund_one', pledgeId }         refund one deposit while still taking reservations
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
@@ -56,12 +57,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json(r, { status: r.ok ? 200 : 400 })
     }
 
-    if (action === 'retry_refund' || action === 'resolve') {
+    if (action === 'retry_refund' || action === 'resolve' || action === 'refund_one') {
       const drop = await getDrop(db, params.id)
       if (!drop) return NextResponse.json({ error: 'Drop not found.' }, { status: 404 })
       const { data: p } = await db.from('set_drop_pledges').select('*').eq('id', String(body.pledgeId || '')).eq('drop_id', drop.id).maybeSingle()
       if (!p) return NextResponse.json({ error: 'Deposit not found.' }, { status: 404 })
       const pledge = p as DropPledge
+      if (action === 'refund_one') {
+        // Only before the decision: after GO a deposit is already studio credit.
+        if (drop.status !== 'pre_reserve') return NextResponse.json({ error: 'Deposits can only be refunded one by one while reservations are open.' }, { status: 400 })
+        if (pledge.status !== 'active') return NextResponse.json({ error: 'That deposit has already been handled.' }, { status: 400 })
+        const r = await refundPledge(db, drop, pledge, 'active', 'withdrawn')
+        return NextResponse.json(r, { status: r.ok ? 200 : 400 })
+      }
       if (action === 'retry_refund') {
         if (pledge.status !== 'refund_failed') return NextResponse.json({ error: 'That refund isn’t in a failed state.' }, { status: 400 })
         const r = await refundPledge(db, drop, pledge, 'refund_failed')

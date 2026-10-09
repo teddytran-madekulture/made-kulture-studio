@@ -321,7 +321,7 @@ export async function cancelDrop(db: SupabaseClient, dropId: string, resolution:
   return report
 }
 
-export async function refundPledge(db: SupabaseClient, drop: SetDrop, p: DropPledge, from: 'active' | 'pending_choice' | 'refund_failed'): Promise<{ ok: boolean; error?: string }> {
+export async function refundPledge(db: SupabaseClient, drop: SetDrop, p: DropPledge, from: 'active' | 'pending_choice' | 'refund_failed', notice: 'cancelled' | 'withdrawn' = 'cancelled'): Promise<{ ok: boolean; error?: string }> {
   const { data: c } = await db.from('set_drop_pledges')
     .update({ status: 'refunded', resolved_at: new Date().toISOString() })
     .eq('id', p.id).eq('status', from).select('id, square_payment_id')
@@ -334,13 +334,25 @@ export async function refundPledge(db: SupabaseClient, drop: SetDrop, p: DropPle
     }
   } else {
     try {
-      const r = await refundPayment({ paymentId, amountCents: p.deposit_cents, reason: `Set Drop cancelled — ${drop.name}` })
+      const r = await refundPayment({ paymentId, amountCents: p.deposit_cents, reason: notice === 'withdrawn' ? `Set Drop deposit withdrawn — ${drop.name}` : `Set Drop cancelled — ${drop.name}` })
       await db.from('set_drop_pledges').update({ refund_id: r.id ?? null }).eq('id', p.id)
     } catch (e: any) {
       const msg = e?.errors?.[0]?.detail || e?.message || 'refund failed'
       await db.from('set_drop_pledges').update({ status: 'refund_failed' }).eq('id', p.id)
       return { ok: false, error: msg }
     }
+  }
+  if (notice === 'withdrawn') {
+    // One person backing out before the decision — the drop itself goes on.
+    await tell(p, {
+      subject: `Your ${drop.name} deposit has been refunded`,
+      heading: 'Deposit refunded',
+      paragraphs: [
+        `As requested, your ${dollars(p.deposit_cents)} deposit for ${drop.name} has been refunded to your card — it usually shows within 5–10 business days. You're no longer counted toward the goal.`,
+        `Changed your mind? You can reserve again any time before reservations close.`,
+      ],
+    }, `Made Kulture: your ${dollars(p.deposit_cents)} deposit for ${drop.name} has been refunded to your card.`)
+    return { ok: true }
   }
   await tell(p, {
     subject: `${drop.name} isn't happening — refund on its way`,
