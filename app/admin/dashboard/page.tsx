@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { AGREEMENT_KEYS, DEFAULT_SET_AGREEMENT, DEFAULT_STUDIO_AGREEMENT } from '@/lib/agreements'
 import { useIsMobile } from '@/lib/use-is-mobile'
@@ -87,7 +87,9 @@ interface Booking {
   standing?: { level: string; points: number } | null
   // Active Plus membership, attached client-side from the API's `plus` map.
   plus?: { comp: boolean } | null
-  sets: { name: string } | null
+  sets: { name: string; rate_per_hour?: number | null } | null
+  // The hourly set rate this row was SOLD at (migration 154); null on older rows.
+  hourly_rate?: number | null
   customers: { name: string; email: string; phone: string; status?: string; banned?: boolean; square_customer_id?: string | null } | null
   booking_add_ons?: {
     id?: string
@@ -296,7 +298,9 @@ interface TourRequest {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const SETS = [
+// Fallbacks for first paint only — the component swaps in the live `sets` table
+// (see liveSets) so a new room or a Set Drop appears without a code change.
+const DEFAULT_SETS = [
   { id: 'set-a', name: 'Set A' }, { id: 'set-b', name: 'Set B' },
   { id: 'set-c', name: 'Set C' }, { id: 'set-d', name: 'Set D' },
   { id: 'concrete', name: 'Concrete' }, { id: 'vintage', name: 'Vintage' },
@@ -305,7 +309,7 @@ const SETS = [
   { id: 'studio-one', name: 'Studio One' }, { id: 'studio', name: 'Full Studio Takeover' },
 ]
 
-const CAL_SETS   = ['Set A', 'Set B', 'Set C', 'Set D', 'Concrete', 'Vintage', 'Cottage', 'The Watering Hole', 'The Tank', 'Studio One']
+const DEFAULT_CAL_SETS = ['Set A', 'Set B', 'Set C', 'Set D', 'Concrete', 'Vintage', 'Cottage', 'The Watering Hole', 'The Tank', 'Studio One']
 const TIME_SLOTS = Array.from({ length: 27 }, (_, i) => 9 + i * 0.5)  // 9:00 – 22:00 in 30-min steps
 // Off-hours. Same 30-minute decimal-hour units as TIME_SLOTS, but the whole
 // clock — an admin booking an after-hours buyout is not bound by the public
@@ -326,7 +330,7 @@ const rotateFrom = (slots: number[], start: number) =>
   slots.filter(h => h !== start).sort((a, b) => ((a - start + 24) % 24) - ((b - start + 24) % 24))
 // ⚠️ Was a local table that had already drifted — it was missing 'The Tank',
 // which every other copy priced at 75. Now the shared one. See lib/guest-rate.ts.
-const SET_RATES = RATE_BY_NAME
+const DEFAULT_SET_RATES: Record<string, number> = RATE_BY_NAME
 
 // The LIST rate for a set plus the per-hour guest surcharge THIS booking was
 // sold at, so the modal quotes a guest booking at the price its customer
@@ -343,8 +347,15 @@ const SET_RATES = RATE_BY_NAME
 // load pricing_overrides. That is unchanged from before (SET_RATES ignored them
 // too), and it cancels out of editDiff as long as both sides agree. The server
 // is the authority on what any button actually charges.
-const effectiveRateFor = (setName: string, b: Booking | null) =>
-  (SET_RATES[setName] ?? 40) + (b ? guestSurchargePerHourOf(b) + guestFeePerHourOf(b) : 0)
+// 2026-10-09: the rate a row was SOLD at (hourly_rate) wins when the set is the
+// booking's own; otherwise the live list rate. ⚠️ Only for the booking's OWN set:
+// moving it to another set in the edit form must price at THAT set's rate.
+const effectiveRateFor = (setName: string, b: Booking | null, rates: Record<string, number> = DEFAULT_SET_RATES) => {
+  const own = !!b && b.sets?.name === setName
+  const sold = own ? Number(b!.hourly_rate) : 0
+  const base = sold > 0 ? sold : (rates[setName] ?? DEFAULT_SET_RATES[setName] ?? 40)
+  return base + (b ? guestSurchargePerHourOf(b) + guestFeePerHourOf(b) : 0)
+}
 const SLOT_H     = 44    // px per 30-min slot → 88px/hr
 const CAL_START  = 9
 const CAL_END    = 22
@@ -578,6 +589,36 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [bookings,  setBookings]  = useState<Booking[]>([])
+  // The live `sets` table (2026-10-09). Rates, names and calendar columns come
+  // from here once it loads; the DEFAULT_* constants are only the first paint.
+  const [liveSets, setLiveSets] = useState<StudioSet[] | null>(null)
+  useEffect(() => {
+    fetch('/api/admin/sets', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (Array.isArray(d?.sets)) setLiveSets(d.sets) })
+      .catch(() => {})
+  }, [])
+  const SETS = useMemo(() => {
+    if (!liveSets) return DEFAULT_SETS
+    const rows = liveSets.filter(s => s.is_active && s.slug).map(s => ({ id: s.slug as string, name: s.name }))
+    return [...rows, { id: 'studio', name: 'Full Studio Takeover' }]
+  }, [liveSets])
+  const SET_RATES = useMemo(() => {
+    const m: Record<string, number> = { ...DEFAULT_SET_RATES }
+    for (const s of liveSets ?? []) if (Number(s.rate_per_hour) > 0) m[s.name] = Number(s.rate_per_hour)
+    return m
+  }, [liveSets])
+  // Calendar columns: every active set, plus any inactive one that still has a
+  // booking on the books (an archived Set Drop's history must stay visible).
+  const CAL_SETS = useMemo(() => {
+    if (!liveSets) return DEFAULT_CAL_SETS
+    const names = liveSets.filter(s => s.is_active).map(s => s.name)
+    for (const b of bookings) {
+      const n = b.sets?.name
+      if (n && !names.includes(n)) names.push(n)
+    }
+    return names
+  }, [liveSets, bookings])
   const [tours,     setTours]     = useState<TourRequest[]>([])
   const [loading,   setLoading]   = useState(true)
   // Square-sourced collected revenue, keyed "YYYY-MM" → { gross, net, count }. Null until loaded.
@@ -1383,7 +1424,7 @@ export default function AdminDashboard() {
   // Manual booking price: hours × rate (buyout rate for a Full Studio Takeover).
   const manualRate = manual.setSlug === 'studio'
     ? (Number(buyoutRate) || 400)
-    : effectiveRateFor(SETS.find(x => x.id === manual.setSlug)?.name || '', null)
+    : effectiveRateFor(SETS.find(x => x.id === manual.setSlug)?.name || '', null, SET_RATES)
   const manualAutoTotal = Math.max(Math.round(spanHours(manual.startHour, manual.endHour) * manualRate * 100) / 100, 0)
   const manualTotal = manualTotalTyped === null ? manualAutoTotal : (Number(manualTotalTyped) || 0)
   // The buyout rate is otherwise only loaded on the Sets tab.
@@ -1566,7 +1607,7 @@ export default function AdminDashboard() {
   // already maps back to set_id null.
   const setNameOf = (b: Booking) => b.sets?.name || 'Full Studio Takeover'
   const editRateFor = (name: string, b: Booking | null) =>
-    name === 'Full Studio Takeover' ? (Number(buyoutRate) || 400) : effectiveRateFor(name, b)
+    name === 'Full Studio Takeover' ? (Number(buyoutRate) || 400) : effectiveRateFor(name, b, SET_RATES)
 
   const openEdit = async (b: Booking) => {
     // The buyout rate is otherwise only loaded on the Sets tab — fetch it before
@@ -2079,6 +2120,7 @@ export default function AdminDashboard() {
           {navHdr('STUDIO')}
           {navView('revenue', '📈', 'Revenue')}
           {navView('sets', '▦', 'Products & Pricing')}
+          {navLink('/admin/drops', '◇', 'Set Drops')}
           {navLink('/admin/promos', '🏷', 'Promo Codes')}
           {navLink('/admin/jukebox', '♪', 'Jukebox')}
 
@@ -5108,7 +5150,7 @@ export default function AdminDashboard() {
       {addSetFor && (
         <AddSetModal
           booking={addSetFor as any}
-          sets={Object.entries(SET_RATES).map(([name, rate]) => ({ name, rate }))}
+          sets={SETS.filter(s => s.id !== 'studio').map(s => ({ name: s.name, rate: SET_RATES[s.name] ?? 40 }))}
           defaultDate={localDateStr(addSetFor.start_time)}
           onClose={() => setAddSetFor(null)}
           onSuccess={() => { setAddSetFor(null); setDetailBooking(null); fetchBookings() }}
@@ -5134,7 +5176,7 @@ export default function AdminDashboard() {
           // Overtime is real money on the customer's card, so it honours their
           // negotiated rate (pricing_overrides) — same rule the server uses for
           // EXTEND. effectiveRateFor stays override-free on purpose (editDiff).
-          rate={effectiveHourlyRate(overtimeFor.sets?.name ?? '', (overtimeFor as any).customers?.pricing_overrides, overtimeFor as any) || effectiveRateFor(overtimeFor.sets?.name ?? '', overtimeFor)}
+          rate={effectiveHourlyRate(overtimeFor.sets?.name ?? '', (overtimeFor as any).customers?.pricing_overrides, overtimeFor as any) || effectiveRateFor(overtimeFor.sets?.name ?? '', overtimeFor, SET_RATES)}
           onClose={() => setOvertimeFor(null)}
           onSuccess={() => {
             const ob = overtimeFor

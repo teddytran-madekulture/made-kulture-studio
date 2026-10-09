@@ -1,4 +1,4 @@
-import { manualBookingConflict, SLUG_TO_NAME } from '@/lib/admin-manual-check'
+import { manualBookingConflict, adminSetNames } from '@/lib/admin-manual-check'
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
 import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
@@ -50,9 +50,9 @@ export async function GET(req: NextRequest) {
       .select(`
         id, start_time, end_time, status, total_amount, notes, source, created_at,
         square_payment_id, square_card_on_file_id, guest_count, guest_fee_amount,
-        guest_surcharge_amount, customer_id,
+        guest_surcharge_amount, hourly_rate, customer_id,
         checked_in_at, checked_out_at, arrived_guest_count, cleaning_status,
-        sets ( name ),
+        sets ( name, rate_per_hour ),
         customers ( name, email, phone, status, banned, square_customer_id, pricing_overrides ),
         booking_add_ons ( id, quantity, rate, paid, label, square_order_id, square_payment_link_id, equipment ( name ) )
       `)
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
 
   const clash = await manualBookingConflict(supabase, { setSlug, date, startHour, endHour, force: !!body.force })
   if (clash) return NextResponse.json(clash.body, { status: clash.status })
-
+  const SLUG_TO_NAME = await adminSetNames(supabase)
 
   // Upsert customer
   const { data: customerData } = await upsertCustomerByEmail(supabase, { email, name, phone }, { trusted: true })

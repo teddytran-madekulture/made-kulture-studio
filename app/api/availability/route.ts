@@ -2,37 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { centralOffset } from '@/lib/booking-times'
 import { createClient } from '@supabase/supabase-js'
 import { activeClosures, closureBlocks, type Closure } from '@/lib/closures'
+import { loadSetCatalog } from '@/lib/set-catalog'
+
+// The set catalog is read here now; never serve a cached copy of it.
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const SLUG_TO_NAME: Record<string, string> = {
-  'set-a':         'Set A',
-  'set-b':         'Set B',
-  'set-c':         'Set C',
-  'set-d':         'Set D',
-  'concrete':      'Concrete',
-  'vintage':       'Vintage',
-  'cottage':       'Cottage',
-  'watering-hole': 'The Watering Hole',
-  'the-tank':      'The Tank',
-  'studio-one':    'Studio One',
-}
-
-const NAME_TO_SLUG: Record<string, string> = {
-  'Set A':             'set-a',
-  'Set B':             'set-b',
-  'Set C':             'set-c',
-  'Set D':             'set-d',
-  'Concrete':          'concrete',
-  'Vintage':           'vintage',
-  'Cottage':           'cottage',
-  'The Watering Hole': 'watering-hole',
-  'The Tank':          'the-tank',
-  'Studio One':        'studio-one',
-}
+// Slugs resolve through the `sets` table (lib/set-catalog) — the hardcoded
+// slug/name maps that used to live here could not see a new room.
 
 // Extract time in Houston local time as decimal hours (e.g. 11.5 = 11:30)
 function cdhTime(dateStr: string): number {
@@ -80,14 +62,11 @@ export async function GET(req: NextRequest) {
     let resolvedId = set_id
 
     if (!isUUID) {
-      const name = SLUG_TO_NAME[set_id]
-      if (name) {
-        const { data: setRow } = await supabase.from('sets').select('id').eq('name', name).single()
-        if (!setRow) return NextResponse.json({ booked: [] })
-        resolvedId = setRow.id
-      } else {
-        return NextResponse.json({ booked: [] })
-      }
+      let setRow: { id: string } | undefined
+      try { setRow = (await loadSetCatalog(supabase)).bySlug[set_id] }
+      catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+      if (!setRow) return NextResponse.json({ booked: [] })
+      resolvedId = setRow.id
     }
 
     const { data, error } = await supabase
@@ -139,7 +118,7 @@ export async function GET(req: NextRequest) {
   // ── All sets ───────────────────────────────────────────────────────────────
   const { data: sets, error: setsError } = await supabase
     .from('sets')
-    .select('id, name')
+    .select('id, name, slug')
     .eq('is_active', true)
     .order('name')
 
@@ -187,7 +166,7 @@ export async function GET(req: NextRequest) {
   const result: Record<string, { name: string; bookedSlots: { start: number; end: number }[] }> = {}
 
   for (const set of (sets ?? [])) {
-    const slug = NAME_TO_SLUG[set.name] ?? set.name.toLowerCase().replace(/\s+/g, '-')
+    const slug = (set as any).slug || set.name.toLowerCase().replace(/\s+/g, '-')
     const slots = (bookings ?? [])
       .filter(b => b.set_id === set.id)
       .map(b => ({

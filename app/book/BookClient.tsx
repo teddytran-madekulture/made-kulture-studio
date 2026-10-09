@@ -37,7 +37,9 @@ function loadSquareScript(): Promise<void> {
 
 // Sets are loaded from /api/sets at runtime (admin Sets Manager is the source
 // of truth). Shape used by this page:
-interface BookSet { id: string; name: string; price: number; desc: string; minHours: number; photo: string | null; bookingPrompt: string | null }
+interface BookSet { id: string; name: string; price: number; desc: string; minHours: number; photo: string | null; bookingPrompt: string | null
+  /** Set Drop run window (migration 155) — the set only sells between these Central dates. */
+  runStarts?: string | null; runEnds?: string | null; dropName?: string | null; depositorRate?: boolean }
 
 // One set added to a multi-set order (per-set scheduling). price = effective
 // hourly rate (with any customer overrides) captured when it was added.
@@ -228,6 +230,10 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
           minHours: s.min_hours ?? 1,
           photo: s.photo_url ?? null,
           bookingPrompt: s.booking_prompt ?? null,
+          runStarts: d.drops?.[s.id]?.runStarts ?? null,
+          runEnds:   d.drops?.[s.id]?.runEnds ?? null,
+          dropName:  d.drops?.[s.id]?.name ?? null,
+          depositorRate: !!s.depositor_rate,
         }))
       )
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
@@ -460,6 +466,17 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   // ── Derived ────────────────────────────────────────────────────────────────
 
   const selectedSet  = sets.find(s => s.id === booking.setId)
+  // A Set Drop only sells inside its run dates: move the date into the window
+  // when one of those sets is picked, rather than letting checkout refuse it.
+  useEffect(() => {
+    const s = selectedSet
+    if (!s?.runStarts || !s?.runEnds || !booking.date) return
+    const lo = s.runStarts > minBookDate ? s.runStarts : minBookDate
+    if ((booking.date < lo || booking.date > s.runEnds) && lo <= s.runEnds) {
+      setBooking(b => ({ ...b, date: lo, startHour: null, endHour: null }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSet?.id, selectedSet?.runStarts, selectedSet?.runEnds])
   const hourCount    = booking.startHour !== null && booking.endHour !== null
                        ? booking.endHour - booking.startHour : 0
 
@@ -492,9 +509,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   const standardSetRate = selectedSet?.price ?? 65
   const perSetOverride  = booking.setId ? pricingOverrides?.sets?.[booking.setId] : undefined
   const globalOverride  = pricingOverrides?.hourly_rate
-  const setRate         = perSetOverride != null ? Number(perSetOverride)
+  const overrideRate    = perSetOverride != null ? Number(perSetOverride)
                         : globalOverride != null ? Number(globalOverride)
-                        : standardSetRate
+                        : null
+  // A Set Drop depositor rate (already in standardSetRate via /api/sets) and a
+  // negotiated rate: the server charges the LOWER of the two, so show that.
+  const setRate         = overrideRate == null ? standardSetRate
+                        : selectedSet?.depositorRate ? Math.min(overrideRate, standardSetRate)
+                        : overrideRate
 
   const equipDiscount   = pricingOverrides?.equipment_discount_percent
   const equipTotal      = booking.equipment.reduce((sum, l) => sum + l.rate * l.quantity, 0)
@@ -969,9 +991,16 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   ? 'Bookings normally need 48 hours\u2019 notice. As a Plus member you can also book sooner \u2014 for the hours the studio is already open. Studio hours are Monday\u2013Sunday, 9am\u201310pm.'
                   : 'Bookings require at least 48 hours advance notice. Studio hours are Monday\u2013Sunday, 9am\u201310pm.'}
               </p>
+              {selectedSet?.runStarts && selectedSet?.runEnds && (
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', marginBottom: 14, lineHeight: 1.5 }}>
+                  {selectedSet.name} is a limited run: {prettyDay(selectedSet.runStarts)} – {prettyDay(selectedSet.runEnds)}.
+                  {selectedSet.depositorRate ? ' Your depositor rate is applied.' : ''}
+                </div>
+              )}
               <DatePicker
                 value={booking.date}
-                min={minBookDate}
+                min={selectedSet?.runStarts && selectedSet.runStarts > minBookDate ? selectedSet.runStarts : minBookDate}
+                max={selectedSet?.runEnds ?? undefined}
                 onChange={d => {
                   setBooking(b => ({ ...b, date: d, startHour: null, endHour: null }))
                   setBookedSlots([]); setClosedSlots([])
@@ -2169,7 +2198,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
     guests:     booking.guests,
     promoCode:  promoApplied?.code,
     applyCredit: useCredit,
-    totalCents: grandTotalRef.current * 100,
+    totalCents: Math.round(grandTotalRef.current * 100),
   })
 
   // Shared booking submission used by both card and Google Pay

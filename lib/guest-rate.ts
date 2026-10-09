@@ -11,6 +11,9 @@
 // the admin dashboard (a client component) can import the same arithmetic the
 // API routes use instead of keeping a fourth copy in sync by hand.
 
+// ⚠️ FALLBACK ONLY (2026-10-09). The live rates are the `sets` table; see
+// lib/set-catalog.ts. This table now prices only rows with no hourly_rate whose
+// set join is missing — it matches the database for the ten original sets.
 export const RATE_BY_NAME: Record<string, number> = {
   'Set A': 40, 'Set B': 40, 'Set C': 40, 'Set D': 40,
   'Concrete': 40, 'Vintage': 40, 'Cottage': 40,
@@ -44,6 +47,11 @@ export function hasRateOverride(setName: string | undefined, overrides: any): bo
 }
 
 export interface SurchargeBooking {
+  /** The hourly set rate this row was SOLD at (migration 154) — list, negotiated,
+   *  Set Drop or depositor rate, before any guest surcharge. NULL on older rows. */
+  hourly_rate?: number | null
+  /** Joined `sets ( rate_per_hour )` — the live list rate, used when hourly_rate is NULL. */
+  sets?: { name?: string | null; rate_per_hour?: number | null } | null
   guest_surcharge_amount?: number | null
   /** Extra-person fee (party over the set's capacity) for this row's window. */
   guest_fee_amount?: number | null
@@ -166,7 +174,17 @@ export function effectiveHourlyRate(
   overrides: any,
   booking: SurchargeBooking,
 ): number {
-  const base = rateFor(setName, overrides)
+  // 1. What this row was actually sold at, when it says (every booking since
+  //    2026-10-09). This is what makes a Set Drop's own rate, a depositor
+  //    discount or a rate changed in admin carry through to add-time.
+  // 2. Otherwise the live list rate from the `sets` row, or a negotiated rate.
+  // 3. Only then the old hardcoded table (pre-migration rows on the ten
+  //    original sets, where it matches the database to the dollar).
+  const sold = Number(booking.hourly_rate)
+  const list = Number(booking.sets?.rate_per_hour)
+  const base = sold > 0
+    ? sold
+    : (!hasRateOverride(setName, overrides) && list > 0 ? list : rateFor(setName, overrides))
   if (!base) return 0
   // The extra-person fee applies either way — a negotiated rate covers the
   // set, not people beyond its capacity (checkout charges it to everyone).

@@ -3,13 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { randomBytes } from 'crypto'
 import { shortNoticeActive, shortNoticeViewActive, shortNoticeExpiresAtMs, plusActive, violatesAdvanceWindow, ADVANCE_WINDOW_ERROR } from '@/lib/short-notice'
-import { shortNoticeQuoteCents, SET_MIN_HOURS } from '@/lib/booking-core'
+import { shortNoticeQuoteCents } from '@/lib/booking-core'
+import { loadSetCatalog, catalogMinHours } from '@/lib/set-catalog'
 import { Client, Environment } from 'square'
 import { sendShortNoticeRequestAlert } from '@/lib/email'
 import { sendOwnerSMS } from '@/lib/sms'
 import { standingForCustomerId, standingForEmail, shortNoticeAllowed, SHORT_NOTICE_PAUSED_ERROR } from '@/lib/standing'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 const service = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -85,9 +87,10 @@ export async function GET(req: NextRequest) {
   const qSet   = req.nextUrl.searchParams.get('set')
   const qHours = Number(req.nextUrl.searchParams.get('hours'))
   if (qSet && Number.isFinite(qHours) && qHours > 0) {
+    const cat = await loadSetCatalog(service)
     return NextResponse.json({
-      cents:    shortNoticeQuoteCents(qSet, qHours, c.overrides),
-      minHours: SET_MIN_HOURS[qSet] ?? 1,
+      cents:    shortNoticeQuoteCents(cat, qSet, qHours, c.overrides),
+      minHours: catalogMinHours(cat, qSet),
     })
   }
   const canView = shortNoticeViewActive(c.overrides)
@@ -161,7 +164,8 @@ export async function POST(req: NextRequest) {
   // charged the moment it is approved. One that does not is a pre-auto-pay
   // request (the account-page form still sends these) and approval simply
   // unlocks them to book it themselves — exactly as it did before.
-  const minHours = SET_MIN_HOURS[desiredSet] ?? 1
+  const cat = await loadSetCatalog(service)
+  const minHours = catalogMinHours(cat, desiredSet)
   const rawHours = Number(body.desiredHours)
   const wantsAutoPay = Number.isFinite(rawHours) && rawHours > 0
   let desiredHours: number | null = null
@@ -182,7 +186,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Please confirm you agree to be charged if this is approved.' }, { status: 400 })
     }
     desiredHours = rawHours
-    quotedCents  = shortNoticeQuoteCents(desiredSet, rawHours, c.overrides)
+    quotedCents  = shortNoticeQuoteCents(cat, desiredSet, rawHours, c.overrides)
     consentedAt  = new Date().toISOString()
 
     const cardId = typeof body.squareCardId === 'string' ? body.squareCardId.trim() : ''

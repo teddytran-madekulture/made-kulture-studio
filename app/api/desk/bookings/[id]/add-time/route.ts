@@ -23,9 +23,9 @@ import { effectiveHourlyRate } from '@/lib/extensions'
 import { guestAmountsForWindow } from '@/lib/guest-rate'
 
 const SELECT = `
-  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount, guest_fee_amount,
+  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount, guest_fee_amount, hourly_rate,
   customer_id, square_card_on_file_id,
-  sets ( name ),
+  sets ( name, rate_per_hour ),
   customers ( name, email, phone, square_customer_id, pricing_overrides )
 `
 

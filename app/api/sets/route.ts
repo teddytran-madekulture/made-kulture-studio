@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { depositorRatesForViewer, dropsBySetIds } from '@/lib/set-drops-server'
+import { dropPhase } from '@/lib/set-drops'
 
 // Public, read-only catalog of active sets for the customer /sets and /book
 // pages. No auth — only active sets and display-safe fields are exposed.
@@ -56,5 +59,27 @@ export async function GET() {
   const guestSurchargePerHour = settings['guest_surcharge_per_hour'] != null
     ? Number(settings['guest_surcharge_per_hour']) : 10
 
-  return NextResponse.json({ sets: data ?? [], buyoutRate, guestPricing, guestSurchargePerHour })
+  // Set Drops (migration 155). A drop's set carries its run window so the
+  // booking page can keep dates inside it, and a signed-in DEPOSITOR sees their
+  // depositor rate as the set's rate — the same number checkout charges
+  // (dropContextForCheckout), so screen and card agree.
+  let sets: any[] = data ?? []
+  const drops: Record<string, { slug: string; name: string; runStarts: string | null; runEnds: string | null; phase: string; earlyAccessEndsAt: string | null }> = {}
+  try {
+    const ids = sets.map(s => s.id)
+    const dm = await dropsBySetIds(supabase, ids)
+    dm.forEach((d, setId) => {
+      drops[setId] = { slug: d.slug, name: d.name, runStarts: d.run_starts, runEnds: d.run_ends, phase: dropPhase(d), earlyAccessEndsAt: d.early_access_ends_at }
+    })
+    if (dm.size) {
+      let uid: string | null = null
+      try { uid = (await createServerClient().auth.getUser()).data.user?.id ?? null } catch { /* signed out */ }
+      const rates = await depositorRatesForViewer(supabase, uid, Array.from(dm.keys()))
+      sets = sets.map(s => rates[s.id] != null ? { ...s, rate_per_hour: rates[s.id], list_rate_per_hour: s.rate_per_hour, depositor_rate: true } : s)
+    }
+  } catch (e) {
+    console.error('[api/sets] drop lookup failed (catalog served without drop info):', e)
+  }
+
+  return NextResponse.json({ sets, drops, buyoutRate, guestPricing, guestSurchargePerHour })
 }

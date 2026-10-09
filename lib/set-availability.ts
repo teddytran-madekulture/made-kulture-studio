@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { activeClosures, closureBlocks, closureReason } from '@/lib/closures'
+import { dropsBySetIds, dropWindowProblem } from '@/lib/set-drops-server'
 
 // Statuses that occupy a set's calendar.
 // 'pending_payment' = a delegated ("someone else pays") hold; it reserves the
@@ -86,6 +87,18 @@ export async function checkSetWindows(
     for (const w of windows) {
       const hit = closures.find(c => closureBlocks(c, w.setId) && overlaps(w.startISO, w.endISO, c.startISO, c.endISO))
       if (hit) conflicts.push({ setName: w.setName, startISO: w.startISO, endISO: w.endISO, reason: closureReason(hit, w.setName) })
+    }
+  }
+
+  // 01. Set Drops (migration 155): a drop's set only sells inside its run dates,
+  //     and not at all before GO or after it is cancelled/archived. Throws on a
+  //     failed lookup (a missing table reads as "no drops").
+  if (windows.length && !opts.ignoreClosures) {
+    const drops = await dropsBySetIds(supabase, windows.map(w => w.setId))
+    for (const w of windows) {
+      const d = drops.get(w.setId)
+      const problem = d ? dropWindowProblem(d, w.startISO) : null
+      if (problem) conflicts.push({ setName: w.setName, startISO: w.startISO, endISO: w.endISO, reason: problem })
     }
   }
 

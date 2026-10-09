@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import SiteNav from '@/components/SiteNav'
 import SetGallery from '@/components/SetGallery'
@@ -50,6 +50,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function SetLandingPage({ params }: { params: { slug: string } }) {
   const [set, surcharge] = await Promise.all([getSet(params.slug), getGuestSurcharge()])
   if (!set) notFound()
+  // A Set Drop's set lives on its drop page (run dates, early access, depositor rate).
+  const { data: drop } = await supabase.from('set_drops').select('slug').eq('set_id', set.id).maybeSingle()
+  if (drop?.slug) redirect(`/drops/${drop.slug}`)
 
   const guestRate = Number(set.rate_per_hour) + surcharge
   const minNote = set.min_hours && set.min_hours > 1 ? `${set.min_hours}-hour minimum` : '1-hour minimum'

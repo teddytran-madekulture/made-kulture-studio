@@ -18,9 +18,10 @@ const navBtn: React.CSSProperties = { background: 'transparent', border: 'none',
 
 // Custom dark date picker — fully width-constrained (no native-input overflow,
 // no OS picker popup spilling off-screen). In-flow calendar (pushes content down).
-export default function DatePicker({ value, min, onChange }: { value: string; min?: string; onChange: (d: string) => void }) {
+export default function DatePicker({ value, min, max, onChange }: { value: string; min?: string; max?: string; onChange: (d: string) => void }) {
   const selected = parseYMD(value)
   const minDate  = min ? parseYMD(min) : null
+  const maxDate  = max ? parseYMD(max) : null
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<Date>(() => selected ?? new Date())
 
@@ -31,7 +32,8 @@ export default function DatePicker({ value, min, onChange }: { value: string; mi
   const cells: (number | null)[] = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
 
   const minStripped = minDate ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()) : null
-  const isDisabled = (day: number) => minStripped ? new Date(y, m, day) < minStripped : false
+  // max (2026-10-09): a Set Drop only sells inside its run dates.
+  const isDisabled = (day: number) => (minStripped ? new Date(y, m, day) < minStripped : false) || (maxDate ? new Date(y, m, day) > maxDate : false)
   const isSelected = (day: number) => !!selected && selected.getFullYear() === y && selected.getMonth() === m && selected.getDate() === day
 
   const label = selected ? `${MONTHS[selected.getMonth()].slice(0, 3)} ${selected.getDate()}, ${selected.getFullYear()}` : 'Select a date'

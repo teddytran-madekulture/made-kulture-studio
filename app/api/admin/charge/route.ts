@@ -1,4 +1,4 @@
-import { manualBookingConflict, SLUG_TO_NAME } from '@/lib/admin-manual-check'
+import { manualBookingConflict, adminSetNames } from '@/lib/admin-manual-check'
 import { NextRequest, NextResponse } from 'next/server'
 import { normEmail, upsertCustomerByEmail } from '@/lib/customer-email'
 import { authUserIdForEmail, rewardRateForEmail } from '@/lib/rewards'
@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
   // Check the window BEFORE taking any money.
   const clash = await manualBookingConflict(supabase, { setSlug, date, startHour, endHour, force: !!force })
   if (clash) return NextResponse.json(clash.body, { status: clash.status })
+  const SLUG_TO_NAME = await adminSetNames(supabase)
 
   const amountCents = Math.round(totalAmount * 100)
   const setName = SLUG_TO_NAME[setSlug] ?? 'Studio'

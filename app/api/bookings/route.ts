@@ -27,6 +27,8 @@ import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
 import { screenBooking, rememberCard } from '@/lib/identity-match'
 import { validatePromo, recordPromoRedemption } from '@/lib/promo'
 import { guestSharesByLine } from '@/lib/guest-rate'
+import { loadSetCatalog, catalogRate, catalogMinHours } from '@/lib/set-catalog'
+import { dropContextForCheckout } from '@/lib/set-drops-server'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -87,51 +89,9 @@ interface BookingRequest {
   totalCents: number
 }
 
-// ─── Slug → Set name map ──────────────────────────────────────────────────────
-
-const SLUG_TO_NAME: Record<string, string> = {
-  'set-a':         'Set A',
-  'set-b':         'Set B',
-  'set-c':         'Set C',
-  'set-d':         'Set D',
-  'concrete':      'Concrete',
-  'vintage':       'Vintage',
-  'cottage':       'Cottage',
-  'watering-hole': 'The Watering Hole',
-  'the-tank':      'The Tank',
-  'studio-one':    'Studio One',
-}
-
-async function getSetId(slug: string): Promise<string | null> {
-  const name = SLUG_TO_NAME[slug]
-  if (!name) return null
-  const { data } = await supabase.from('sets').select('id').eq('name', name).single()
-  return data?.id ?? null
-}
-
-// ─── Pricing ──────────────────────────────────────────────────────────────────
-
-const SET_PRICES: Record<string, number> = {
-  'set-a': 40, 'set-b': 40, 'set-c': 40, 'set-d': 40,
-  'concrete': 40, 'vintage': 40, 'cottage': 40,
-  'watering-hole': 75, 'the-tank': 75, 'studio-one': 65,
-}
-
-const SET_MIN_HOURS: Record<string, number> = {
-  'watering-hole': 2, 'the-tank': 2,
-}
-
-// Hourly rate for a single set, applying any customer pricing overrides.
-function setRateFor(slug: string, pricingOverrides?: any): number {
-  let rate = SET_PRICES[slug] ?? 0
-  if (pricingOverrides) {
-    const perSet = pricingOverrides.sets?.[slug]
-    const global = pricingOverrides.hourly_rate
-    if (perSet != null) rate = Number(perSet)
-    else if (global != null) rate = Number(global)
-  }
-  return rate
-}
+// ─── Sets + pricing come from the `sets` table — see lib/set-catalog.ts ──────
+// (These used to be hardcoded SLUG_TO_NAME / SET_PRICES / SET_MIN_HOURS tables,
+// which made the admin rate field display-only.)
 
 function equipmentDollars(
   equipment: { equipment_id: string; quantity: number }[],
@@ -144,6 +104,12 @@ function equipmentDollars(
     total = Math.round(total * (1 - Number(pricingOverrides.equipment_discount_percent) / 100))
   }
   return total
+}
+
+// The per-hour set rate a line was priced at (no guest surcharge, no fees).
+function soldHourlyRate(l: { spaceDollars: number; startHour: number; endHour: number }): number | null {
+  const h = l.endHour - l.startHour
+  return h > 0 ? Math.round((l.spaceDollars / h) * 100) / 100 : null
 }
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
@@ -289,6 +255,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Build normalized order lines (resolve set ids, names, ISO times, price)
+    const catalog = await loadSetCatalog(supabase)
     const lines: OrderLine[] = []
     if (body.type === 'studio') {
       lines.push({
@@ -300,11 +267,14 @@ export async function POST(req: NextRequest) {
       })
     } else {
       for (const l of rawLines) {
-        const setId = await getSetId(l.setSlug)
-        if (!setId) return NextResponse.json({ error: `Set not found: ${l.setSlug}` }, { status: 404 })
-        const setName = SLUG_TO_NAME[l.setSlug] ?? l.setSlug
-        const rate = setRateFor(l.setSlug, customerPricingOverrides)
-        const rateStd = setRateFor(l.setSlug)
+        const cs = catalog.bySlug[l.setSlug]
+        // An inactive set (an archived room, or a Set Drop not open yet) is not
+        // bookable from the website, whatever the cart says.
+        if (!cs || !cs.isActive) return NextResponse.json({ error: `Set not found: ${l.setSlug}` }, { status: 404 })
+        const setId = cs.id
+        const setName = cs.name
+        const rate = catalogRate(catalog, l.setSlug, customerPricingOverrides)
+        const rateStd = catalogRate(catalog, l.setSlug)
         lines.push({
           type: 'set', setSlug: l.setSlug, setId, setName,
           date: l.date, startHour: l.startHour, endHour: l.endHour,
@@ -312,6 +282,24 @@ export async function POST(req: NextRequest) {
           spaceDollars: rate * (l.endHour - l.startHour),
           stdSpaceDollars: rateStd * (l.endHour - l.startHour),
         })
+      }
+    }
+
+    // ── 3a. Set Drops (migration 155): early access + the depositor rate ────
+    //     Identity is the SESSION. A depositor's rate replaces the line's rate
+    //     only when it is lower (a negotiated rate can already beat it).
+    //     stdSpaceDollars stays at list so the tamper check still accepts a
+    //     list-price total from an out-of-date page — the charge is the lower one.
+    if (body.type !== 'studio') {
+      const dropCtx = await dropContextForCheckout(supabase, sessionUser?.id ?? null, lines.map(l => l.setId))
+      for (const l of lines) {
+        const c = l.setId ? dropCtx.get(l.setId) : undefined
+        if (!c) continue
+        if (c.blocked) return NextResponse.json({ error: c.blocked }, { status: 403 })
+        const hrs = l.endHour - l.startHour
+        if (c.depositorRate != null && hrs > 0 && c.depositorRate < l.spaceDollars / hrs) {
+          l.spaceDollars = Math.round(c.depositorRate * hrs * 100) / 100
+        }
       }
     }
 
@@ -396,7 +384,7 @@ export async function POST(req: NextRequest) {
 
     // ── 4. Minimum-hours guard (per line) ──────────────────────────────────
     for (const l of lines) {
-      const minH = l.type === 'studio' ? 4 : (SET_MIN_HOURS[l.setSlug ?? ''] ?? 1)
+      const minH = l.type === 'studio' ? 4 : catalogMinHours(catalog, l.setSlug)
       if ((l.endHour - l.startHour) < minH) {
         return NextResponse.json(
           { error: `${l.setName} requires a minimum ${minH}-hour booking.` },
@@ -823,6 +811,9 @@ export async function POST(req: NextRequest) {
           end_time:           l.endISO,
           status:             'confirmed',
           base_amount:        l.spaceDollars,
+          // The hourly set rate this row was sold at (migration 154) — add-time,
+          // overtime and the admin modal price from it. See lib/guest-rate.
+          hourly_rate:        soldHourlyRate(l),
           extras_amount:      i === 0 ? equipDollars : 0,
           total_amount:       rowTotal,
           guest_count:        guestCount || null,

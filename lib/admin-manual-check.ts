@@ -9,12 +9,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
+import { loadSetCatalog } from '@/lib/set-catalog'
 
+// Fallback names only — adminSetNames() layers the live `sets` table on top so
+// a new room (e.g. a Set Drop) works without a code change.
 export const SLUG_TO_NAME: Record<string, string> = {
   'set-a': 'Set A', 'set-b': 'Set B', 'set-c': 'Set C', 'set-d': 'Set D',
   'concrete': 'Concrete', 'vintage': 'Vintage', 'cottage': 'Cottage',
   'watering-hole': 'The Watering Hole', 'the-tank': 'The Tank', 'studio-one': 'Studio One',
   'studio': 'Full Studio Takeover',
+}
+
+/** slug → name for every set in the database, plus 'studio'. */
+export async function adminSetNames(db: SupabaseClient): Promise<Record<string, string>> {
+  const cat = await loadSetCatalog(db)
+  return { ...SLUG_TO_NAME, ...Object.fromEntries(cat.list.map(s => [s.slug, s.name])) }
 }
 
 /** null = clear to book. Otherwise the JSON + status to return. */
@@ -31,10 +40,9 @@ export async function manualBookingConflict(
       if (!ok) return { status: 409, body: { error: `${conflicts.map(c => c.reason).join(' ')} Nothing was booked or charged.`, overridable: true } }
       return null
     }
-    const setName = SLUG_TO_NAME[b.setSlug]
-    if (!setName) return { status: 400, body: { error: 'Unknown set.' } }
-    const { data: s, error } = await db.from('sets').select('id').eq('name', setName).single()
-    if (error || !s) return { status: 400, body: { error: `Could not find ${setName}.` } }
+    const s = (await loadSetCatalog(db)).bySlug[b.setSlug]
+    if (!s) return { status: 400, body: { error: 'Unknown set.' } }
+    const setName = s.name
     const { ok, conflicts } = await checkSetWindows(db, [{ setId: s.id, setName, startISO, endISO }], undefined, { ignoreClosures: true })
     if (!ok) return { status: 409, body: { error: `${conflicts.map(c => c.reason).join(' ')} Nothing was booked or charged.`, overridable: true } }
     return null

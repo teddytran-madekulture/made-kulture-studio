@@ -26,6 +26,8 @@ import { rewardRateForEmail } from '@/lib/rewards'
 import { standingForEmail, PROBATION_BOOKING_ERROR } from '@/lib/standing'
 import { screenBooking } from '@/lib/identity-match'
 import { guestSharesByLine } from '@/lib/guest-rate'
+import { loadSetCatalog, catalogRate, catalogMinHours, type SetCatalog } from '@/lib/set-catalog'
+import { dropContextForCheckout } from '@/lib/set-drops-server'
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -88,24 +90,9 @@ export const SLUG_TO_NAME: Record<string, string> = {
   'watering-hole': 'The Watering Hole', 'the-tank': 'The Tank', 'studio-one': 'Studio One',
 }
 
-const SET_PRICES: Record<string, number> = {
-  'set-a': 40, 'set-b': 40, 'set-c': 40, 'set-d': 40,
-  'concrete': 40, 'vintage': 40, 'cottage': 40,
-  'watering-hole': 75, 'the-tank': 75, 'studio-one': 65,
-}
-
-export const SET_MIN_HOURS: Record<string, number> = { 'watering-hole': 2, 'the-tank': 2 }
-
-export function setRateFor(slug: string, pricingOverrides?: any): number {
-  let rate = SET_PRICES[slug] ?? 0
-  if (pricingOverrides) {
-    const perSet = pricingOverrides.sets?.[slug]
-    const global = pricingOverrides.hourly_rate
-    if (perSet != null) rate = Number(perSet)
-    else if (global != null) rate = Number(global)
-  }
-  return rate
-}
+// ⚠️ SET RATES AND MINIMUMS NOW COME FROM THE `sets` TABLE — lib/set-catalog.ts.
+// SLUG_TO_NAME above stays only for the PHYSICAL tablets (kiosk links, June's
+// kiosk mode, /t/ short codes): those are tied to rooms that have hardware.
 
 function equipmentDollars(
   equipment: { equipment_id: string; quantity: number }[],
@@ -133,13 +120,6 @@ export function fmt12(h: number) {
 export function hoursToISO(date: string, h: number): string {
   // Offset is computed for the date, not assumed — see lib/booking-times.
   return bookingHourToISO(date, h)
-}
-
-async function getSetId(supabase: SupabaseClient, slug: string): Promise<string | null> {
-  const name = SLUG_TO_NAME[slug]
-  if (!name) return null
-  const { data } = await supabase.from('sets').select('id').eq('name', name).single()
-  return data?.id ?? null
 }
 
 // ─── validateAndPriceOrder — pre-charge checks (mirrors route.ts steps 1–8) ──
@@ -192,6 +172,7 @@ export async function validateAndPriceOrder(
     return { ok: false, error: 'No sets selected.', status: 400 }
   }
 
+  const catalog = await loadSetCatalog(supabase)
   const lines: OrderLine[] = []
   if (body.type === 'studio') {
     lines.push({
@@ -203,11 +184,12 @@ export async function validateAndPriceOrder(
     })
   } else {
     for (const l of rawLines) {
-      const setId = await getSetId(supabase, l.setSlug)
-      if (!setId) return { ok: false, error: `Set not found: ${l.setSlug}`, status: 404 }
-      const setName = SLUG_TO_NAME[l.setSlug] ?? l.setSlug
-      const rate = setRateFor(l.setSlug, customerPricingOverrides)
-      const rateStd = setRateFor(l.setSlug)
+      const cs = catalog.bySlug[l.setSlug]
+      if (!cs || !cs.isActive) return { ok: false, error: `Set not found: ${l.setSlug}`, status: 404 }
+      const setId = cs.id
+      const setName = cs.name
+      const rate = catalogRate(catalog, l.setSlug, customerPricingOverrides)
+      const rateStd = catalogRate(catalog, l.setSlug)
       lines.push({
         type: 'set', setSlug: l.setSlug, setId, setName,
         date: l.date, startHour: l.startHour, endHour: l.endHour,
@@ -215,6 +197,29 @@ export async function validateAndPriceOrder(
         spaceDollars: rate * (l.endHour - l.startHour),
         stdSpaceDollars: rateStd * (l.endHour - l.startHour),
       })
+    }
+  }
+
+  // 3a. Set Drops (migration 155): early access + the depositor rate, the same
+  //     rules POST /api/bookings applies. Identity = pricingEmail (callers set
+  //     it from a verified identity); the pledge row carries the account id.
+  if (body.type !== 'studio') {
+    let authId: string | null = null
+    if (pricingEmail) {
+      const { data: pl, error: plErr } = await supabase.from('set_drop_pledges')
+        .select('auth_user_id').eq('customer_email', pricingEmail).neq('status', 'refunded').limit(1)
+      if (plErr && !/does not exist|schema cache/i.test(plErr.message)) throw new Error(`pledge lookup failed: ${plErr.message}`)
+      authId = (pl?.[0] as any)?.auth_user_id ?? null
+    }
+    const dropCtx = await dropContextForCheckout(supabase, authId, lines.map(l => l.setId))
+    for (const l of lines) {
+      const c = l.setId ? dropCtx.get(l.setId) : undefined
+      if (!c) continue
+      if (c.blocked) return { ok: false, error: c.blocked, status: 403 }
+      const hrs = l.endHour - l.startHour
+      if (c.depositorRate != null && hrs > 0 && c.depositorRate < l.spaceDollars / hrs) {
+        l.spaceDollars = Math.round(c.depositorRate * hrs * 100) / 100
+      }
     }
   }
 
@@ -266,7 +271,7 @@ export async function validateAndPriceOrder(
 
   // 4. Minimum hours
   for (const l of lines) {
-    const minH = l.type === 'studio' ? 4 : (SET_MIN_HOURS[l.setSlug ?? ''] ?? 1)
+    const minH = l.type === 'studio' ? 4 : catalogMinHours(catalog, l.setSlug)
     if ((l.endHour - l.startHour) < minH) {
       return { ok: false, error: `${l.setName} requires a minimum ${minH}-hour booking.`, status: 400 }
     }
@@ -605,8 +610,8 @@ export async function finalizeBooking(
 // exactly what validateAndPriceOrder computes for the same order. That is not a
 // coincidence to preserve loosely: it is what makes the price check at approval
 // pass instead of 400ing on a mismatch.
-export function shortNoticeQuoteCents(slug: string, hours: number, pricingOverrides?: any): number {
-  return Math.round(setRateFor(slug, pricingOverrides) * hours * 100)
+export function shortNoticeQuoteCents(catalog: SetCatalog, slug: string, hours: number, pricingOverrides?: any): number {
+  return Math.round(catalogRate(catalog, slug, pricingOverrides) * hours * 100)
 }
 
 // ─── insertBookingRows — the shared row writer ───────────────────────────────
@@ -678,6 +683,8 @@ export async function insertBookingRows(
         end_time:         l.endISO,
         status:           opts.status,
         base_amount:      l.spaceDollars,
+        // Sold hourly set rate (migration 154) — see lib/guest-rate effectiveHourlyRate.
+        hourly_rate:      (l.endHour - l.startHour) > 0 ? Math.round((l.spaceDollars / (l.endHour - l.startHour)) * 100) / 100 : null,
         extras_amount:    i === 0 ? equipTotal : 0,
         total_amount:     rowTotal,
         guest_count:      guestCount || null,

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import SetDropsRow from '@/components/SetDropsRow'
 import SiteNav from '@/components/SiteNav'
 import { useGuestPricing } from '@/lib/use-guest-pricing'
 import { useIsMobile } from '@/lib/use-is-mobile'
@@ -269,6 +270,8 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
           </div>
         ))}
       </section>
+
+      <SetDropsRow isMobile={isMobile} />
 
       {/* Standard sets grid */}
       <section style={{ padding: isMobile ? '52px 20px' : '80px 40px' }}>

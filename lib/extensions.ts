@@ -52,10 +52,10 @@ export function normalizeHours(raw: unknown): number | null {
 }
 
 const SELECT = `
-  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount, guest_fee_amount,
+  id, start_time, end_time, status, set_id, total_amount, guest_surcharge_amount, guest_fee_amount, hourly_rate,
   customer_id, auth_user_id, gcal_event_id,
   square_card_on_file_id, door_code, door_code_back, checked_out_at, check_in_token,
-  sets ( name ),
+  sets ( name, rate_per_hour ),
   customers ( name, email, phone, square_customer_id, pricing_overrides )
 `
 
@@ -414,13 +414,25 @@ export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupa
     buyout,
   })
 
+  // A Set Drop that has TAKEN OVER this room (migration 155) sells under its own
+  // set id, but the guest is standing at THIS tablet. Count its bookings as this
+  // room's. Non-fatal: a failed lookup only means the tablet sees the room's own
+  // bookings, exactly as before drops existed.
+  const roomIds = new Set<string>([setRow.id])
+  {
+    const { data: takeovers, error: tErr } = await db.from('set_drops')
+      .select('set_id').eq('replaces_set_id', setRow.id).eq('status', 'funded')
+    if (tErr) console.error('[kiosk] drop takeover lookup failed (non-fatal):', tErr.message)
+    for (const t of takeovers ?? []) if ((t as any).set_id) roomIds.add((t as any).set_id)
+  }
+
   // This set's own booking wins. Earliest start, so a session already running
   // beats one starting in twenty minutes.
   const mine = live
-    .filter(r => r.set_id === setRow.id)
+    .filter(r => roomIds.has(r.set_id))
     .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0]
   if (mine) {
-    const head = await setHeadroom(setRow.id, mine.end_time, mine.id)
+    const head = await setHeadroom(mine.set_id, mine.end_time, mine.id)
     return { ...shape(mine, false), ...head, extendable: head.headroomHours >= 0.5 }
   }
 

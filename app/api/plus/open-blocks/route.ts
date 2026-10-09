@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
     admin.from('bookings')
       .select('id, start_time, end_time, set_id, status')
       .lt('start_time', windowEnd).gt('end_time', windowStart),
-    admin.from('sets').select('id, name, min_hours').eq('is_active', true).order('name'),
+    admin.from('sets').select('id, name, slug, min_hours').eq('is_active', true).order('name'),
   ])
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 })
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
         startISO:  new Date(i.start).toISOString(),
         endISO:    new Date(i.end).toISOString(),
       }))
-    const slug = NAME_TO_SLUG[s.name] ?? s.name.toLowerCase().replace(/\s+/g, '-')
+    const slug = (s as any).slug || NAME_TO_SLUG[s.name] || s.name.toLowerCase().replace(/\s+/g, '-')
     // `id` is included so the booking page can match on whatever it holds —
     // it carries set UUIDs, not slugs.
     out[slug] = { id: s.id, name: s.name, minHours, blocks }
