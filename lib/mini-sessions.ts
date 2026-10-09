@@ -29,6 +29,15 @@ export interface MiniSession {
   cutoff_hours: number
   blocked_slots: number[]
   approve_switches: boolean            // migration 159 — switches need the photographer's OK
+  allow_extra_guests: boolean          // migration 160 — bigger groups, billed to the photographer
+  extra_card_id: string | null
+  extra_square_customer_id: string | null
+  extra_charge_status: 'charging' | 'charged' | 'link_sent' | 'none' | 'review' | null
+  extra_charge_cents: number | null
+  extra_fee_cents: number | null          // the fee agreed when bigger groups were turned on
+  extra_charge_claimed_at: string | null
+  extra_payment_id: string | null
+  extra_charged_at: string | null
   share_token: string
   status: MiniStatus
   announced_start: string | null
@@ -105,6 +114,26 @@ export function headcountLimit(b: Pick<MiniBooking, 'set_id' | 'guest_count'>, s
 export function maxParty(limit: number, crew: number): number {
   return Math.max(0, limit - Math.max(1, crew))
 }
+
+/**
+ * Party sizes for a mini day (migration 160).
+ *   included — what the booking already covers
+ *   max      — the most a client may bring: included, or with bigger groups on,
+ *              up to the set's hard max (7) / a buyout's 30
+ * A person over `included` is an extra guest, billed to the photographer.
+ */
+export function partyRoom(
+  b: Pick<MiniBooking, 'set_id' | 'guest_count'>,
+  m: Pick<MiniSession, 'crew_count' | 'allow_extra_guests'>,
+  s: { capacity: number; maxPerSet: number },
+): { included: number; max: number } {
+  const included = maxParty(headcountLimit(b, s), m.crew_count)
+  const hard = b.set_id ? s.maxPerSet : BUYOUT_LIMIT
+  return { included, max: m.allow_extra_guests ? Math.max(included, maxParty(hard, m.crew_count)) : included }
+}
+
+export const extrasFor = (party: number, included: number) => Math.max(0, Math.floor(party) - included)
+
 
 /** Sign-ups close this many hours before the booking starts. */
 export function signupsClosed(b: Pick<MiniBooking, 'start_time'>, m: Pick<MiniSession, 'cutoff_hours'>, now = Date.now()): boolean {

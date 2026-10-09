@@ -97,7 +97,11 @@ export default function MiniSignupPage() {
               <select style={input} value={f.party} onChange={e => setF({ ...f, party: Number(e.target.value) })}>
                 {Array.from({ length: d.maxParty }, (_, i) => i + 1).map(n => <option key={n} value={n} style={option}>{n}</option>)}
               </select>
-              <div style={{ ...fine, marginTop: 6 }}>Up to {d.maxParty} per slot — the studio has a strict headcount, so please don’t bring extra people.</div>
+              <div style={{ ...fine, marginTop: 6 }}>
+                {d.maxParty > d.includedParty
+                  ? `Up to ${d.maxParty} per slot. Bigger groups are covered by ${d.photographer} — just pick your real number so the studio knows who’s coming.`
+                  : `Up to ${d.maxParty} per slot — the studio has a strict headcount, so please don’t bring extra people.`}
+              </div>
             </div>
             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
               <input type="checkbox" checked={f.smsOk} onChange={e => setF({ ...f, smsOk: e.target.checked })} style={{ marginTop: 3 }} />

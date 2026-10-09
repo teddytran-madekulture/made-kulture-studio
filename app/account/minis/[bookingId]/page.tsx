@@ -28,7 +28,9 @@ export default function MiniSetupPage() {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ title: '', slot_minutes: DEFAULTS.slot_minutes, break_minutes: DEFAULTS.break_minutes, crew_count: DEFAULTS.crew_count, cutoff_hours: DEFAULTS.cutoff_hours, note: '', price_text: '', approve_switches: false })
+  const [cards, setCards] = useState<{ id: string; card_brand: string; last_4: string }[] | null>(null)
+  useEffect(() => { fetch('/api/account/cards?dedupe=1').then(r => r.ok ? r.json() : { cards: [] }).then(j => setCards(j.cards ?? [])).catch(() => setCards([])) }, [])
+  const [form, setForm] = useState({ title: '', slot_minutes: DEFAULTS.slot_minutes, break_minutes: DEFAULTS.break_minutes, crew_count: DEFAULTS.crew_count, cutoff_hours: DEFAULTS.cutoff_hours, note: '', price_text: '', approve_switches: false, allow_extra_guests: false, extra_card_id: '' })
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/account/minis/${bookingId}`, { cache: 'no-store' })
@@ -39,6 +41,7 @@ export default function MiniSetupPage() {
       title: j.mini.title ?? '', slot_minutes: j.mini.slot_minutes, break_minutes: j.mini.break_minutes,
       crew_count: j.mini.crew_count, cutoff_hours: j.mini.cutoff_hours, note: j.mini.note ?? '', price_text: j.mini.price_text ?? '',
       approve_switches: !!j.mini.approve_switches,
+      allow_extra_guests: !!j.mini.allow_extra_guests, extra_card_id: '',
     })
   }, [bookingId])
   useEffect(() => { load() }, [load])
@@ -46,12 +49,14 @@ export default function MiniSetupPage() {
   const preview = useMemo(() => {
     if (!d) return null
     const n = slotsFor(d.booking, form).length
-    return { slots: n, room: maxParty(d.limit, form.crew_count) }
+    const room = maxParty(d.limit, form.crew_count)
+    const big = form.allow_extra_guests && !d.booking.isBuyout ? Math.max(room, maxParty(d.hardLimit, form.crew_count)) : room
+    return { slots: n, room, big }
   }, [d, form])
 
   async function save() {
     setBusy(true); setError(''); setNotice('')
-    const r = await fetch(`/api/account/minis/${bookingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+    const r = await fetch(`/api/account/minis/${bookingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, extra_card_id: form.extra_card_id || undefined }) })
     const j = await r.json().catch(() => ({}))
     setBusy(false)
     if (!r.ok) { setError(j.error || 'Could not save.'); return }
@@ -112,6 +117,29 @@ export default function MiniSetupPage() {
           <input type="checkbox" checked={form.approve_switches} onChange={e => setForm({ ...form, approve_switches: e.target.checked })} style={{ marginTop: 3 }} />
           <span>Approve time changes<br /><span style={{ fontSize: 12, color: muted(0.55) }}>When a client asks to switch slots, hold the new time and wait for your OK. Off: they switch instantly and you get an email.</span></span>
         </label>
+        {!d.booking.isBuyout && d.hardLimit > d.limit && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={{ ...font, fontSize: 14, display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', color: 'var(--t-fg)' }}>
+              <input type="checkbox" checked={form.allow_extra_guests} onChange={e => setForm({ ...form, allow_extra_guests: e.target.checked })} style={{ marginTop: 3 }} />
+              <span>Allow bigger groups (billed to me)<br /><span style={{ fontSize: 12, color: muted(0.55) }}>
+                Families can bring up to {d.hardLimit} people on set including your crew. Each person over what’s included is ${d.extraFee} per slot, charged to your card once after the session — clients never pay us.
+              </span></span>
+            </label>
+            {form.allow_extra_guests && (
+              <div style={{ marginTop: 10, maxWidth: 360 }}>
+                <label style={lbl}>Card for extra guests</label>
+                {cards && cards.length === 0 ? (
+                  <div style={{ ...font, fontSize: 13, color: muted(0.65) }}>No saved card yet — <Link href="/account/payment" style={{ color: 'var(--t-gold)' }}>add one in Payment Methods</Link>, then come back.</div>
+                ) : (
+                  <select style={input} value={form.extra_card_id} onChange={e => setForm({ ...form, extra_card_id: e.target.value })}>
+                    <option value="" style={optStyle}>{m?.extra_card_id ? 'Keep the card already chosen' : 'Choose a card…'}</option>
+                    {(cards ?? []).map(c => <option key={c.id} value={c.id} style={optStyle}>{c.card_brand} ···· {c.last_4}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={lbl}>Price shown to clients (optional — you collect it)</label>
           <input style={input} value={form.price_text} maxLength={80} placeholder="e.g. $250 · 20 min · 10 edited photos" onChange={e => setForm({ ...form, price_text: e.target.value })} />
@@ -126,6 +154,7 @@ export default function MiniSetupPage() {
           {preview.slots} slot{preview.slots === 1 ? '' : 's'} of {form.slot_minutes} min.{' '}
           {preview.room < 1 ? `Your booking allows ${d.limit} people at once, so this crew leaves no room for clients.`
             : `This booking allows ${d.limit} people at once, so each client can bring a party of up to ${preview.room} (including themselves).`}
+          {preview.room >= 1 && preview.big > preview.room && ` With bigger groups on, families can bring up to ${preview.big}; each person over ${preview.room} costs you $${d.extraFee} per slot.`}
           {locked && ' Slot length and break are locked because clients are booked.'}
         </p>
       )}
@@ -177,6 +206,10 @@ export default function MiniSetupPage() {
               <span><b style={{ color: 'var(--t-fg)' }}>{roster.counts.open}</b> open</span>
               <span><b style={{ color: 'var(--t-fg)' }}>{roster.counts.people}</b> client guests total</span>
               <span>Parties up to <b style={{ color: 'var(--t-fg)' }}>{m.maxParty}</b></span>
+              {(m.allow_extra_guests || roster.counts.extraGuests > 0) && (
+                <span>Extra guests: <b style={{ color: 'var(--t-fg)' }}>{roster.counts.extraGuests}</b> · ${(roster.counts.extraCents / 100).toFixed(0)}
+                  {roster.extraCharge.status === 'charged' ? ' · charged' : roster.extraCharge.status === 'link_sent' ? ' · payment link emailed' : roster.extraCharge.status === 'review' ? ' · being reviewed by the studio' : m.allow_extra_guests ? ' · billed after the session' : ''}</span>
+              )}
               {roster.counts.requests > 0 && <span style={{ color: 'var(--t-gold)' }}><b>{roster.counts.requests}</b> switch request{roster.counts.requests === 1 ? '' : 's'}</span>}
               <span>{m.approve_switches ? 'You approve time changes' : 'Time changes are instant'}</span>
               <span>{m.status === 'closed' ? 'Sign-ups stopped' : m.signupsClosed ? 'Sign-ups closed (cutoff passed)' : `Sign-ups close ${m.cutoff_hours}h before`}</span>
@@ -230,6 +263,7 @@ function SlotRow({ s, roster, maxP, busy, act }: { s: any; roster: any; maxP: nu
             <>
               <span style={{ fontWeight: 600 }}>{c.name || 'Client'}</span>
               <span style={{ color: muted(0.55) }}> · party of {c.party}</span>
+              {c.extras > 0 && <span style={{ color: 'var(--t-gold)', fontSize: 12 }}> · {c.extras} extra (${c.extras * roster.extraFee})</span>}
               {c.checkedIn && <span style={{ color: 'var(--t-ok)', fontSize: 12, marginLeft: 8 }}>✓ here</span>}
               <div style={{ fontSize: 12, color: muted(0.5), marginTop: 3 }}>
                 {c.phone && <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>{fmtPhone(c.phone)}</a>}
@@ -274,7 +308,7 @@ function SlotRow({ s, roster, maxP, busy, act }: { s: any; roster: any; maxP: nu
           <input style={input} placeholder="Email (sends confirmation)" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
           <input style={input} placeholder="Phone" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} />
           <select style={input} value={f.party} onChange={e => setF({ ...f, party: Number(e.target.value) })}>
-            {Array.from({ length: maxP }, (_, i) => i + 1).map(n => <option key={n} value={n} style={optStyle}>Party of {n}</option>)}
+            {Array.from({ length: maxP }, (_, i) => i + 1).map(n => <option key={n} value={n} style={optStyle}>Party of {n}{n > roster.included ? ` (+${n - roster.included} extra, $${(n - roster.included) * roster.extraFee})` : ''}</option>)}
           </select>
           <button style={btn(true)} disabled={busy} onClick={async () => { if (await act({ action: 'add', slot: s.index, ...f }, 'Client added.')) { setMode(''); setF({ name: '', email: '', phone: '', party: 1 }) } }}>Add</button>
         </div>

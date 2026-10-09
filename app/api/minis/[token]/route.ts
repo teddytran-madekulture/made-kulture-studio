@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
-import { BOOKING_SELECT, limitFor, photographerName, ctxFor, sendClientConfirmation, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
-import { cleanText, cleanEmail, cleanPhone, maxParty, slotsFor, signupsClosed, slotLabel, fmtDay, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
+import { BOOKING_SELECT, guestSettings, photographerName, ctxFor, sendClientConfirmation, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
+import { cleanText, cleanEmail, cleanPhone, partyRoom, slotsFor, signupsClosed, slotLabel, fmtDay, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   try { r = await load(params.token) } catch { return NextResponse.json({ error: 'We couldn’t load this page just now — please try again.' }, { status: 503 }) }
   if (!r) return NextResponse.json({ error: 'This sign-up link isn’t valid. Check with your photographer.' }, { status: 404 })
   const { db, mini, booking: b, taken } = r
-  const limit = await limitFor(db, b)
+  const room = partyRoom(b, mini, await guestSettings(db))
   const takenSet = new Set(taken.flatMap(t => t.pending_slot != null ? [t.slot_index, t.pending_slot] : [t.slot_index]))
   const blocked = new Set(mini.blocked_slots ?? [])
   const state =
@@ -50,7 +50,8 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     photographer: await photographerName(db, b, mini.owner_user_id),
     day: fmtDay(b.start_time),
     address: STUDIO_ADDRESS,
-    maxParty: maxParty(limit, mini.crew_count),
+    maxParty: room.max,
+    includedParty: room.included,
     slots: slotsFor(b, mini).map(s => ({
       index: s.index, label: slotLabel(s),
       open: !takenSet.has(s.index) && !blocked.has(s.index) && Date.parse(s.startISO) > Date.now(),
@@ -76,8 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   if (!email) return NextResponse.json({ error: 'Add a valid email — your confirmation goes there.' }, { status: 400 })
   if (!phone) return NextResponse.json({ error: 'Add a 10-digit phone number so your photographer can reach you.' }, { status: 400 })
 
-  const limit = await limitFor(db, b)
-  const room = maxParty(limit, mini.crew_count)
+  const room = partyRoom(b, mini, await guestSettings(db)).max
   const party = Math.round(Number(body.party) || 0)
   if (party < 1) return NextResponse.json({ error: 'How many people are coming, including you?' }, { status: 400 })
   if (party > room) return NextResponse.json({ error: `Each slot fits up to ${room} ${room === 1 ? 'person' : 'people'}, including you. The studio has a strict headcount.` }, { status: 400 })

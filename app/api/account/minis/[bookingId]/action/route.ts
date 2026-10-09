@@ -14,10 +14,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
-  loadForOwner, limitFor, ctxFor, sendClientConfirmation, sendClientMoved,
+  loadForOwner, guestSettings, ctxFor, sendClientConfirmation, sendClientMoved,
   sendClientRemovedOrCancelled, sendClientBroadcast, sendClientSwitchDeclined,
 } from '@/lib/mini-sessions-server'
-import { cleanText, cleanEmail, cleanPhone, maxParty, slotsFor, type MiniClient } from '@/lib/mini-sessions'
+import { cleanText, cleanEmail, cleanPhone, partyRoom, slotsFor, type MiniClient } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -45,8 +45,11 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
   const takenBy = (i: number) => booked.find(c => c.slot_index === i)
   const heldBy = (i: number) => booked.find(c => c.pending_slot === i)
   const client = (id: any) => clients.find(c => c.id === id)
-  const limit = await limitFor(db, b)
-  const room = maxParty(limit, mini.crew_count)
+  const room = partyRoom(b, mini, await guestSettings(db)).max
+  const limit = mini.crew_count + room
+  // Extra guests are billed from the roster as it stands after the session, so
+  // a client whose slot has started can't be moved or removed — only checked in.
+  const started = (c: { slot_index: number }) => { const s = slots.find(x => x.index === c.slot_index); return !!s && Date.parse(s.startISO) <= Date.now() }
 
   switch (body.action) {
     case 'block':
@@ -92,6 +95,8 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
     case 'move': {
       const c = client(body.clientId)
       if (!c || !['booked', 'bumped'].includes(c.status)) return bad('Client not found.')
+      if (c.status === 'booked' && started(c)) return bad('Their slot has already started, so they stay on the roster as is.')
+      if (c.party_size > room) return bad(`Their party of ${c.party_size} is more than the ${room} each slot allows now.`)
       const i = Number(body.slot)
       if (!slotOk(i)) return bad('No such slot.')
       if (takenBy(i) && takenBy(i)!.id !== c.id) return bad('That slot is taken.')
@@ -111,6 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
     case 'remove': {
       const c = client(body.clientId)
       if (!c || !['booked', 'bumped'].includes(c.status)) return bad('Client not found.')
+      if (c.status === 'booked' && started(c)) return bad('Their slot has already started, so they stay on the roster as is.')
       const { error } = await db.from('mini_session_clients').update({ status: 'removed', updated_at: now }).eq('id', c.id)
       if (error) return bad(error.message, 500)
       if (body.notify) {
@@ -135,6 +141,8 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
       }
       const i = c.pending_slot
       if (!slotOk(i)) return bad('That time no longer exists on your booking.')
+      if (started(c)) return bad('Their current slot has already started.')
+      if (c.party_size > room) return bad(`Their party of ${c.party_size} is more than the ${room} each slot allows now.`)
       if (takenBy(i)) return bad('Someone is already in that slot.')
       const { data, error } = await db.from('mini_session_clients')
         .update({ slot_index: i, pending_slot: null, reminder_sent_at: null, updated_at: now })

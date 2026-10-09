@@ -13,8 +13,12 @@ import { sendSMS } from '@/lib/sms'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import {
   type MiniSession, type MiniClient, type MiniBooking, type Slot,
-  slotsFor, headcountLimit, fmtTime, fmtDay, slotLabel, esc, RETENTION_DAYS,
+  slotsFor, headcountLimit, partyRoom, extrasFor, fmtTime, fmtDay, fmtDayShort, slotLabel, esc, RETENTION_DAYS,
 } from '@/lib/mini-sessions'
+import { Client, Environment } from 'square'
+import { randomUUID } from 'crypto'
+import { createOrderForPayment } from '@/lib/square-order'
+import { sendOwnerPush } from '@/lib/push'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 export const STUDIO_ADDRESS = '4825 Gulf Freeway, Houston TX 77023'
@@ -30,11 +34,20 @@ export type OwnedBooking = MiniBooking & {
 export const shareUrl = (m: Pick<MiniSession, 'share_token'>) => `${APP_URL}/minis/${m.share_token}`
 export const clientUrl = (c: Pick<MiniClient, 'manage_token'>) => `${APP_URL}/minis/c/${c.manage_token}`
 
-export async function guestSettings(db: SupabaseClient): Promise<{ capacity: number; maxPerSet: number }> {
-  const { data } = await db.from('studio_settings').select('key, value')
-    .in('key', ['guest_capacity_per_set', 'max_guests_per_set'])
+export interface GuestSettings { capacity: number; maxPerSet: number; extraFee: number }
+
+export async function guestSettings(db: SupabaseClient, opts: { strict?: boolean } = {}): Promise<GuestSettings> {
+  const { data, error } = await db.from('studio_settings').select('key, value')
+    .in('key', ['guest_capacity_per_set', 'max_guests_per_set', 'mini_extra_guest_fee'])
+  // Billing must not guess: a failed read throws so the charge retries next hour.
+  if (error && opts.strict) throw new Error(error.message)
   const map = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value]))
-  return { capacity: Number(map['guest_capacity_per_set']) || 5, maxPerSet: Number(map['max_guests_per_set']) || 7 }
+  return {
+    capacity: Number(map['guest_capacity_per_set']) || 5,
+    maxPerSet: Number(map['max_guests_per_set']) || 7,
+    // Whole dollars per extra person per slot. Teddy set $5 on 2026-10-09.
+    extraFee: (() => { const n = Math.round(Number(map['mini_extra_guest_fee'] ?? 5)); return Number.isFinite(n) && n >= 0 ? n : 5 })(),
+  }
 }
 
 export async function limitFor(db: SupabaseClient, b: MiniBooking): Promise<number> {
@@ -287,7 +300,7 @@ export async function reconcileMini(db: SupabaseClient, mini: MiniSession, deadl
 
 // ── Hourly upkeep ───────────────────────────────────────────────────────────
 export async function runMiniUpkeep(db: SupabaseClient, now = new Date()) {
-  const result = { reconciled: 0, reminders: 0, purged: 0, errors: [] as string[] }
+  const result = { reconciled: 0, reminders: 0, purged: 0, extraCharges: [] as string[], errors: [] as string[] }
   const deadline = Date.now() + 240_000
 
   // 1. Follow moved/cancelled bookings — anything not yet over.
@@ -331,7 +344,32 @@ export async function runMiniUpkeep(db: SupabaseClient, now = new Date()) {
     }
   }
 
-  // 3. 90 days after the session: clear client contact details, keep counts.
+  // 3. Bigger groups: bill the photographer once the session is over.
+  //    Every finished day is checked (not only ones with the setting on), so
+  //    extras that slipped in any other way still get billed — or marked 'none'.
+  const { data: done, error: dErr } = await db.from('mini_sessions').select('*, bookings!inner ( end_time )')
+    .is('extra_charge_status', null).neq('status', 'cancelled')
+    .lt('bookings.end_time', now.toISOString()).limit(20)
+  if (dErr) result.errors.push(`extra charges: ${dErr.message}`)
+  for (const m of (done ?? []) as any[]) {
+    if (Date.now() > deadline) break
+    const { bookings: _b, ...mini } = m
+    result.extraCharges.push(`${mini.id}: ${await chargeMiniExtras(db, mini as MiniSession)}`)
+  }
+
+  //    A charge that never finished (process died mid-way) is never retried —
+  //    it might have gone through. Flag it for Teddy instead.
+  const { data: stuck } = await db.from('mini_sessions').select('id, owner_user_id, booking_id, extra_charge_cents')
+    .eq('extra_charge_status', 'charging').lt('extra_charge_claimed_at', new Date(now.getTime() - 15 * 60_000).toISOString())
+  for (const m of (stuck ?? []) as any[]) {
+    const { data: flipped } = await db.from('mini_sessions').update({ extra_charge_status: 'review' }).eq('id', m.id).eq('extra_charge_status', 'charging').select('id')
+    if (flipped?.length) await sendOwnerPush({ title: '⚠️ Mini Sessions charge didn’t finish', body: 'An extra-guest charge stopped part-way. Check Square before charging again.', url: '/admin/minis' }).catch(() => {})
+  }
+  //    Payment links the photographer has paid since.
+  const { data: links } = await db.from('mini_sessions').select('*').eq('extra_charge_status', 'link_sent').limit(50)
+  for (const m of (links ?? []) as MiniSession[]) await settleLinkStatus(db, m)
+
+  // 4. 90 days after the session: clear client contact details, keep counts.
   //    Done in batches and marked on the session, so the list never grows.
   const cutoff = new Date(now.getTime() - RETENTION_DAYS * 86_400_000).toISOString()
   const { data: old, error: oErr } = await db.from('mini_sessions').select('id, bookings!inner ( end_time )')
@@ -350,17 +388,29 @@ export async function runMiniUpkeep(db: SupabaseClient, now = new Date()) {
 }
 
 // ── The roster, as the photographer's page and the admin page both show it ──
-export function rosterView(booking: OwnedBooking, mini: MiniSession, clients: MiniClient[], limit: number) {
+export function rosterView(booking: OwnedBooking, mini: MiniSession, clients: MiniClient[], gs: GuestSettings) {
   const slots = slotsFor(booking, mini)
   const booked = clients.filter(c => c.status === 'booked')
   const bySlot = new Map(booked.map(c => [c.slot_index, c]))
   const blocked = new Set(mini.blocked_slots ?? [])
   // Requested switches (approval on): the wanted slot is held for that client.
   const pendingFor = new Map(booked.filter(c => c.pending_slot != null).map(c => [c.pending_slot as number, c]))
-  const labelOf = (i: number) => { const s = slots.find(x => x.index === i); return s ? slotLabel(s) : null }
+  const labelOf = (i: number) => { const s = slots.find(x => x.index === i) ; return s ? slotLabel(s) : null }
+  const room = partyRoom(booking, mini, gs)
+  const limit = mini.crew_count + room.max
+  const extraOf = (c: MiniClient) => extrasFor(c.party_size, room.included)
+  const extraGuests = booked.reduce((n, c) => n + extraOf(c), 0)
+  const feeCents = feeCentsFor(mini, gs)
+  const billed = mini.extra_charge_status && mini.extra_charge_status !== 'none' && mini.extra_charge_cents != null
   return {
     limit,
+    included: room.included,
+    maxParty: room.max,
     crew: mini.crew_count,
+    extraFee: feeCents / 100,
+    extraCharge: {
+      status: mini.extra_charge_status, cents: mini.extra_charge_cents, at: mini.extra_charged_at,
+    },
     slots: slots.map(s => {
       const c = bySlot.get(s.index) ?? null
       return {
@@ -369,6 +419,7 @@ export function rosterView(booking: OwnedBooking, mini: MiniSession, clients: Mi
         heldFor: !c && pendingFor.has(s.index) ? (pendingFor.get(s.index)!.name || 'a client') : null,
         client: c && {
           id: c.id, name: c.name, email: c.email, phone: c.phone, party: c.party_size,
+          extras: extraOf(c),
           checkedIn: !!c.checked_in_at, addedBy: c.added_by, smsOk: c.sms_ok,
           pendingSlot: c.pending_slot, pendingLabel: c.pending_slot != null ? labelOf(c.pending_slot) : null,
         },
@@ -383,6 +434,190 @@ export function rosterView(booking: OwnedBooking, mini: MiniSession, clients: Mi
       open: slots.filter(s => !bySlot.has(s.index) && !blocked.has(s.index) && !pendingFor.has(s.index)).length,
       requests: booked.filter(c => c.pending_slot != null).length,
       people: booked.reduce((n, c) => n + c.party_size, 0),
+      extraGuests,
+      // Once billed, show what was actually billed, not a live recount.
+      extraCents: billed ? mini.extra_charge_cents! : extraGuests * feeCents,
     },
   }
+}
+
+// ── Bigger groups: one charge to the photographer, after the session ───────
+const square = () => new Client({
+  accessToken: process.env.SQUARE_ACCESS_TOKEN!,
+  environment: process.env.SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox,
+})
+
+/** The fee this day was agreed at (snapshotted when bigger groups were turned on), else today's. */
+export function feeCentsFor(mini: Pick<MiniSession, 'extra_fee_cents'>, gs: GuestSettings): number {
+  const snap = Number(mini.extra_fee_cents)
+  return Number.isFinite(snap) && snap >= 0 && mini.extra_fee_cents != null ? Math.round(snap) : gs.extraFee * 100
+}
+
+// Square error codes that mean "this card said no" — the only case where a
+// payment link is the right next step. Anything else (timeout, 5xx) may have
+// actually charged, so it goes to Teddy for review instead of billing twice.
+const DECLINE_CODES = new Set([
+  'CARD_DECLINED', 'GENERIC_DECLINE', 'INSUFFICIENT_FUNDS', 'CVV_FAILURE', 'ADDRESS_VERIFICATION_FAILURE',
+  'INVALID_EXPIRATION', 'EXPIRATION_FAILURE', 'CARD_EXPIRED', 'CARD_NOT_SUPPORTED', 'INVALID_CARD',
+  'CARD_DECLINED_VERIFICATION_REQUIRED', 'CARD_DECLINED_CALL_ISSUER', 'TRANSACTION_LIMIT', 'VOICE_FAILURE',
+  'PAN_FAILURE', 'BAD_EXPIRATION', 'CHIP_INSERTION_REQUIRED', 'ALLOWABLE_PIN_TRIES_EXCEEDED', 'INVALID_ACCOUNT',
+  'CARD_TOKEN_EXPIRED', 'CARD_TOKEN_USED',
+])
+const isDecline = (e: any) => Array.isArray(e?.errors) && e.errors.some((x: any) => DECLINE_CODES.has(String(x?.code)))
+
+async function needsReview(db: SupabaseClient, mini: MiniSession, why: string, cents: number | null) {
+  await db.from('mini_sessions').update({ extra_charge_status: 'review', ...(cents != null ? { extra_charge_cents: cents } : {}) }).eq('id', mini.id)
+  await sendOwnerPush({ title: '⚠️ Mini Sessions extra guests need a look', body: why.slice(0, 180), url: '/admin/minis' }).catch(() => {})
+}
+
+/**
+ * Bill the photographer for extra guests on a FINISHED mini day. Claimed first
+ * (extra_charge_status null → 'charging'), so the cron can never start it twice.
+ * The card was verified as the photographer's own when they turned the setting
+ * on. A clear DECLINE becomes a Square payment link (unpaid booking_add_ons row
+ * → the Square webhook marks it paid). Anything unclear → 'review' + a push to
+ * Teddy, never a second attempt: a timed-out payment may have gone through.
+ */
+export async function chargeMiniExtras(db: SupabaseClient, mini: MiniSession): Promise<string> {
+  const now = new Date().toISOString()
+  const { data: claimed, error: cErr } = await db.from('mini_sessions')
+    .update({ extra_charge_status: 'charging', extra_charge_claimed_at: now })
+    .eq('id', mini.id).is('extra_charge_status', null).select('id')
+  if (cErr) return `claim failed: ${cErr.message}`
+  if (!claimed?.length) return 'already handled'
+  const release = async () => { await db.from('mini_sessions').update({ extra_charge_status: null, extra_charge_claimed_at: null }).eq('id', mini.id) }
+
+  const ctx = await ctxFor(db, mini)
+  if (!ctx) { await release(); return 'booking not loaded — will retry' }
+  const b = ctx.booking
+  let gs: GuestSettings
+  try { gs = await guestSettings(db, { strict: true }) } catch { await release(); return 'settings not loaded — will retry' }
+  const { data: cs, error: csErr } = await db.from('mini_session_clients').select('*').eq('mini_session_id', mini.id).eq('status', 'booked')
+  if (csErr) { await release(); return `clients not loaded (${csErr.message}) — will retry` }
+
+  const room = partyRoom(b, mini, gs)
+  const fee = feeCentsFor(mini, gs)
+  const slots = slotsFor(b, mini)
+  const lines = ((cs ?? []) as MiniClient[])
+    .map(c => ({ c, n: extrasFor(c.party_size, room.included), s: slots.find(x => x.index === c.slot_index) }))
+    .filter(x => x.n > 0)
+    .map(x => ({
+      name: `Mini Sessions extra guests — ${x.s ? fmtTime(x.s.startISO) : 'slot'} (${x.n} × $${(fee / 100).toFixed(fee % 100 ? 2 : 0)})`,
+      amountCents: x.n * fee,
+    }))
+  const totalCents = lines.reduce((t, l) => t + l.amountCents, 0)
+  if (!Number.isFinite(totalCents)) { await needsReview(db, mini, `${ctx.photographer}: extra-guest total could not be worked out`, null); return 'review' }
+  if (totalCents <= 0 || b.status === 'cancelled') {
+    await db.from('mini_sessions').update({ extra_charge_status: 'none', extra_charge_cents: 0, extra_charged_at: now }).eq('id', mini.id)
+    return 'nothing to charge'
+  }
+  // Only a photographer who opted in (and so agreed a fee) is ever billed. Extras
+  // on any other day mean the settings moved under it — Teddy decides.
+  if (!mini.allow_extra_guests || mini.extra_fee_cents == null) {
+    await needsReview(db, mini, `${ctx.photographer}: extra guests on a day without bigger groups turned on — decide whether to bill`, totalCents)
+    return 'review (not opted in)'
+  }
+  const extraCount = lines.reduce((t, l) => t + l.amountCents / Math.max(1, fee), 0)
+  const label = `Mini Sessions extra guests — ${fmtDayShort(b.start_time)}`
+  const dollarsS = `$${(totalCents / 100).toFixed(2)}`
+  const feeS = `$${(fee / 100).toFixed(fee % 100 ? 2 : 0)}`
+  const sq = square()
+
+  // 1. The card the photographer chose. ONLY the payment call is inside the try.
+  let declined = !(mini.extra_card_id && mini.extra_square_customer_id)
+  if (!declined) {
+    const orderId = await createOrderForPayment(sq, {
+      locationId: process.env.SQUARE_LOCATION_ID!, customerId: mini.extra_square_customer_id,
+      lineItems: lines, expectedTotalCents: totalCents, referenceId: b.id.slice(0, 40),
+    })
+    let paymentId: string | null = null
+    try {
+      const { result } = await sq.paymentsApi.createPayment({
+        sourceId: mini.extra_card_id!, customerId: mini.extra_square_customer_id!,
+        idempotencyKey: `mx-${mini.id}`,
+        amountMoney: { amount: BigInt(totalCents), currency: 'USD' },
+        locationId: process.env.SQUARE_LOCATION_ID!,
+        ...(orderId ? { orderId } : {}),
+        note: label.slice(0, 500),
+        buyerEmailAddress: b.customers?.email || undefined,
+      })
+      paymentId = result.payment?.id ?? null
+    } catch (e: any) {
+      if (isDecline(e)) declined = true
+      else {
+        console.error('[minis] extra-guest charge — unclear result', e?.errors ?? e)
+        await needsReview(db, mini, `${ctx.photographer}: ${dollarsS} extra-guest charge got an unclear answer from Square — check Square before charging again`, totalCents)
+        return 'review (unclear)'
+      }
+    }
+    if (!declined) {
+      // Money has moved. Everything below is bookkeeping and must not re-bill.
+      const { error: sErr } = await db.from('mini_sessions').update({
+        extra_charge_status: 'charged', extra_charge_cents: totalCents, extra_payment_id: paymentId, extra_charged_at: now,
+      }).eq('id', mini.id)
+      if (sErr) console.error('[minis] CRITICAL: charged but status not saved', sErr)
+      await recordOnBooking(db, b, label, totalCents, true, paymentId, null)
+      await notifyPhotographer(ctx, `Receipt: ${label}`,
+        `Your card was charged <b>${dollarsS}</b> for ${extraCount} extra guest${extraCount === 1 ? '' : 's'} across your mini sessions on ${esc(fmtDay(b.start_time))} (${feeS} per extra person per slot). Square emails an itemized receipt.`)
+      return `charged ${totalCents}`
+    }
+  }
+
+  // 2. No card / declined: a payment link the photographer pays themselves.
+  try {
+    const { result } = await sq.checkoutApi.createPaymentLink({
+      idempotencyKey: randomUUID(),
+      quickPay: { name: label, priceMoney: { amount: BigInt(totalCents), currency: 'USD' }, locationId: process.env.SQUARE_LOCATION_ID! },
+    })
+    const url = result.paymentLink?.url
+    const linkOrderId = result.paymentLink?.orderId ?? null
+    if (!url) throw new Error('Square returned no payment link')
+    await db.from('mini_sessions').update({
+      extra_charge_status: 'link_sent', extra_charge_cents: totalCents, extra_payment_id: linkOrderId, extra_charged_at: now,
+    }).eq('id', mini.id)
+    const ok = await recordOnBooking(db, b, label, totalCents, false, linkOrderId, result.paymentLink?.id ?? null)
+    if (!ok) await sendOwnerPush({ title: '⚠️ Mini Sessions link won’t auto-reconcile', body: `${ctx.photographer} — ${dollarsS}. Mark it paid by hand when it clears.`, url: '/admin/minis' }).catch(() => {})
+    if (b.customers?.email) {
+      await sendSimpleEmail({
+        to: b.customers.email, label: 'mini_extra_link',
+        subject: `Payment needed: ${label}`, heading: 'Extra guests from your mini sessions',
+        paragraphs: [
+          `Your mini sessions on ${esc(fmtDay(b.start_time))} had ${extraCount} extra guest${extraCount === 1 ? '' : 's'} (${feeS} per extra person per slot), <b>${dollarsS}</b> total.`,
+          mini.extra_card_id ? `We couldn't charge the card you chose, so here's a secure link to pay.` : `Here's a secure link to pay.`,
+        ],
+        ctaText: 'Pay now', ctaUrl: url,
+      }).catch(e => console.error('[minis] link email failed', e))
+    }
+    await sendOwnerPush({ title: 'Mini Sessions: extra guests sent as a link', body: `${ctx.photographer} — ${dollarsS}`, url: '/admin/minis' }).catch(() => {})
+    return `link ${totalCents}`
+  } catch (e: any) {
+    console.error('[minis] extra-guest payment link failed', e?.errors ?? e)
+    await needsReview(db, mini, `${ctx.photographer} owes ${dollarsS} for extra guests — card declined and the payment link failed. Charge it by hand.`, totalCents)
+    return 'review (link failed)'
+  }
+}
+
+/** The charge lands on the booking like any other add-on (and its total, once paid). Returns false if the row didn't save. */
+async function recordOnBooking(db: SupabaseClient, b: OwnedBooking, label: string, cents: number, paid: boolean, orderOrPaymentId: string | null, linkId: string | null): Promise<boolean> {
+  const { error } = await db.from('booking_add_ons').insert({
+    booking_id: b.id, equipment_id: null, quantity: 1, rate: cents / 100, paid, label,
+    square_order_id: orderOrPaymentId,
+    ...(linkId ? { square_payment_link_id: linkId, link_sent_at: new Date().toISOString() } : {}),
+  })
+  if (error) console.error('[minis] add-on row failed (money side already done)', error)
+  if (!paid) return !error   // the Square webhook bumps the total when the link is paid
+  const { data: bk } = await db.from('bookings').select('total_amount').eq('id', b.id).single()
+  const bumped = Math.round(((Number(bk?.total_amount) || 0) + cents / 100) * 100) / 100
+  const { data: up, error: upErr } = await db.from('bookings').update({ total_amount: bumped }).eq('id', b.id).select('id')
+  if (upErr || !up?.length) console.error('[minis] CRITICAL: charged but booking total not updated', upErr)
+  return !error
+}
+
+/** A payment link the photographer has since paid: the webhook marked the add-on paid; mirror it. */
+export async function settleLinkStatus(db: SupabaseClient, mini: MiniSession): Promise<MiniSession> {
+  if (mini.extra_charge_status !== 'link_sent' || !mini.extra_payment_id) return mini
+  const { data } = await db.from('booking_add_ons').select('paid').eq('square_order_id', mini.extra_payment_id).eq('paid', true).limit(1)
+  if (!data?.length) return mini
+  await db.from('mini_sessions').update({ extra_charge_status: 'charged' }).eq('id', mini.id).eq('extra_charge_status', 'link_sent')
+  return { ...mini, extra_charge_status: 'charged' }
 }
