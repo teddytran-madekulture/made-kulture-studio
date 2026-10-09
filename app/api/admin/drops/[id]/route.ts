@@ -51,6 +51,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!ok.includes(body[k])) return NextResponse.json({ error: `Invalid ${k}.` }, { status: 400 })
     row[k] = body[k]
   }
+  if ('past_gallery' in body) {
+    const arr = Array.isArray(body.past_gallery) ? body.past_gallery : []
+    row.past_gallery = arr
+      .map((x: any) => ({ url: String(x?.url || '').trim(), credit: x?.credit ? String(x.credit).trim().slice(0, 140) : null }))
+      .filter((x: any) => /^https:\/\//.test(x.url))
+      .slice(0, 80)
+  }
   if ('gallery' in body) row.gallery = Array.isArray(body.gallery) ? body.gallery.map(String).filter(Boolean).slice(0, 12) : []
   if ('slug' in body) {
     const s = slugify(String(body.slug || ''))

@@ -21,6 +21,7 @@ type PublicDrop = SetDrop & {
   people: number
   set_slug: string | null
   open_call: { slug: string; title: string } | null
+  past_gallery: { url: string; credit: string | null }[]
 }
 interface Mine { hours_wanted: number; deposit_cents: number; status: string; timing_note: string | null }
 interface Card { id: string; last_4: string; card_brand: string }
@@ -34,13 +35,15 @@ export default function DropClient({ slug }: { slug: string }) {
   const [drop, setDrop] = useState<PublicDrop | null>(null)
   const [mine, setMine] = useState<Mine | null>(null)
   const [signedIn, setSignedIn] = useState(false)
+  const [preview, setPreview] = useState(false)
+  const [lightbox, setLightbox] = useState<number | null>(null)
   const [loadErr, setLoadErr] = useState('')
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/drops/${slug}`, { cache: 'no-store' })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setLoadErr(d.error || 'Could not load this drop.'); return }
-    setDrop(d.drop); setMine(d.mine); setSignedIn(!!d.signedIn)
+    setDrop(d.drop); setMine(d.mine); setSignedIn(!!d.signedIn); setPreview(!!d.preview)
   }, [slug])
   useEffect(() => { load() }, [load])
 
@@ -86,6 +89,7 @@ export default function DropClient({ slug }: { slug: string }) {
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px 96px' }}>
         {/* ── Status banners ───────────────────────────────────── */}
+        {preview && <Banner>PREVIEW — only you can see this. It&rsquo;s how the page will look once you press OPEN RESERVATIONS; nothing can be reserved from it yet.</Banner>}
         {phase === 'deciding' && <Banner>Reservations are closed. We&rsquo;re deciding whether to build it — everyone who reserved hears first.</Banner>}
         {phase === 'early_access' && (mine && mine.status !== 'refunded'
           ? <Banner>It&rsquo;s happening. Your early access to book runs until {fmtInstant(drop.early_access_ends_at)} — your deposit is already credit on your account.</Banner>
@@ -120,6 +124,33 @@ export default function DropClient({ slug }: { slug: string }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 2, marginTop: 48 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {gallery.map(u => <img key={u} src={u} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', display: 'block' }} />)}
+          </div>
+        )}
+
+        {/* ── Shot here in past years ──────────────────────────── */}
+        {(drop.past_gallery ?? []).length > 0 && (
+          <div style={{ marginTop: 64 }}>
+            <div style={label}>SHOT ON {drop.name.toUpperCase()} · PAST YEARS</div>
+            <div style={{ columnWidth: 260, columnGap: 2 }}>
+              {drop.past_gallery.map((p, i) => (
+                <figure key={p.url} style={{ margin: '0 0 2px', breakInside: 'avoid', cursor: 'zoom-in' }} onClick={() => setLightbox(i)}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url} alt={p.credit ? `Shot on ${drop.name} — ${p.credit}` : `Shot on ${drop.name}`} loading="lazy" style={{ width: '100%', display: 'block' }} />
+                  {p.credit && <figcaption style={{ fontFamily: inter, fontSize: 11, color: dim(0.5), padding: '6px 2px 10px', letterSpacing: '0.02em' }}>{p.credit}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          </div>
+        )}
+        {lightbox != null && drop.past_gallery?.[lightbox] && (
+          <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, cursor: 'zoom-out' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={drop.past_gallery[lightbox].url} alt="" style={{ maxWidth: '100%', maxHeight: 'calc(85 * var(--svh, 1vh))', objectFit: 'contain' }} />
+            {drop.past_gallery[lightbox].credit && <div style={{ fontFamily: inter, fontSize: 13, color: dim(0.7), marginTop: 12 }}>{drop.past_gallery[lightbox].credit}</div>}
+            <div style={{ display: 'flex', gap: 16, marginTop: 14 }} onClick={e => e.stopPropagation()}>
+              <button onClick={() => setLightbox(i => i == null ? null : (i - 1 + drop.past_gallery.length) % drop.past_gallery.length)} style={ghost}>‹ PREV</button>
+              <button onClick={() => setLightbox(i => i == null ? null : (i + 1) % drop.past_gallery.length)} style={ghost}>NEXT ›</button>
+            </div>
           </div>
         )}
 
@@ -161,7 +192,7 @@ export default function DropClient({ slug }: { slug: string }) {
                 </div>
               </div>
             ) : (
-              <ReserveForm drop={drop} slug={slug} onDone={load} />
+              <ReserveForm drop={drop} slug={slug} onDone={load} preview={preview} />
             )}
           </div>
         )}
@@ -174,7 +205,7 @@ function Banner({ children }: { children: React.ReactNode }) {
   return <div style={{ border: `1px solid ${GOLD}55`, background: 'rgba(201,178,126,0.07)', padding: '16px 20px', fontFamily: inter, fontSize: 15, color: dim(0.85), lineHeight: 1.6 }}>{children}</div>
 }
 
-function ReserveForm({ drop, slug, onDone }: { drop: PublicDrop; slug: string; onDone: () => void }) {
+function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: string; onDone: () => void; preview?: boolean }) {
   const min = Math.max(0.5, Number(drop.min_hours) || 1)
   const max = Math.max(min, Number(drop.max_hours_per_pledge) || 8)
   const options: number[] = []
@@ -231,6 +262,7 @@ function ReserveForm({ drop, slug, onDone }: { drop: PublicDrop; slug: string; o
 
   const submit = async () => {
     setErr('')
+    if (preview) { setErr('This is a preview — reservations open when you press OPEN RESERVATIONS in admin.'); return }
     if (!agree) { setErr('Tick the box to confirm what happens to your deposit.'); return }
     setPaying(true)
     try {

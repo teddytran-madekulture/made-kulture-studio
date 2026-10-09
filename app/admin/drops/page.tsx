@@ -77,6 +77,7 @@ export default function SetDropsAdmin() {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [uploadingPast, setUploadingPast] = useState('')
 
   const load = async () => {
     const r = await fetch('/api/admin/drops', { cache: 'no-store' })
@@ -165,6 +166,36 @@ export default function SetDropsAdmin() {
     setUploadingVideo(false)
   }
 
+  // "Shot here" photos from past years: one request per photo, resized first,
+  // so a big batch never hits the 4.5 MB per-request upload ceiling.
+  const uploadPast = async (files: FileList | null) => {
+    if (!files?.length) return
+    const list = Array.from(files).slice(0, 40)
+    const added: { url: string; credit: string | null }[] = []
+    try {
+      for (let i = 0; i < list.length; i++) {
+        setUploadingPast(`UPLOADING ${i + 1}/${list.length}…`)
+        const fd = new FormData()
+        fd.append('files', await shrinkImage(list[i], 2000, 0.86), list[i].name)
+        const r = await fetch('/api/admin/sets/upload', { method: 'POST', body: fd })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok || !d.urls?.[0]) throw new Error(d.error || `Upload failed on ${list[i].name}`)
+        added.push({ url: d.urls[0], credit: null })
+      }
+    } catch (e: any) { setMsg(e.message) }
+    if (added.length) set('past_gallery', [...(v.past_gallery ?? []), ...added])
+    setUploadingPast('')
+  }
+  const setPast = (i: number, patch: Partial<{ url: string; credit: string | null }>) =>
+    set('past_gallery', (v.past_gallery ?? []).map((p, k) => (k === i ? { ...p, ...patch } : p)))
+  const movePast = (i: number, dir: -1 | 1) => {
+    const arr = [...(v.past_gallery ?? [])]
+    const j = i + dir
+    if (j < 0 || j >= arr.length) return
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    set('past_gallery', arr)
+  }
+
   if (unauth) return <main style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: 40 }}>Admin sign-in required.</main>
   if (loading) return <main style={{ background: C.bg, color: C.text, minHeight: '100vh', padding: 40 }}>Loading…</main>
 
@@ -206,7 +237,7 @@ export default function SetDropsAdmin() {
                 <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, marginTop: 4 }}>{drop.name}</div>
                 <div style={small}>{runLabel(drop)}{drop.pre_reserve_ends_at ? ` · reservations close ${fmtInstant(drop.pre_reserve_ends_at)}` : ''}</div>
               </div>
-              {drop.status !== 'draft' && <a href={`/drops/${drop.slug}`} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>VIEW PUBLIC PAGE ↗</a>}
+              <a href={`/drops/${drop.slug}`} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>{drop.status === 'draft' ? 'PREVIEW PAGE ↗' : 'VIEW PUBLIC PAGE ↗'}</a>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginTop: 18 }}>
               {[
@@ -355,6 +386,28 @@ export default function SetDropsAdmin() {
                 )}
                 <div style={{ ...small, marginTop: 6 }}>H.264 MP4 under 4.4 MB. It plays muted with a sound button. ⚠️ Other video formats can look fine in Chrome and show nothing on iPhones.</div>
               </Field>
+            </Group>
+
+            <Group title="Shot here — past years">
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ ...small, marginBottom: 10 }}>Photos customers made on this set before, shown as their own gallery with a credit under each. ⚠️ Only work you have permission to post — the photographer is the main credit.</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
+                  {(v.past_gallery ?? []).map((p, i) => (
+                    <div key={p.url} style={{ border: `1px solid ${C.line}`, padding: 6 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.url} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', display: 'block' }} />
+                      <input value={p.credit ?? ''} onChange={e => setPast(i, { credit: e.target.value || null })} placeholder="Photo: Name @handle" style={{ ...inp, marginTop: 6, padding: '6px 8px', fontSize: 12 }} />
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                        <button onClick={() => movePast(i, -1)} style={{ ...btn, padding: '2px 7px', fontSize: 11 }}>←</button>
+                        <button onClick={() => movePast(i, 1)} style={{ ...btn, padding: '2px 7px', fontSize: 11 }}>→</button>
+                        <button onClick={() => set('past_gallery', (v.past_gallery ?? []).filter((_, k) => k !== i))} style={{ ...btn, padding: '2px 7px', fontSize: 11, color: C.red, marginLeft: 'auto' }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <label style={{ ...btn, display: 'inline-block', marginTop: 10 }}>{uploadingPast || '+ ADD PHOTOS'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e => { uploadPast(e.target.files); e.target.value = '' }} /></label>
+                <span style={{ ...small, marginLeft: 10 }}>Up to 40 at a time, resized before upload. Press SAVE when done.</span>
+              </div>
             </Group>
 
             <Group title="Dates (Central)">

@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import SiteNav from '@/components/SiteNav'
 import { supabaseAdmin } from '@/lib/supabase'
+import { cookies, headers } from 'next/headers'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import DropClient from './DropClient'
 
 // /drops/<slug> — one Set Drop: the concept, the progress bar, and the reserve
@@ -13,7 +15,10 @@ export const fetchCache = 'force-no-store'
 
 async function getMeta(slug: string) {
   const { data } = await supabaseAdmin().from('set_drops').select('name, tagline, description, hero_url, status').eq('slug', slug).maybeSingle()
-  return data && data.status !== 'draft' ? data : null
+  if (!data) return null
+  if (data.status !== 'draft') return data
+  // Drafts: admin preview only.
+  try { return isAdminAuthed({ cookies: cookies(), headers: headers() } as any) ? data : null } catch { return null }
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {

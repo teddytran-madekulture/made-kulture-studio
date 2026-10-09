@@ -17,6 +17,7 @@ import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { refundPayment } from '@/lib/square-refund'
 import { sendOwnerPush } from '@/lib/push'
 import { rateLimit } from '@/lib/rate-limit'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { getDrop, getPledges, sendPledgeReceipt, processRemaining } from '@/lib/set-drops-server'
 import { dropPhase, dropProgress, dropTerms, depositFor, clampHours, depositorRate, dollars, type SetDrop, type DropPledge } from '@/lib/set-drops'
 
@@ -34,6 +35,7 @@ function publicDrop(d: SetDrop, pledges: DropPledge[]) {
   return {
     slug: d.slug, name: d.name, tagline: d.tagline, description: d.description,
     hero_url: d.hero_url, gallery: d.gallery ?? [], video_url: d.video_url, video_hero: !!d.video_hero,
+    past_gallery: Array.isArray(d.past_gallery) ? d.past_gallery : [],
     phase: dropPhase(d),
     pre_reserve_ends_at: d.pre_reserve_ends_at, run_starts: d.run_starts, run_ends: d.run_ends,
     early_access_ends_at: d.early_access_ends_at,
@@ -57,10 +59,13 @@ async function sessionUser() {
   } catch { return null }
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { slug: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { slug: string } }) {
   const db = supabaseAdmin()
   const drop = await getDrop(db, params.slug).catch(() => null)
-  if (!drop || drop.status === 'draft') return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // A draft is visible ONLY to a signed-in admin, as a preview of what
+  // customers will see once reservations open. Nothing can be reserved from it.
+  const preview = !!drop && drop.status === 'draft' && isAdminAuthed(req)
+  if (!drop || (drop.status === 'draft' && !preview)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const pledges = await getPledges(db, drop.id)
   const me = await sessionUser()
   const mine = me ? pledges.find(p => p.auth_user_id === me.id) ?? null : null
@@ -74,8 +79,11 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
     const { data: oc } = await db.from('open_calls').select('slug, title').eq('id', drop.open_call_id).maybeSingle()
     openCall = oc ?? null
   }
+  const pub = publicDrop(drop, pledges)
+  if (preview) pub.phase = 'pre_reserve'   // show the page as it will look once open
   return NextResponse.json({
-    drop: { ...publicDrop(drop, pledges), set_slug: setSlug, open_call: openCall },
+    preview,
+    drop: { ...pub, set_slug: setSlug, open_call: openCall },
     signedIn: !!me,
     mine: mine ? { hours_wanted: Number(mine.hours_wanted), deposit_cents: mine.deposit_cents, status: mine.status, timing_note: mine.timing_note } : null,
   })

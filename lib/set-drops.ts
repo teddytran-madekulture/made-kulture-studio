@@ -23,6 +23,8 @@ export interface SetDrop {
   gallery: string[]
   video_url: string | null
   video_hero: boolean
+  /** Photos customers shot here in past years (migration 156). */
+  past_gallery: { url: string; credit: string | null }[]
   status: DropStatus
   set_id: string | null
   replaces_set_id: string | null
