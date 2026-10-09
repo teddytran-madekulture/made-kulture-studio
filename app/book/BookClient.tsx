@@ -157,6 +157,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   const setParam   = searchParams.get('set')   // e.g. "set-a" (from availability chart)
   const dateParam  = searchParams.get('date')  // e.g. "2026-06-28"
   const startParam = searchParams.get('start') // e.g. "10"
+  const endParam   = searchParams.get('end')   // e.g. "14" (Mini Sessions "Book this day")
 
   // Every entry point runs the guest-count step. A pre-selected type (home
   // "Book a Set"/"Book the Studio") or a set+date+time pick (availability
@@ -176,7 +177,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
     setId:     setParam || null,
     date:      dateParam || today(),
     startHour: startParam ? Math.floor(parseFloat(startParam)) : null,  // starts snap to the hour
-    endHour:   null,
+    endHour:   startParam && endParam && parseFloat(endParam) > parseFloat(startParam) ? parseFloat(endParam) : null,
     equipment: [],
     name: '', email: '', phone: '', notes: '', smsConsent: false, guestAck: false, agreementAck: false,
   })

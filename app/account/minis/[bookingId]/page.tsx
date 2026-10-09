@@ -37,6 +37,7 @@ export default function MiniSetupPage() {
     const j = await r.json().catch(() => ({}))
     if (!r.ok) { setError(j.error || 'Could not load this booking.'); return }
     setD(j)
+    if (j.attachedPlan) setNotice(`We attached your planned day to this booking — ${j.attachedPlan.confirmed} client${j.attachedPlan.confirmed === 1 ? '' : 's'} confirmed${j.attachedPlan.bumped ? `, ${j.attachedPlan.bumped} need a new time (listed below)` : ''}.`)
     if (j.mini) setForm({
       title: j.mini.title ?? '', slot_minutes: j.mini.slot_minutes, break_minutes: j.mini.break_minutes,
       crew_count: j.mini.crew_count, cutoff_hours: j.mini.cutoff_hours, note: j.mini.note ?? '', price_text: j.mini.price_text ?? '',
@@ -177,7 +178,9 @@ export default function MiniSetupPage() {
       {notice && <div style={{ ...font, fontSize: 13, color: 'var(--t-ok)', marginBottom: 12 }}>{notice}</div>}
       {error && <div style={{ ...font, fontSize: 13, color: 'var(--t-err)', marginBottom: 12 }}>{error}</div>}
 
-      {b.status === 'cancelled' && <div style={{ ...card, ...font, fontSize: 14, color: muted(0.7) }}>This booking is cancelled{m ? ' and your clients were told.' : '.'}</div>}
+      {b.status === 'cancelled' && <div style={{ ...card, ...font, fontSize: 14, color: muted(0.7) }}>{b.planned ? 'This plan was called off and your clients were told.' : `This booking is cancelled${m ? ' and your clients were told.' : '.'}`}</div>}
+
+      {b.planned && b.status !== 'cancelled' && d.plan && <PlanPanel d={d} busy={busy} act={act} reload={load} setError={setError} setNotice={setNotice} />}
 
       {!m && b.status !== 'cancelled' && (
         <>
@@ -366,6 +369,83 @@ function Broadcast({ busy, act, disabled }: { busy: boolean; act: (b: any) => Pr
         <button style={btn(true)} disabled={busy || disabled || text.trim().length < 3} onClick={async () => { if (await act({ action: 'message', text, sms })) setText('') }}>Send</button>
       </div>
       <p style={{ ...font, fontSize: 12, color: muted(0.45), margin: '10px 0 0' }}>Clients can reply to the email to reach you directly.</p>
+    </div>
+  )
+}
+
+const PLAN_HOURS = Array.from({ length: 27 }, (_, i) => 9 + i / 2)   // studio hours
+const planHour = (h: number) => { const hr = Math.floor(h), mm = h % 1 ? '30' : '00'; return `${hr % 12 === 0 ? 12 : hr % 12}:${mm} ${hr >= 12 ? 'PM' : 'AM'}` }
+
+/** A planned day: book it, attach the booking, move it, or call it off. */
+function PlanPanel({ d, busy, act, reload, setError, setNotice }: { d: any; busy: boolean; act: (b: any, m?: string) => Promise<boolean>; reload: () => Promise<void>; setError: (s: string) => void; setNotice: (s: string) => void }) {
+  const p = d.plan
+  const [attachId, setAttachId] = useState('')
+  const [moving, setMoving] = useState(false)
+  const [mv, setMv] = useState({ date: p.date, start: p.startHour, end: p.endHour })
+  const [askOff, setAskOff] = useState(false)
+  const requested = d.roster?.counts?.booked ?? 0
+  const saveMove = async () => {
+    setError(''); setNotice('')
+    const r = await fetch(`/api/account/minis/${d.booking.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planDate: mv.date, planStartHour: mv.start, planEndHour: mv.end }) })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) { setError(j.error || 'Could not move the plan.'); return }
+    setMoving(false); setNotice(requested ? 'Moved — your pending clients were emailed their new times.' : 'Moved.')
+    await reload()
+  }
+  const attach = async () => {
+    setError(''); setNotice('')
+    const r = await fetch(`/api/account/minis/${d.booking.id}/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'attach', bookingId: attachId }) })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) { setError(j.error || 'Could not attach that booking.'); return }
+    window.location.href = `/account/minis/${j.bookingId}`
+  }
+  return (
+    <div style={{ ...card, borderColor: 'rgba(var(--t-gold-rgb), 0.55)', borderStyle: 'dashed' }}>
+      <label style={{ ...lbl, color: 'var(--t-gold)' }}>Planned — not booked yet</label>
+      <p style={{ ...font, fontSize: 14, color: muted(0.75), lineHeight: 1.6, margin: '0 0 12px' }}>
+        <b style={{ color: 'var(--t-fg)' }}>{requested}</b> client{requested === 1 ? ' has' : 's have'} requested a slot. They see this day as <b>pending</b> until you book the studio.
+        This plan doesn’t hold the time — book when you’re ready.
+      </p>
+      {p.conflicts > 0 && (
+        <p style={{ ...font, fontSize: 13, color: 'var(--t-err)', margin: '0 0 12px', lineHeight: 1.5 }}>
+          Someone else has booked this time. Move your plan to another time or set — your pending clients move with it.
+        </p>
+      )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <a href={p.bookLink} style={{ ...btn(true), textDecoration: 'none', display: 'inline-block' }}>Book this day →</a>
+        <button style={btn()} onClick={() => setMoving(!moving)}>{moving ? 'Close' : 'Move plan'}</button>
+        {!askOff ? <button style={btn()} onClick={() => setAskOff(true)}>Call it off</button>
+          : <><button style={{ ...btn(true), background: 'var(--t-err)', color: '#fff' }} disabled={busy} onClick={() => act({ action: 'cancel_plan' }, 'Called off — your pending clients were told.')}>Call it off{requested ? ` & email ${requested}` : ''}</button>
+             <button style={btn()} onClick={() => setAskOff(false)}>Keep it</button></>}
+      </div>
+      {moving && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+          <input type="date" style={{ ...input, width: 'auto' }} value={mv.date} onChange={e => setMv({ ...mv, date: e.target.value })} />
+          <select style={{ ...input, width: 'auto' }} value={mv.start} onChange={e => { const v = Number(e.target.value); setMv({ ...mv, start: v, end: Math.max(mv.end, v + 1) }) }}>
+            {PLAN_HOURS.filter(h => Number.isInteger(h) && h <= 21).map(h => <option key={h} value={h} style={optStyle}>{planHour(h)}</option>)}
+          </select>
+          <span style={{ ...font, fontSize: 13, color: muted(0.5) }}>to</span>
+          <select style={{ ...input, width: 'auto' }} value={mv.end} onChange={e => setMv({ ...mv, end: Number(e.target.value) })}>
+            {PLAN_HOURS.filter(h => h >= mv.start + 1).map(h => <option key={h} value={h} style={optStyle}>{planHour(h)}</option>)}
+          </select>
+          <button style={btn(true)} onClick={saveMove}>Save</button>
+        </div>
+      )}
+      <div style={{ borderTop: `1px solid ${muted(0.08)}`, paddingTop: 12 }}>
+        <label style={lbl}>Already booked it?</label>
+        {p.candidates.length === 0 ? (
+          <div style={{ ...font, fontSize: 13, color: muted(0.55) }}>Once you book that day, your booking shows up here so you can attach it — your pending clients get a “you’re confirmed” email.</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <select style={{ ...input, width: 'auto', minWidth: 220 }} value={attachId} onChange={e => setAttachId(e.target.value)}>
+              <option value="" style={optStyle}>Pick your booking…</option>
+              {p.candidates.map((c: any) => <option key={c.id} value={c.id} style={optStyle}>{c.label}</option>)}
+            </select>
+            <button style={btn(true)} disabled={!attachId} onClick={attach}>Attach & confirm clients</button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

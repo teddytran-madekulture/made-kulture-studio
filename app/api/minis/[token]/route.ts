@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
-import { BOOKING_SELECT, guestSettings, photographerName, ctxFor, sendClientConfirmation, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
+import { bookingForMini, guestSettings, photographerName, ctxFor, sendClientConfirmation, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
 import { cleanText, cleanEmail, cleanPhone, partyRoom, slotsFor, signupsClosed, slotLabel, fmtDay, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
@@ -20,8 +20,8 @@ async function load(token: string) {
   const { data: m, error } = await db.from('mini_sessions').select('*').eq('share_token', token).maybeSingle()
   if (error) throw new Error(error.message)
   if (!m) return null
-  const { data: b, error: bErr } = await db.from('bookings').select(BOOKING_SELECT).eq('id', m.booking_id).maybeSingle()
-  if (bErr) throw new Error(bErr.message)
+  // A planned day (migration 161) runs on a stand-in built from its plan.
+  const b = await bookingForMini(db, m as MiniSession)
   if (!b) return null
   const { data: cs, error: cErr } = await db.from('mini_session_clients').select('slot_index, pending_slot, email, status').eq('mini_session_id', m.id).eq('status', 'booked')
   if (cErr) throw new Error(cErr.message)
@@ -38,12 +38,14 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   const blocked = new Set(mini.blocked_slots ?? [])
   const state =
     mini.status === 'cancelled' || b.status === 'cancelled' ? 'cancelled'
-    : b.status !== 'confirmed' ? 'closed'
+    : b.status !== 'confirmed' && b.status !== 'planned' ? 'closed'
     : Date.parse(b.end_time) < Date.now() ? 'over'
     : mini.status === 'closed' || signupsClosed(b, mini) ? 'closed'
     : 'open'
   return NextResponse.json({
     state,
+    // Planned = the photographer hasn't booked the studio yet; sign-ups are requests.
+    pending: !!b.planned,
     title: mini.title,
     note: mini.note,
     priceText: mini.price_text,
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   if (!r) return NextResponse.json({ error: 'This sign-up link isn’t valid.' }, { status: 404 })
   const { db, mini, booking: b, taken } = r
   if (mini.status === 'cancelled' || b.status === 'cancelled') return NextResponse.json({ error: 'This mini session day was cancelled.' }, { status: 400 })
-  if (mini.status === 'closed' || b.status !== 'confirmed' || signupsClosed(b, mini)) return NextResponse.json({ error: 'Sign-ups are closed. Reach out to your photographer directly.' }, { status: 400 })
+  if (mini.status === 'closed' || (b.status !== 'confirmed' && b.status !== 'planned') || signupsClosed(b, mini)) return NextResponse.json({ error: 'Sign-ups are closed. Reach out to your photographer directly.' }, { status: 400 })
 
   const body = await req.json().catch(() => ({} as any))
   const name = cleanText(body.name, 80)
@@ -108,5 +110,5 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   const c = data![0] as MiniClient
   const ctx = await ctxFor(db, mini, b)
   if (ctx) await sendClientConfirmation(ctx, c)
-  return NextResponse.json({ ok: true, token: c.manage_token, when: `${fmtDay(slot.startISO)}, ${slotLabel(slot)}` })
+  return NextResponse.json({ ok: true, pending: !!b.planned, token: c.manage_token, when: `${fmtDay(slot.startISO)}, ${slotLabel(slot)}` })
 }

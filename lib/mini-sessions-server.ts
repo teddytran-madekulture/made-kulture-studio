@@ -10,7 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendSMS } from '@/lib/sms'
-import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
+import { centralDateStr, centralHourDecimal, bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
 import {
   type MiniSession, type MiniClient, type MiniBooking, type Slot,
   slotsFor, headcountLimit, partyRoom, extrasFor, fmtTime, fmtDay, fmtDayShort, slotLabel, esc, RETENTION_DAYS,
@@ -29,6 +29,101 @@ export const BOOKING_SELECT = `id, start_time, end_time, status, set_id, guest_c
 export type OwnedBooking = MiniBooking & {
   auth_user_id: string | null
   customers?: { name: string | null; email: string | null; phone: string | null } | null
+  /** true when this is a PLANNED day's stand-in, not a real booking (migration 161). */
+  planned?: boolean
+}
+
+// ── Planned days (migration 161) ────────────────────────────────────────────
+// A plan has no booking yet. Everything downstream (slots, headcount, emails)
+// reads a booking, so a plan gets a stand-in built from its planned fields.
+// Its status is 'planned'; its id is the mini's own id.
+export const isPlanned = (m: Pick<MiniSession, 'booking_id'>) => !m.booking_id
+
+export async function plannedBooking(db: SupabaseClient, m: MiniSession): Promise<OwnedBooking> {
+  let sets: { name: string | null; slug: string | null } | null = null
+  if (m.planned_set_id) {
+    const { data } = await db.from('sets').select('name, slug').eq('id', m.planned_set_id).maybeSingle()
+    sets = (data as any) ?? null
+  }
+  const [{ data: prof }, { data: au }] = await Promise.all([
+    db.from('customer_profiles').select('full_name').eq('id', m.owner_user_id).maybeSingle(),
+    db.auth.admin.getUserById(m.owner_user_id).catch(() => ({ data: { user: null } } as any)),
+  ])
+  return {
+    id: m.id, start_time: m.planned_start!, end_time: m.planned_end!,
+    status: m.status === 'cancelled' ? 'cancelled' : 'planned',
+    set_id: m.planned_buyout ? null : m.planned_set_id, guest_count: null,
+    auth_user_id: m.owner_user_id,
+    customers: { name: (prof as any)?.full_name ?? null, email: (au as any)?.user?.email ?? null, phone: null },
+    sets, planned: true,
+  }
+}
+
+/**
+ * A plan must be bookable exactly as planned: whole-hour start inside studio
+ * hours (9 AM – 10 PM), the set's minimum (buyout 4h), and far enough out that
+ * a normal booking (48 hours' notice) is still possible.
+ */
+export const PLAN_LEAD_HOURS = 48
+export async function validatePlanWindow(db: SupabaseClient, o: { date: string; startHour: number; endHour: number; setId: string | null; buyout: boolean }):
+  Promise<{ ok: true; start: string; end: string; setId: string | null } | { ok: false; error: string }> {
+  const { date, startHour: sh, endHour: eh } = o
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'Pick a date.' }
+  if (!Number.isInteger(sh) || !Number.isInteger(eh * 2)) return { ok: false, error: 'Bookings start on the hour.' }
+  if (sh < 9 || eh > 22) return { ok: false, error: 'Pick a time between 9 AM and 10 PM.' }
+  let setId: string | null = null, minH = 4
+  if (!o.buyout) {
+    const { data: set } = await db.from('sets').select('id, is_active, min_hours').eq('id', String(o.setId || '')).maybeSingle()
+    if (!set || !(set as any).is_active) return { ok: false, error: 'Pick a set.' }
+    setId = (set as any).id; minH = Number((set as any).min_hours) || 1
+  }
+  if (eh - sh < minH) return { ok: false, error: `That ${o.buyout ? 'full warehouse booking' : 'set'} needs at least ${minH} hour${minH === 1 ? '' : 's'}.` }
+  const start = bookingHourToISO(date, sh), end = bookingEndISO(date, sh, eh)
+  if (!Number.isFinite(Date.parse(start)) || centralDateStr(start) !== date) return { ok: false, error: 'That date doesn’t exist.' }
+  // 48h booking notice + a day to actually book it before the plan is called off.
+  if (Date.parse(start) < Date.now() + (PLAN_LEAD_HOURS + 24) * 3_600_000) return { ok: false, error: 'Plan at least 3 days ahead — you’ll need to book it 48 hours before.' }
+  return { ok: true, start, end, setId }
+}
+
+/** The owner's confirmed booking that matches a plan (same day, overlapping, same set / buyout), if any. */
+export async function findMatchingBooking(db: SupabaseClient, m: MiniSession, ownerEmail: string | null, statuses: string[] = ['confirmed']): Promise<OwnedBooking | null> {
+  if (!m.planned_start || !m.planned_end) return null
+  const date = centralDateStr(m.planned_start)
+  const { data } = await db.from('bookings').select(BOOKING_SELECT)
+    .in('status', statuses).lt('start_time', m.planned_end).gt('end_time', m.planned_start)
+  const ok = ((data ?? []) as any[]).filter(b =>
+    centralDateStr(b.start_time) === date &&
+    (m.planned_buyout ? b.set_id == null : b.set_id === m.planned_set_id) &&
+    ownsBooking(b, { id: m.owner_user_id, email: ownerEmail }))
+  if (!ok.length) return null
+  const { data: used } = await db.from('mini_sessions').select('booking_id').in('booking_id', ok.map(b => b.id))
+  const usedSet = new Set((used ?? []).map((u: any) => u.booking_id))
+  return ok.find(b => !usedSet.has(b.id)) ?? null
+}
+
+/** The booking a mini day runs on — the real one, or a plan's stand-in. */
+export async function bookingForMini(db: SupabaseClient, m: MiniSession): Promise<OwnedBooking | null> {
+  if (isPlanned(m)) return plannedBooking(db, m)
+  const { data } = await db.from('bookings').select(BOOKING_SELECT).eq('id', m.booking_id!).maybeSingle()
+  return (data as any) ?? null
+}
+
+/**
+ * Is the planned time still free? A plan holds nothing, so someone else may
+ * book it. Bookings by the photographer themselves don't count — that's the
+ * booking they'll attach.
+ */
+export async function planConflicts(db: SupabaseClient, m: MiniSession, ownerEmail: string | null): Promise<number> {
+  if (!m.planned_start || !m.planned_end) return 0
+  // Only bookings that really hold the time: paid, or a live payment hold.
+  let q = db.from('bookings').select('id, set_id, auth_user_id, customers ( email )')
+    .in('status', ['pending', 'confirmed', 'pending_payment']).lt('start_time', m.planned_end).gt('end_time', m.planned_start)
+  // A buyout plan collides with anything; a set plan with that set or a buyout.
+  if (!m.planned_buyout && m.planned_set_id) q = q.or(`set_id.eq.${m.planned_set_id},set_id.is.null`)
+  const { data, error } = await q
+  if (error) { console.error('[minis] conflict check failed', error); return 0 }
+  const mine = (b: any) => b.auth_user_id === m.owner_user_id || (!!ownerEmail && (b.customers?.email || '').toLowerCase() === ownerEmail.toLowerCase())
+  return (data ?? []).filter(b => !mine(b)).length
 }
 
 export const shareUrl = (m: Pick<MiniSession, 'share_token'>) => `${APP_URL}/minis/${m.share_token}`
@@ -61,16 +156,45 @@ export function ownsBooking(b: OwnedBooking, user: { id: string; email?: string 
 }
 
 export type OwnerLoad =
-  | { ok: true; booking: OwnedBooking; mini: MiniSession | null; clients: MiniClient[] }
+  | { ok: true; booking: OwnedBooking; mini: MiniSession | null; clients: MiniClient[]; attached?: { confirmed: number; bumped: number } }
   | { ok: false; status: number; error: string }
 
 export async function loadForOwner(db: SupabaseClient, user: { id: string; email?: string | null }, bookingId: string): Promise<OwnerLoad> {
   if (!/^[0-9a-f-]{36}$/i.test(bookingId)) return { ok: false, status: 404, error: 'Booking not found.' }
   const { data: b, error } = await db.from('bookings').select(BOOKING_SELECT).eq('id', bookingId).maybeSingle()
   if (error) return { ok: false, status: 500, error: error.message }
-  if (!b || !ownsBooking(b as any, user)) return { ok: false, status: 404, error: 'Booking not found.' }
-  const { data: m, error: mErr } = await db.from('mini_sessions').select('*').eq('booking_id', bookingId).maybeSingle()
+  if (!b) {
+    // Not a booking id — maybe a PLANNED day (its URL uses the mini's own id).
+    const { data: pm, error: pErr } = await db.from('mini_sessions').select('*').eq('id', bookingId).maybeSingle()
+    if (pErr) return { ok: false, status: 500, error: pErr.message }
+    if (!pm || (pm as any).owner_user_id !== user.id) return { ok: false, status: 404, error: 'Booking not found.' }
+    const mini = pm as MiniSession
+    // A plan that has since been attached lives at its booking's URL.
+    if (!isPlanned(mini)) return loadForOwner(db, user, mini.booking_id!)
+    const { data: cs, error: cErr } = await db.from('mini_session_clients').select('*')
+      .eq('mini_session_id', mini.id).order('slot_index').order('created_at')
+    if (cErr) return { ok: false, status: 500, error: cErr.message }
+    return { ok: true, booking: await plannedBooking(db, mini), mini, clients: (cs ?? []) as MiniClient[] }
+  }
+  if (!ownsBooking(b as any, user)) return { ok: false, status: 404, error: 'Booking not found.' }
+  let attached: { confirmed: number; bumped: number } | undefined
+  let { data: m, error: mErr } = await db.from('mini_sessions').select('*').eq('booking_id', bookingId).maybeSingle()
   if (mErr) return { ok: false, status: 500, error: mErr.message }
+  if (!m && (b as any).status === 'confirmed') {
+    // This booking may be the one a PLAN was waiting for — attach it instead of
+    // starting a fresh, empty mini day (which would strand the plan's clients).
+    const { data: plans } = await db.from('mini_sessions').select('*')
+      .eq('owner_user_id', user.id).is('booking_id', null).neq('status', 'cancelled').order('created_at')
+    for (const p of (plans ?? []) as MiniSession[]) {
+      const r = await attachPlan(db, p, b as any)
+      if (r.ok) {
+        const { data: again } = await db.from('mini_sessions').select('*').eq('booking_id', bookingId).maybeSingle()
+        m = again
+        attached = { confirmed: r.confirmed ?? 0, bumped: r.bumped ?? 0 }
+        break
+      }
+    }
+  }
   let clients: MiniClient[] = []
   if (m) {
     const { data: cs, error: cErr } = await db.from('mini_session_clients').select('*')
@@ -78,7 +202,7 @@ export async function loadForOwner(db: SupabaseClient, user: { id: string; email
     if (cErr) return { ok: false, status: 500, error: cErr.message }
     clients = (cs ?? []) as MiniClient[]
   }
-  return { ok: true, booking: b as any, mini: (m as MiniSession) ?? null, clients }
+  return { ok: true, booking: b as any, mini: (m as MiniSession) ?? null, clients, attached }
 }
 
 /** The name clients see: directory name, else the booking name. */
@@ -111,6 +235,19 @@ const ARRIVAL = 'Please arrive at your slot time and <b>wait outside until it st
 
 export async function sendClientConfirmation(ctx: Ctx, c: MiniClient) {
   const s = slotOf(ctx, c.slot_index); if (!s) return
+  if (ctx.booking.planned) {
+    await mail(ctx, c.email,
+      `Requested: ${fmtDay(s.startISO)} at ${fmtTime(s.startISO)} (pending)`,
+      `Your spot is requested`,
+      [
+        `Hi ${esc(first(c.name))} — you've requested <b>${esc(fmtDay(s.startISO))}, ${esc(slotLabel(s))}</b> for a mini session with ${esc(ctx.photographer)} at Made Kulture, ${STUDIO_ADDRESS}.`,
+        `<b>This day is pending.</b> ${esc(ctx.photographer)} is confirming it with the studio. You'll get another email the moment it's locked in — or if it isn't happening.`,
+        `Party of ${c.party_size}.`,
+        ...(ctx.mini.note ? [`From ${esc(ctx.photographer)}: ${esc(ctx.mini.note)}`] : []),
+      ],
+      { text: 'View or change my request', url: clientUrl(c) }, 'mini_requested')
+    return
+  }
   await mail(ctx, c.email,
     `You're booked: ${fmtDay(s.startISO)} at ${fmtTime(s.startISO)}`,
     `You're booked with ${ctx.photographer}`,
@@ -135,8 +272,19 @@ export async function sendClientRemovedOrCancelled(ctx: Ctx, c: MiniClient, why:
     ], undefined, 'mini_cancel')
 }
 
-export async function sendClientMoved(ctx: Ctx, c: MiniClient) {
+export async function sendClientMoved(ctx: Ctx, c: MiniClient, why: 'day' | 'slot' = 'day') {
   const s = slotOf(ctx, c.slot_index); if (!s) return
+  if (ctx.booking.planned) {
+    await mail(ctx, c.email,
+      `New requested time: ${fmtDay(s.startISO)} at ${fmtTime(s.startISO)} (pending)`,
+      'Your requested time changed',
+      [
+        `Hi ${esc(first(c.name))} — ${why === 'day' ? `${esc(ctx.photographer)} moved the planned mini session day.` : 'Your requested time changed.'} Your requested slot is now <b>${esc(fmtDay(s.startISO))}, ${esc(slotLabel(s))}</b>.`,
+        `<b>This day is still pending</b> until ${esc(ctx.photographer)} confirms it with the studio — you'll get an email either way. If the new time doesn't work, you can switch or cancel from the link below.`,
+      ],
+      { text: 'View or change my request', url: clientUrl(c) }, 'mini_plan_moved')
+    return
+  }
   await mail(ctx, c.email,
     `New time: ${fmtDay(s.startISO)} at ${fmtTime(s.startISO)}`,
     'Your mini session time changed',
@@ -156,6 +304,31 @@ export async function sendClientBumped(ctx: Ctx, c: MiniClient) {
       `Hi ${esc(first(c.name))} — ${esc(ctx.photographer)}'s mini session day changed and your slot no longer fits.`,
       `${esc(ctx.photographer)} will be in touch about a new time — or reply to this email to reach them.`,
     ], undefined, 'mini_bumped')
+}
+
+/** A planned day was booked: pending → confirmed. */
+export async function sendClientPlanConfirmed(ctx: Ctx, c: MiniClient) {
+  const s = slotOf(ctx, c.slot_index); if (!s) return
+  await mail(ctx, c.email,
+    `Confirmed: ${fmtDay(s.startISO)} at ${fmtTime(s.startISO)}`,
+    `You're confirmed with ${ctx.photographer}`,
+    [
+      `Hi ${esc(first(c.name))} — ${esc(ctx.photographer)} booked the studio, so your mini session is <b>confirmed for ${esc(fmtDay(s.startISO))}, ${esc(slotLabel(s))}</b> at Made Kulture, ${STUDIO_ADDRESS}.`,
+      `Party of ${c.party_size}. ${ARRIVAL}`,
+      `Payment and anything about your photos go through ${esc(ctx.photographer)} directly — reply to this email to reach them.`,
+    ],
+    { text: 'View or change my slot', url: clientUrl(c) }, 'mini_plan_confirmed')
+}
+
+/** A planned day that won't happen (photographer called it off, or it was never booked). */
+export async function sendClientPlanOff(ctx: Ctx, c: MiniClient) {
+  await mail(ctx, c.email,
+    `${ctx.photographer}'s mini session day isn't happening`,
+    'This mini session day is off',
+    [
+      `Hi ${esc(first(c.name))} — the mini session day you requested with ${esc(ctx.photographer)} wasn't confirmed, so it isn't happening.`,
+      `Reply to this email to reach ${esc(ctx.photographer)} about another date.`,
+    ], undefined, 'mini_plan_off')
 }
 
 export async function sendClientSwitchDeclined(ctx: Ctx, c: MiniClient) {
@@ -214,13 +387,78 @@ export async function notifyPhotographer(ctx: Ctx, subject: string, line: string
 }
 
 export async function ctxFor(db: SupabaseClient, mini: MiniSession, booking?: OwnedBooking): Promise<Ctx | null> {
-  let b = booking
-  if (!b) {
-    const { data } = await db.from('bookings').select(BOOKING_SELECT).eq('id', mini.booking_id).maybeSingle()
-    if (!data) return null
-    b = data as any
-  }
+  let b = booking ?? await bookingForMini(db, mini)
+  if (!b) return null
   return { mini, booking: b!, photographer: await photographerName(db, b!, mini.owner_user_id) }
+}
+
+// ── Plans: call off, or attach the real booking ─────────────────────────────
+/** Call off a planned day: every pending client is told it isn't happening. */
+export async function cancelPlan(db: SupabaseClient, mini: MiniSession, why: 'photographer' | 'expired'): Promise<number> {
+  const { data: claimed } = await db.from('mini_sessions').update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('id', mini.id).is('booking_id', null).neq('status', 'cancelled').select('id')
+  if (!claimed?.length) return 0
+  const ctx = await ctxFor(db, mini)
+  const { data: cs } = await db.from('mini_session_clients').update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('mini_session_id', mini.id).eq('status', 'booked').select('*')
+  for (const c of (cs ?? []) as MiniClient[]) if (ctx) await sendClientPlanOff(ctx, c)
+  if (ctx && why === 'expired') {
+    await notifyPhotographer(ctx, 'Your planned mini session day was called off',
+      `Your planned mini day on ${esc(fmtDay(ctx.booking.start_time))} wasn't booked by 48 hours before (the studio's booking notice), so it was called off and your ${(cs ?? []).length} pending client${(cs ?? []).length === 1 ? ' was' : 's were'} told.`)
+  }
+  return (cs ?? []).length
+}
+
+/**
+ * The photographer booked the studio: hang the plan on that booking. Slot
+ * indexes are re-read against the REAL booking's hours — anyone whose slot no
+ * longer fits is bumped and told; everyone else gets "you're confirmed".
+ */
+export async function attachPlan(db: SupabaseClient, mini: MiniSession, b: OwnedBooking): Promise<{ ok: boolean; error?: string; confirmed?: number; bumped?: number }> {
+  if (b.status !== 'confirmed') return { ok: false, error: 'That booking isn’t confirmed yet.' }
+  if (Date.parse(b.end_time) < Date.now()) return { ok: false, error: 'That booking is already over.' }
+  // Only the booking this plan is FOR: same day, overlapping, same set (or a buyout for a buyout plan).
+  if (!mini.planned_start || !mini.planned_end || centralDateStr(b.start_time) !== centralDateStr(mini.planned_start)
+      || !(Date.parse(b.start_time) < Date.parse(mini.planned_end) && Date.parse(b.end_time) > Date.parse(mini.planned_start))) {
+    return { ok: false, error: 'That booking isn’t on the day and time you planned. Move the plan first, or attach the right booking.' }
+  }
+  if (mini.planned_buyout ? b.set_id != null : b.set_id !== mini.planned_set_id) {
+    return { ok: false, error: mini.planned_buyout ? 'This plan is for the full warehouse — attach your buyout booking.' : 'That booking is for a different set than you planned.' }
+  }
+  const { data: taken } = await db.from('mini_sessions').select('id').eq('booking_id', b.id).maybeSingle()
+  if (taken) return { ok: false, error: 'That booking already has mini sessions set up.' }
+  const { data: claimed, error } = await db.from('mini_sessions')
+    .update({ booking_id: b.id, announced_start: b.start_time, updated_at: new Date().toISOString() })
+    .eq('id', mini.id).is('booking_id', null).neq('status', 'cancelled').select('*')
+  if (error) return { ok: false, error: error.code === '23505' ? 'That booking already has mini sessions set up.' : error.message }
+  if (!claimed?.length) return { ok: false, error: 'This plan was already attached or cancelled.' }
+  const live = claimed[0] as MiniSession
+  const ctx = await ctxFor(db, live, b)
+  const fit = slotsFor(b, live).length
+  // Blocks keep their meaning (same grid); drop only ones past the real booking's end.
+  if ((live.blocked_slots ?? []).some(i => i >= fit)) {
+    await db.from('mini_sessions').update({ blocked_slots: live.blocked_slots.filter(i => i < fit) }).eq('id', live.id)
+  }
+  // A plan's party sizes were checked against the PLANNED room; the real booking may hold fewer.
+  const room = partyRoom(b, live, await guestSettings(db))
+  const { data: cs } = await db.from('mini_session_clients').select('*').eq('mini_session_id', mini.id).eq('status', 'booked')
+  let confirmed = 0, bumped = 0
+  for (const c of (cs ?? []) as MiniClient[]) {
+    if (c.slot_index >= fit || c.party_size > room.max) {
+      await db.from('mini_session_clients').update({ status: 'bumped', updated_at: new Date().toISOString() }).eq('id', c.id)
+      if (ctx) await sendClientBumped(ctx, c)
+      bumped++
+    } else {
+      await db.from('mini_session_clients').update({ told_start: b.start_time, reminder_sent_at: null, updated_at: new Date().toISOString() }).eq('id', c.id)
+      if (ctx) await sendClientPlanConfirmed(ctx, c)
+      confirmed++
+    }
+  }
+  if (bumped && ctx) {
+    await notifyPhotographer(ctx, 'Some planned clients need a new time',
+      `Your booking is attached and ${confirmed} client${confirmed === 1 ? ' was' : 's were'} confirmed. ${bumped} didn't fit the booking (their slot or party size) and were told you'll reach out — they're listed at the top of your roster.`)
+  }
+  return { ok: true, confirmed, bumped }
 }
 
 // ── Keep clients in step with the booking ───────────────────────────────────
@@ -290,7 +528,7 @@ export async function reconcileMini(db: SupabaseClient, mini: MiniSession, deadl
   }
   if (bumped.length && future) {
     await notifyPhotographer(ctx, 'Some mini session clients need a new time',
-      `Your booking changed and ${bumped.length} client${bumped.length === 1 ? '' : 's'} no longer fit: ${bumped.map(c => esc(c.name || 'a client')).join(', ')}. They've been told you'll reach out.`)
+      `Your ${ctx.booking.planned ? 'plan' : 'booking'} changed and ${bumped.length} client${bumped.length === 1 ? '' : 's'} no longer fit: ${bumped.map(c => esc(c.name || 'a client')).join(', ')}. They've been told you'll reach out.`)
   }
   if (!mini.announced_start || Date.parse(mini.announced_start) !== Date.parse(b.start_time)) {
     await db.from('mini_sessions').update({ announced_start: b.start_time }).eq('id', mini.id)
@@ -369,6 +607,36 @@ export async function runMiniUpkeep(db: SupabaseClient, now = new Date()) {
   const { data: links } = await db.from('mini_sessions').select('*').eq('extra_charge_status', 'link_sent').limit(50)
   for (const m of (links ?? []) as MiniSession[]) await settleLinkStatus(db, m)
 
+  // 3b. Plans (migration 161). A plan whose start time passed without a booking
+  //     is called off. A plan whose time someone else booked: tell the
+  //     photographer once, so they can move it or book elsewhere.
+  const { data: plans, error: plErr } = await db.from('mini_sessions').select('*')
+    .is('booking_id', null).neq('status', 'cancelled').limit(200)
+  if (plErr) result.errors.push(`plans: ${plErr.message}`)
+  for (const m of (plans ?? []) as MiniSession[]) {
+    if (Date.now() > deadline) break
+    // Booked it but never pressed Attach? Do it for them.
+    const ctx = await ctxFor(db, m)
+    const ownerEmail = ctx?.booking.customers?.email ?? null
+    const match = await findMatchingBooking(db, m, ownerEmail)
+    if (match) { await attachPlan(db, m, match); continue }
+    // Not booked by the time a booking is no longer possible (48h notice): call it off
+    // now, while clients still have two days to make other plans — unless the
+    // photographer is mid-checkout for it right now.
+    if (m.planned_start && Date.parse(m.planned_start) <= now.getTime() + PLAN_LEAD_HOURS * 3_600_000) {
+      if (await findMatchingBooking(db, m, ownerEmail, ['pending', 'pending_payment'])) continue
+      await cancelPlan(db, m, 'expired'); continue
+    }
+    if (!m.conflict_notified_at) {
+      if (ctx && await planConflicts(db, m, ctx.booking.customers?.email ?? null) > 0) {
+        const { data: flagged } = await db.from('mini_sessions').update({ conflict_notified_at: now.toISOString() })
+          .eq('id', m.id).is('conflict_notified_at', null).select('id')
+        if (flagged?.length) await notifyPhotographer(ctx, 'Heads up: someone booked your planned mini day',
+          `The time you planned for minis on ${esc(fmtDay(m.planned_start!))} was just booked by someone else. Your plan doesn't hold the studio, so pick another time or set — your pending clients move with it.`)
+      }
+    }
+  }
+
   // 4. 90 days after the session: clear client contact details, keep counts.
   //    Done in batches and marked on the session, so the list never grows.
   const cutoff = new Date(now.getTime() - RETENTION_DAYS * 86_400_000).toISOString()
@@ -380,6 +648,16 @@ export async function runMiniUpkeep(db: SupabaseClient, now = new Date()) {
       .update({ name: null, email: null, phone: null, purged_at: now.toISOString() })
       .eq('mini_session_id', r.id).is('purged_at', null).select('id')
     if (pErr) { result.errors.push(`purge ${r.id}: ${pErr.message}`); continue }
+    result.purged += purged?.length ?? 0
+    await db.from('mini_sessions').update({ purged_at: now.toISOString() }).eq('id', r.id)
+  }
+  //    Plans that never became bookings: same 90 days, counted from their planned end.
+  const { data: oldPlans } = await db.from('mini_sessions').select('id').is('booking_id', null).is('purged_at', null).lt('planned_end', cutoff).limit(100)
+  for (const r of (oldPlans ?? []) as any[]) {
+    const { data: purged, error: pErr } = await db.from('mini_session_clients')
+      .update({ name: null, email: null, phone: null, purged_at: now.toISOString() })
+      .eq('mini_session_id', r.id).is('purged_at', null).select('id')
+    if (pErr) { result.errors.push(`purge plan ${r.id}: ${pErr.message}`); continue }
     result.purged += purged?.length ?? 0
     await db.from('mini_sessions').update({ purged_at: now.toISOString() }).eq('id', r.id)
   }

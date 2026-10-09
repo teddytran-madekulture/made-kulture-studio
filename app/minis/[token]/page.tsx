@@ -45,15 +45,22 @@ export default function MiniSignupPage() {
       <p style={{ ...body, color: CHAMP, marginBottom: d.priceText ? 6 : 16 }}>{d.day}</p>
       {d.priceText && <p style={{ ...body, marginBottom: 16 }}>{d.priceText}</p>}
       {d.note && <p style={{ ...body, whiteSpace: 'pre-wrap', borderLeft: `2px solid ${CHAMP}`, paddingLeft: 12 }}>{d.note}</p>}
+      {d.pending && d.state === 'open' && (
+        <p style={{ ...body, fontSize: 14, border: `1px solid ${CHAMP}`, borderRadius: 8, padding: '10px 12px', color: '#fff' }}>
+          <b style={{ color: CHAMP }}>Pending date.</b> {d.photographer} is confirming this day with the studio. Request your spot now — you’ll get an email the moment it’s confirmed, or if it isn’t happening.
+        </p>
+      )}
     </>
   )
 
   if (done) return (
     <div style={wrap}><div style={card}>
       {header}
-      <div style={{ ...label, color: CHAMP, marginTop: 8 }}>You’re booked</div>
+      <div style={{ ...label, color: CHAMP, marginTop: 8 }}>{d.pending ? 'Requested — pending' : 'You’re booked'}</div>
       <p style={{ ...body, fontSize: 18, color: '#fff' }}>{done.when}</p>
-      <p style={body}>A confirmation is on its way to your email. Arrive at your time and wait outside until your slot starts — the set has a strict headcount.</p>
+      <p style={body}>{d.pending
+        ? `Your spot is held for you. ${d.photographer} is confirming the day with the studio — we’ll email you the moment it’s confirmed.`
+        : 'A confirmation is on its way to your email. Arrive at your time and wait outside until your slot starts — the set has a strict headcount.'}</p>
       <p style={body}>{d.address}</p>
       <a href={`/minis/c/${done.token}`} style={{ color: CHAMP, fontSize: 14 }}>View or change my slot</a>
       <p style={{ ...fine, marginTop: 18 }}>Payment and your photos go through {d.photographer} directly.</p>
@@ -110,7 +117,7 @@ export default function MiniSignupPage() {
           </div>
 
           {formError && <p style={{ color: '#ff8a8a', fontSize: 14, margin: '16px 0 0' }}>{formError}</p>}
-          <button style={{ ...primary, marginTop: 20, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>{busy ? 'Booking…' : 'Book my slot'}</button>
+          <button style={{ ...primary, marginTop: 20, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>{busy ? 'Sending…' : d.pending ? 'Request my spot' : 'Book my slot'}</button>
           <p style={{ ...fine, marginTop: 16 }}>
             Made Kulture, {d.address}. Arrive at your time and wait outside until your slot starts. Payment goes through {d.photographer} directly.
           </p>

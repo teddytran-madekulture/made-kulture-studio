@@ -18,7 +18,12 @@ export type MiniClientStatus = 'booked' | 'cancelled' | 'removed' | 'bumped'
 
 export interface MiniSession {
   id: string
-  booking_id: string
+  booking_id: string | null          // null while it's only a plan (migration 161)
+  planned_set_id: string | null
+  planned_buyout: boolean
+  planned_start: string | null
+  planned_end: string | null
+  conflict_notified_at: string | null
   owner_user_id: string
   title: string | null
   note: string | null

@@ -48,7 +48,8 @@ export default function MiniClientPage() {
         </p>
       ) : (
         <>
-          <span style={label}>Your slot</span>
+          <span style={label}>{d.pending ? 'Your requested slot — pending' : 'Your slot'}</span>
+          {d.pending && <p style={{ ...body, fontSize: 14, color: CHAMP }}>{d.photographer} is confirming this day with the studio. You’ll get an email when it’s confirmed.</p>}
           <p style={{ ...body, fontSize: 20, color: '#fff', marginBottom: 4 }}>{d.day}</p>
           <p style={{ ...body, fontSize: 20, color: CHAMP }}>{d.slot}</p>
           <p style={body}>Party of {d.party} · {d.address}</p>

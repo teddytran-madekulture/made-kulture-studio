@@ -5,7 +5,7 @@
 // cutoff — after that the roster is final and changes go through them.
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { BOOKING_SELECT, ctxFor, notifyPhotographer, sendClientMoved, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
+import { bookingForMini, ctxFor, notifyPhotographer, sendClientMoved, STUDIO_ADDRESS } from '@/lib/mini-sessions-server'
 import { slotsFor, signupsClosed, slotLabel, fmtDay, esc, type MiniSession, type MiniClient } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +20,7 @@ async function load(token: string) {
   if (!c || c.purged_at) return null
   const { data: m } = await db.from('mini_sessions').select('*').eq('id', c.mini_session_id).maybeSingle()
   if (!m) return null
-  const { data: b } = await db.from('bookings').select(BOOKING_SELECT).eq('id', m.booking_id).maybeSingle()
+  const b = await bookingForMini(db, m as MiniSession)
   if (!b) return null
   return { db, client: c as MiniClient, mini: m as MiniSession, booking: b as any }
 }
@@ -45,6 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     title: mini.title, note: mini.note, address: STUDIO_ADDRESS,
     day: fmtDay(b.start_time),
     slot: mine ? slotLabel(mine) : null,
+    pending: !!(b as any).planned,
     approveSwitches: !!mini.approve_switches,
     pendingSlot: pending ? slotLabel(pending) : null,
     canChange: !cancelled && c.status === 'booked' && !signupsClosed(b, mini) && mini.status === 'open',
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     if (error) return NextResponse.json({ error: error.code === '23505' ? 'Someone just took that time. Pick another.' : 'We couldn’t switch that — please try again.' }, { status: error.code === '23505' ? 409 : 500 })
     if (!moved?.length) return NextResponse.json({ error: 'This slot was already changed.' }, { status: 409 })
     if (ctx) {
-      await sendClientMoved(ctx, { ...c, slot_index: i })
+      await sendClientMoved(ctx, { ...c, slot_index: i }, 'slot')
       await notifyPhotographer(ctx, `${c.name || 'A client'} switched mini session times`,
         `${esc(c.name || 'A client')} moved from ${oldSlot ? esc(slotLabel(oldSlot)) : 'their slot'} to ${esc(slotLabel(s))} on ${esc(fmtDay(b.start_time))}.`)
     }

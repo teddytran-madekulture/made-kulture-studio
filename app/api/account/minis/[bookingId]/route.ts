@@ -6,9 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { loadForOwner, guestSettings, rosterView, shareUrl, photographerName, settleLinkStatus, feeCentsFor } from '@/lib/mini-sessions-server'
+import { loadForOwner, guestSettings, rosterView, shareUrl, photographerName, settleLinkStatus, feeCentsFor, planConflicts, reconcileMini, validatePlanWindow } from '@/lib/mini-sessions-server'
 import { cardBelongsToUser } from '@/lib/card-verify'
-import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
+import { centralDateStr, centralHourDecimal, bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
 import { cleanText, maxParty, partyRoom, headcountLimit, extrasFor, slotsFor, signupsClosed, DEFAULTS, fmtDay, fmtTime } from '@/lib/mini-sessions'
 
 export const dynamic = 'force-dynamic'
@@ -25,9 +25,41 @@ export async function GET(_req: NextRequest, { params }: { params: { bookingId: 
   const gs = await guestSettings(db)
   const limit = headcountLimit(b, gs)
   const room = mini ? partyRoom(b, mini, gs) : null
+
+  // A PLANNED day (no booking yet): how to book it, whether the time is still
+  // free, and which of my bookings that day could be attached.
+  let plan: any = null
+  if (b.planned && mini) {
+    const date = centralDateStr(b.start_time)
+    const sh = centralHourDecimal(b.start_time), eh = centralHourDecimal(b.end_time) || 24
+    const { data: custRows } = await db.from('customers').select('id').eq('email', (user.email ?? '').toLowerCase())
+    const ors = [`auth_user_id.eq.${user.id}`]
+    if (custRows?.length) ors.push(`customer_id.in.(${custRows.map(c => c.id).join(',')})`)
+    const dayStart = bookingHourToISO(date, 0), dayEnd = bookingEndISO(date, 23.5, 0)
+    const { data: mine } = await db.from('bookings').select('id, start_time, end_time, set_id, sets ( name )')
+      .or(ors.join(',')).eq('status', 'confirmed').gte('start_time', dayStart).lt('start_time', dayEnd).order('start_time')
+    const ids = (mine ?? []).map(x => x.id)
+    const { data: used } = ids.length ? await db.from('mini_sessions').select('booking_id').in('booking_id', ids) : { data: [] as any[] }
+    const usedSet = new Set((used ?? []).map((u: any) => u.booking_id))
+    plan = {
+      date, startHour: sh, endHour: eh, setId: mini.planned_set_id, buyout: mini.planned_buyout,
+      bookLink: `/book?${new URLSearchParams({
+        type: b.set_id ? 'set' : 'studio', ...(b.sets?.slug ? { set: b.sets.slug } : {}),
+        date, start: String(sh), end: String(eh),
+      }).toString()}`,
+      conflicts: await planConflicts(db, mini, user.email ?? null),
+      candidates: (mine ?? []).filter(x => !usedSet.has(x.id)).map((x: any) => ({
+        id: x.id, label: `${x.set_id ? (x.sets?.name ?? 'Set') : 'Full warehouse'} · ${fmtTime(x.start_time)} – ${fmtTime(x.end_time)}`,
+      })),
+    }
+  }
+
   return NextResponse.json({
+    // Set when opening this booking just attached a waiting plan to it.
+    attachedPlan: r.attached ?? null,
+    plan,
     booking: {
-      id: b.id, start_time: b.start_time, end_time: b.end_time, status: b.status,
+      id: b.id, start_time: b.start_time, end_time: b.end_time, status: b.status, planned: !!b.planned,
       place: b.set_id ? (b.sets?.name ?? 'Set') : 'Full warehouse', isBuyout: !b.set_id,
       // For "Find crew for this day" → a new casting pre-filled with this booking.
       crewLink: `/account/castings/new?${new URLSearchParams({
@@ -63,10 +95,33 @@ export async function PUT(req: NextRequest, { params }: { params: { bookingId: s
   if (!r.ok) return NextResponse.json({ error: (r as any).error }, { status: (r as any).status })
   const { booking: b, mini, clients } = r
   if (b.status === 'cancelled') return NextResponse.json({ error: 'This booking is cancelled.' }, { status: 400 })
-  if (b.status !== 'confirmed') return NextResponse.json({ error: 'Mini Sessions opens once this booking is paid and confirmed.' }, { status: 400 })
+  if (b.status !== 'confirmed' && !b.planned) return NextResponse.json({ error: 'Mini Sessions opens once this booking is paid and confirmed.' }, { status: 400 })
   if (Date.parse(b.end_time) < Date.now()) return NextResponse.json({ error: 'This booking is already over.' }, { status: 400 })
 
   const body = await req.json().catch(() => ({} as any))
+
+  // Moving a PLAN (date / time / set): allowed any time before it's booked.
+  // Pending clients are told their new times by reconcileMini below.
+  if (b.planned && mini && (body.planDate || body.planSetId !== undefined || body.planBuyout !== undefined)) {
+    const buyout = body.planBuyout !== undefined ? !!body.planBuyout : mini.planned_buyout
+    const v = await validatePlanWindow(db, {
+      date: String(body.planDate || centralDateStr(b.start_time)),
+      startHour: Number(body.planStartHour ?? centralHourDecimal(b.start_time)),
+      endHour: Number(body.planEndHour ?? (centralHourDecimal(b.end_time) || 24)),
+      setId: body.planSetId !== undefined ? body.planSetId : mini.planned_set_id, buyout,
+    })
+    if (!v.ok) return NextResponse.json({ error: (v as any).error }, { status: 400 })
+    const { start, end, setId } = v as any
+    const { data: moved, error: mvErr } = await db.from('mini_sessions').update({
+      planned_start: start, planned_end: end, planned_set_id: buyout ? null : setId, planned_buyout: buyout,
+      conflict_notified_at: null, updated_at: new Date().toISOString(),
+    }).eq('id', mini.id).is('booking_id', null).select('*')
+    if (mvErr) return NextResponse.json({ error: mvErr.message }, { status: 500 })
+    if (!moved?.length) return NextResponse.json({ error: 'This plan was already booked or cancelled.' }, { status: 409 })
+    await reconcileMini(db, moved[0] as any).catch(e => console.error('[minis] plan move notify failed', e))
+    return NextResponse.json({ ok: true })
+  }
+
   const int = (v: any, d: number) => (v === undefined || v === null || v === '' ? d : Math.round(Number(v)))
   const row = {
     title: cleanText(body.title ?? mini?.title, 80),

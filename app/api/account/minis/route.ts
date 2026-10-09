@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { validatePlanWindow } from '@/lib/mini-sessions-server'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -41,11 +42,50 @@ export async function GET() {
     for (const m of ms ?? []) minis[m.booking_id] = { ...m, booked: counts[m.id] ?? 0 }
   }
 
+  // Planned days (migration 161): mini days with no booking yet.
+  const { data: plans, error: plErr } = await db.from('mini_sessions')
+    .select('id, status, title, planned_start, planned_end, planned_buyout, sets:planned_set_id ( name )')
+    .eq('owner_user_id', user.id).is('booking_id', null).neq('status', 'cancelled')
+    .gt('planned_end', new Date().toISOString()).order('planned_start')
+  if (plErr) return NextResponse.json({ error: plErr.message }, { status: 500 })
+  const planCounts: Record<string, number> = {}
+  if (plans?.length) {
+    const { data: pcs } = await db.from('mini_session_clients').select('mini_session_id').in('mini_session_id', plans.map(p => p.id)).eq('status', 'booked')
+    for (const c of pcs ?? []) planCounts[c.mini_session_id] = (planCounts[c.mini_session_id] ?? 0) + 1
+  }
+
   return NextResponse.json({
+    plans: (plans ?? []).map((p: any) => ({
+      id: p.id, title: p.title, start_time: p.planned_start, end_time: p.planned_end,
+      place: p.planned_buyout ? 'Full warehouse' : (p.sets?.name ?? 'Set'), requested: planCounts[p.id] ?? 0,
+    })),
     bookings: (rows ?? []).map((b: any) => ({
       id: b.id, start_time: b.start_time, end_time: b.end_time,
       place: b.set_id ? (b.sets?.name ?? 'Set') : 'Full warehouse',
       mini: minis[b.id] ?? null,
     })),
   })
+}
+
+// POST /api/account/minis — PLAN a mini day before booking (migration 161).
+// { setId | buyout: true, date: 'YYYY-MM-DD', startHour, endHour }
+// Holds no studio time: it's the window the photographer means to book.
+export async function POST(req: Request) {
+  const { data: { user } } = await createClient().auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Sign in first.' }, { status: 401 })
+  const db = supabaseAdmin()
+  const body = await req.json().catch(() => ({} as any))
+  const v = await validatePlanWindow(db, { date: String(body.date || ''), startHour: Number(body.startHour), endHour: Number(body.endHour), setId: body.setId ?? null, buyout: !!body.buyout })
+  if (!v.ok) return NextResponse.json({ error: (v as any).error }, { status: 400 })
+  const { start, end, setId } = v as any
+  const buyout = !!body.buyout
+  const { count } = await db.from('mini_sessions').select('id', { count: 'exact', head: true })
+    .eq('owner_user_id', user.id).is('booking_id', null).neq('status', 'cancelled').gt('planned_end', new Date().toISOString())
+  if ((count ?? 0) >= 5) return NextResponse.json({ error: 'You have 5 planned days already — book or cancel one first.' }, { status: 400 })
+  const { data, error } = await db.from('mini_sessions').insert({
+    booking_id: null, owner_user_id: user.id, planned_set_id: setId, planned_buyout: buyout,
+    planned_start: start, planned_end: end, announced_start: start,
+  }).select('id').single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, id: (data as any).id })
 }

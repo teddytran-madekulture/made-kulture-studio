@@ -16,6 +16,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import {
   loadForOwner, guestSettings, ctxFor, sendClientConfirmation, sendClientMoved,
   sendClientRemovedOrCancelled, sendClientBroadcast, sendClientSwitchDeclined,
+  attachPlan, cancelPlan, BOOKING_SELECT, ownsBooking,
 } from '@/lib/mini-sessions-server'
 import { cleanText, cleanEmail, cleanPhone, partyRoom, slotsFor, type MiniClient } from '@/lib/mini-sessions'
 
@@ -33,6 +34,21 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
   const { booking: b, mini, clients } = r
   if (!mini) return bad('Set up Mini Sessions on this booking first.')
   if (b.status === 'cancelled') return bad('This booking is cancelled.')
+  const peek = await req.clone().json().catch(() => ({} as any))
+
+  // ── Plan-only actions (migration 161) ──
+  if (peek.action === 'attach' || peek.action === 'cancel_plan') {
+    if (!b.planned) return bad('This mini day is already on a booking.')
+    if (peek.action === 'cancel_plan') {
+      const told = await cancelPlan(db, mini, 'photographer')
+      return NextResponse.json({ ok: true, told })
+    }
+    const { data: bk, error: bkErr } = await db.from('bookings').select(BOOKING_SELECT).eq('id', String(peek.bookingId || '')).maybeSingle()
+    if (bkErr) return bad(bkErr.message, 500)
+    if (!bk || !ownsBooking(bk as any, user)) return bad('Booking not found.', 404)
+    const r = await attachPlan(db, mini, bk as any)
+    return r.ok ? NextResponse.json({ ...r, bookingId: (bk as any).id }) : bad(r.error || 'Could not attach.')
+  }
 
   const body = await req.json().catch(() => ({} as any))
   // A day cancelled with its booking stays closed unless the booking came back
@@ -108,7 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
       if (blocked.has(i)) await db.from('mini_sessions').update({ blocked_slots: Array.from(blocked).filter(x => x !== i) }).eq('id', mini.id)
       if (body.notify !== false) {
         const ctx = await ctxFor(db, mini, b)
-        if (ctx) await sendClientMoved(ctx, { ...c, slot_index: i })
+        if (ctx) await sendClientMoved(ctx, { ...c, slot_index: i }, 'slot')
       }
       return NextResponse.json({ ok: true })
     }
@@ -149,7 +165,7 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
         .eq('id', c.id).eq('pending_slot', i).select('id')
       if (error) return bad(error.code === '23505' ? 'Someone is already in that slot.' : error.message, error.code === '23505' ? 409 : 500)
       if (!data?.length) return bad('That request just changed — refresh.', 409)
-      if (ctx) await sendClientMoved(ctx, { ...c, slot_index: i })
+      if (ctx) await sendClientMoved(ctx, { ...c, slot_index: i }, 'slot')
       return NextResponse.json({ ok: true })
     }
 
