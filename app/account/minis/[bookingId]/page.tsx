@@ -28,7 +28,7 @@ export default function MiniSetupPage() {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ title: '', slot_minutes: DEFAULTS.slot_minutes, break_minutes: DEFAULTS.break_minutes, crew_count: DEFAULTS.crew_count, cutoff_hours: DEFAULTS.cutoff_hours, note: '', price_text: '' })
+  const [form, setForm] = useState({ title: '', slot_minutes: DEFAULTS.slot_minutes, break_minutes: DEFAULTS.break_minutes, crew_count: DEFAULTS.crew_count, cutoff_hours: DEFAULTS.cutoff_hours, note: '', price_text: '', approve_switches: false })
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/account/minis/${bookingId}`, { cache: 'no-store' })
@@ -38,6 +38,7 @@ export default function MiniSetupPage() {
     if (j.mini) setForm({
       title: j.mini.title ?? '', slot_minutes: j.mini.slot_minutes, break_minutes: j.mini.break_minutes,
       crew_count: j.mini.crew_count, cutoff_hours: j.mini.cutoff_hours, note: j.mini.note ?? '', price_text: j.mini.price_text ?? '',
+      approve_switches: !!j.mini.approve_switches,
     })
   }, [bookingId])
   useEffect(() => { load() }, [load])
@@ -107,6 +108,10 @@ export default function MiniSetupPage() {
             {[2, 6, 12, 24, 48].map(n => <option key={n} value={n} style={optStyle}>{n} hours before</option>)}
           </select>
         </div>
+        <label style={{ gridColumn: '1 / -1', ...font, fontSize: 14, display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', color: 'var(--t-fg)' }}>
+          <input type="checkbox" checked={form.approve_switches} onChange={e => setForm({ ...form, approve_switches: e.target.checked })} style={{ marginTop: 3 }} />
+          <span>Approve time changes<br /><span style={{ fontSize: 12, color: muted(0.55) }}>When a client asks to switch slots, hold the new time and wait for your OK. Off: they switch instantly and you get an email.</span></span>
+        </label>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={lbl}>Price shown to clients (optional — you collect it)</label>
           <input style={input} value={form.price_text} maxLength={80} placeholder="e.g. $250 · 20 min · 10 edited photos" onChange={e => setForm({ ...form, price_text: e.target.value })} />
@@ -172,6 +177,8 @@ export default function MiniSetupPage() {
               <span><b style={{ color: 'var(--t-fg)' }}>{roster.counts.open}</b> open</span>
               <span><b style={{ color: 'var(--t-fg)' }}>{roster.counts.people}</b> client guests total</span>
               <span>Parties up to <b style={{ color: 'var(--t-fg)' }}>{m.maxParty}</b></span>
+              {roster.counts.requests > 0 && <span style={{ color: 'var(--t-gold)' }}><b>{roster.counts.requests}</b> switch request{roster.counts.requests === 1 ? '' : 's'}</span>}
+              <span>{m.approve_switches ? 'You approve time changes' : 'Time changes are instant'}</span>
               <span>{m.status === 'closed' ? 'Sign-ups stopped' : m.signupsClosed ? 'Sign-ups closed (cutoff passed)' : `Sign-ups close ${m.cutoff_hours}h before`}</span>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -212,7 +219,7 @@ function SlotRow({ s, roster, maxP, busy, act }: { s: any; roster: any; maxP: nu
   const [notify, setNotify] = useState(true)
   const c = s.client
   const row: React.CSSProperties = { padding: '14px 18px', borderBottom: `1px solid ${muted(0.07)}`, opacity: s.blocked ? 0.55 : 1 }
-  const open = roster.slots.filter((x: any) => !x.client && !x.blocked && x.index !== s.index)
+  const open = roster.slots.filter((x: any) => !x.client && !x.blocked && !x.heldFor && x.index !== s.index)
 
   return (
     <div style={row}>
@@ -231,7 +238,16 @@ function SlotRow({ s, roster, maxP, busy, act }: { s: any; roster: any; maxP: nu
                 {c.addedBy === 'photographer' && ' · added by you'}
               </div>
             </>
-          ) : s.blocked ? <span style={{ color: muted(0.5) }}>Blocked</span> : <span style={{ color: muted(0.4) }}>Open</span>}
+          ) : s.blocked ? <span style={{ color: muted(0.5) }}>Blocked</span>
+            : s.heldFor ? <span style={{ color: 'var(--t-gold)' }}>Held — {s.heldFor} asked to switch here</span>
+            : <span style={{ color: muted(0.4) }}>Open</span>}
+          {c?.pendingLabel && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8, fontSize: 13, color: 'var(--t-gold)' }}>
+              Wants to switch to {c.pendingLabel}
+              <button style={small} disabled={busy} onClick={() => act({ action: 'approve_switch', clientId: c.id }, 'Approved — they’ve been emailed their new time.')}>Approve</button>
+              <button style={small} disabled={busy} onClick={() => act({ action: 'decline_switch', clientId: c.id }, 'Declined — they keep their original time.')}>Decline</button>
+            </div>
+          )}
         </div>
         <div style={{ ...font, fontSize: 11, color: s.headcount > roster.limit ? 'var(--t-err)' : muted(0.45), width: 74, textAlign: 'right' }}>
           {c ? `${s.headcount} of ${roster.limit}` : ''}
@@ -245,8 +261,8 @@ function SlotRow({ s, roster, maxP, busy, act }: { s: any; roster: any; maxP: nu
             </>
           ) : (
             <>
-              {!s.blocked && <button style={small} onClick={() => setMode(mode === 'add' ? '' : 'add')}>Add client</button>}
-              <button style={small} disabled={busy} onClick={() => act({ action: s.blocked ? 'unblock' : 'block', slot: s.index })}>{s.blocked ? 'Unblock' : 'Block'}</button>
+              {!s.blocked && !s.heldFor && <button style={small} onClick={() => setMode(mode === 'add' ? '' : 'add')}>Add client</button>}
+              {!s.heldFor && <button style={small} disabled={busy} onClick={() => act({ action: s.blocked ? 'unblock' : 'block', slot: s.index })}>{s.blocked ? 'Unblock' : 'Block'}</button>}
             </>
           )}
         </div>
@@ -285,7 +301,7 @@ function SlotRow({ s, roster, maxP, busy, act }: { s: any; roster: any; maxP: nu
 
 function BumpedRow({ c, slots, busy, act }: { c: any; slots: any[]; busy: boolean; act: (b: any, m?: string) => Promise<boolean> }) {
   const [to, setTo] = useState<number | ''>('')
-  const open = slots.filter(x => !x.client && !x.blocked)
+  const open = slots.filter(x => !x.client && !x.blocked && !x.heldFor)
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 0', ...font, fontSize: 13 }}>
       <span style={{ minWidth: 160 }}><b>{c.name || 'Client'}</b> · party of {c.party}{c.phone ? ` · ${fmtPhone(c.phone)}` : ''}</span>

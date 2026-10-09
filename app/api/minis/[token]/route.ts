@@ -23,9 +23,9 @@ async function load(token: string) {
   const { data: b, error: bErr } = await db.from('bookings').select(BOOKING_SELECT).eq('id', m.booking_id).maybeSingle()
   if (bErr) throw new Error(bErr.message)
   if (!b) return null
-  const { data: cs, error: cErr } = await db.from('mini_session_clients').select('slot_index, email, status').eq('mini_session_id', m.id).eq('status', 'booked')
+  const { data: cs, error: cErr } = await db.from('mini_session_clients').select('slot_index, pending_slot, email, status').eq('mini_session_id', m.id).eq('status', 'booked')
   if (cErr) throw new Error(cErr.message)
-  return { db, mini: m as MiniSession, booking: b as any, taken: (cs ?? []) as Pick<MiniClient, 'slot_index' | 'email' | 'status'>[] }
+  return { db, mini: m as MiniSession, booking: b as any, taken: (cs ?? []) as Pick<MiniClient, 'slot_index' | 'pending_slot' | 'email' | 'status'>[] }
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
   if (!r) return NextResponse.json({ error: 'This sign-up link isn’t valid. Check with your photographer.' }, { status: 404 })
   const { db, mini, booking: b, taken } = r
   const limit = await limitFor(db, b)
-  const takenSet = new Set(taken.map(t => t.slot_index))
+  const takenSet = new Set(taken.flatMap(t => t.pending_slot != null ? [t.slot_index, t.pending_slot] : [t.slot_index]))
   const blocked = new Set(mini.blocked_slots ?? [])
   const state =
     mini.status === 'cancelled' || b.status === 'cancelled' ? 'cancelled'
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   if (!slot || (mini.blocked_slots ?? []).includes(i) || Date.parse(slot.startISO) <= Date.now()) {
     return NextResponse.json({ error: 'That time isn’t available. Pick another.' }, { status: 400 })
   }
-  if (taken.some(t => t.slot_index === i)) return NextResponse.json({ error: 'Someone just took that time. Pick another.' }, { status: 409 })
+  if (taken.some(t => t.slot_index === i || t.pending_slot === i)) return NextResponse.json({ error: 'Someone just took that time. Pick another.' }, { status: 409 })
   if (taken.some(t => (t.email || '').toLowerCase() === email)) {
     return NextResponse.json({ error: 'You already have a slot. Use the link in your confirmation email to switch times.' }, { status: 409 })
   }

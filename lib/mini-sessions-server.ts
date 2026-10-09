@@ -145,6 +145,18 @@ export async function sendClientBumped(ctx: Ctx, c: MiniClient) {
     ], undefined, 'mini_bumped')
 }
 
+export async function sendClientSwitchDeclined(ctx: Ctx, c: MiniClient) {
+  const s = slotOf(ctx, c.slot_index); if (!s) return
+  await mail(ctx, c.email,
+    `Your mini session time stays at ${fmtTime(s.startISO)}`,
+    'Your time stays the same',
+    [
+      `Hi ${esc(first(c.name))} — ${esc(ctx.photographer)} couldn't make the switch you asked for, so your slot stays <b>${esc(fmtDay(s.startISO))}, ${esc(slotLabel(s))}</b>.`,
+      `Reply to this email to reach ${esc(ctx.photographer)} directly.`,
+    ],
+    { text: 'View my slot', url: clientUrl(c) }, 'mini_switch_declined')
+}
+
 /** Message from the photographer to every booked client. */
 export async function sendClientBroadcast(ctx: Ctx, c: MiniClient, text: string, withSms: boolean) {
   const s = slotOf(ctx, c.slot_index)
@@ -245,6 +257,9 @@ export async function reconcileMini(db: SupabaseClient, mini: MiniSession, deadl
   const bumped: MiniClient[] = []
   for (const c of clients) {
     if (Date.now() > deadline) break
+    if (c.pending_slot != null && c.pending_slot >= fit) {
+      await db.from('mini_session_clients').update({ pending_slot: null }).eq('id', c.id)
+    }
     if (c.slot_index >= fit) {
       // The booking got shorter (or moved and shrank): this slot no longer exists.
       const { data: claimed } = await db.from('mini_session_clients').update({ status: 'bumped', updated_at: stamp() })
@@ -340,6 +355,9 @@ export function rosterView(booking: OwnedBooking, mini: MiniSession, clients: Mi
   const booked = clients.filter(c => c.status === 'booked')
   const bySlot = new Map(booked.map(c => [c.slot_index, c]))
   const blocked = new Set(mini.blocked_slots ?? [])
+  // Requested switches (approval on): the wanted slot is held for that client.
+  const pendingFor = new Map(booked.filter(c => c.pending_slot != null).map(c => [c.pending_slot as number, c]))
+  const labelOf = (i: number) => { const s = slots.find(x => x.index === i); return s ? slotLabel(s) : null }
   return {
     limit,
     crew: mini.crew_count,
@@ -348,9 +366,11 @@ export function rosterView(booking: OwnedBooking, mini: MiniSession, clients: Mi
       return {
         index: s.index, startISO: s.startISO, endISO: s.endISO, label: slotLabel(s),
         blocked: blocked.has(s.index),
+        heldFor: !c && pendingFor.has(s.index) ? (pendingFor.get(s.index)!.name || 'a client') : null,
         client: c && {
           id: c.id, name: c.name, email: c.email, phone: c.phone, party: c.party_size,
           checkedIn: !!c.checked_in_at, addedBy: c.added_by, smsOk: c.sms_ok,
+          pendingSlot: c.pending_slot, pendingLabel: c.pending_slot != null ? labelOf(c.pending_slot) : null,
         },
         headcount: mini.crew_count + (c?.party_size ?? 0),
       }
@@ -360,7 +380,8 @@ export function rosterView(booking: OwnedBooking, mini: MiniSession, clients: Mi
     counts: {
       slots: slots.length,
       booked: booked.length,
-      open: slots.filter(s => !bySlot.has(s.index) && !blocked.has(s.index)).length,
+      open: slots.filter(s => !bySlot.has(s.index) && !blocked.has(s.index) && !pendingFor.has(s.index)).length,
+      requests: booked.filter(c => c.pending_slot != null).length,
       people: booked.reduce((n, c) => n + c.party_size, 0),
     },
   }

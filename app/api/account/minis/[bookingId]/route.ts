@@ -60,6 +60,7 @@ export async function PUT(req: NextRequest, { params }: { params: { bookingId: s
     break_minutes: int(body.break_minutes, mini?.break_minutes ?? DEFAULTS.break_minutes),
     crew_count: int(body.crew_count, mini?.crew_count ?? DEFAULTS.crew_count),
     cutoff_hours: int(body.cutoff_hours, mini?.cutoff_hours ?? DEFAULTS.cutoff_hours),
+    approve_switches: body.approve_switches === undefined ? (mini?.approve_switches ?? false) : !!body.approve_switches,
   }
   if (!(row.slot_minutes >= 5 && row.slot_minutes <= 240)) return NextResponse.json({ error: 'Slots can be 5 minutes to 4 hours.' }, { status: 400 })
   if (!(row.break_minutes >= 0 && row.break_minutes <= 60)) return NextResponse.json({ error: 'The break can be 0 to 60 minutes.' }, { status: 400 })

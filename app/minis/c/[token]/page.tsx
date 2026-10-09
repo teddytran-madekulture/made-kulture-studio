@@ -57,15 +57,20 @@ export default function MiniClientPage() {
 
           {d.canChange ? (
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 18, marginTop: 8 }}>
-              {d.openSlots.length > 0 && (
+              {d.pendingSlot ? (
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ ...body, color: CHAMP, marginBottom: 8 }}>You asked to switch to {d.pendingSlot}. That time is held for you until {d.photographer} approves it — you’ll get an email either way.</p>
+                  <button style={ghost} disabled={busy} onClick={() => post({ action: 'withdraw' }, 'Request withdrawn — you keep your current time.')}>Withdraw request</button>
+                </div>
+              ) : d.openSlots.length > 0 && (
                 <>
-                  <span style={label}>Switch to another time</span>
+                  <span style={label}>{d.approveSwitches ? `Ask ${d.photographer} for another time` : 'Switch to another time'}</span>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                     <select style={{ ...input, flex: 1 }} value={to} onChange={e => setTo(e.target.value === '' ? '' : Number(e.target.value))}>
                       <option value="" style={option}>Pick a time…</option>
                       {d.openSlots.map((s: any) => <option key={s.index} value={s.index} style={option}>{s.label}</option>)}
                     </select>
-                    <button style={{ ...primary, width: 'auto' }} disabled={busy || to === ''} onClick={() => post({ action: 'switch', slot: to }, 'Switched — a new confirmation is on its way.')}>Switch</button>
+                    <button style={{ ...primary, width: 'auto' }} disabled={busy || to === ''} onClick={() => post({ action: 'switch', slot: to }, d.approveSwitches ? `Request sent — ${d.photographer} will approve or decline it.` : 'Switched — a new confirmation is on its way.')}>{d.approveSwitches ? 'Request' : 'Switch'}</button>
                   </div>
                 </>
               )}

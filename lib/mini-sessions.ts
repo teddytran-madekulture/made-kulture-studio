@@ -28,6 +28,7 @@ export interface MiniSession {
   crew_count: number
   cutoff_hours: number
   blocked_slots: number[]
+  approve_switches: boolean            // migration 159 — switches need the photographer's OK
   share_token: string
   status: MiniStatus
   announced_start: string | null
@@ -51,6 +52,7 @@ export interface MiniClient {
   manage_token: string
   checked_in_at: string | null
   reminder_sent_at: string | null
+  pending_slot: number | null          // a requested switch awaiting approval
   told_start: string | null
   purged_at: string | null
   created_at: string

@@ -6,6 +6,7 @@
 //   { action: 'checkin', clientId, on }
 //   { action: 'message', text, sms }
 //   { action: 'close' | 'open' }                           (stop / restart sign-ups)
+//   { action: 'approve_switch' | 'decline_switch', clientId } (approval toggle on)
 //
 // ⚠️ The one-client-per-slot rule is a UNIQUE index in the database (migration
 // 158), so a move onto a slot someone just took fails cleanly instead of doubling.
@@ -14,7 +15,7 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import {
   loadForOwner, limitFor, ctxFor, sendClientConfirmation, sendClientMoved,
-  sendClientRemovedOrCancelled, sendClientBroadcast,
+  sendClientRemovedOrCancelled, sendClientBroadcast, sendClientSwitchDeclined,
 } from '@/lib/mini-sessions-server'
 import { cleanText, cleanEmail, cleanPhone, maxParty, slotsFor, type MiniClient } from '@/lib/mini-sessions'
 
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
   const slotOk = (i: any) => Number.isInteger(i) && i >= 0 && i < slots.length
   const booked = clients.filter(c => c.status === 'booked')
   const takenBy = (i: number) => booked.find(c => c.slot_index === i)
+  const heldBy = (i: number) => booked.find(c => c.pending_slot === i)
   const client = (id: any) => clients.find(c => c.id === id)
   const limit = await limitFor(db, b)
   const room = maxParty(limit, mini.crew_count)
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
       const i = Number(body.slot)
       if (!slotOk(i)) return bad('No such slot.')
       if (body.action === 'block' && takenBy(i)) return bad('Someone is booked in that slot — move or remove them first.')
+      if (body.action === 'block' && heldBy(i)) return bad('A client asked to switch into that slot — approve or decline it first.')
       const set = new Set(mini.blocked_slots ?? [])
       body.action === 'block' ? set.add(i) : set.delete(i)
       const { error } = await db.from('mini_sessions').update({ blocked_slots: Array.from(set).sort((a, z) => a - z), updated_at: now }).eq('id', mini.id)
@@ -63,6 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
       const i = Number(body.slot)
       if (!slotOk(i)) return bad('No such slot.')
       if (takenBy(i)) return bad('That slot is taken.')
+      if (heldBy(i)) return bad('A client asked to switch into that slot — approve or decline it first.')
       const name = cleanText(body.name, 80)
       if (!name) return bad('Add the client’s name.')
       const email = body.email ? cleanEmail(body.email) : null
@@ -91,8 +95,9 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
       const i = Number(body.slot)
       if (!slotOk(i)) return bad('No such slot.')
       if (takenBy(i) && takenBy(i)!.id !== c.id) return bad('That slot is taken.')
+      if (heldBy(i) && heldBy(i)!.id !== c.id) return bad('Another client asked to switch into that slot — approve or decline it first.')
       const { error } = await db.from('mini_session_clients')
-        .update({ slot_index: i, status: 'booked', reminder_sent_at: null, told_start: b.start_time, updated_at: now }).eq('id', c.id)
+        .update({ slot_index: i, status: 'booked', pending_slot: null, reminder_sent_at: null, told_start: b.start_time, updated_at: now }).eq('id', c.id)
       if (error) return bad(error.code === '23505' ? 'That slot was just taken.' : error.message, error.code === '23505' ? 409 : 500)
       const blocked = new Set(mini.blocked_slots ?? [])
       if (blocked.has(i)) await db.from('mini_sessions').update({ blocked_slots: Array.from(blocked).filter(x => x !== i) }).eq('id', mini.id)
@@ -112,6 +117,31 @@ export async function POST(req: NextRequest, { params }: { params: { bookingId: 
         const ctx = await ctxFor(db, mini, b)
         if (ctx) await sendClientRemovedOrCancelled(ctx, c, 'removed')
       }
+      return NextResponse.json({ ok: true })
+    }
+
+    case 'approve_switch':
+    case 'decline_switch': {
+      const c = client(body.clientId)
+      if (!c || c.status !== 'booked' || c.pending_slot == null) return bad('That request is no longer open.')
+      const ctx = await ctxFor(db, mini, b)
+      if (body.action === 'decline_switch') {
+        const { data, error } = await db.from('mini_session_clients').update({ pending_slot: null, updated_at: now })
+          .eq('id', c.id).eq('pending_slot', c.pending_slot).select('id')
+        if (error) return bad(error.message, 500)
+        if (!data?.length) return bad('That request just changed — refresh.', 409)
+        if (ctx) await sendClientSwitchDeclined(ctx, c)
+        return NextResponse.json({ ok: true })
+      }
+      const i = c.pending_slot
+      if (!slotOk(i)) return bad('That time no longer exists on your booking.')
+      if (takenBy(i)) return bad('Someone is already in that slot.')
+      const { data, error } = await db.from('mini_session_clients')
+        .update({ slot_index: i, pending_slot: null, reminder_sent_at: null, updated_at: now })
+        .eq('id', c.id).eq('pending_slot', i).select('id')
+      if (error) return bad(error.code === '23505' ? 'Someone is already in that slot.' : error.message, error.code === '23505' ? 409 : 500)
+      if (!data?.length) return bad('That request just changed — refresh.', 409)
+      if (ctx) await sendClientMoved(ctx, { ...c, slot_index: i })
       return NextResponse.json({ ok: true })
     }
 
