@@ -546,7 +546,7 @@ export async function reconcileMini(db: SupabaseClient, mini: MiniSession, deadl
 
 // ── Hourly upkeep ───────────────────────────────────────────────────────────
 export async function runMiniUpkeep(db: SupabaseClient, now = new Date()) {
-  const result = { reconciled: 0, reminders: 0, purged: 0, extraCharges: [] as string[], errors: [] as string[] }
+  const result = { reconciled: 0, reminders: 0, purged: 0, covers: 0, extraCharges: [] as string[], errors: [] as string[] }
   const deadline = Date.now() + 240_000
 
   // 1. Follow moved/cancelled bookings — anything not yet over.
@@ -669,8 +669,46 @@ export async function runMiniUpkeep(db: SupabaseClient, now = new Date()) {
     result.purged += purged?.length ?? 0
     await db.from('mini_sessions').update({ purged_at: now.toISOString() }).eq('id', r.id)
   }
+  // 5. Cover photos (migration 162) leave storage a week after the day is over
+  //    or called off — the sign-up page, link preview and flyers are done with.
+  const weekAgo = new Date(now.getTime() - COVER_KEEP_DAYS * 86_400_000).toISOString()
+  const coverRows: { id: string }[] = []
+  const { data: c1, error: c1Err } = await db.from('mini_sessions').select('id, bookings!inner ( end_time )')
+    .not('cover_url', 'is', null).lt('bookings.end_time', weekAgo).limit(50)
+  if (c1Err) result.errors.push(`cover list: ${c1Err.message}`)
+  coverRows.push(...((c1 ?? []) as any[]))
+  const { data: c2, error: c2Err } = await db.from('mini_sessions').select('id')
+    .not('cover_url', 'is', null).is('booking_id', null).lt('planned_end', weekAgo).limit(50)
+  if (c2Err) result.errors.push(`cover plans: ${c2Err.message}`)
+  coverRows.push(...((c2 ?? []) as any[]))
+  const { data: c3, error: c3Err } = await db.from('mini_sessions').select('id')
+    .not('cover_url', 'is', null).eq('status', 'cancelled').lt('updated_at', weekAgo).limit(50)
+  if (c3Err) result.errors.push(`cover cancelled: ${c3Err.message}`)
+  coverRows.push(...((c3 ?? []) as any[]))
+  const seen = new Set<string>()
+  for (const r of coverRows) {
+    if (seen.has(r.id)) continue
+    seen.add(r.id)
+    const removed = await removeMiniMedia(db, r.id)
+    if (!removed.ok) { result.errors.push(`cover ${r.id}: ${(removed as any).error}`); continue }
+    await db.from('mini_sessions').update({ cover_url: null }).eq('id', r.id)
+    result.covers++
+  }
+
   if (result.errors.length) console.error('[minis] upkeep errors', result.errors)
   return result
+}
+
+const COVER_KEEP_DAYS = 7
+
+/** Deletes everything a mini day stored in the mini-media bucket (its folder is its id). */
+export async function removeMiniMedia(db: SupabaseClient, miniId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const bucket = db.storage.from('mini-media')
+  const { data: files, error } = await bucket.list(miniId, { limit: 100 })
+  if (error) return { ok: false, error: error.message }
+  if (!files?.length) return { ok: true }
+  const { error: rmErr } = await bucket.remove(files.map(f => `${miniId}/${f.name}`))
+  return rmErr ? { ok: false, error: rmErr.message } : { ok: true }
 }
 
 // ── The roster, as the photographer's page and the admin page both show it ──
