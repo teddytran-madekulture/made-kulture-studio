@@ -1,11 +1,11 @@
-// GET /api/account/minis/[bookingId]/flyer?size=story|square[&download=1]
+// GET /api/account/minis/[bookingId]/flyer?size=story|portrait|square[&download=1]
 // The photographer's shareable flyer: cover photo, title, date, price and a QR
 // code to their sign-up page, branded Made Kulture. Owner only.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { loadForOwner, flyerInfoFor } from '@/lib/mini-sessions-server'
-import { flyerImage } from '@/lib/mini-flyer'
+import { flyerImage, type FlyerSize } from '@/lib/mini-flyer'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: { bookingId: s
   if (!r.mini) return NextResponse.json({ error: 'Set up Mini Sessions first.' }, { status: 400 })
   const info = await flyerInfoFor(db, r.mini)
   if (!info) return NextResponse.json({ error: 'This day isn’t available.' }, { status: 404 })
-  const size = req.nextUrl.searchParams.get('size') === 'square' ? 'square' : 'story'
+  const q = req.nextUrl.searchParams.get('size')
+  const size: FlyerSize = q === 'square' || q === 'portrait' ? q : 'story'
   const img = await flyerImage(info, size, req.nextUrl.origin)
   const headers = new Headers(img.headers)
   headers.set('Cache-Control', 'private, no-store')

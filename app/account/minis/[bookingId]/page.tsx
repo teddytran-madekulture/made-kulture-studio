@@ -486,7 +486,7 @@ function ShareKit({ bookingId, m, busy, setBusy, setError, setNotice, reload }: 
     if (!r.ok) { setError('Could not remove the photo.'); return }
     setNotice('Cover photo removed.'); reload()
   }
-  const flyer = (size: 'story' | 'square') => `/api/account/minis/${bookingId}/flyer?size=${size}&download=1&v=${encodeURIComponent(m.updated_at || '')}`
+  const flyer = (size: 'story' | 'portrait' | 'square') => `/api/account/minis/${bookingId}/flyer?size=${size}&download=1&v=${encodeURIComponent(m.updated_at || '')}`
   return (
     <div style={card}>
       <label style={lbl}>Share it like a flyer</label>
@@ -510,8 +510,10 @@ function ShareKit({ bookingId, m, busy, setBusy, setError, setNotice, reload }: 
             {m.cover_url && <button style={small} disabled={busy} onClick={remove}>Remove</button>}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-            <a href={flyer('story')} style={{ ...btn(true), textDecoration: 'none', display: 'inline-block' }}>Download story flyer</a>
-            <a href={flyer('square')} style={{ ...btn(), textDecoration: 'none', display: 'inline-block' }}>Download square post</a>
+            <span style={{ ...font, fontSize: 12, color: muted(0.55), alignSelf: 'center' }}>Download:</span>
+            <a href={flyer('story')} style={{ ...btn(true), textDecoration: 'none', display: 'inline-block' }}>Story</a>
+            <a href={flyer('portrait')} style={{ ...btn(), textDecoration: 'none', display: 'inline-block' }}>4:5 post</a>
+            <a href={flyer('square')} style={{ ...btn(), textDecoration: 'none', display: 'inline-block' }}>Square post</a>
           </div>
         </div>
       </div>

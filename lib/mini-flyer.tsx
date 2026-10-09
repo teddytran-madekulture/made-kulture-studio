@@ -62,8 +62,10 @@ function Qr({ text, size }: { text: string; size: number }) {
   )
 }
 
-export async function flyerImage(info: FlyerInfo, size: 'story' | 'square', origin: string): Promise<ImageResponse> {
-  const W = 1080, H = size === 'story' ? 1920 : 1080
+export type FlyerSize = 'story' | 'portrait' | 'square'
+
+export async function flyerImage(info: FlyerInfo, size: FlyerSize, origin: string): Promise<ImageResponse> {
+  const W = 1080, H = size === 'story' ? 1920 : size === 'portrait' ? 1350 : 1080   // portrait = Instagram 4:5 feed post
   const photo = drawable(info.coverUrl)
   const f = await display(origin)
   const head = f ? 'Anton' : undefined
@@ -99,23 +101,25 @@ export async function flyerImage(info: FlyerInfo, size: 'story' | 'square', orig
     )
   }
 
-  // Square: the photo fills the frame, text sits on a dark fade.
+  // Square + 4:5 portrait: the photo fills the frame, text sits on a dark fade.
+  const k = size === 'portrait' ? 1.15 : 1
+  const fade = size === 'portrait' ? 'rgba(11,11,13,0.05) 34%, rgba(11,11,13,0.92) 74%' : 'rgba(11,11,13,0.05) 20%, rgba(11,11,13,0.92) 68%'
   return new ImageResponse(
     (
       <div style={{ width: W, height: H, display: 'flex', position: 'relative', background: INK, color: '#fff' }}>
         {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text */}
         {photo && <img src={photo} width={W} height={H} style={{ position: 'absolute', left: 0, top: 0, width: W, height: H, objectFit: 'cover' }} />}
-        <div style={{ position: 'absolute', left: 0, top: 0, width: W, height: H, display: 'flex', backgroundImage: `linear-gradient(to bottom, rgba(11,11,13,0.05) 20%, rgba(11,11,13,0.92) 68%, ${INK})` }} />
-        <div style={{ position: 'absolute', left: 64, right: 64, bottom: 60, display: 'flex', alignItems: 'flex-end' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, width: W, height: H, display: 'flex', backgroundImage: `linear-gradient(to bottom, ${fade}, ${INK})` }} />
+        <div style={{ position: 'absolute', left: 64, right: 64, bottom: 60 * k, display: 'flex', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, paddingRight: 36 }}>
-            <div style={{ display: 'flex', fontSize: 24, letterSpacing: 7, color: CHAMP, textTransform: 'uppercase' }}>Mini sessions</div>
-            <div style={{ display: 'flex', fontFamily: head, fontSize: titleSize(info.title, 92), lineHeight: 1.0, textTransform: 'uppercase', marginTop: 10 }}>{info.title}</div>
-            <div style={{ display: 'flex', fontSize: 30, color: 'rgba(255,255,255,0.8)', marginTop: 12 }}>with {info.photographer}</div>
-            <div style={{ display: 'flex', fontSize: 34, color: CHAMP, marginTop: 20 }}>{info.day}</div>
-            <div style={{ display: 'flex', fontSize: 27, color: 'rgba(255,255,255,0.75)', marginTop: 6 }}>{[info.time + (info.pending ? ' · pending' : ''), info.priceText].filter(Boolean).join('  ·  ')}</div>
+            <div style={{ display: 'flex', fontSize: 24 * k, letterSpacing: 7, color: CHAMP, textTransform: 'uppercase' }}>Mini sessions</div>
+            <div style={{ display: 'flex', fontFamily: head, fontSize: titleSize(info.title, 92 * k), lineHeight: 1.0, textTransform: 'uppercase', marginTop: 10 }}>{info.title}</div>
+            <div style={{ display: 'flex', fontSize: 30 * k, color: 'rgba(255,255,255,0.8)', marginTop: 12 }}>with {info.photographer}</div>
+            <div style={{ display: 'flex', fontSize: 34 * k, color: CHAMP, marginTop: 20 }}>{info.day}</div>
+            <div style={{ display: 'flex', fontSize: 27 * k, color: 'rgba(255,255,255,0.75)', marginTop: 6 }}>{[info.time + (info.pending ? ' · pending' : ''), info.priceText].filter(Boolean).join('  ·  ')}</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Qr text={info.link} size={220} />
+            <Qr text={info.link} size={Math.round(220 * k)} />
             <div style={{ display: 'flex', fontSize: 20, letterSpacing: 4, color: '#fff', marginTop: 12, textTransform: 'uppercase' }}>Scan to book</div>
           </div>
         </div>
