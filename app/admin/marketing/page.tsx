@@ -10,7 +10,7 @@ const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text:
 
 interface Campaign {
   id: string; name: string; segment_key: string; subject: string; status: string
-  recipient_count: number; sent_at: string | null; code: string | null; redemptions: number
+  recipient_count: number; remaining?: number; sent_at: string | null; code: string | null; redemptions: number
   opened: number; clicked: number; unsubscribed: number; bounced: number
 }
 interface Promo { id: string; code: string; active: boolean }
@@ -106,7 +106,7 @@ export default function MarketingPage() {
   // of getting it (the server works that out; it refuses if records are still
   // arriving, so nobody is mailed twice).
   const resumeSend = async (c: Campaign) => {
-    const left = Math.max(0, (counts[c.segment_key] ?? 0) - (c.recipient_count ?? 0))
+    const left = c.remaining ?? 0
     if (!confirm(`Finish sending "${c.name}"?\n\nIt went to ${c.recipient_count} so far. This sends to the remaining ~${left} people in "${c.segment_key}" and skips everyone who already has it.`)) return
     const r = await fetch(`/api/admin/marketing/${c.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resume: true }) })
     const d = await r.json().catch(() => ({}))
@@ -245,12 +245,12 @@ export default function MarketingPage() {
                         </div>
                       </div>
                       {c.status === 'sent'
-                        ? ((counts[c.segment_key] ?? 0) > (c.recipient_count ?? 0)
+                        ? ((c.remaining ?? 0) > 0
                           ? (
                             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
                               <span style={{ fontSize: 11, color: C.accent, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>PARTLY SENT</span>
                               <button onClick={() => resumeSend(c)} style={{ background: C.accent, border: 'none', color: '#0b0b0d', borderRadius: 6, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                                FINISH SENDING · {(counts[c.segment_key] ?? 0) - (c.recipient_count ?? 0)} LEFT
+                                FINISH SENDING · {c.remaining} LEFT
                               </button>
                             </div>
                           )

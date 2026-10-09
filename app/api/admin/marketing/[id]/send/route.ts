@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getSegmentRecipients, sendCampaignEmails, cleanEmail, type SegmentKey } from '@/lib/marketing'
+import { getSegmentRecipients, sendCampaignEmails, campaignLeftovers, type SegmentKey } from '@/lib/marketing'
 import { renderTemplateBody } from '@/lib/email-templates'
 
 export const dynamic = 'force-dynamic'
@@ -72,41 +72,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // ── RESUME: finish a campaign that stopped part-way ──────────────────────
   if (b.resume) {
     if (c.status !== 'sent') return NextResponse.json({ error: 'Only a sent campaign can be resumed.' }, { status: 409 })
-    // Everyone with ANY event on this campaign got it: 'sent' (recorded at send
-    // time since 2026-10-08) or a Resend webhook event (delivered, opened,
-    // bounced…) — the only record the earliest sends have.
-    const already = new Set<string>()
-    const recordedSent = new Set<string>()   // 'sent' rows — written per address since 2026-10-08
-    for (let from = 0; ; from += 1000) {
-      const { data: ev, error: evErr } = await db.from('marketing_events').select('email, type')
-        .eq('campaign_id', c.id).order('id').range(from, from + 999)
-      if (evErr) return NextResponse.json({ error: `Could not check who already got it: ${evErr.message}` }, { status: 500 })
-      for (const e of ev ?? []) { const em = cleanEmail(e.email); already.add(em); if ((e as any).type === 'sent') recordedSent.add(em) }
-      if (!ev || ev.length < 1000) break
-    }
     const reached = Number(c.recipient_count || 0)
-    const all = await getSegmentRecipients(c.segment_key as SegmentKey)
-    // Backstop for addresses whose delivery event hasn't arrived (a slow or
-    // deferring mail server can hold it for hours — Issue 01 sat at 99 of 100).
-    // The original send went out in the segment's own deterministic order
-    // (customers by id, de-duped), so its first `reached` addresses are the ones
-    // it mailed. Skipping them as well covers anyone not yet on record.
-    // Applies only when the original send was in that order — i.e. campaigns
-    // stopped before 'sent' events were recorded per address.
-    // ⚠️ Only the part of `reached` that has NO 'sent' rows (the original first
-    // send, before per-address records existed) — later sends record every
-    // address, and slicing past the original batch would skip people whose
-    // batch FAILED (Issue 01: ~200 in a batch rejected over an example.com address).
-    const unrecorded = Math.max(0, reached - recordedSent.size)
-    if (already.size < reached && unrecorded > 0) {
-      for (const r of all.slice(0, unrecorded)) already.add(cleanEmail(r.email))
-    }
-    // ⚠️ Still short ⇒ the list changed shape since the first send; refuse
-    // rather than risk re-mailing someone.
-    if (already.size < reached) {
-      return NextResponse.json({ error: `Only ${already.size} of the ${reached} people already sent are on record. Give it a few minutes and try again, so nobody gets it twice.` }, { status: 409 })
-    }
-    const rest = all.filter(r => !already.has(cleanEmail(r.email)))
+    const left = await campaignLeftovers(c.id, c.segment_key as SegmentKey, reached)
+    if ('error' in left) return NextResponse.json({ error: left.error }, { status: 409 })
+    const rest = left.rest
     if (rest.length === 0) return NextResponse.json({ error: 'Everyone in this segment already has it.' }, { status: 409 })
 
     // Claim sent → sending so two clicks can't both resume.

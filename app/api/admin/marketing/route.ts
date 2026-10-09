@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getSegmentCounts } from '@/lib/marketing'
+import { getSegmentCounts, campaignLeftovers, type SegmentKey } from '@/lib/marketing'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,7 +63,14 @@ export async function GET(req: NextRequest) {
       unsubscribed = uniq.unsubscribed.size; bounced = uniq.bounced.size
     }
 
-    return { ...c, code: c.promo_codes?.code ?? null, redemptions, opened, clicked, unsubscribed, bounced }
+    // Anyone in the segment still without it? Only for recent sends — older
+    // campaigns are finished business and this costs a segment build each.
+    let remaining = 0
+    if (c.status === 'sent' && c.sent_at && Date.now() - Date.parse(c.sent_at) < 14 * 24 * 3600 * 1000) {
+      const left = await campaignLeftovers(c.id, c.segment_key as SegmentKey, Number(c.recipient_count || 0))
+      remaining = 'rest' in left ? left.rest.length : 0
+    }
+    return { ...c, code: c.promo_codes?.code ?? null, redemptions, opened, clicked, unsubscribed, bounced, remaining }
   }))
 
   return NextResponse.json({ campaigns: withStats })

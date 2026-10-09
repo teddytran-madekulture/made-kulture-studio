@@ -78,8 +78,12 @@ export async function getSegmentRecipients(segment: SegmentKey): Promise<Recipie
 
   const out: Recipient[] = []
   for (const c of customers ?? []) {
-    const email = cleanEmail((c as any).email || '')
-    if (!email || supp.has(email)) continue
+    // Some records hold SEVERAL addresses in one field ("a@x.com,b@y.com" —
+    // typed that way at booking, mostly old Acuity rows). Each one is a person
+    // who should get the email, so split and send to every address in it.
+    // (2026-10-08: ~19 such records were skipped from Issue 01.)
+    const emails = String((c as any).email || '').split(/[,;\/]|\s+(?=\S+@)/).map(cleanEmail).filter(Boolean)
+    if (!emails.length) continue
     const cid = (c as any).id
     const last = latest[cid]
     const member = !!isMember[cid]
@@ -91,11 +95,45 @@ export async function getSegmentRecipients(segment: SegmentKey): Promise<Recipie
       case 'recent':  keep = last != null && now - last <= D30; break
       case 'lapsed':  keep = last == null || now - last > D90; break
     }
-    if (keep) out.push({ email, name: (c as any).name ?? null })
+    if (keep) for (const email of emails) if (!supp.has(email)) out.push({ email, name: (c as any).name ?? null })
   }
   // De-dupe by email.
   const seen = new Set<string>()
   return out.filter(r => (seen.has(r.email) ? false : (seen.add(r.email), true)))
+}
+
+// Who in a SENT campaign's segment has no record of receiving it (2026-10-08).
+// Used by FINISH SENDING and by the campaign list, so the button appears
+// whenever anyone is genuinely left — comparing segment SIZE to the sent count
+// broke as soon as bounces left the segment (1,368 people, 1,396 sent, ~37
+// still unsent).
+// Record = any event on the campaign: 'sent' (written per address at send time
+// since 2026-10-08) or a Resend webhook event (delivered, opened, bounced…).
+export async function campaignLeftovers(
+  campaignId: string, segment: SegmentKey, reached: number,
+): Promise<{ rest: Recipient[] } | { error: string }> {
+  const db = supabaseAdmin()
+  const already = new Set<string>()
+  const recordedSent = new Set<string>()
+  for (let from = 0; ; from += 1000) {
+    const { data: ev, error } = await db.from('marketing_events').select('email, type')
+      .eq('campaign_id', campaignId).order('id').range(from, from + 999)
+    if (error) return { error: `Could not check who already got it: ${error.message}` }
+    for (const e of ev ?? []) { const em = cleanEmail((e as any).email); already.add(em); if ((e as any).type === 'sent') recordedSent.add(em) }
+    if (!ev || ev.length < 1000) break
+  }
+  const all = await getSegmentRecipients(segment)
+  // Backstop for a first batch sent before per-address 'sent' rows existed and
+  // whose delivery events haven't all arrived: that send went out in the
+  // segment's own order, so its first (reached − recorded) addresses are covered.
+  const unrecorded = Math.max(0, reached - recordedSent.size)
+  if (already.size < reached && unrecorded > 0) {
+    for (const r of all.slice(0, unrecorded)) already.add(cleanEmail(r.email))
+  }
+  if (already.size < reached) {
+    return { error: `Only ${already.size} of the ${reached} people already sent are on record. Give it a few minutes and try again, so nobody gets it twice.` }
+  }
+  return { rest: all.filter(r => !already.has(cleanEmail(r.email))) }
 }
 
 // Counts for every segment in one pass (for the admin UI).
