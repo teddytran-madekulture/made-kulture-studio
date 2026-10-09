@@ -17,7 +17,7 @@ const dim = (a: number) => `rgba(255,255,255,${a})`
 type PublicDrop = SetDrop & {
   phase: string
   depositor_rate: number | null
-  progress: { label: string; pct: number } | null
+  progress: { label: string; pct: number; remaining: number; goalType: string } | null
   people: number
   set_slug: string | null
   open_call: { slug: string; title: string } | null
@@ -51,7 +51,7 @@ export default function DropClient({ slug }: { slug: string }) {
   if (!drop) return <p style={{ padding: '160px 20px', textAlign: 'center', fontFamily: mono, fontSize: 11, letterSpacing: '0.2em', color: dim(0.4) }}>LOADING…</p>
 
   const phase = drop.phase
-  const kicker = { pre_reserve: 'SET DROP · RESERVE NOW', deciding: 'SET DROP · RESERVATIONS CLOSED', early_access: 'SET DROP · EARLY ACCESS', open: 'SET DROP · NOW BOOKING', ended: 'SET DROP · RUN ENDED', cancelled: 'SET DROP', archived: 'SET DROP' }[phase] ?? 'SET DROP'
+  const kicker = { pre_reserve: 'SET DROP · ONLY BUILT IF YOU WANT IT', deciding: 'SET DROP · RESERVATIONS CLOSED', early_access: 'SET DROP · EARLY ACCESS', open: 'SET DROP · NOW BOOKING', ended: 'SET DROP · RUN ENDED', cancelled: 'SET DROP', archived: 'SET DROP' }[phase] ?? 'SET DROP'
   const bookHref = drop.set_slug ? `/book?type=set&set=${drop.set_slug}${drop.run_starts ? `&date=${drop.run_starts}` : ''}` : '/book'
   const gallery = (drop.gallery ?? []).filter(u => u && u !== drop.hero_url)
 
@@ -77,10 +77,17 @@ export default function DropClient({ slug }: { slug: string }) {
                 {drop.progress ? drop.progress.label : `${drop.people} ${drop.people === 1 ? 'person has' : 'people have'} reserved`}
                 {drop.pre_reserve_ends_at ? ` · closes ${fmtInstant(drop.pre_reserve_ends_at)}` : ''}
               </div>
+              {drop.progress && (
+                <div style={{ fontFamily: inter, fontSize: 13, color: GOLD, marginTop: 6 }}>
+                  {drop.progress.remaining > 0
+                    ? `${drop.progress.remaining} more ${drop.progress.goalType === 'hours' ? 'hours' : drop.progress.goalType === 'dollars' ? 'dollars' : (drop.progress.remaining === 1 ? 'reservation' : 'reservations')} and it gets built.`
+                    : 'Goal reached — it’s getting built.'}
+                </div>
+              )}
             </div>
           )}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 28, pointerEvents: 'auto' }}>
-            {phase === 'pre_reserve' && !mine && <a href="#reserve" style={btn}>RESERVE · {dollars(depositFor(drop, Math.max(1, Number(drop.min_hours) || 1)))}{drop.deposit_mode === 'per_hour' ? '/HR' : ''}</a>}
+            {phase === 'pre_reserve' && !mine && <a href="#reserve" style={btn}>VOTE TO BUILD IT · {dollars(depositFor(drop, Math.max(1, Number(drop.min_hours) || 1)))}{drop.deposit_mode === 'per_hour' ? '/HR' : ''}</a>}
             {(phase === 'open' || (phase === 'early_access' && mine && mine.status !== 'refunded')) && <Link href={bookHref} style={btn}>BOOK YOUR DATES ↗</Link>}
             {drop.open_call && <Link href={`/submissions#${drop.open_call.slug}`} style={ghost}>OPEN CALL ↗</Link>}
           </div>
@@ -96,6 +103,18 @@ export default function DropClient({ slug }: { slug: string }) {
           : <Banner>It&rsquo;s happening. People who reserved are booking first until {fmtInstant(drop.early_access_ends_at)}; it opens to everyone after that.</Banner>)}
         {phase === 'cancelled' && <Banner>This one isn&rsquo;t happening — not enough reservations this time. Everyone who reserved has been emailed about their deposit.</Banner>}
         {phase === 'ended' && <Banner>This run has ended. Keep an eye out for the next drop.</Banner>}
+
+        {/* ── Your vote decides ─────────────────────────────────── */}
+        {phase === 'pre_reserve' && (
+          <div style={{ marginTop: 32, border: `1px solid ${GOLD}66`, padding: 'clamp(20px, 3vw, 32px)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 24, alignItems: 'center' }}>
+            <div style={{ fontFamily: anton, fontSize: 'clamp(34px, 5vw, 56px)', lineHeight: 0.95 }}>YOUR VOTE<br />DECIDES.</div>
+            <div style={{ fontFamily: inter, fontSize: 15, color: dim(0.75), lineHeight: 1.65 }}>
+              {drop.name} is <strong style={{ color: '#fff' }}>not built yet</strong> — and it only gets built if enough of you want it.
+              Your reservation is your vote. If we hit the goal{drop.pre_reserve_ends_at ? ` by ${fmtInstant(drop.pre_reserve_ends_at)}` : ''}, we build it and you book first.
+              If we don&rsquo;t, it doesn&rsquo;t happen and your deposit comes back to you{drop.cancel_policy === 'refund' ? ' as a full refund' : drop.cancel_policy === 'credit' ? ' as studio credit' : drop.cancel_policy === 'choice' ? ' — refund or studio credit, your pick' : ''}.
+            </div>
+          </div>
+        )}
 
         {/* ── The idea ─────────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 48, marginTop: 40 }}>
@@ -159,8 +178,8 @@ export default function DropClient({ slug }: { slug: string }) {
           <div style={label}>HOW A SET DROP WORKS</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 2, background: dim(0.06) }}>
             {[
-              ['01', 'Reserve it', `Put down a ${dollars(depositFor(drop, 1))}${drop.deposit_mode === 'per_hour' ? ' per hour' : ''} deposit and tell us roughly when you'd shoot. It's not a booking yet.`],
-              ['02', 'We decide', `If enough of you reserve by ${drop.pre_reserve_ends_at ? fmtInstant(drop.pre_reserve_ends_at) : 'the deadline'}, we build it. If not, you get your deposit back.`],
+              ['01', 'Cast your vote', `Reserve with a ${dollars(depositFor(drop, 1))}${drop.deposit_mode === 'per_hour' ? ' per hour' : ''} deposit. It's not a booking yet — it's your vote to build it.`],
+              ['02', 'You decide', `If enough of you reserve by ${drop.pre_reserve_ends_at ? fmtInstant(drop.pre_reserve_ends_at) : 'the deadline'}, we build it. If not, it doesn't happen and your deposit comes back to you.`],
               ['03', 'You book first', `Your deposit becomes studio credit${drop.perk_early_access ? `, and you get ${drop.early_access_hours} hours to pick your dates before anyone else` : ''}.`],
             ].map(([n, h, p]) => (
               <div key={n} style={{ background: '#080808', padding: '26px 22px' }}>
@@ -326,7 +345,7 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
 
       {err && <div style={{ fontFamily: inter, fontSize: 14, color: '#ff8a80' }}>{err}</div>}
       <button onClick={submit} disabled={paying} style={{ ...btn, opacity: paying ? 0.6 : 1, justifySelf: 'start' }}>
-        {paying ? 'RESERVING…' : `RESERVE · ${dollars(cents)}`}
+        {paying ? 'RESERVING…' : `RESERVE MY VOTE · ${dollars(cents)}`}
       </button>
     </div>
   )

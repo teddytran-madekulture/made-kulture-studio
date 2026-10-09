@@ -47,7 +47,7 @@ function publicDrop(d: SetDrop, pledges: DropPledge[]) {
     cancel_policy: d.cancel_policy, goal_type: d.goal_type, show_goal: d.show_goal, open_call_id: d.open_call_id,
     // Progress: only when the goal is public. People count is always shown once
     // there are any (social proof), dollars never.
-    progress: d.show_goal ? { label: progress.label, pct: progress.pct } : null,
+    progress: d.show_goal ? { label: progress.label, pct: progress.pct, remaining: Math.max(0, Math.ceil(progress.goal - progress.current)), goalType: d.goal_type } : null,
     people: progress.people,
   }
 }

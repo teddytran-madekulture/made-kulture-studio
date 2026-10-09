@@ -152,11 +152,12 @@ async function tell(p: DropPledge, email: { subject: string; heading: string; pa
 export async function sendPledgeReceipt(drop: SetDrop, p: DropPledge, terms: string) {
   const first = (p.customer_name || '').split(' ')[0] || 'there'
   await tell(p, {
-    subject: `You reserved ${drop.name}`,
-    heading: `You're in for ${drop.name}`,
+    subject: `Your vote for ${drop.name} is in`,
+    heading: `Your vote for ${drop.name} is in`,
     paragraphs: [
       `Hi ${esc(first)}, your ${dollars(p.deposit_cents)} deposit is in${p.hours_wanted ? ` — about ${p.hours_wanted} hour${Number(p.hours_wanted) === 1 ? '' : 's'}` : ''}${p.timing_note ? ` (${esc(p.timing_note)})` : ''}.`,
-      drop.pre_reserve_ends_at ? `Reservations close ${esc(fmtInstant(drop.pre_reserve_ends_at))}. We'll email you as soon as we decide whether it's happening.` : `We'll email you as soon as we decide whether it's happening.`,
+      `${esc(drop.name)} only gets built if enough people reserve${drop.pre_reserve_ends_at ? ` by ${esc(fmtInstant(drop.pre_reserve_ends_at))}` : ''}. Every reservation counts — if you know someone who'd shoot it, send them the link.`,
+      `We'll email you the moment we know whether it's happening.`,
       `<strong style="color:#fff;">What you agreed to:</strong> ${esc(terms)}`,
     ],
     ctaText: 'View the drop',
