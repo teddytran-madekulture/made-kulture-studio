@@ -39,7 +39,9 @@ function loadSquareScript(): Promise<void> {
 // of truth). Shape used by this page:
 interface BookSet { id: string; name: string; price: number; desc: string; minHours: number; photo: string | null; bookingPrompt: string | null
   /** Set Drop run window (migration 155) — the set only sells between these Central dates. */
-  runStarts?: string | null; runEnds?: string | null; dropName?: string | null; depositorRate?: boolean }
+  runStarts?: string | null; runEnds?: string | null; dropName?: string | null; depositorRate?: boolean
+  /** Sets built in the same room share a space_group (migration 163). */
+  spaceGroup?: string | null; dropPhase?: string | null }
 
 // One set added to a multi-set order (per-set scheduling). price = effective
 // hourly rate (with any customer overrides) captured when it was added.
@@ -237,6 +239,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
           runEnds:   d.drops?.[s.id]?.runEnds ?? null,
           dropName:  d.drops?.[s.id]?.name ?? null,
           depositorRate: !!s.depositor_rate,
+          spaceGroup: s.space_group ?? null,
+          dropPhase: d.drops?.[s.id]?.phase ?? null,
         }))
       )
       if (d.buyoutRate) setBuyoutRate(Number(d.buyoutRate))
@@ -487,6 +491,18 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   // Minimum booking length: full warehouse buyout = 4hr, otherwise the set's own min
   const STUDIO_MIN_HOURS = 4
+  // A Set Drop built INSIDE the selected room (migration 163 — Winter Is Coming
+  // in Studio One). Booking the room doesn't include the drop set, so say so
+  // while it's running — and only for dates inside its run once one is picked.
+  const sharedDropSet = (() => {
+    if (!selectedSet?.spaceGroup || selectedSet.runStarts) return null
+    const d = sets.find(x => x.id !== selectedSet.id && x.spaceGroup === selectedSet.spaceGroup
+      && x.runStarts && x.runEnds && ['early_access', 'open'].includes(x.dropPhase ?? ''))
+    if (!d) return null
+    if (booking.date && (booking.date < d.runStarts! || booking.date > d.runEnds!)) return null
+    return d
+  })()
+
   const minHours     = booking.type === 'studio' ? STUDIO_MIN_HOURS : (selectedSet?.minHours ?? 1)
 
   // Per-set prep questions for this booking (migration 107, sets.booking_prompt).
@@ -1007,6 +1023,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   {selectedSet.depositorRate ? ' Your depositor rate is applied.' : ''}
                 </div>
               )}
+              {sharedDropSet && selectedSet && (
+                <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', marginBottom: 14, lineHeight: 1.5 }}>
+                  Heads up: the {sharedDropSet.name} set is built inside {selectedSet.name} ({prettyDay(sharedDropSet.runStarts!)} – {prettyDay(sharedDropSet.runEnds!)}) and isn&rsquo;t included with a {selectedSet.name} booking. To shoot it, book {sharedDropSet.name} &mdash; it includes all of {selectedSet.name}.
+                </div>
+              )}
               <DatePicker
                 value={booking.date}
                 min={selectedSet?.runStarts && selectedSet.runStarts > minBookDate ? selectedSet.runStarts : minBookDate}
@@ -1028,6 +1049,11 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 a ternary arm, which swallowed the whole time grid whenever a cart
                 existed. The date is fixed for added sets (one booking = one day), so
                 say which day they're adding to since the picker was skipped. */}
+            {booking.type === 'set' && booking.setId && booking.date && sharedDropSet && selectedSet && (
+              <div style={{ fontFamily: 'Inter', fontSize: 13, color: '#e6c07a', marginBottom: 14, lineHeight: 1.5 }}>
+                {selectedSet.name} doesn&rsquo;t include the {sharedDropSet.name} set built inside it. To shoot it, book {sharedDropSet.name} instead &mdash; it includes all of {selectedSet.name}.
+              </div>
+            )}
             {booking.type === 'set' && booking.setId && setCart.length > 0 && !lockedToWindow && (
               <div style={{ marginBottom: 20, fontFamily: 'Inter', fontSize: 13, color: '#e6c07a' }}>
                 Adding to {prettyDay(booking.date)} · same booking.{' '}
