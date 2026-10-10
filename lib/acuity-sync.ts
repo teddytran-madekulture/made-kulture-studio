@@ -31,9 +31,14 @@ function acuityAuth(): string | null {
  *   (so a full-buyout can't be booked over it).
  * - A full studio buyout blocks every set calendar + the warehouse calendar.
  */
+// Website-only sets built inside an Acuity room (migration 163): booking one
+// blocks that room's Acuity calendar so Acuity can't sell it on top.
+const SHARED_ROOM: Record<string, string> = { 'winter-is-coming': 'studio-one' }
+
 function targetCalendars(type: string, setSlug: string | null): number[] {
   if (type === 'studio') return [...ALL_SET_CALENDARS, WAREHOUSE_CALENDAR]
-  const cal = setSlug ? SLUG_TO_CALENDAR[setSlug] : undefined
+  const slug = setSlug ? (SHARED_ROOM[setSlug] ?? setSlug) : null
+  const cal = slug ? SLUG_TO_CALENDAR[slug] : undefined
   if (!cal) return []
   return [cal, WAREHOUSE_CALENDAR]
 }

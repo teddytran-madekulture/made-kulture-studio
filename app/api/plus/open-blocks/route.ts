@@ -9,6 +9,7 @@
 // response from here as permission.
 
 import { activeClosures, closureBlocks, type Closure } from '@/lib/closures'
+import { loadSetCatalog, spaceMates } from '@/lib/set-catalog'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
@@ -89,6 +90,11 @@ export async function GET(req: NextRequest) {
   try { closures = await activeClosures(admin, windowStart, windowEnd) }
   catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
 
+  // Sets sharing a room (migration 163) block each other.
+  let cat: Awaited<ReturnType<typeof loadSetCatalog>>
+  try { cat = await loadSetCatalog(admin) }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+
   const rows = ((bookings ?? []) as any[])
     .filter(b => !exclude || b.id !== exclude) as BookingRow[]
   const open = openWindowsFrom(rows)
@@ -97,7 +103,8 @@ export async function GET(req: NextRequest) {
   const out: Record<string, { id: string; name: string; minHours: number; blocks: any[] }> = {}
   for (const s of sets ?? []) {
     const minHours = Math.max(1, s.min_hours ?? 1)
-    const mine = rows.filter(b => b.set_id === s.id && BLOCKING_STATUSES.includes(b.status))
+    const mates = spaceMates(cat, s.id)
+    const mine = rows.filter(b => b.set_id !== null && mates.includes(b.set_id) && BLOCKING_STATUSES.includes(b.status))
     const blocks = instantBlocksForSet(open, mine, minHours, now, PLUS_LEAD_MS)
       // Houston-local day only — a block bleeding past midnight belongs to the
       // next date, and bookings may not span days anyway (visit continuity).

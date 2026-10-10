@@ -12,6 +12,7 @@
 
 import { activeClosures, closureBlocks } from '@/lib/closures'
 import { supabaseAdmin } from '@/lib/supabase'
+import { spaceMatesOf } from '@/lib/set-catalog'
 import { bookingHourToISO, centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 import { randomUUID } from 'crypto'
 
@@ -101,15 +102,19 @@ export async function planExtension(
 
   // Only meaningful for 'extend' — an overage never moves the window, so it
   // can't collide with anything. Computed either way for the caller's display.
-  const { data: clash } = await db
+  // Sets sharing this room (migration 163 — Winter Is Coming inside Studio One)
+  // block it too. A failed catalog read counts as a conflict, never "free".
+  let mates: string[] | null = null
+  try { mates = await spaceMatesOf(db, b.set_id) } catch (e: any) { console.error('[extensions] space-mate lookup failed:', e?.message) }
+  const { data: clash, error: clashErr } = await db
     .from('bookings')
     .select('id')
     // ⚠️ A FULL-STUDIO BUYOUT (set_id NULL) occupies this set too, and
     // `.eq('set_id', …)` never matches a NULL — so an extension could be sold
     // straight into a buyout that starts right after. Same blind spot
-    // lib/set-availability.ts had on 2026-08-21. Fixed 2026-09-27. set_id is a
-    // uuid read from our own row, so it is safe inside the filter string.
-    .or(`set_id.eq.${b.set_id},set_id.is.null`)
+    // lib/set-availability.ts had on 2026-08-21. Fixed 2026-09-27. set ids are
+    // uuids read from our own rows, so they are safe inside the filter string.
+    .or(`set_id.in.(${(mates ?? [b.set_id]).join(',')}),set_id.is.null`)
     .neq('status', 'cancelled')
     .neq('id', bookingId)
     .lt('start_time', newEnd.toISOString())
@@ -139,7 +144,7 @@ export async function planExtension(
     rate,
     priceCents,
     newEndISO: newEnd.toISOString(),
-    conflict: kind === 'extend' && (!!(clash && clash.length) || closed),
+    conflict: kind === 'extend' && (!!(clash && clash.length) || closed || !!clashErr || !mates),
     // Optimistic: a Square customer profile can hold saved cards even when this
     // particular booking wasn't paid with one. The confirm endpoint resolves the
     // actual card (booking's card → else customer's saved cards) before charging.
@@ -324,13 +329,20 @@ export async function setHeadroom(
     return { nextStartISO: null, headroomHours: 0, headroomLimit: 'closing' }
   }
 
+  // A set sharing this room (migration 163) is "the next booking" too.
+  let mates: string[]
+  try { mates = await spaceMatesOf(db, setId) }
+  catch (e: any) {
+    console.error('[kiosk] space-mate lookup failed:', e?.message)
+    return { nextStartISO: null, headroomHours: 0, headroomLimit: 'next-booking' }
+  }
   const { data: nextRows, error } = await db
     .from('bookings')
     .select('start_time')
     // Buyouts count as "the next booking on this set" — see the note in
     // planExtension. Without this the tablet told a guest the room was free
     // after them, and offered ADD TIME, with the whole building booked next.
-    .or(`set_id.eq.${setId},set_id.is.null`)
+    .or(`set_id.in.(${mates.join(',')}),set_id.is.null`)
     .neq('status', 'cancelled')
     .neq('id', excludeBookingId)
     .gte('start_time', new Date(end - 60_000).toISOString())
@@ -419,6 +431,10 @@ export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupa
   // room's. Non-fatal: a failed lookup only means the tablet sees the room's own
   // bookings, exactly as before drops existed.
   const roomIds = new Set<string>([setRow.id])
+  // A set built inside this room (migration 163 — Winter Is Coming in Studio
+  // One) is standing at this tablet too. Non-fatal, like the takeover lookup.
+  try { for (const id of await spaceMatesOf(db, setRow.id)) roomIds.add(id) }
+  catch (e: any) { console.error('[kiosk] space-mate lookup failed (non-fatal):', e?.message) }
   {
     const { data: takeovers, error: tErr } = await db.from('set_drops')
       .select('set_id').eq('replaces_set_id', setRow.id).eq('status', 'funded')

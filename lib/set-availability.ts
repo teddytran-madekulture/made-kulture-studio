@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { activeClosures, closureBlocks, closureReason } from '@/lib/closures'
 import { dropsBySetIds, dropWindowProblem } from '@/lib/set-drops-server'
+import { loadSetCatalog, spaceMates } from '@/lib/set-catalog'
 
 // Statuses that occupy a set's calendar.
 // 'pending_payment' = a delegated ("someone else pays") hold; it reserves the
@@ -116,21 +117,33 @@ export async function checkSetWindows(
     }
   }
 
-  // 1. Against existing bookings, per set.
+  // 1. Against existing bookings, per set — AND its space-mates (migration 163):
+  //    sets built in the same room (Winter Is Coming inside Studio One) can each
+  //    be booked, but never at the same time. Throws on a failed read.
+  const cat = windows.length ? await loadSetCatalog(supabase) : null
   for (const w of windows) {
-    const { data: existing } = await supabase
+    const mates = spaceMates(cat!, w.setId)
+    const { data: existing, error: exErr } = await supabase
       .from('bookings')
-      .select('id, start_time, end_time, status')
-      .eq('set_id', w.setId)
+      .select('id, set_id, start_time, end_time, status')
+      .in('set_id', mates)
       .in('status', ACTIVE_STATUSES)
+    // A failed read must never read as "free".
+    if (exErr) throw new Error(`set availability lookup failed: ${exErr.message}`)
 
-    const hit = (existing ?? [])
+    const hits = (existing ?? [])
       .filter(b => !excludeBookingId || b.id !== excludeBookingId)
-      .some(b => overlaps(w.startISO, w.endISO, b.start_time, b.end_time))
-    if (hit) {
+      .filter(b => overlaps(w.startISO, w.endISO, b.start_time, b.end_time))
+    if (hits.some(b => b.set_id === w.setId)) {
       conflicts.push({
         setName: w.setName, startISO: w.startISO, endISO: w.endISO,
         reason: `${w.setName} is already booked during that time.`,
+      })
+    } else if (hits.length) {
+      const other = cat!.byId[hits[0].set_id as string]?.name || 'another set'
+      conflicts.push({
+        setName: w.setName, startISO: w.startISO, endISO: w.endISO,
+        reason: `${w.setName} shares its space with ${other}, which is booked during that time.`,
       })
     }
   }
@@ -150,10 +163,16 @@ export async function checkSetWindows(
   for (let i = 0; i < windows.length; i++) {
     for (let j = i + 1; j < windows.length; j++) {
       const a = windows[i], b = windows[j]
-      if (a.setId === b.setId && overlaps(a.startISO, a.endISO, b.startISO, b.endISO)) {
+      if (!overlaps(a.startISO, a.endISO, b.startISO, b.endISO)) continue
+      if (a.setId === b.setId) {
         conflicts.push({
           setName: a.setName, startISO: a.startISO, endISO: a.endISO,
           reason: `You selected ${a.setName} twice for overlapping times.`,
+        })
+      } else if (cat && spaceMates(cat, a.setId).includes(b.setId)) {
+        conflicts.push({
+          setName: a.setName, startISO: a.startISO, endISO: a.endISO,
+          reason: `${a.setName} and ${b.setName} share the same space, so they can’t be booked for overlapping times.`,
         })
       }
     }

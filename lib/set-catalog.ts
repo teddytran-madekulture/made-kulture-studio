@@ -23,6 +23,7 @@ export interface CatalogSet {
   rate:      number    // member hourly rate (rate_per_hour)
   minHours:  number    // min_hours, defaults to 1
   isActive:  boolean
+  spaceGroup: string | null  // migration 163 — sets sharing one physical space
 }
 
 export interface SetCatalog {
@@ -48,7 +49,7 @@ export async function loadSetCatalog(db: SupabaseClient, opts: { fresh?: boolean
   if (!opts.fresh && cached && Date.now() - cached.at < TTL_MS) return cached.cat
   const { data, error } = await db
     .from('sets')
-    .select('id, slug, name, rate_per_hour, min_hours, is_active, sort_order')
+    .select('*')   // '*' so a missing newer column (space_group before 163 runs) can't break checkout
     .order('sort_order', { ascending: true })
   if (error) throw new Error(`set catalog lookup failed: ${error.message}`)
 
@@ -59,6 +60,7 @@ export async function loadSetCatalog(db: SupabaseClient, opts: { fresh?: boolean
     rate:     Number(s.rate_per_hour) || 0,
     minHours: Number(s.min_hours) > 0 ? Number(s.min_hours) : 1,
     isActive: s.is_active !== false,
+    spaceGroup: s.space_group ? String(s.space_group) : null,
   }))
   const cat: SetCatalog = { bySlug: {}, byName: {}, byId: {}, list }
   for (const s of list) {
@@ -68,6 +70,28 @@ export async function loadSetCatalog(db: SupabaseClient, opts: { fresh?: boolean
   }
   cached = { at: Date.now(), cat }
   return cat
+}
+
+/**
+ * SHARED SPACE (migration 163). Some sets are built in the same physical room —
+ * the Winter Is Coming set lives inside Studio One — so they can each be booked,
+ * but never at the same time. Every set with the same `space_group` blocks the
+ * others. Returns the set's own id plus its space-mates; a set with no group
+ * (every normal set) returns just itself.
+ *
+ * ⚠️ Any check that asks "is this set free?" must look at ALL of these ids,
+ * not `.eq('set_id', id)` — exactly the blind spot buyouts once had.
+ */
+export function spaceMates(cat: SetCatalog, setId: string): string[] {
+  const g = cat.byId[setId]?.spaceGroup
+  if (!g) return [setId]
+  const ids = cat.list.filter(s => s.spaceGroup === g).map(s => s.id)
+  return ids.includes(setId) ? ids : [setId, ...ids]
+}
+
+/** spaceMates, loading the catalog. Throws on a failed read (never "no mates"). */
+export async function spaceMatesOf(db: SupabaseClient, setId: string): Promise<string[]> {
+  return spaceMates(await loadSetCatalog(db), setId)
 }
 
 /** Drop the cache — call after an admin edits a set so the next read is live. */

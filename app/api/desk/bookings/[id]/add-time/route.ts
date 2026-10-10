@@ -1,5 +1,6 @@
 import { addRewardForCharge } from '@/lib/rewards'
 import { NextRequest, NextResponse } from 'next/server'
+import { spaceMatesOf } from '@/lib/set-catalog'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -51,11 +52,16 @@ async function plan(id: string, hours: number) {
   const curEnd = new Date(b.end_time)
   const newEnd = new Date(curEnd.getTime() + hours * 3600_000)
 
-  // Conflict: any other live booking on the same set overlapping [curEnd, newEnd).
-  const { data: clash } = await db
+  // Conflict: any other live booking overlapping [curEnd, newEnd) on this set,
+  // a set sharing its room (migration 163), or a full buyout (set_id NULL —
+  // `.eq` never matched it, the same blind spot lib/extensions fixed 2026-09-27).
+  // A failed lookup reads as a conflict, never "free".
+  let mates: string[] | null = null
+  try { mates = await spaceMatesOf(db, b.set_id) } catch (e: any) { console.error('[desk add-time] space-mate lookup failed:', e?.message) }
+  const { data: clash, error: clashErr } = await db
     .from('bookings')
     .select('id')
-    .eq('set_id', b.set_id)
+    .or(`set_id.in.(${(mates ?? [b.set_id]).join(',')}),set_id.is.null`)
     .neq('status', 'cancelled')
     .neq('id', id)
     .lt('start_time', newEnd.toISOString())
@@ -65,7 +71,7 @@ async function plan(id: string, hours: number) {
   return {
     booking: b, setName, rate, priceCents,
     newEndISO: newEnd.toISOString(),
-    conflict: !!(clash && clash.length),
+    conflict: !!(clash && clash.length) || !!clashErr || !mates,
     hasCardOnFile: !!(b.square_card_on_file_id && customer?.square_customer_id),
   }
 }

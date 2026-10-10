@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { centralOffset } from '@/lib/booking-times'
 import { createClient } from '@supabase/supabase-js'
 import { activeClosures, closureBlocks, type Closure } from '@/lib/closures'
-import { loadSetCatalog } from '@/lib/set-catalog'
+import { loadSetCatalog, spaceMates } from '@/lib/set-catalog'
 
 // The set catalog is read here now; never serve a cached copy of it.
 export const dynamic = 'force-dynamic'
@@ -69,10 +69,16 @@ export async function GET(req: NextRequest) {
       resolvedId = setRow.id
     }
 
+    // Sets that share a room (migration 163 — Winter Is Coming inside Studio One)
+    // block each other, so the grid paints a space-mate's bookings as taken too.
+    let mates: string[]
+    try { mates = spaceMates(await loadSetCatalog(supabase), resolvedId) }
+    catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+
     const { data, error } = await supabase
       .from('bookings')
       .select('start_time, end_time')
-      .eq('set_id', resolvedId)
+      .in('set_id', mates)
       .neq('status', 'cancelled')
       .gte('start_time', dayStart)
       .lte('start_time', dayEnd)
@@ -148,6 +154,11 @@ export async function GET(req: NextRequest) {
   if (bookingsError) return NextResponse.json({ error: bookingsError.message }, { status: 500 })
   if (buyoutsError)  return NextResponse.json({ error: buyoutsError.message },  { status: 500 })
 
+  // Space-mates (migration 163) paint each other's bookings as taken.
+  let cat: Awaited<ReturnType<typeof loadSetCatalog>>
+  try { cat = await loadSetCatalog(supabase) }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+
   let closures: Closure[] = []
   try { closures = await activeClosures(supabase, dayStart, dayEnd) }
   catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
@@ -168,7 +179,7 @@ export async function GET(req: NextRequest) {
   for (const set of (sets ?? [])) {
     const slug = (set as any).slug || set.name.toLowerCase().replace(/\s+/g, '-')
     const slots = (bookings ?? [])
-      .filter(b => b.set_id === set.id)
+      .filter(b => spaceMates(cat, set.id).includes(b.set_id))
       .map(b => ({
         start: cdhTime(b.start_time),
         end:   cdhTime(b.end_time),

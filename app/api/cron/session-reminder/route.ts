@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { spaceMatesOf } from '@/lib/set-catalog'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS, toE164 } from '@/lib/sms'
 import { createExtensionRequest } from '@/lib/extensions'
@@ -68,7 +69,13 @@ export async function GET(req: NextRequest) {
       .lte('start_time', new Date(end + HANDOVER_WINDOW_MS).toISOString())
       .order('start_time', { ascending: true })
       .limit(1)
-    if (b.set_id) q = q.eq('set_id', b.set_id)
+    // A set sharing this room (migration 163 — Winter Is Coming in Studio One)
+    // needs it next just as much. A buyout next blocks every set.
+    if (b.set_id) {
+      let mates = [b.set_id]
+      try { mates = await spaceMatesOf(supabase, b.set_id) } catch { /* warn about the set itself at least */ }
+      q = q.or(`set_id.in.(${mates.join(',')}),set_id.is.null`)
+    }
     const { data } = await q
     return (data ?? [])[0] ?? null
   }

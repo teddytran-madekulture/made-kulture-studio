@@ -10,6 +10,7 @@
 // path around this one.
 
 import { plusActive } from '@/lib/short-notice'
+import { loadSetCatalog, spaceMates } from '@/lib/set-catalog'
 import { standingForEmail, shortNoticeAllowed } from '@/lib/standing'
 import {
   openWindowsFrom, instantBlocksForSet, isInstantBookable,
@@ -74,6 +75,10 @@ export async function sessionMayInstantBook(
   // silently becomes "no bookings exist", which would open every hour.
   if (bErr || sErr) return false
 
+  // Sets sharing a room (migration 163) block each other. A failed read is "no".
+  let cat: Awaited<ReturnType<typeof loadSetCatalog>>
+  try { cat = await loadSetCatalog(supabase) } catch { return false }
+
   const rows = ((bookings ?? []) as any[])
     .filter(b => !excludeBookingId || b.id !== excludeBookingId) as BookingRow[]
   const open = openWindowsFrom(rows)
@@ -83,7 +88,8 @@ export async function sessionMayInstantBook(
   const now = Date.now()
 
   return lines.every(l => {
-    const mine = rows.filter(b => b.set_id === l.setId && BLOCKING_STATUSES.includes(b.status))
+    const mates = spaceMates(cat, l.setId!)
+    const mine = rows.filter(b => b.set_id !== null && mates.includes(b.set_id) && BLOCKING_STATUSES.includes(b.status))
     const blocks = instantBlocksForSet(open, mine, minHoursById.get(l.setId!) ?? 1, now, PLUS_LEAD_MS)
     return isInstantBookable(blocks, Date.parse(l.startISO), Date.parse(l.endISO))
   })

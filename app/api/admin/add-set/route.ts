@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSetWindows } from '@/lib/set-availability'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { sendSMS } from '@/lib/sms'
 import { Client, Environment } from 'square'
@@ -57,18 +58,19 @@ async function resolveAndCheck(setName: string, date: string, startHour: number,
   const startISO = isoFor(date, startHour)
   const endISO   = isoFor(date, endHour)
 
-  const { data: clash } = await supabase
-    .from('bookings')
-    .select('id')
-    .or(`set_id.eq.${setRow.id},set_id.is.null`)
-    .neq('status', 'cancelled')
-    .lt('start_time', endISO)
-    .gt('end_time', startISO)
-    .limit(1)
+  // The shared availability gate: the set, a set sharing its room (migration
+  // 163), any buyout, drop run dates. Closures are ignored like every admin
+  // path — Teddy may book over his own. A failed check reads as unavailable.
+  let available = false
+  try {
+    available = (await checkSetWindows(supabase, [{ setId: setRow.id, setName, startISO, endISO }], undefined, { ignoreClosures: true })).ok
+  } catch (e: any) {
+    console.error('[add-set] availability check failed:', e?.message)
+  }
 
   const rate  = hasRateOverride(setName, overrides) ? rateFor(setName, overrides) : (Number(setRow.rate_per_hour) || 0)
   const price = rate * (endHour - startHour)
-  return { setId: setRow.id, rate, price, startISO, endISO, available: !(clash && clash.length) }
+  return { setId: setRow.id, rate, price, startISO, endISO, available }
 }
 
 // GET preview: ?setName&date&startHour&endHour → { available, price, rate }

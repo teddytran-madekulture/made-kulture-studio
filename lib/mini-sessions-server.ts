@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendSimpleEmail } from '@/lib/email'
+import { spaceMatesOf } from '@/lib/set-catalog'
 import { sendSMS } from '@/lib/sms'
 import { centralDateStr, centralHourDecimal, bookingHourToISO, bookingEndISO } from '@/lib/booking-times'
 import {
@@ -118,8 +119,13 @@ export async function planConflicts(db: SupabaseClient, m: MiniSession, ownerEma
   // Only bookings that really hold the time: paid, or a live payment hold.
   let q = db.from('bookings').select('id, set_id, auth_user_id, customers ( email )')
     .in('status', ['pending', 'confirmed', 'pending_payment']).lt('start_time', m.planned_end).gt('end_time', m.planned_start)
-  // A buyout plan collides with anything; a set plan with that set or a buyout.
-  if (!m.planned_buyout && m.planned_set_id) q = q.or(`set_id.eq.${m.planned_set_id},set_id.is.null`)
+  // A buyout plan collides with anything; a set plan with that set, a set
+  // sharing its room (migration 163), or a buyout.
+  if (!m.planned_buyout && m.planned_set_id) {
+    let mates = [m.planned_set_id]
+    try { mates = await spaceMatesOf(db, m.planned_set_id) } catch { /* the set itself still counts */ }
+    q = q.or(`set_id.in.(${mates.join(',')}),set_id.is.null`)
+  }
   const { data, error } = await q
   if (error) { console.error('[minis] conflict check failed', error); return 0 }
   const mine = (b: any) => b.auth_user_id === m.owner_user_id || (!!ownerEmail && (b.customers?.email || '').toLowerCase() === ownerEmail.toLowerCase())
