@@ -7,6 +7,7 @@
 // someone a different deal from the one they agreed to.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { isVideoUrl } from '@/lib/media-url'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { cancelPolicyChangeAllowed, depositorRate, slugify, LIVE_PLEDGE, type SetDrop } from '@/lib/set-drops'
@@ -58,6 +59,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       .filter((x: any) => /^https:\/\//.test(x.url))
       .slice(0, 80)
   }
+  // The cover is the link preview and the set's photo elsewhere — images only.
+  if (typeof row.hero_url === 'string' && isVideoUrl(row.hero_url)) return NextResponse.json({ error: 'The cover has to be a photo — pick a photo as the cover.' }, { status: 400 })
   if ('gallery' in body) row.gallery = Array.isArray(body.gallery) ? body.gallery.map(String).filter(Boolean).slice(0, 12) : []
   if ('slug' in body) {
     const s = slugify(String(body.slug || ''))

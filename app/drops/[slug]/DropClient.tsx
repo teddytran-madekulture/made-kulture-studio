@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { dropTerms, depositFor, dollars, runLabel, fmtInstant, type SetDrop } from '@/lib/set-drops'
 import SetVideo from '@/components/SetVideo'
+import { isVideoUrl } from '@/lib/media-url'
 
 const anton = 'Anton, "Bebas Neue", sans-serif'
 const mono = '"JetBrains Mono", ui-monospace, monospace'
@@ -36,7 +37,9 @@ export default function DropClient({ slug }: { slug: string }) {
   const [mine, setMine] = useState<Mine | null>(null)
   const [signedIn, setSignedIn] = useState(false)
   const [preview, setPreview] = useState(false)
-  const [lightbox, setLightbox] = useState<number | null>(null)
+  // Gallery viewer: which gallery and which item. Tiles are squares; the viewer
+  // shows the photo or video at its real shape.
+  const [lightbox, setLightbox] = useState<{ list: 'main' | 'past'; i: number } | null>(null)
   const [loadErr, setLoadErr] = useState('')
 
   const load = useCallback(async () => {
@@ -140,9 +143,8 @@ export default function DropClient({ slug }: { slug: string }) {
         )}
 
         {gallery.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 2, marginTop: 48 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {gallery.map(u => <img key={u} src={u} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', display: 'block' }} />)}
+          <div style={{ ...galleryGrid, marginTop: 48 }}>
+            {gallery.map((u, i) => <Tile key={u} url={u} alt={drop.name} onOpen={() => setLightbox({ list: 'main', i })} />)}
           </div>
         )}
 
@@ -150,28 +152,26 @@ export default function DropClient({ slug }: { slug: string }) {
         {(drop.past_gallery ?? []).length > 0 && (
           <div style={{ marginTop: 64 }}>
             <div style={label}>SHOT ON {drop.name.toUpperCase()} · PAST YEARS</div>
-            <div style={{ columnWidth: 260, columnGap: 2 }}>
+            <div style={galleryGrid}>
               {drop.past_gallery.map((p, i) => (
-                <figure key={p.url} style={{ margin: '0 0 2px', breakInside: 'avoid', cursor: 'zoom-in' }} onClick={() => setLightbox(i)}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.url} alt={p.credit ? `Shot on ${drop.name} — ${p.credit}` : `Shot on ${drop.name}`} loading="lazy" style={{ width: '100%', display: 'block' }} />
+                <figure key={p.url} style={{ margin: 0 }}>
+                  <Tile url={p.url} alt={p.credit ? `Shot on ${drop.name} — ${p.credit}` : `Shot on ${drop.name}`} onOpen={() => setLightbox({ list: 'past', i })} />
                   {p.credit && <figcaption style={{ fontFamily: inter, fontSize: 11, color: dim(0.5), padding: '6px 2px 10px', letterSpacing: '0.02em' }}>{p.credit}</figcaption>}
                 </figure>
               ))}
             </div>
           </div>
         )}
-        {lightbox != null && drop.past_gallery?.[lightbox] && (
-          <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, cursor: 'zoom-out' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={drop.past_gallery[lightbox].url} alt="" style={{ maxWidth: '100%', maxHeight: 'calc(85 * var(--svh, 1vh))', objectFit: 'contain' }} />
-            {drop.past_gallery[lightbox].credit && <div style={{ fontFamily: inter, fontSize: 13, color: dim(0.7), marginTop: 12 }}>{drop.past_gallery[lightbox].credit}</div>}
-            <div style={{ display: 'flex', gap: 16, marginTop: 14 }} onClick={e => e.stopPropagation()}>
-              <button onClick={() => setLightbox(i => i == null ? null : (i - 1 + drop.past_gallery.length) % drop.past_gallery.length)} style={ghost}>‹ PREV</button>
-              <button onClick={() => setLightbox(i => i == null ? null : (i + 1) % drop.past_gallery.length)} style={ghost}>NEXT ›</button>
-            </div>
-          </div>
-        )}
+        {lightbox && (() => {
+          const items = lightbox.list === 'main'
+            ? gallery.map(url => ({ url, credit: null as string | null }))
+            : (drop.past_gallery ?? [])
+          const it = items[lightbox.i]
+          if (!it) return null
+          return <Viewer item={it} count={items.length}
+            onClose={() => setLightbox(null)}
+            onStep={d => setLightbox(l => l && ({ ...l, i: (l.i + d + items.length) % items.length }))} />
+        })()}
 
         {/* ── How it works ─────────────────────────────────────── */}
         <div style={{ marginTop: 64 }}>
@@ -354,6 +354,58 @@ function ReserveForm({ drop, slug, onDone, preview }: { drop: PublicDrop; slug: 
       <button onClick={submit} disabled={paying} style={{ ...btn, opacity: paying ? 0.6 : 1, justifySelf: 'start' }}>
         {paying ? 'RESERVING…' : `RESERVE MY VOTE · ${dollars(cents)} DEPOSIT`}
       </button>
+    </div>
+  )
+}
+
+// ── Gallery ─────────────────────────────────────────────────────────────────
+const galleryGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 2 }
+
+/** A square tile. A video shows its first frame with a play mark. */
+function Tile({ url, alt, onOpen }: { url: string; alt: string; onOpen: () => void }) {
+  const video = isVideoUrl(url)
+  return (
+    <button onClick={onOpen} aria-label={video ? `Play video — ${alt}` : `Open photo — ${alt}`}
+      style={{ position: 'relative', display: 'block', width: '100%', aspectRatio: '1 / 1', padding: 0, border: 'none', background: '#111', cursor: 'zoom-in', overflow: 'hidden' }}>
+      {video
+        ? <video src={`${url}#t=0.1`} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+        // eslint-disable-next-line @next/next/no-img-element
+        : <img src={url} alt={alt} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+      {video && (
+        <span aria-hidden style={{ position: 'absolute', right: 8, bottom: 8, width: 30, height: 30, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 1.5v9l7.5-4.5z" fill="#fff" /></svg>
+        </span>
+      )}
+    </button>
+  )
+}
+
+/** Full-size viewer: the photo or video at its real aspect, never cropped. */
+function Viewer({ item, count, onClose, onStep }: { item: { url: string; credit: string | null }; count: number; onClose: () => void; onStep: (d: number) => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowLeft') onStep(-1)
+      else if (e.key === 'ArrowRight') onStep(1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, onStep])
+  const media: React.CSSProperties = { maxWidth: '100%', maxHeight: 'calc(82 * var(--svh, 1vh))', objectFit: 'contain', display: 'block' }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.94)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16, cursor: 'zoom-out' }}>
+      <div onClick={e => e.stopPropagation()} style={{ cursor: 'default', maxWidth: '100%' }}>
+        {isVideoUrl(item.url)
+          ? <video key={item.url} src={item.url} controls autoPlay playsInline style={{ ...media, background: '#000' }} />
+          // eslint-disable-next-line @next/next/no-img-element
+          : <img src={item.url} alt="" style={media} />}
+      </div>
+      {item.credit && <div style={{ fontFamily: inter, fontSize: 13, color: dim(0.7), marginTop: 12 }}>{item.credit}</div>}
+      <div style={{ display: 'flex', gap: 16, marginTop: 14 }} onClick={e => e.stopPropagation()}>
+        {count > 1 && <button onClick={() => onStep(-1)} style={ghost}>‹ PREV</button>}
+        <button onClick={onClose} style={ghost}>CLOSE</button>
+        {count > 1 && <button onClick={() => onStep(1)} style={ghost}>NEXT ›</button>}
+      </div>
     </div>
   )
 }

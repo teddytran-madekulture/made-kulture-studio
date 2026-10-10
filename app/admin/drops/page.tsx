@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { shrinkImage } from '@/lib/shrink-image'
+import { isVideoUrl } from '@/lib/media-url'
 import {
   dropTerms, depositFor, depositorRate, dollars, runLabel, fmtInstant, type SetDrop, type DropPledge, type DropProgress,
 } from '@/lib/set-drops'
@@ -129,40 +130,57 @@ export default function SetDropsAdmin() {
     await load()
   }
 
+  // One file → its public URL. Photos are resized and go through the site's
+  // upload route; VIDEOS go straight to storage on a signed URL, because a
+  // Vercel function refuses any request body over 4.5 MB.
+  const uploadOne = async (f: File, onProgress?: (pct: number) => void): Promise<string> => {
+    if (f.type.startsWith('video/')) {
+      const start = await fetch('/api/admin/sets/upload-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: f.type, size: f.size }) })
+      const d = await start.json().catch(() => ({}))
+      if (!start.ok) throw new Error(d.error || `Couldn’t start uploading ${f.name}`)
+      const ok = await new Promise<boolean>(res => {
+        const x = new XMLHttpRequest()
+        x.open('PUT', d.uploadUrl)
+        x.setRequestHeader('Content-Type', f.type)
+        x.upload.onprogress = e => { if (e.lengthComputable) onProgress?.(Math.round(e.loaded / e.total * 100)) }
+        x.onload = () => res(x.status >= 200 && x.status < 300)
+        x.onerror = () => res(false)
+        x.send(f)
+      })
+      if (!ok) throw new Error(`Upload failed on ${f.name} — try again on a steadier connection.`)
+      return d.publicUrl
+    }
+    const fd = new FormData()
+    fd.append('files', await shrinkImage(f, 2000, 0.86), f.name)
+    const r = await fetch('/api/admin/sets/upload', { method: 'POST', body: fd })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok || !d.urls?.[0]) throw new Error(d.error || `Upload failed on ${f.name}`)
+    return d.urls[0]
+  }
+
+  // Gallery: photos AND videos. The cover (hero) is always a photo — it is the
+  // link preview and the set's photo elsewhere, which only render images.
   const upload = async (files: FileList | null) => {
     if (!files?.length) return
     setUploading(true)
+    const urls: string[] = []
     try {
-      const fd = new FormData()
-      for (const f of Array.from(files).slice(0, 8)) {
-        const blob = f.type.startsWith('image/') ? await shrinkImage(f, 2000, 0.86) : f
-        fd.append('files', blob, f.name)
-      }
-      const r = await fetch('/api/admin/sets/upload', { method: 'POST', body: fd })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.error || 'Upload failed')
-      const urls: string[] = d.urls ?? []
-      if (!v.hero_url && urls[0]) set('hero_url', urls[0])
-      set('gallery', [...(v.gallery ?? []), ...urls].slice(0, 12))
+      for (const f of Array.from(files).slice(0, 12)) urls.push(await uploadOne(f))
     } catch (e: any) { setMsg(e.message) }
+    if (urls.length) {
+      const firstPhoto = urls.find(u => !isVideoUrl(u))
+      if (!v.hero_url && firstPhoto) set('hero_url', firstPhoto)
+      set('gallery', [...(v.gallery ?? []), ...urls].slice(0, 12))
+    }
     setUploading(false)
   }
 
-  // A video NEVER goes in the gallery (that renders <img>) — it has its own field.
-  // ⚠️ 4.5 MB is the ceiling for any upload through a Vercel function; bigger
-  // files fail with no useful error, so refuse them here with one.
   const uploadVideo = async (files: FileList | null) => {
     const f = files?.[0]
     if (!f) return
-    if (f.size > 4.4 * 1024 * 1024) { setMsg(`That video is ${(f.size / 1048576).toFixed(1)} MB — uploads top out around 4.4 MB. Export a shorter or smaller H.264 MP4 (about 810×1440 is plenty for a phone).`); return }
     setUploadingVideo(true)
     try {
-      const fd = new FormData()
-      fd.append('files', f, f.name)
-      const r = await fetch('/api/admin/sets/upload', { method: 'POST', body: fd })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || !d.urls?.[0]) throw new Error(d.error || 'Upload failed')
-      set('video_url', d.urls[0]); setMsg(null)
+      set('video_url', await uploadOne(f)); setMsg(null)
     } catch (e: any) { setMsg(e.message) }
     setUploadingVideo(false)
   }
@@ -176,12 +194,8 @@ export default function SetDropsAdmin() {
     try {
       for (let i = 0; i < list.length; i++) {
         setUploadingPast(`UPLOADING ${i + 1}/${list.length}…`)
-        const fd = new FormData()
-        fd.append('files', await shrinkImage(list[i], 2000, 0.86), list[i].name)
-        const r = await fetch('/api/admin/sets/upload', { method: 'POST', body: fd })
-        const d = await r.json().catch(() => ({}))
-        if (!r.ok || !d.urls?.[0]) throw new Error(d.error || `Upload failed on ${list[i].name}`)
-        added.push({ url: d.urls[0], credit: null })
+        const url = await uploadOne(list[i], pct => setUploadingPast(`UPLOADING ${i + 1}/${list.length} · ${pct}%`))
+        added.push({ url, credit: null })
       }
     } catch (e: any) { setMsg(e.message) }
     if (added.length) set('past_gallery', [...(v.past_gallery ?? []), ...added])
@@ -371,17 +385,19 @@ export default function SetDropsAdmin() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   {[v.hero_url, ...(v.gallery ?? []).filter(u => u !== v.hero_url)].filter(Boolean).map((u, i) => (
                     <div key={u as string} style={{ position: 'relative' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={u as string} alt="" style={{ width: 90, height: 90, objectFit: 'cover', border: i === 0 ? `2px solid ${C.accent}` : `1px solid ${C.line}` }} />
+                      {isVideoUrl(u as string)
+                        ? <video src={`${u}#t=0.1`} muted playsInline preload="metadata" style={{ width: 90, height: 90, objectFit: 'cover', background: '#000', display: 'block', border: `1px solid ${C.line}` }} />
+                        // eslint-disable-next-line @next/next/no-img-element
+                        : <img src={u as string} alt="" style={{ width: 90, height: 90, objectFit: 'cover', border: i === 0 ? `2px solid ${C.accent}` : `1px solid ${C.line}` }} />}
                       <div style={{ display: 'flex', gap: 2, marginTop: 2 }}>
-                        {i > 0 && <button onClick={() => set('hero_url', u)} style={{ ...btn, padding: '2px 5px', fontSize: 10 }}>COVER</button>}
-                        <button onClick={() => { if (u === v.hero_url) set('hero_url', (v.gallery ?? []).find(g => g !== u) ?? null); set('gallery', (v.gallery ?? []).filter(g => g !== u)) }} style={{ ...btn, padding: '2px 5px', fontSize: 10 }}>✕</button>
+                        {i > 0 && !isVideoUrl(u as string) && <button onClick={() => set('hero_url', u)} style={{ ...btn, padding: '2px 5px', fontSize: 10 }}>COVER</button>}
+                        <button onClick={() => { if (u === v.hero_url) set('hero_url', (v.gallery ?? []).find(g => g !== u && !isVideoUrl(g)) ?? null); set('gallery', (v.gallery ?? []).filter(g => g !== u)) }} style={{ ...btn, padding: '2px 5px', fontSize: 10 }}>✕</button>
                       </div>
                     </div>
                   ))}
-                  <label style={{ ...btn, display: 'inline-block' }}>{uploading ? 'UPLOADING…' : '+ ADD IMAGES'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e => upload(e.target.files)} /></label>
+                  <label style={{ ...btn, display: 'inline-block' }}>{uploading ? 'UPLOADING…' : '+ ADD PHOTOS / VIDEOS'}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" multiple hidden onChange={e => { upload(e.target.files); e.target.value = '' }} /></label>
                 </div>
-                <div style={{ ...small, marginTop: 6 }}>Mood board, render or sketch — whatever sells the idea. Images are resized before upload.</div>
+                <div style={{ ...small, marginTop: 6 }}>Mood board, render, sketch or clips — whatever sells the idea. Shown as square tiles; tapping one opens it full size. The cover is always a photo. Photos are resized; videos up to 49 MB (H.264 MP4 plays everywhere).</div>
               </Field>
               <Field label="Video (optional)" wide>
                 {v.video_url ? (
@@ -398,18 +414,20 @@ export default function SetDropsAdmin() {
                 ) : (
                   <label style={{ ...btn, display: 'inline-block' }}>{uploadingVideo ? 'UPLOADING…' : '+ ADD VIDEO'}<input type="file" accept="video/mp4,video/quicktime,video/webm" hidden onChange={e => { uploadVideo(e.target.files); e.target.value = '' }} /></label>
                 )}
-                <div style={{ ...small, marginTop: 6 }}>H.264 MP4 under 4.4 MB. It plays muted with a sound button. ⚠️ Other video formats can look fine in Chrome and show nothing on iPhones.</div>
+                <div style={{ ...small, marginTop: 6 }}>H.264 MP4 up to 49 MB. It plays muted with a sound button. ⚠️ Other video formats can look fine in Chrome and show nothing on iPhones.</div>
               </Field>
             </Group>
 
             <Group title="Shot here — past years">
               <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ ...small, marginBottom: 10 }}>Photos customers made on this set before, shown as their own gallery with a credit under each. ⚠️ Only work you have permission to post — the photographer is the main credit.</div>
+                <div style={{ ...small, marginBottom: 10 }}>Photos and clips customers made on this set before, shown as their own gallery with a credit under each. ⚠️ Only work you have permission to post — the photographer is the main credit.</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
                   {(v.past_gallery ?? []).map((p, i) => (
                     <div key={p.url} style={{ border: `1px solid ${C.line}`, padding: 6 }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.url} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', display: 'block' }} />
+                      {isVideoUrl(p.url)
+                        ? <video src={`${p.url}#t=0.1`} muted playsInline preload="metadata" style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block', background: '#000' }} />
+                        // eslint-disable-next-line @next/next/no-img-element
+                        : <img src={p.url} alt="" style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }} />}
                       <input value={p.credit ?? ''} onChange={e => setPast(i, { credit: e.target.value || null })} placeholder="Photo: Name @handle" style={{ ...inp, marginTop: 6, padding: '6px 8px', fontSize: 12 }} />
                       <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                         <button onClick={() => movePast(i, -1)} style={{ ...btn, padding: '2px 7px', fontSize: 11 }}>←</button>
@@ -419,8 +437,8 @@ export default function SetDropsAdmin() {
                     </div>
                   ))}
                 </div>
-                <label style={{ ...btn, display: 'inline-block', marginTop: 10 }}>{uploadingPast || '+ ADD PHOTOS'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e => { uploadPast(e.target.files); e.target.value = '' }} /></label>
-                <span style={{ ...small, marginLeft: 10 }}>Up to 40 at a time, resized before upload. Press SAVE when done.</span>
+                <label style={{ ...btn, display: 'inline-block', marginTop: 10 }}>{uploadingPast || '+ ADD PHOTOS / VIDEOS'}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" multiple hidden onChange={e => { uploadPast(e.target.files); e.target.value = '' }} /></label>
+                <span style={{ ...small, marginLeft: 10 }}>Up to 40 at a time. Photos are resized; videos up to 49 MB. Press SAVE when done.</span>
               </div>
             </Group>
 
