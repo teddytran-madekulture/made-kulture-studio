@@ -10,7 +10,7 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 // Default instruction sent to ChatGPT when cleaning a prop photo. Editable per
 // image in the clean-up modal. Keep in sync with the fallback in
 // app/api/admin/props/clean-image/route.ts.
-const DEFAULT_CLEAN_PROMPT = 'Remove the background and place this exact object on a clean, evenly lit, pure white studio background. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
+const DEFAULT_CLEAN_PROMPT = 'Place this exact object on a seamless, evenly lit, pure white studio background, with a soft, natural shadow on the floor beneath it. The background must be solid white, not transparent. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
 
 // Free, in-browser background remover (same lib the Add-by-Photo flow uses).
 // Loaded from a CDN at runtime so the heavy onnx/wasm code isn't bundled.
@@ -179,7 +179,15 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
     if (!res.ok || !data.imageBase64) throw new Error(data.error || 'Clean-up failed')
     const bin = atob(data.imageBase64); const bytes = new Uint8Array(bin.length)
     for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k)
-    return new Blob([bytes], { type: 'image/png' })
+    // Safety net: if any pixels still come back see-through, flatten them onto
+    // white (same as the free remover) so a prop never shows on a dark backdrop.
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const canvas = document.createElement('canvas')
+    canvas.width = bmp.width; canvas.height = bmp.height
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(bmp, 0, 0)
+    return await new Promise<Blob>((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('Could not encode image')), 'image/jpeg', 0.92))
   }
   const uploadBlob = async (blob: Blob): Promise<string> => {
     const fd = new FormData()

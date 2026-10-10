@@ -63,7 +63,7 @@ export default function PropsClient({ content = {} }: { content?: PageContent })
                 <a key={p.id} href={p.slug ? `/props/p/${p.slug}` : undefined} style={{ background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'inherit', display: 'block', cursor: p.slug ? 'pointer' : 'default' }}>
                   <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', background: '#141414', overflow: 'hidden' }}>
                     {p.image_url ? (
-                      <img src={p.image_url} alt={p.name} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <img src={p.image_url} alt={p.name} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#fff' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                     ) : (
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.15)', fontSize: 11, letterSpacing: '0.15em' }}>NO PHOTO</div>
                     )}

@@ -6,7 +6,7 @@ export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
 const MODEL = 'gpt-image-1'
-const DEFAULT_PROMPT = 'Remove the background and place this exact object on a clean, evenly lit, pure white studio background. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
+const DEFAULT_PROMPT = 'Place this exact object on a seamless, evenly lit, pure white studio background, with a soft, natural shadow on the floor beneath it. The background must be solid white, not transparent. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
 
 // POST /api/admin/props/clean-image — JSON { imageUrl, prompt? }
 // Fetches an EXISTING prop image (relative /images/... path or absolute URL),
@@ -49,6 +49,9 @@ export async function POST(req: NextRequest) {
   oai.append('image', file)
   oai.append('prompt', prompt)
   oai.append('size', '1024x1024')
+  // Solid background, never a transparent cutout: Teddy wants white WITH the
+  // floor shadow (2026-10-09). 'auto' let the model drop the background.
+  oai.append('background', 'opaque')
   oai.append('n', '1')
 
   let r: Response

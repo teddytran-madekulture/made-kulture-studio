@@ -46,7 +46,7 @@ export default function PropDetailPage({ params }: { params: { slug: string } })
             <div>
               <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', background: '#141414', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.06)' }}>
                 {main ? (
-                  <img src={main} alt={prop.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={main} alt={prop.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#fff' }} />
                 ) : (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.15)', fontSize: 12, letterSpacing: '0.15em' }}>NO PHOTO</div>
                 )}
@@ -64,7 +64,7 @@ export default function PropDetailPage({ params }: { params: { slug: string } })
                       position: 'relative', aspectRatio: '1 / 1', background: '#141414', overflow: 'hidden', cursor: 'pointer', padding: 0,
                       border: i === idx ? '2px solid #d4a843' : '1px solid rgba(255,255,255,0.12)',
                     }}>
-                      <img src={g} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={g} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#fff' }} />
                     </button>
                   ))}
                 </div>
