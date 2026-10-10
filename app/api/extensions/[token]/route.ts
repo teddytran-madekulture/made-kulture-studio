@@ -249,7 +249,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // Stable per (request, payment method): a double-tap on the same card
       // can't charge twice, while keying in a DIFFERENT card after a decline
       // gets its own key and is allowed through.
-      idempotencyKey: `${r.id}-${keyedSourceId ? keyedSourceId.slice(-12) : 'cof'}`,
+      // ⚠️ SQUARE CAPS idempotency_key AT 45 CHARACTERS. This used to be the
+      // dashed uuid (36) + '-' + 12 = 49, so EVERY keyed-card payment was
+      // refused with VALUE_TOO_LONG from 2026-08-01 until 2026-10-10 (found when
+      // a Set C guest tried four times to add 30 min). Dashes stripped: 32+1+12 = 45.
+      idempotencyKey: `${String(r.id).replace(/-/g, '')}-${keyedSourceId ? keyedSourceId.slice(-12) : 'cof'}`,
       amountMoney: { amount: BigInt(r.amount_cents), currency: 'USD' },
       ...(chargeCustomerId ? { customerId: chargeCustomerId } : {}),
       locationId: process.env.SQUARE_LOCATION_ID!,

@@ -139,7 +139,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     if (!custId) return NextResponse.json({ error: 'Could not set up your payment profile - please try again.' }, { status: 502 })
     try {
       const { result } = await square.cardsApi.createCard({
-        idempotencyKey: `card-${d.id}-${String(sourceId).slice(-12)}`,
+        // ⚠️ Square caps idempotency_key at 45 chars — `card-<uuid>-<12>` was 54
+        // and refused every save (same bug as the extension link, 2026-10-10).
+        idempotencyKey: `${String(d.id).replace(/-/g, '')}-${String(sourceId).slice(-12)}`,
         sourceId,
         card: { customerId: custId, referenceId: `made-kulture-pay-${d.id}`.slice(0, 40) },
       })
