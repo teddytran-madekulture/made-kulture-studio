@@ -13,6 +13,7 @@ import HeroCarousel, { type CarouselSlide } from '@/components/HeroCarousel'
 import { FOCAL_POSITION, type HeroSlide } from '@/lib/hero-slides'
 import FeaturedEditorial from '@/components/FeaturedEditorial'
 import DirectoryTeaser from '@/components/DirectoryTeaser'
+import SetDropsRow from '@/components/SetDropsRow'
 import { liveEditorial, creditsLine, type FeaturedEditorial as FeaturedEditorialData } from '@/lib/featured-editorial'
 
 
@@ -158,6 +159,10 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
 
       {/* ── Centered content column — the hero image above stays full-bleed ── */}
       <div style={{ maxWidth: PAGE_MAX, margin: '0 auto', width: '100%' }}>
+
+      {/* SET DROPS — limited-run sets (e.g. Winter Is Coming). Renders nothing
+          when none are live, so it needs no switching off. */}
+      <SetDropsRow isMobile={isMobile} />
 
       {/* SETS */}
       <section style={{ padding: isMobile ? '56px 20px' : '100px 40px' }}>
