@@ -12,7 +12,7 @@ export default function SetDropsRow({ isMobile }: { isMobile: boolean }) {
   useEffect(() => { fetch('/api/drops').then(r => r.json()).then(d => setDrops(d.drops ?? [])).catch(() => {}) }, [])
   if (!drops.length) return null
   return (
-    <section style={{ padding: isMobile ? '52px 20px 0' : '80px 40px 0' }}>
+    <section style={{ padding: isMobile ? '52px 20px 44px' : '80px 40px 64px' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
           <div>
