@@ -33,7 +33,7 @@ const CHAMP_DIM = 'rgba(201,178,126,0.55)'
 const HAIR = 'rgba(201,178,126,0.22)'
 const INK = '#0b0b0d'
 
-type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff' | 'portal' | 'board' | 'poses' | 'music' | 'drop'
+type Screen = 'home' | 'checkin' | 'june' | 'team' | 'addtime' | 'staff' | 'portal' | 'board' | 'poses' | 'music'
 interface Pose { id: string; src: string; credit: string | null; setName: string | null }
 interface PoseCat { key: string; label: string; count: number; cover: string | null }
 interface PortalItem { id: string; kind: string; src: string }
@@ -373,20 +373,6 @@ export default function KioskPage() {
     const iv = setInterval(fetchPortal, screen === 'portal' ? 5000 : 30000)
     return () => clearInterval(iv)
   }, [screen, fetchPortal])
-  // ── SET DROP PROMO (2026-10-09) ───────────────────────────────────────────
-  // A live Set Drop (Winter Is Coming) gets a slim pill on the home screen and
-  // a QR screen. Fed by the SAME hourly, CDN-cached showcase fetch — no new poll.
-  const [kioskDrops, setKioskDrops] = useState<{ slug: string; name: string; phase: string; line: string }[]>([])
-  const promoDrop = kioskDrops[0] ?? null
-  const dropQr = useMemo(() => {
-    if (!promoDrop) return null
-    const q = qrcode(0, 'M'); q.addData(`https://madekulture.com/drops/${promoDrop.slug}`); q.make()
-    const n = q.getModuleCount()
-    let d = ''
-    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`
-    return { d, n }
-  }, [promoDrop?.slug])
-
   const portalQr = useMemo(() => {
     if (!portalUrl) return null
     const q = qrcode(0, 'M'); q.addData(portalUrl); q.make()
@@ -720,13 +706,10 @@ export default function KioskPage() {
   // tiles) — the same squeeze the four-tile note below documents — and raw `vh`
   // is unsafe app-wide because globals.css zooms the body 1.25x above 769px.
   // `vh` here is the real visible height this component already measures.
-  // The Set Drop pill sits under the clock; the clock gives up the room it
-  // takes, so the tiles below never get pushed toward the fold.
-  const showDropPill = !!promoDrop && booted && !urgency
-  const clockPx = Math.max(34, Math.round(Math.min(
+  const clockPx = Math.round(Math.min(
     gridTiles ? 66 : barOn ? 80 : 118,
     Math.max(34, (vh ?? 900) * (gridTiles ? 0.075 : 0.13)),
-  )) - (showDropPill ? 30 : 0))
+  ))
 
   // ⚠️ FOUR STACKED TILES DO NOT FIT A LANDSCAPE FIRE HD 10. Measured: the
   // column needs 913px of viewport at the 150px tile floor, and the tablet has
@@ -873,10 +856,7 @@ export default function KioskPage() {
   const [showcaseOn, setShowcaseOn] = useState(false)
   const lastInteract = useRef(Date.now())
   useEffect(() => {
-    const load = () => fetch('/api/kiosk/showcase').then(r => r.json()).then(d => {
-      setShowcase(Array.isArray(d?.editorials) ? d.editorials.filter((x: any) => x?.photos?.length) : [])
-      setKioskDrops(Array.isArray(d?.drops) ? d.drops.filter((x: any) => x?.slug && x?.name) : [])
-    }).catch(() => {})
+    const load = () => fetch('/api/kiosk/showcase').then(r => r.json()).then(d => setShowcase(Array.isArray(d?.editorials) ? d.editorials.filter((x: any) => x?.photos?.length) : [])).catch(() => {})
     load()
     const iv = setInterval(load, SHOWCASE_REFRESH_MS)
     return () => clearInterval(iv)
@@ -1171,19 +1151,6 @@ export default function KioskPage() {
           }}>{wallMeridiem}</span>
         </div>
       </div>
-      {showDropPill && promoDrop && (
-        <div style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'center', padding: '6px 14px 0' }}>
-          <button onClick={() => { setScreen('drop'); touch() }} style={{
-            display: 'flex', alignItems: 'center', gap: 12, maxWidth: '100%',
-            background: 'rgba(201,178,126,0.10)', border: `1px solid ${CHAMP_DIM}`, borderRadius: 999,
-            padding: '9px 20px', color: '#fff', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-          }}>
-            <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.24em', color: CHAMP, whiteSpace: 'nowrap' }}>{promoDrop.name.toUpperCase()}</span>
-            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{promoDrop.line}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.18em', color: CHAMP, whiteSpace: 'nowrap' }}>TAP ›</span>
-          </button>
-        </div>
-      )}
       <div style={{
         flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center',
         flexDirection: gridTiles ? 'row' : 'column',
@@ -1587,35 +1554,6 @@ export default function KioskPage() {
     } catch { setMusicErr('Could not reach the studio system.') }
     setMusicBusy(false)
   }
-
-  if (screen === 'drop' && promoDrop) return (
-    <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>
-      <button style={backBtn} onClick={resetToHome}>&larr; BACK</button>
-      {header}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px 24px 32px' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.32em', color: CHAMP }}>
-          {promoDrop.phase === 'pre_reserve' ? `${promoDrop.name.toUpperCase()} · SET DROP` : 'LIMITED RUN · NOW BOOKING'}
-        </div>
-        <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: Math.min(88, Math.round((vh ?? 900) * 0.09)), lineHeight: 0.95, margin: '14px 0 12px', letterSpacing: '0.01em' }}>
-          {promoDrop.phase === 'pre_reserve' ? 'VOTE TO BRING IT BACK' : promoDrop.name.toUpperCase()}
-        </div>
-        <div style={{ fontSize: 19, color: 'rgba(255,255,255,0.75)', maxWidth: 560, lineHeight: 1.5 }}>
-          {promoDrop.line}.{promoDrop.phase === 'pre_reserve' ? ' It only gets built if enough of you want it. If it is, your deposit becomes studio credit and you book first. If not, you get it back.' : ''}
-        </div>
-        {dropQr && (
-          <div style={{ background: '#fff', padding: 14, borderRadius: 14, marginTop: 26, width: Math.min(260, Math.round((vh ?? 900) * 0.3)) }}>
-            <svg viewBox={`0 0 ${dropQr.n} ${dropQr.n}`} style={{ display: 'block', width: '100%', height: 'auto' }} shapeRendering="crispEdges">
-              <path d={dropQr.d} fill="#000" />
-            </svg>
-          </div>
-        )}
-        <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.24em', color: CHAMP, marginTop: 14 }}>
-          {promoDrop.phase === 'pre_reserve' ? 'SCAN TO VOTE ON YOUR PHONE' : 'SCAN TO BOOK ON YOUR PHONE'}
-        </div>
-        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>madekulture.com/drops/{promoDrop.slug}</div>
-      </div>
-    </main>
-  )
 
   if (screen === 'music') {
     const snap = music.snapshot
