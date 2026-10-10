@@ -20,6 +20,12 @@ export async function POST(req: NextRequest) {
   if (typeof b.is_open === 'boolean') updates.is_open = b.is_open
   if (typeof b.explicit_filter === 'boolean') updates.explicit_filter = b.explicit_filter
   if (typeof b.auto_approve === 'boolean') updates.auto_approve = b.auto_approve
+  // "Keep the vibe going" switch. Turning it off also ends a vibe in progress,
+  // so the room goes back to the house playlist instead of finishing 30 min.
+  if (typeof b.vibe_enabled === 'boolean') {
+    updates.vibe_enabled = b.vibe_enabled
+    if (!b.vibe_enabled) { updates.vibe_seed_id = null; updates.vibe_seed_title = null; updates.vibe_until = null }
+  }
   if (b.source === 'youtube' || b.source === 'spotify') updates.source = b.source
   if (typeof b.house_playlist_url === 'string') updates.house_playlist_url = b.house_playlist_url.trim() || null
   if (typeof b.name === 'string' && b.name.trim()) updates.name = b.name.trim().slice(0, 60)

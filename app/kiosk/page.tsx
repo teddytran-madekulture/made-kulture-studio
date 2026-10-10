@@ -1558,7 +1558,7 @@ export default function KioskPage() {
   if (screen === 'music') {
     const snap = music.snapshot
     const paused = !!snap?.zone && (!snap.zone.is_open || snap.zone.paused)
-    const label = music.display.source === 'request' ? 'GUEST REQUEST' : music.display.source === 'house' ? 'HOUSE PLAYLIST' : paused ? 'PAUSED' : 'WAITING'
+    const label = music.display.source === 'request' ? 'GUEST REQUEST' : music.display.source === 'house' ? 'HOUSE PLAYLIST' : music.display.source === 'vibe' ? 'KEEPING THE VIBE' : paused ? 'PAUSED' : 'WAITING'
     const ctrl: React.CSSProperties = { height: 72, minWidth: 150, padding: '0 26px', borderRadius: 16, fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 800, letterSpacing: '0.16em', cursor: 'pointer', background: 'linear-gradient(150deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015))', color: '#fff', border: '1px solid rgba(255,255,255,0.16)' }
     return (
       <main style={{ ...wrap, position: 'relative' }} onPointerDown={touch}>

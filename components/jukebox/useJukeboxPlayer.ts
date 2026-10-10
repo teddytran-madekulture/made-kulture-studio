@@ -16,11 +16,19 @@
 // Engines: YouTube IFrame API (works on Fire tablets) and the Spotify Web
 // Playback SDK (DESKTOP ONLY — a Spotify zone must run on the laptop).
 //
+// KEEP THE VIBE GOING (2026-10-10): when the queue empties after a guest song
+// ends, the server may hand back a `vibe` (the song's YouTube id). Mode 'vibe'
+// plays YouTube's Mix for it (list=RD<id>) instead of the house playlist, until
+// the server stops reporting it (30 min, "Back to house music", or the admin
+// switch). Time running out finishes the current track first; a person ending
+// it switches at once. Repeats and >15-min videos inside the Mix are skipped.
+//
 // ⚠️ BUMP lib/player-rev.ts when you change this file — the dedicated music
 // devices only reload when JUKEBOX_PLAYER_REV changes.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { MAX_REQUEST_SECONDS } from '@/lib/jukebox'
 
-export type JukeboxSource = 'request' | 'house' | 'idle' | 'paused' | 'blocked'
+export type JukeboxSource = 'request' | 'house' | 'vibe' | 'idle' | 'paused' | 'blocked'
 export type JukeboxDisplay = { title: string; artist: string; source: JukeboxSource }
 
 const isDesktop = () => typeof navigator !== 'undefined' && !/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -114,6 +122,13 @@ export function useJukeboxPlayer(opts: {
 
   const pausedLocal = useRef(false)
 
+  // Keep-the-vibe state (YouTube only).
+  const vibeSeed = useRef<string | null>(null)     // seed the loaded Mix was built from
+  const vibeEnding = useRef(false)                 // time's up — switch at the next track
+  const vibeCurId = useRef<string | null>(null)    // Mix track currently on
+  const vibeTuned = useRef(false)                  // shuffle/loop turned off for this Mix
+  const vibeSeen = useRef<Set<string>>(new Set())  // played this stretch — no repeats
+
   // ── Self-update safety ──
   // Is sound coming out of the speaker right now? House music counts.
   const audiblyPlaying = (): boolean => {
@@ -185,11 +200,14 @@ export function useJukeboxPlayer(opts: {
   }, [])
 
   const refreshHouseNowPlaying = useCallback(() => {
-    if (modeRef.current !== 'house' || pausedLocal.current) return
+    // Vibe tracks are reported the same way as house tracks (house_now_*), so the
+    // guest page, admin and kiosk bar can name what's actually playing.
+    if ((modeRef.current !== 'house' && modeRef.current !== 'vibe') || pausedLocal.current) return
+    const src: JukeboxSource = modeRef.current
     if (currentSource.current === 'youtube') {
       try {
         const d = yt.current?.getVideoData?.()
-        if (d?.title) { setDisplay({ title: d.title, artist: d.author || '', source: 'house' }); reportHouse(d.title, d.author || '') }
+        if (d?.title) { setDisplay({ title: d.title, artist: d.author || '', source: src }); reportHouse(d.title, d.author || '') }
       } catch {}
     } else if (currentSource.current === 'spotify') {
       try {
@@ -236,16 +254,21 @@ export function useJukeboxPlayer(opts: {
               }
               refreshHouseNowPlaying()
             }
+            if (e.data === YT.PlayerState.PLAYING && modeRef.current === 'vibe' && currentSource.current === 'youtube') {
+              onVibeTrack()
+            }
             if (e.data === YT.PlayerState.ENDED && currentSource.current === 'youtube') {
               // A house track just finished — the natural seam to take a pending
               // update. Never mid-run of a guest request (it would replay).
               if (modeRef.current === 'house' && reloadAtSeam()) return
+              // The whole Mix ran out (50 songs — rare inside 30 min): house.
+              if (modeRef.current === 'vibe') { if (lastState.current?.zone) goHouse(lastState.current.zone); return }
               onSongEnd()
             }
           },
           onError: () => {
             if (currentSource.current !== 'youtube') return
-            if (modeRef.current === 'house') { try { yt.current?.nextVideo() } catch {} }
+            if (modeRef.current === 'house' || modeRef.current === 'vibe') { try { yt.current?.nextVideo() } catch {} }
             else onSongEnd()
           },
         },
@@ -268,7 +291,7 @@ export function useJukeboxPlayer(opts: {
     if (!started) return
     const iv = setInterval(() => {
       const m = modeRef.current
-      if (pausedLocal.current || (m !== 'house' && m !== 'request') || currentSource.current !== 'youtube') { setNeedsTap(false); return }
+      if (pausedLocal.current || (m !== 'house' && m !== 'request' && m !== 'vibe') || currentSource.current !== 'youtube') { setNeedsTap(false); return }
       try {
         const st = yt.current?.getPlayerState?.()
         setNeedsTap(st === -1 || st === 5)
@@ -281,7 +304,7 @@ export function useJukeboxPlayer(opts: {
   useEffect(() => {
     if (!started) return
     const iv = setInterval(() => {
-      if (modeRef.current !== 'house' || pausedLocal.current) return
+      if ((modeRef.current !== 'house' && modeRef.current !== 'vibe') || pausedLocal.current) return
       refreshHouseNowPlaying()
     }, 20_000)
     return () => clearInterval(iv)
@@ -289,6 +312,10 @@ export function useJukeboxPlayer(opts: {
 
   const ytPlay = (id: string) => { if (ytLoaded.current === id && modeRef.current === 'request') return; try { yt.current?.loadVideoById(id) } catch {}; ytLoaded.current = id; shuffled.current = false }
   const ytHouse = (pid: string) => { shuffled.current = false; ytLoaded.current = null; try { yt.current?.loadPlaylist({ list: pid, listType: 'playlist' }) } catch {} }
+  const ytVibe = (seed: string) => {
+    ytLoaded.current = null; vibeTuned.current = false; vibeCurId.current = null
+    try { yt.current?.loadPlaylist({ list: `RD${seed}`, listType: 'playlist', index: 0 }) } catch {}
+  }
   const ytStop = () => { try { yt.current?.pauseVideo() } catch {} }
   const ytResume = () => {
     try { yt.current?.unMute?.() } catch {}
@@ -392,6 +419,7 @@ export function useJukeboxPlayer(opts: {
     advancing.current = false
     const np = res?.now_playing
     if (np) startTrack(np)
+    else if (res?.vibe?.seed_id) goVibe(res.vibe)
     else if (lastState.current?.zone?.house_playlist_url) goHouse(lastState.current.zone)
     else { modeRef.current = 'idle'; currentReqId.current = null; setDisplay({ title: '', artist: '', source: 'idle' }) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -400,6 +428,7 @@ export function useJukeboxPlayer(opts: {
   const startTrack = (np: any) => {
     pausedLocal.current = false
     currentReqId.current = np.id
+    if (np.external_id) vibeSeen.current.add(String(np.external_id))
     currentSource.current = (np.source === 'spotify' ? 'spotify' : 'youtube')
     setEngine(currentSource.current)
     modeRef.current = 'request'
@@ -408,7 +437,40 @@ export function useJukeboxPlayer(opts: {
     setDisplay({ title: np.title, artist: np.artist || '', source: 'request' })
   }
 
+  // ── Keep the vibe going ──
+  const goVibe = (v: { seed_id: string }) => {
+    pausedLocal.current = false
+    vibeSeed.current = v.seed_id
+    vibeEnding.current = false
+    vibeSeen.current.add(v.seed_id)
+    currentReqId.current = null
+    currentSource.current = 'youtube'; setEngine('youtube')
+    modeRef.current = 'vibe'
+    spStop(); ytVibe(v.seed_id)
+    setDisplay({ title: 'Keeping the vibe going', artist: '', source: 'vibe' })
+  }
+  // A Mix track just started playing.
+  const onVibeTrack = () => {
+    let id = '', dur = 0
+    try { id = yt.current?.getVideoData?.()?.video_id || ''; dur = Number(yt.current?.getDuration?.()) || 0 } catch {}
+    if (!id || id === vibeCurId.current) { refreshHouseNowPlaying(); return }
+    vibeCurId.current = id
+    // Time ran out during the previous track — it's finished, so switch now.
+    if (vibeEnding.current) { if (lastState.current?.zone) goHouse(lastState.current.zone); return }
+    if (!vibeTuned.current) {
+      vibeTuned.current = true
+      // House turns shuffle + loop on; a Mix should play in order (most similar
+      // first) and stop at its end.
+      try { yt.current?.setShuffle(false); yt.current?.setLoop(false) } catch {}
+    }
+    // Same 15-minute rule as requests, and nothing played this stretch twice.
+    if (vibeSeen.current.has(id) || dur > MAX_REQUEST_SECONDS) { try { yt.current?.nextVideo() } catch {}; return }
+    vibeSeen.current.add(id)
+    refreshHouseNowPlaying()
+  }
+
   const goHouse = (z: any) => {
+    vibeSeed.current = null; vibeEnding.current = false; vibeCurId.current = null; vibeSeen.current.clear()
     houseKey.current = z.house_playlist_url || null
     currentReqId.current = null
     setEngine(z.source === 'spotify' ? 'spotify' : 'youtube')
@@ -449,6 +511,7 @@ export function useJukeboxPlayer(opts: {
       if (currentSource.current === 'spotify') spResume(); else ytResume()
       if (s.now_playing) setDisplay({ title: s.now_playing.title, artist: s.now_playing.artist || '', source: 'request' })
       else if (modeRef.current === 'house') setDisplay({ title: 'House playlist', artist: '', source: 'house' })
+      else if (modeRef.current === 'vibe') refreshHouseNowPlaying()
     }
     if (modeRef.current === 'blocked') modeRef.current = 'idle'
 
@@ -461,6 +524,16 @@ export function useJukeboxPlayer(opts: {
       if (res?.now_playing) { startTrack(res.now_playing); return }
     }
     if (reloadIfQuiet()) return
+    // Keep the vibe going — only reachable with nothing playing or queued.
+    if (s.vibe?.seed_id && !wantsSpotify) {
+      if (modeRef.current !== 'vibe' || vibeSeed.current !== s.vibe.seed_id) goVibe(s.vibe)
+      return
+    }
+    if (modeRef.current === 'vibe') {
+      // Time's up: let the current track finish (onVibeTrack switches at the
+      // next one). Ended by a person / switched off: go now.
+      if (s.vibe_winding_down) { vibeEnding.current = true; return }
+    }
     if (modeRef.current !== 'house' || houseKey.current !== (s.zone.house_playlist_url || null)) goHouse(s.zone)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advance])
@@ -511,7 +584,7 @@ export function useJukeboxPlayer(opts: {
   const requestUpdate = useCallback(() => { needsReload.current = true; reloadIfQuiet() }, [])
   /** Skip within the house playlist (a guest request is skipped server-side). */
   const skipHouseTrack = useCallback(() => {
-    if (modeRef.current !== 'house') return
+    if (modeRef.current !== 'house' && modeRef.current !== 'vibe') return
     if (currentSource.current === 'spotify') spSkip(); else { try { yt.current?.nextVideo() } catch {} }
     setTimeout(refreshHouseNowPlaying, 1500)
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,9 +3,15 @@
 // the next approved song to "playing" (updating the zone's now_playing_id). If
 // nothing is approved, clears now_playing so the player falls back to the house
 // playlist. Optionally protected by JUKEBOX_PLAYER_KEY.
+//
+// 2026-10-10 KEEP THE VIBE GOING: when the queue empties after a guest song
+// finished NATURALLY (a skip is not a vote for more of the same), a YouTube zone
+// with vibe_enabled records that song as the seed of a 30-minute YouTube Mix and
+// returns it as `vibe`; the player plays the Mix instead of the house playlist.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { VIBE_MINUTES } from '@/lib/jukebox'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -34,15 +40,18 @@ export async function POST(req: NextRequest) {
 
   const db = supabaseAdmin()
   const { data: zone } = await db
-    .from('jukebox_zones').select('id, now_playing_id').eq('slug', slug).single()
+    .from('jukebox_zones').select('id, now_playing_id, source, vibe_enabled').eq('slug', slug).single()
   if (!zone) return NextResponse.json({ error: 'Unknown zone.' }, { status: 404 })
 
   // Retire the ended track (or a still-playing current if we're forcing on).
   const retireId = endedId || zone.now_playing_id
+  let retired: { external_id: string; title: string; source: string } | null = null
   if (retireId) {
-    await db.from('jukebox_requests')
+    const { data } = await db.from('jukebox_requests')
       .update({ status: 'played', played_at: new Date().toISOString() })
       .eq('id', retireId).eq('status', 'playing')
+      .select('external_id, title, source')
+    retired = (data && data[0]) || null
   }
 
   // Promote the next approved song (oldest approval first).
@@ -57,6 +66,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ now_playing: { ...next, status: 'playing' } })
   }
 
+  // Queue empty. Seed the vibe from the song that just finished — only when it
+  // played to its end (endedId: the player saw it finish) on a YouTube zone.
+  const seedable = !!endedId && retired && retired.source !== 'spotify' && zone.source !== 'spotify' && zone.vibe_enabled !== false
+  if (seedable) {
+    const until = new Date(Date.now() + VIBE_MINUTES * 60_000).toISOString()
+    const { error } = await db.from('jukebox_zones').update({
+      now_playing_id: null, vibe_seed_id: retired!.external_id, vibe_seed_title: retired!.title, vibe_until: until,
+    }).eq('id', zone.id)
+    if (!error) return NextResponse.json({ now_playing: null, vibe: { seed_id: retired!.external_id, seed_title: retired!.title, until } })
+    console.error('[jukebox/advance] vibe seed failed:', error.message)
+  }
   await db.from('jukebox_zones').update({ now_playing_id: null }).eq('id', zone.id)
   return NextResponse.json({ now_playing: null })
 }

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { readVibe } from '@/lib/jukebox'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   const db = sharedDb()
   const { data: zone } = await db
     .from('jukebox_zones')
-    .select('id, slug, name, is_open, paused, source, house_playlist_url, now_playing_id, house_now_title, house_now_artist, house_now_at')
+    .select('id, slug, name, is_open, paused, source, house_playlist_url, now_playing_id, house_now_title, house_now_artist, house_now_at, vibe_enabled, vibe_seed_id, vibe_seed_title, vibe_until')
     .eq('slug', slug).single()
   if (!zone) return NextResponse.json({ error: 'Unknown zone.' }, { status: 404 })
 
@@ -90,7 +91,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // "Keep the vibe going" (2026-10-10) — see lib/jukebox readVibe. The player
+  // acts on it only when nothing is playing or queued; a request always wins.
+  const { vibe, vibe_winding_down } = readVibe(zone)
+
   return NextResponse.json({
+    vibe,
+    vibe_winding_down,
     zone: {
       slug: zone.slug, name: zone.name, is_open: zone.is_open, paused: zone.paused,
       source: zone.source, house_playlist_url: zone.house_playlist_url,

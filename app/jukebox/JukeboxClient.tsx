@@ -143,6 +143,20 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
     setCancelling('')
   }
 
+  // "Back to house music" — ends the keep-the-vibe Mix for the whole zone.
+  const [endingVibe, setEndingVibe] = useState(false)
+  const endVibe = async () => {
+    setEndingVibe(true); setErr('')
+    try {
+      const r = await fetch('/api/jukebox/vibe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: zoneSlug, action: 'end' }) })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok) { setToast(d.message || 'Back to the house playlist.'); setTimeout(() => setToast(''), 3000) }
+      else setErr(d.error || 'Could not change the music.')
+      loadState()
+    } catch { setErr('Connection problem — try again.') }
+    setEndingVibe(false)
+  }
+
   // ── Styles ──
   const wrap: React.CSSProperties = { background: BG, minHeight: '100vh', color: '#fff', fontFamily: 'Inter, sans-serif', padding: '28px 18px 60px' }
   const card: React.CSSProperties = { background: '#141416', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 14 }
@@ -170,6 +184,7 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
   const closed = zone && !zone.is_open
   const nowPlaying: Track | null = state?.now_playing ?? null
   const houseNow: HouseNow | null = state?.house_now ?? null
+  const vibe: { seed_id: string; seed_title: string | null; until: string } | null = state?.vibe ?? null
   const upNext: Track[] = state?.up_next ?? []
   const mine: any[] = state?.mine ?? []
 
@@ -288,6 +303,23 @@ export default function JukeboxClient({ initialZone }: { initialZone: string }) 
                 <div style={{ fontSize: 14, fontWeight: 700, color: GOLD, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nowPlaying.title}</div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{nowPlaying.artist}</div>
               </div>
+            </div>
+          ) : vibe ? (
+            // Keeping the vibe going: the last guest song ended and the player is
+            // on songs similar to it (its YouTube Mix) instead of the house
+            // playlist, for 30 minutes or until someone requests again.
+            <div style={{ ...card }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: GOLD, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{houseNow ? decode(houseNow.title) : 'Similar songs coming up'}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+                {houseNow?.artist ? `${decode(houseNow.artist)} · ` : ''}Keeping the vibe going{vibe.seed_title ? ` · based on ${decode(vibe.seed_title)}` : ''}
+              </div>
+              <button
+                onClick={endVibe}
+                disabled={endingVibe}
+                style={{ marginTop: 10, background: 'transparent', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.6)', borderRadius: 8, padding: '7px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', cursor: endingVibe ? 'default' : 'pointer' }}
+              >
+                {endingVibe ? '…' : 'BACK TO HOUSE MUSIC'}
+              </button>
             </div>
           ) : houseNow ? (
             // Nobody's request is up, but music IS playing — show the actual

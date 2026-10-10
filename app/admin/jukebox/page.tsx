@@ -6,10 +6,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { readVibe, VIBE_MINUTES } from '@/lib/jukebox'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 
-interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; paused: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null; house_now_title?: string | null; house_now_artist?: string | null; house_now_at?: string | null }
+interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; paused: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null; house_now_title?: string | null; house_now_artist?: string | null; house_now_at?: string | null; vibe_enabled?: boolean; vibe_seed_id?: string | null; vibe_seed_title?: string | null; vibe_until?: string | null }
 interface Req { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name: string | null; status: string }
 
 function fmtDur(s: number | null): string { if (s == null) return ''; const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}` }
@@ -120,6 +121,11 @@ export default function AdminJukeboxPage() {
                     <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: zone.auto_approve ? C.accent : C.dim, cursor: 'pointer' }} title="Requests skip approval and go straight into the queue">
                       <input type="checkbox" checked={zone.auto_approve} onChange={e => saveSettings({ auto_approve: e.target.checked })} /> Auto-approve requests
                     </label>
+                    {zone.source !== 'spotify' && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: zone.vibe_enabled !== false ? C.accent : C.dim, cursor: 'pointer' }} title={`When the last guest song ends, keep playing similar songs (YouTube Mix) for ${VIBE_MINUTES} minutes before going back to the house playlist`}>
+                        <input type="checkbox" checked={zone.vibe_enabled !== false} onChange={e => saveSettings({ vibe_enabled: e.target.checked })} /> Keep the vibe going ({VIBE_MINUTES} min)
+                      </label>
+                    )}
                     <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: C.dim }}>
                       Source
                       <select value={zone.source} onChange={e => saveSettings({ source: e.target.value })} style={{ ...inp, width: 'auto', padding: '6px 8px', fontWeight: 600, color: zone.source === 'spotify' ? '#1db954' : C.accent }}>
@@ -175,6 +181,23 @@ export default function AdminJukeboxPage() {
                     // The player reports the live house track; show it if it's fresh
                     // (updated within 30s and not paused), else the generic label.
                     const fresh = !zone.paused && zone.house_now_at && (Date.now() - new Date(zone.house_now_at).getTime() < 30000)
+                    // Keeping the vibe going: the player is on the YouTube Mix of the
+                    // last guest song, not the house playlist.
+                    const { vibe } = readVibe(zone)
+                    if (vibe) {
+                      const mins = Math.max(1, Math.ceil((new Date(vibe.until).getTime() - Date.now()) / 60000))
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
+                          <div style={{ minWidth: 0 }}>
+                            {fresh && zone.house_now_title
+                              ? <><span style={{ color: C.text }}>{zone.house_now_title}</span>{zone.house_now_artist && <span style={{ color: C.dim }}> — {zone.house_now_artist}</span>}</>
+                              : <span style={{ color: C.text }}>Similar songs</span>}
+                            <div style={{ color: C.accent, fontSize: 11, marginTop: 3 }}>Keeping the vibe going · based on {vibe.seed_title || 'the last request'} · {mins} min left</div>
+                          </div>
+                          <button onClick={() => control('end_vibe')} style={{ ...btn('transparent', C.dim), border: `1px solid ${C.line}` }}>Back to house</button>
+                        </div>
+                      )
+                    }
                     if (fresh && zone.house_now_title) return (
                       <div style={{ fontSize: 13 }}>
                         <span style={{ color: C.text }}>{zone.house_now_title}</span>

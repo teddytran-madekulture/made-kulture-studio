@@ -8,6 +8,8 @@
 //   reload_players — stamp a marker every player device polls (/api/version), so
 //                    the tablets take a new build on demand instead of waiting
 //                    for a quiet moment. Studio-wide, so it needs no zone.
+//   end_vibe — stop the "keep the vibe going" Mix now; the player goes back to
+//              the house playlist on its next poll.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
@@ -49,6 +51,11 @@ export async function POST(req: NextRequest) {
 
   if (action === 'play') {
     await db.from('jukebox_zones').update({ paused: false }).eq('id', zone.id)
+    return NextResponse.json({ success: true })
+  }
+
+  if (action === 'end_vibe') {
+    await db.from('jukebox_zones').update({ vibe_seed_id: null, vibe_seed_title: null, vibe_until: null }).eq('id', zone.id)
     return NextResponse.json({ success: true })
   }
 

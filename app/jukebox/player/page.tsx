@@ -64,7 +64,7 @@ export default function PlayerPage() {
           <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.9)' }}>
             <div style={{ textAlign: 'center', padding: 24 }}>
               <div style={{ color: display.source === 'paused' ? '#f87171' : GOLD, fontSize: 13, letterSpacing: '0.2em', marginBottom: 14 }}>
-                {display.source === 'house' ? '♫ HOUSE PLAYLIST' : display.source === 'paused' ? '❚❚ PAUSED' : display.source === 'request' ? '♫ NOW PLAYING' : '♫ WAITING FOR REQUESTS'}
+                {display.source === 'house' ? '♫ HOUSE PLAYLIST' : display.source === 'vibe' ? '♫ KEEPING THE VIBE GOING' : display.source === 'paused' ? '❚❚ PAUSED' : display.source === 'request' ? '♫ NOW PLAYING' : '♫ WAITING FOR REQUESTS'}
               </div>
               <div style={{ fontSize: 32, fontWeight: 800, maxWidth: '80vw', lineHeight: 1.2 }}>{display.title || '—'}</div>
               {display.artist && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 17, marginTop: 10 }}>{display.artist}</div>}
@@ -84,7 +84,7 @@ export default function PlayerPage() {
       <div style={{ flexShrink: 0, background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 10, letterSpacing: '0.16em', color: display.source === 'paused' || display.source === 'blocked' ? '#f87171' : GOLD }}>
-            {display.source === 'request' ? 'NOW PLAYING' : display.source === 'house' ? 'HOUSE PLAYLIST' : display.source === 'paused' ? 'PAUSED' : display.source === 'blocked' ? 'WRONG DEVICE' : 'WAITING FOR REQUESTS'}
+            {display.source === 'request' ? 'NOW PLAYING' : display.source === 'house' ? 'HOUSE PLAYLIST' : display.source === 'vibe' ? 'KEEPING THE VIBE GOING' : display.source === 'paused' ? 'PAUSED' : display.source === 'blocked' ? 'WRONG DEVICE' : 'WAITING FOR REQUESTS'}
             <span style={{ color: 'rgba(255,255,255,0.3)', marginLeft: 10 }}>{zoneName}</span>
           </div>
           <div style={{ color: '#fff', fontSize: 16, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70vw' }}>{display.title || '—'}</div>
