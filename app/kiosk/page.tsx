@@ -1594,13 +1594,13 @@ export default function KioskPage() {
       {header}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px 24px 32px' }}>
         <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.32em', color: CHAMP }}>
-          {promoDrop.phase === 'pre_reserve' ? 'SET DROP · VOTE TO BUILD IT' : 'LIMITED RUN · NOW BOOKING'}
+          {promoDrop.phase === 'pre_reserve' ? `${promoDrop.name.toUpperCase()} · SET DROP` : 'LIMITED RUN · NOW BOOKING'}
         </div>
         <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: Math.min(88, Math.round((vh ?? 900) * 0.09)), lineHeight: 0.95, margin: '14px 0 12px', letterSpacing: '0.01em' }}>
-          {promoDrop.name.toUpperCase()}
+          {promoDrop.phase === 'pre_reserve' ? 'VOTE TO BRING IT BACK' : promoDrop.name.toUpperCase()}
         </div>
         <div style={{ fontSize: 19, color: 'rgba(255,255,255,0.75)', maxWidth: 560, lineHeight: 1.5 }}>
-          {promoDrop.line}.{promoDrop.phase === 'pre_reserve' ? ' It only gets built if enough of you want it — your deposit becomes studio credit and you book first.' : ''}
+          {promoDrop.line}.{promoDrop.phase === 'pre_reserve' ? ' It only gets built if enough of you want it. If it is, your deposit becomes studio credit and you book first. If not, you get it back.' : ''}
         </div>
         {dropQr && (
           <div style={{ background: '#fff', padding: 14, borderRadius: 14, marginTop: 26, width: Math.min(260, Math.round((vh ?? 900) * 0.3)) }}>
@@ -1610,7 +1610,7 @@ export default function KioskPage() {
           </div>
         )}
         <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.24em', color: CHAMP, marginTop: 14 }}>
-          {promoDrop.phase === 'pre_reserve' ? 'SCAN TO RESERVE ON YOUR PHONE' : 'SCAN TO BOOK ON YOUR PHONE'}
+          {promoDrop.phase === 'pre_reserve' ? 'SCAN TO VOTE ON YOUR PHONE' : 'SCAN TO BOOK ON YOUR PHONE'}
         </div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>madekulture.com/drops/{promoDrop.slug}</div>
       </div>

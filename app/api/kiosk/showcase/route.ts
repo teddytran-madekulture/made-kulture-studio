@@ -13,7 +13,7 @@
 import { NextResponse } from 'next/server'
 import { getLiveEditorials } from '@/lib/featured-editorial-server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { dropPhase, depositFor, dollars, fmtInstant, runLabel, type SetDrop } from '@/lib/set-drops'
+import { dropPhase, depositFor, dollars, runLabel, type SetDrop } from '@/lib/set-drops'
 import { isVideoUrl } from '@/lib/media-url'
 
 // Live Set Drops ride along as ADS in the idle showcase (QR to the drop page),
@@ -48,14 +48,14 @@ export async function GET() {
     return {
       id: `drop-${d.slug}`, title: d.name, subtitle: d.tagline ?? '', setName: d.name, setSlug: undefined, postUrl: '',
       // Same words as the home-page hero slide (look "A", Teddy 2026-10-09).
-      promoLabel: reserving
-        ? `SET DROP · RESERVE BY ${d.pre_reserve_ends_at ? shortDay(d.pre_reserve_ends_at).toUpperCase() : 'THE DEADLINE'}`
-        : 'LIMITED RUN · NOW BOOKING',
+      // Same words as the home-page hero slide (option 1, Teddy 2026-10-09):
+      // lead with the VOTE so nobody reads it as "this is happening".
+      promoLabel: reserving ? `${d.name.toUpperCase()} · SET DROP` : 'LIMITED RUN · NOW BOOKING',
       promoUrl: reserving ? `/drops/${d.slug}#reserve` : `/drops/${d.slug}`,
-      promoCta: reserving ? 'SCAN TO RESERVE' : 'SCAN TO BOOK',
-      promoHeadline: d.name,
+      promoCta: reserving ? 'SCAN TO VOTE' : 'SCAN TO BOOK',
+      promoHeadline: reserving ? 'VOTE TO\nBRING IT BACK' : d.name,
       promoText: reserving
-        ? `Only built if you want it. Reserve with a ${dollars(depositFor(d, 1))} deposit. It becomes studio credit${perks(d)}.`
+        ? `${d.name} only returns if ${d.goal_type === 'people' && d.goal_value ? `${d.goal_value} of you` : 'enough of you'} reserve${d.pre_reserve_ends_at ? ` by ${shortDay(d.pre_reserve_ends_at)}` : ''}. Put down ${dollars(depositFor(d, 1))} to vote. If it's built, it becomes studio credit${perks(d)}. If not, you get it back.`
         : `${d.tagline ? d.tagline + ' ' : ''}${runLabel(d)}.`,
       credits: [], photos: Array.from(new Set(photos)).slice(0, 8), intervalSec: 7,
     }
@@ -71,7 +71,7 @@ export async function GET() {
     drops: drops.map(({ d, phase }) => ({
       slug: d.slug, name: d.name, phase,
       line: phase === 'pre_reserve'
-        ? `Reserve with a ${dollars(depositFor(d, 1))} deposit${d.pre_reserve_ends_at ? ` by ${fmtInstant(d.pre_reserve_ends_at)}` : ''}`
+        ? `Vote to bring it back · ${dollars(depositFor(d, 1))} deposit by ${d.pre_reserve_ends_at ? shortDay(d.pre_reserve_ends_at) : 'the deadline'}`
         : `Now booking · ${runLabel(d)}`,
     })),
   }, {
