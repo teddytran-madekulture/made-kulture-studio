@@ -19,6 +19,15 @@ import { isVideoUrl } from '@/lib/media-url'
 // Live Set Drops ride along as ADS in the idle showcase (QR to the drop page),
 // and as a short list for the home-screen pill. Ends by itself: a drop past its
 // deadline or run is never returned. A failed lookup just means no drop ads.
+const shortDay = (iso: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric' }).format(new Date(iso))
+const perks = (d: SetDrop) => {
+  const p = [
+    d.perk_discount && d.discount_kind === 'percent' && d.discount_value ? `${d.discount_value}% off` : null,
+    d.perk_early_access ? 'first pick of dates' : null,
+  ].filter(Boolean)
+  return p.length ? `, plus ${p.join(' and ')}` : ''
+}
+
 async function liveDrops() {
   const { data, error } = await supabaseAdmin().from('set_drops').select('*').in('status', ['pre_reserve', 'funded'])
   if (error) { console.error('[kiosk showcase] drop lookup failed:', error.message); return [] }
@@ -38,12 +47,15 @@ export async function GET() {
       .filter((u): u is string => !!u && !isVideoUrl(u))
     return {
       id: `drop-${d.slug}`, title: d.name, subtitle: d.tagline ?? '', setName: d.name, setSlug: undefined, postUrl: '',
-      promoLabel: reserving ? 'SET DROP · VOTE TO BUILD IT' : 'LIMITED RUN · NOW BOOKING',
-      promoUrl: `/drops/${d.slug}`,
+      // Same words as the home-page hero slide (look "A", Teddy 2026-10-09).
+      promoLabel: reserving
+        ? `SET DROP · RESERVE BY ${d.pre_reserve_ends_at ? shortDay(d.pre_reserve_ends_at).toUpperCase() : 'THE DEADLINE'}`
+        : 'LIMITED RUN · NOW BOOKING',
+      promoUrl: reserving ? `/drops/${d.slug}#reserve` : `/drops/${d.slug}`,
       promoCta: reserving ? 'SCAN TO RESERVE' : 'SCAN TO BOOK',
       promoHeadline: d.name,
       promoText: reserving
-        ? `${d.tagline ? d.tagline + ' ' : ''}Reserve with a ${dollars(depositFor(d, 1))} deposit${d.pre_reserve_ends_at ? ` by ${fmtInstant(d.pre_reserve_ends_at)}` : ''}. Only built if enough of you want it.`
+        ? `Only built if you want it. Reserve with a ${dollars(depositFor(d, 1))} deposit. It becomes studio credit${perks(d)}.`
         : `${d.tagline ? d.tagline + ' ' : ''}${runLabel(d)}.`,
       credits: [], photos: Array.from(new Set(photos)).slice(0, 8), intervalSec: 7,
     }
