@@ -255,6 +255,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     console.log('[extension] candidates:', candidates.length, 'matchedBookingCard:', !!(sourceCardId && b.square_card_on_file_id === sourceCardId), 'usedFallback:', !!(sourceCardId && fallbackCard && sourceCardId === fallbackCard.cardId))
 
     if (!sourceCardId) {
+      // 2026-10-11 — a tablet guest who gets bounced to their phone may never
+      // finish, and nothing told the owner. Now it does. Non-fatal.
+      if (r.created_by === 'kiosk') {
+        sendOwnerPush({
+          title: `ADD TIME not paid yet: ${p.setName}`,
+          body: `${String(customer?.name ?? 'Guest').split(' ')[0]} asked for +${durationLabel(hours)} ($${(r.amount_cents / 100).toFixed(2)}) on the tablet. No saved card found, so they were sent a pay link. Check it gets paid.`,
+          url: '/admin/dashboard', tag: `ext-unpaid-${r.id}`,
+        }).catch(e => console.error('[extension] owner push failed', e))
+      }
       // The page swaps itself for a card field on this signal.
       return NextResponse.json({ error: 'No saved card found on your account.', needsCard: true }, { status: 402 })
     }
@@ -287,6 +296,13 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     paymentId = result.payment?.id ?? null
   } catch (e: any) {
     console.error('[extension] charge failed', e)
+    if (r.created_by === 'kiosk') {
+      sendOwnerPush({
+        title: `ADD TIME card declined: ${p.setName}`,
+        body: `${String(customer?.name ?? 'Guest').split(' ')[0]}'s card was refused for +${durationLabel(hours)} ($${(r.amount_cents / 100).toFixed(2)}). Nothing was charged.`,
+        url: '/admin/dashboard', tag: `ext-unpaid-${r.id}`,
+      }).catch(err => console.error('[extension] owner push failed', err))
+    }
     // Deliberately left PENDING, not 'failed': a declined or drained card (very
     // common — prepaid cards are the norm with this clientele) should let them
     // try another one on the same link instead of dead-ending it. The expiry

@@ -18,6 +18,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { findActiveBookingBySet, createExtensionRequest, normalizeHours, durationLabel } from '@/lib/extensions'
 import { sendSMS, toE164 } from '@/lib/sms'
 import { phoneProof } from '@/lib/extension-link'
+import { sendOwnerPush } from '@/lib/push'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -49,22 +50,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Pick between 30 minutes and 12 hours.' }, { status: 400 })
   }
 
-  const occ = await findActiveBookingBySet(setSlug)
+  // 15-minute grace: a guest running over can still buy the time from the
+  // tablet (the studio's overtime rule starts at 15 minutes past).
+  // 2026-10-11: every refusal also tells the owner — a guest who gave up at the
+  // tablet used to leave no trace anywhere. Non-fatal, never blocks the reply.
+  const tellOwner = (why: string) => sendOwnerPush({
+    title: `ADD TIME refused: ${setSlug}`,
+    body: `Someone tried to add +${durationLabel(hours)} on the ${setSlug} tablet. Nothing was charged. Reason: ${why}`,
+    url: '/admin/dashboard', tag: `ext-refused-${setSlug}`,
+  }).catch(e => console.error('[kiosk/extend] owner push failed', e))
+
+  const occ = await findActiveBookingBySet(setSlug, { graceMs: 15 * 60 * 1000 })
   if (occ.kind === 'none' || !occ.bookingId) {
-    return NextResponse.json({ error: 'No session is running on this set right now.' }, { status: 409 })
+    await tellOwner('no session running (ended more than 15 min ago)')
+    return NextResponse.json({ error: 'This session has ended, so time can\'t be added here. Tap GET THE TEAM and we\'ll sort it out.', needsTeam: true }, { status: 409 })
   }
 
   // Buyouts and off-hours ends are a conversation with a person, not a price.
   if (!occ.extendable) {
+    await tellOwner('buyout or ends outside studio hours')
     return NextResponse.json({
       error: occ.buyout
         ? 'Full-studio bookings are extended by the team - tap GET THE TEAM.'
         : 'This one needs a person - tap GET THE TEAM and we will sort it out.',
+      needsTeam: true,
     }, { status: 409 })
   }
 
   const headroom = occ.headroomHours ?? 0
   if (hours > headroom) {
+    await tellOwner('not enough open time on the set')
     return NextResponse.json({
       error: headroom >= 0.5
         ? `Only ${durationLabel(headroom)} is available on this set.`
@@ -82,6 +97,7 @@ export async function POST(req: NextRequest) {
     ttlMs: 20 * 60 * 1000,
   })
   if ('error' in made) {
+    await tellOwner('could not create the request')
     return NextResponse.json({ error: made.error }, { status: 409 })
   }
 

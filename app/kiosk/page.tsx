@@ -1494,15 +1494,22 @@ export default function KioskPage() {
             </>
           )}
 
+          {/* 2026-10-11 — a refusal used to be one quiet line under the buttons,
+              followed by the SAME gold DONE button as success. A guest on Set A
+              read that as "paid" and left (nothing was charged, no link sent).
+              A failure now says NOT CHARGED in so many words, and its main
+              button is GET THE TEAM, never a gold DONE. */}
           {extError && (
-            <div style={{ color: 'rgba(255,255,255,0.8)', borderLeft: `2px solid ${CHAMP_DIM}`, paddingLeft: 14, fontSize: 17, marginTop: 22, maxWidth: 500, textAlign: 'left', lineHeight: 1.6 }}>
-              {extError}
+            <div style={{ marginTop: 24, maxWidth: 540, width: '100%', border: '1px solid rgba(255,107,107,0.55)', background: 'rgba(255,107,107,0.08)', borderRadius: 16, padding: '20px 24px', textAlign: 'center' }}>
+              <div style={{ fontSize: 13, letterSpacing: '0.3em', fontWeight: 800, color: '#ff8a8a', marginBottom: 8 }}>NOT CHARGED · NO TIME ADDED</div>
+              <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.88)', lineHeight: 1.6 }}>{extError}</div>
+              <button onClick={() => { setScreen('team'); touch() }} style={{ ...champBtn, marginTop: 18 }}>GET THE TEAM</button>
             </div>
           )}
 
           {(extStep === 'done' || extStep === 'phone' || extError) && (
             <button onClick={resetToHome} style={
-              (extStep === 'phone' && !extReq?.smsSent)
+              ((extStep === 'phone' && !extReq?.smsSent) || !!extError)
                 ? { background: 'none', border: '1px solid rgba(255,255,255,0.16)', color: 'rgba(255,255,255,0.55)',
                     borderRadius: 14, padding: '15px 38px', fontFamily: 'Inter, sans-serif', fontSize: 13,
                     fontWeight: 700, letterSpacing: '0.18em', cursor: 'pointer', marginTop: 16 }

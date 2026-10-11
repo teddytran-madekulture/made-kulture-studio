@@ -397,9 +397,16 @@ export async function setHeadroom(
   return { nextStartISO, headroomHours: Math.min(hours, 12), headroomLimit: bounds[0].limit }
 }
 
-export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupancy> {
+/** `graceMs` (2026-10-11): also match a session that ENDED within the last
+ *  graceMs. Used ONLY by the tablet's ADD TIME — the guest running over is
+ *  exactly who needs it (Set A, Jean, tapped at 2:34 for a 2:30 end and was told
+ *  "No session is running"). A session still in progress always wins over a
+ *  recently ended one, so a guest who just walked in is never billed for the
+ *  previous guest's overtime, and vice versa. */
+export async function findActiveBookingBySet(setSlug: string, opts: { graceMs?: number } = {}): Promise<SetOccupancy> {
   const db = supabaseAdmin()
   const now = Date.now()
+  const graceMs = Math.max(0, opts.graceMs ?? 0)
 
   const { data: setRow, error: setErr } = await db
     .from('sets').select('id').eq('slug', setSlug).maybeSingle()
@@ -415,7 +422,7 @@ export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupa
     .select('id, start_time, end_time, set_id, checked_in_at, customers(name)')
     .eq('status', 'confirmed')
     .lte('start_time', new Date(now + 30 * 60 * 1000).toISOString())
-    .gt('end_time', new Date(now).toISOString())
+    .gt('end_time', new Date(now - graceMs).toISOString())
   if (error) { console.error('[kiosk] occupancy query failed:', error.message); return { kind: 'none' } }
 
   const live = (rows ?? []) as any[]
@@ -451,9 +458,17 @@ export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupa
 
   // This set's own booking wins. Earliest start, so a session already running
   // beats one starting in twenty minutes.
+  // Priority: 0 = running now, 1 = ended within graceMs (the guest running
+  // over is still standing here), 2 = starting soon. ⚠️ The ended session MUST
+  // outrank the next one: with grace, "earliest start" alone would hand the
+  // running-over guest's ADD TIME to the NEXT guest's booking. Without grace no
+  // row has ended, so this is the old "earliest start wins" order.
+  const ended = (r: any) => Date.parse(r.end_time) <= now
+  const rank = (r: any) => ended(r) ? 1 : Date.parse(r.start_time) <= now ? 0 : 2
   const mine = live
     .filter(r => roomIds.has(r.set_id))
-    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0]
+    .sort((a, b) => (rank(a) - rank(b))
+      || (ended(a) ? Date.parse(b.end_time) - Date.parse(a.end_time) : Date.parse(a.start_time) - Date.parse(b.start_time)))[0]
   if (mine) {
     const head = await setHeadroom(mine.set_id, mine.end_time, mine.id)
     return { ...shape(mine, false), ...head, extendable: head.headroomHours >= 0.5 }
@@ -461,7 +476,7 @@ export async function findActiveBookingBySet(setSlug: string): Promise<SetOccupa
 
   // Otherwise a buyout has the whole building, this set included.
   const buyout = live
-    .filter(r => r.set_id === null)
+    .filter(r => r.set_id === null && !ended(r))
     .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0]
   // ⚠️ planExtension REFUSES buyouts ("extended by the team"). The tablet must
   // never print a price it cannot honour, so a buyout gets no headroom at all.
