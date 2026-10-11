@@ -112,12 +112,15 @@ export async function rosterTalent(db: SupabaseClient, rosterId: string): Promis
   return (data ?? []).map(t => ({ ...t, cities: t.cities ?? [], photos: t.photos ?? [] }))
 }
 
-/** The roster a member's directory profile shows — LIVE rosters only. Null when
- *  there is none (or it is a draft/hidden). Logs and returns null on a DB
- *  error so a roster problem can never take the whole profile down. */
-export async function liveRosterFor(db: SupabaseClient, ownerId: string): Promise<PublicRoster | null> {
+/** The roster a member's directory profile shows — LIVE rosters only, unless
+ *  `includeDraft` (the admin viewing a profile, so the owner can see a draft in
+ *  place before the company has said yes). Null when there is none. Logs and
+ *  returns null on a DB error so a roster problem can never take the whole
+ *  profile down. */
+export async function liveRosterFor(db: SupabaseClient, ownerId: string, opts: { includeDraft?: boolean } = {}): Promise<PublicRoster | null> {
   const { data: r, error } = await db.from('company_rosters')
-    .select('id, label, source_url, status').eq('owner_id', ownerId).eq('status', 'live').maybeSingle()
+    .select('id, label, source_url, status').eq('owner_id', ownerId)
+    .in('status', opts.includeDraft ? ['live', 'draft'] : ['live']).maybeSingle()
   if (error) { console.error('[roster] lookup failed:', error.message); return null }
   if (!r) return null
   try {
@@ -125,6 +128,38 @@ export async function liveRosterFor(db: SupabaseClient, ownerId: string): Promis
     if (!talent.length) return null
     let company_url = r.source_url
     try { company_url = siteOrigin(r.source_url) } catch {}
-    return { label: r.label || 'Roster', company_url, talent }
+    return { label: r.label || 'Roster', company_url, talent, draft: r.status === 'draft' }
   } catch (e: any) { console.error('[roster]', e?.message ?? e); return null }
+}
+
+/** One agency model as directory search shows it. */
+export type DirectoryModel = {
+  id: string; name: string; division: string; cities: string[]; photo: string
+  agencyId: string; agencyName: string
+}
+
+/** Every model on a LIVE roster whose agency is in `ownerNames` (the listed,
+ *  unblocked members the caller already resolved). Throws on a DB error so the
+ *  caller decides; /api/directory treats a failure as "no models" + a log. */
+export async function directoryModels(db: SupabaseClient, ownerNames: Map<string, string>): Promise<DirectoryModel[]> {
+  if (!ownerNames.size) return []
+  // Live rosters are few; filter owners in JS rather than sending every
+  // listed member's id in the query string.
+  const { data: all, error } = await db.from('company_rosters').select('id, owner_id').eq('status', 'live')
+  if (error) throw new Error(`roster lookup failed: ${error.message}`)
+  const rosters = (all ?? []).filter(r => ownerNames.has(r.owner_id))
+  if (!rosters.length) return []
+  const ownerOf = new Map(rosters.map(r => [r.id, r.owner_id as string]))
+  const { data: talent, error: tErr } = await db.from('roster_talent')
+    .select('id, roster_id, name, division, cities, photos, sort_order')
+    .in('roster_id', [...ownerOf.keys()]).eq('active', true)
+    .order('sort_order', { ascending: true }).limit(2000)
+  if (tErr) throw new Error(`roster talent lookup failed: ${tErr.message}`)
+  return (talent ?? []).filter(t => (t.photos ?? []).length).map(t => {
+    const agencyId = ownerOf.get(t.roster_id)!
+    return {
+      id: t.id, name: t.name, division: t.division ?? '', cities: t.cities ?? [], photo: t.photos[0],
+      agencyId, agencyName: ownerNames.get(agencyId) ?? '',
+    }
+  })
 }

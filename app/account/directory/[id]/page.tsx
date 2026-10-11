@@ -115,6 +115,9 @@ export default function MemberProfilePage() {
     }
   }
   const [tab, setTab] = useState<'roster' | 'listings' | 'portfolio' | 'tagged' | 'credits'>('portfolio')
+  // ?talent=<id> — arrived from an agency model in directory search.
+  const [talentId, setTalentId] = useState<string | null>(null)
+  useEffect(() => { try { setTalentId(new URLSearchParams(window.location.search).get('talent')) } catch {} }, [])
   // ?tab=tagged — the "you were credited" email lands here.
   useEffect(() => {
     try { if (new URLSearchParams(window.location.search).get('tab') === 'tagged') setTab('tagged') } catch {}
@@ -486,7 +489,7 @@ export default function MemberProfilePage() {
       </div>
 
       {tab === 'roster' && member.roster ? (
-        <RosterTab roster={member.roster} memberId={member.id} memberName={member.full_name ?? ''} isSelf={member.is_self} />
+        <RosterTab roster={member.roster} memberId={member.id} memberName={member.full_name ?? ''} isSelf={member.is_self} openId={talentId} />
       ) : tab === 'listings' ? (
         <ListingsTab memberId={member.id} memberName={member.full_name ?? ''} listings={member.listings ?? []} isSelf={member.is_self} />
       ) : tab === 'tagged' ? (

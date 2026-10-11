@@ -2115,6 +2115,7 @@ export default function AdminDashboard() {
           {navLink('/admin/directory', '✦', 'Creative Directory')}
           {navLink('/admin/listings', '🏷', 'Service Listings')}
           {navLink('/admin/rosters', '☰', 'Company Rosters')}
+          {navLink('/admin/partners', '⇄', 'Partners')}
           {navLink('/admin/community', '📈', 'Community')}
           {navLink('/admin/roles', '◆', 'Directory Roles')}
 

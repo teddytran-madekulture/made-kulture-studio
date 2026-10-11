@@ -20,6 +20,35 @@ export type PublicRoster = {
   label: string
   company_url: string
   talent: RosterTalent[]
+  /** True only for an admin viewing a roster that isn't live yet. */
+  draft?: boolean
+}
+
+/** A talent's bio as the agency writes it ("Height:   5ft 9inches" lines plus
+ *  boilerplate) → a clean stats block. Lines that are not "Label: value", or
+ *  whose value is long (Activities, Resume), come back as `notes`. */
+export function talentStats(bio: string): { stats: { label: string; value: string }[]; notes: { label: string; value: string }[] } {
+  const stats: { label: string; value: string }[] = []
+  const notes: { label: string; value: string }[] = []
+  const SKIP_LINE = /^(how to book|➤|download|book now)/i
+  const SKIP_LABEL = /^(name|location|gender)$/i
+  const NOTE_LABEL = /^(activities|resume|experience|skills|credits)$/i
+  const RENAME: Record<string, string> = { 'hair color': 'Hair', 'eye color': 'Eyes', 'shoe size': 'Shoe', 'dress size': 'Dress' }
+  for (const raw of String(bio ?? '').split('\n')) {
+    const line = raw.replace(/\s+/g, ' ').trim()
+    if (!line || SKIP_LINE.test(line)) continue
+    const m = line.match(/^([^:]{2,32}):\s*(.*)$/)
+    if (!m) { notes.push({ label: '', value: line }); continue }
+    let label = m[1].replace(/\(\s*inch(es)?\s*\)/i, '').trim()
+    let value = m[2].trim()
+    if (!value || SKIP_LABEL.test(label)) continue
+    label = RENAME[label.toLowerCase()] ?? label
+    // "5ft 9inches" → 5'9"
+    const h = value.match(/^(\d)\s*f(?:ee)?t\.?\s*(\d{1,2}(?:\.\d)?)?\s*(?:in(?:ch(?:es)?)?)?\.?$/i)
+    if (h) value = `${h[1]}'${h[2] ?? '0'}"`
+    if (value.length > 24 || NOTE_LABEL.test(label)) notes.push({ label, value }); else stats.push({ label, value })
+  }
+  return { stats, notes }
 }
 
 /** A talent row ready to upsert (before it has our id). */

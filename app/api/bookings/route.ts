@@ -29,6 +29,7 @@ import { validatePromo, recordPromoRedemption } from '@/lib/promo'
 import { guestSharesByLine } from '@/lib/guest-rate'
 import { loadSetCatalog, catalogRate, catalogMinHours } from '@/lib/set-catalog'
 import { dropContextForCheckout } from '@/lib/set-drops-server'
+import { activePartner, PARTNER_COOKIE } from '@/lib/partners'
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
@@ -872,6 +873,20 @@ export async function POST(req: NextRequest) {
     }
 
     const firstBookingId = bookingIds[0]
+
+    // Partner link (migration 166): a booking made within 30 days of opening a
+    // partner's /p/<code> link is tagged to that partner. A SEPARATE update,
+    // never part of the insert above — the card is already charged there, and
+    // nothing about partner tracking may ever cost a booking. Non-fatal.
+    if (bookingIds.length) {
+      try {
+        const partner = await activePartner(supabase, req.cookies.get(PARTNER_COOKIE)?.value ?? null)
+        if (partner) {
+          const { error: refErr } = await supabase.from('bookings').update({ partner_code: partner.code }).in('id', bookingIds)
+          if (refErr) console.error('[bookings] partner tag failed (non-fatal):', refErr.message)
+        }
+      } catch (e) { console.error('[bookings] partner tag failed (non-fatal):', e) }
+    }
 
     // If nothing saved, do NOT report success — surface the failure so it can be
     // reconciled (a charge may have gone through without a booking row).

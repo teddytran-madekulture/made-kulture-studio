@@ -7,6 +7,7 @@ import { isProfileComplete } from '@/lib/directory-listing'
 import { publicAccountType } from '@/lib/roles'
 import { claimFoundingSpots, FOUNDING_CAP } from '@/lib/founding'
 import { blockedIds } from '@/lib/blocks'
+import { directoryModels, type DirectoryModel } from '@/lib/roster-sync'
 
 // Service client to read across profiles; we only ever expose opted-in members
 // and never return email/phone.
@@ -93,5 +94,12 @@ export async function GET(req: NextRequest) {
     .filter(m => !hidden.has(m.id))
     .map(m => ({ id: m.id, full_name: m.full_name, roles: m.roles ?? [], instagram: m.instagram ?? null, avatar_url: m.avatar_url ?? null, account_type: publicAccountType(m.account_type), founding_number: m.founding_number ?? null, profile_color: m.profile_color ?? null, photos: feedPhotos.get(m.id) ?? [] }))
 
-  return NextResponse.json({ members, founding: { cap: FOUNDING_CAP, taken: Math.min(taken, FOUNDING_CAP) } })
+  // Agency models (migration 165): talent on LIVE company rosters whose agency
+  // is itself listed and not blocked. Searchable alongside members; each links
+  // to the agency's profile. A lookup failure hides models, never the directory.
+  let models: DirectoryModel[] = []
+  try { models = await directoryModels(service, new Map(members.map(m => [m.id, m.full_name ?? '']))) }
+  catch (e: any) { console.error('[directory] agency models:', e?.message ?? e) }
+
+  return NextResponse.json({ members, models, founding: { cap: FOUNDING_CAP, taken: Math.min(taken, FOUNDING_CAP) } })
 }

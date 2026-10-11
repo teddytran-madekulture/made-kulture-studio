@@ -20,6 +20,19 @@ interface Member {
   photos?: string[]
 }
 
+// Agency models (migration 165) — people on a company's synced roster, e.g. a
+// model agency. NOT directory members: they get their own clearly labelled
+// section and every card names the agency and opens the AGENCY's profile.
+interface AgencyModel {
+  id: string; name: string; division: string; cities: string[]; photo: string
+  agencyId: string; agencyName: string
+}
+const MODEL_PAGE = 48
+function shopifySized(url: string, w: number) {
+  if (!/cdn\.shopify\.com|\/cdn\/shop\//.test(url)) return url
+  try { const u = new URL(url); u.searchParams.set('width', String(w)); return u.toString() } catch { return url }
+}
+
 // ── Fair ordering ─────────────────────────────────────────────────────────
 // No alphabetical head start: members are ordered by a hash of (visit seed +
 // id). The seed lives for the browser-tab session, so the order holds steady
@@ -56,6 +69,9 @@ export default function DirectoryExplorePage() {
   const [foundingOnly, setFoundingOnly] = useState(false)
   // Production Services (vendors) only — lib/roles.ts SERVICE_ROLES.
   const [servicesOnly, setServicesOnly] = useState(false)
+  const [models, setModels] = useState<AgencyModel[]>([])
+  const [modelsOnly, setModelsOnly] = useState(false)
+  const [modelLimit, setModelLimit] = useState(MODEL_PAGE)
   const [view, setView] = useState<'explore' | 'people'>('explore')
   useEffect(() => {
     try { if (new URLSearchParams(window.location.search).get('view') === 'people') setView('people') } catch {}
@@ -78,7 +94,7 @@ export default function DirectoryExplorePage() {
         const d = await r.json().catch(() => ({}))
         if (r.status === 403 && d.incomplete) { setIncomplete(d.blockers ?? []); setMembers([]) }
         else if (r.status === 403 && d.optedOut) { setOptedOut(true); setMembers([]) }
-        else { setOptedOut(false); setIncomplete(null); setMembers(d.members ?? []); if (d.founding) setFounding(d.founding) }
+        else { setOptedOut(false); setIncomplete(null); setMembers(d.members ?? []); setModels(d.models ?? []); if (d.founding) setFounding(d.founding) }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -125,6 +141,22 @@ export default function DirectoryExplorePage() {
     }
     return out
   }, [filtered, seed])
+  // Agency models shown: all of them on the Models filter; otherwise only when
+  // the search matches a name/city/"women"/"men", or a Model role is selected.
+  const modelMatches = useMemo(() => {
+    const q = peopleQuery.trim().toLowerCase()
+    const wantsModels = modelsOnly || selected.some(r => /model/i.test(r))
+    if (!wantsModels && q.length < 2) return []
+    return models.filter(m => !q
+      || m.name.toLowerCase().includes(q)
+      || m.agencyName.toLowerCase().includes(q)
+      || m.cities.some(c => c.toLowerCase().includes(q))
+      || (m.division && m.division.toLowerCase() === q)
+      || (/^(model|models)$/.test(q))
+    ).sort((a, b) => rank(seed, a.id) - rank(seed, b.id))
+  }, [models, peopleQuery, modelsOnly, selected, seed])
+  useEffect(() => { setModelLimit(MODEL_PAGE) }, [peopleQuery, modelsOnly])
+
   // Typing a name means "find this person": show people, not photos.
   const showPeople = view === 'people' || peopleQuery.trim().length > 0
 
@@ -213,8 +245,14 @@ export default function DirectoryExplorePage() {
             Services
           </button>
         )}
-        {(selected.length > 0 || peopleQuery || foundingOnly || servicesOnly) && (
-          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false); setServicesOnly(false) }}
+        {models.length > 0 && (
+          <button onClick={() => { const on = !modelsOnly; setModelsOnly(on); if (on) track('filter', { meta: { role: 'Agency models', results: models.length } }) }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: modelsOnly ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', color: modelsOnly ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Agency models
+          </button>
+        )}
+        {(selected.length > 0 || peopleQuery || foundingOnly || servicesOnly || modelsOnly) && (
+          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false); setServicesOnly(false); setModelsOnly(false) }}
             style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
             Clear
           </button>
@@ -267,6 +305,7 @@ export default function DirectoryExplorePage() {
         <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))' }}>Loading…</div>
       ) : (
         <>
+          {!modelsOnly && (<>
           <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', marginBottom: 14 }}>
             {filtered.length} {filtered.length === 1 ? 'creative' : 'creatives'}
             {founding && founding.taken < founding.cap && (
@@ -360,6 +399,49 @@ export default function DirectoryExplorePage() {
                 </Link>
               ))}
             </div>
+          )}
+          </>)}
+
+          {/* AGENCY MODELS — never mixed into the member grid. Its own heading,
+              a plain-English line saying who these people are, and the agency
+              named on every card. */}
+          {modelMatches.length > 0 && (
+            <section style={{ marginTop: modelsOnly ? 0 : 40, paddingTop: modelsOnly ? 0 : 28, borderTop: modelsOnly ? 'none' : '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
+                <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, letterSpacing: '0.02em', margin: 0 }}>AGENCY MODELS</h2>
+                <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))' }}>{modelMatches.length} {modelMatches.length === 1 ? 'model' : 'models'}</span>
+              </div>
+              <p style={{ fontFamily: 'Inter', fontSize: 13, lineHeight: 1.55, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', margin: '0 0 18px', maxWidth: 640 }}>
+                These models aren&apos;t directory members. They&apos;re represented by agencies in the directory, and you book them through that agency.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '18px 12px' }}>
+                {modelMatches.slice(0, modelLimit).map(m => (
+                  <Link key={m.id} href={`/account/directory/${m.agencyId}?talent=${m.id}`} style={{ textDecoration: 'none', color: 'var(--t-fg)', display: 'block' }}>
+                    <div style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
+                      <img src={shopifySized(m.photo, 500)} alt={m.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <span style={{ position: 'absolute', left: 8, top: 8, maxWidth: 'calc(100% - 16px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: '#fff', background: 'rgba(0,0,0,0.62)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 4, padding: '3px 7px' }}>
+                        VIA {(m.agencyName || 'AGENCY').toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: 'Inter', fontSize: 13.5, fontWeight: 700, marginTop: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                    <div style={{ fontFamily: 'Inter', fontSize: 11.5, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {[m.division, m.cities.join(' · ')].filter(Boolean).join('  ·  ')}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              {modelMatches.length > modelLimit && (
+                <div style={{ textAlign: 'center', marginTop: 22 }}>
+                  <button type="button" onClick={() => setModelLimit(n => n + MODEL_PAGE)}
+                    style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', padding: '11px 22px', borderRadius: 6, border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', background: 'transparent', color: 'var(--t-fg)', cursor: 'pointer' }}>
+                    SHOW MORE ({modelMatches.length - modelLimit})
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+          {modelsOnly && modelMatches.length === 0 && (
+            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', paddingTop: 6 }}>No agency models match that search.</div>
           )}
         </>
       )}

@@ -74,6 +74,7 @@ function SidebarInner() {
         <Item href="/admin/directory" icon="✦" label="Creative Directory" active={on('/admin/directory')} />
         <Item href="/admin/listings" icon="🏷" label="Service Listings" active={on('/admin/listings')} />
         <Item href="/admin/rosters" icon="☰" label="Company Rosters" active={on('/admin/rosters')} />
+        <Item href="/admin/partners" icon="⇄" label="Partners" active={on('/admin/partners')} />
         <Item href="/admin/community" icon="📈" label="Community" active={on('/admin/community')} />
         <Item href="/admin/roles" icon="◆" label="Directory Roles" active={on('/admin/roles')} />
 

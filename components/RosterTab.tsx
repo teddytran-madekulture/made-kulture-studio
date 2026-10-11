@@ -9,10 +9,10 @@
 //
 // `preview` = the admin preview in /admin/rosters: everything renders, nothing
 // messages anyone.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { trackNow } from '@/lib/track'
-import { sizedImage, type PublicRoster, type RosterTalent } from '@/lib/roster'
+import { sizedImage, talentStats, type PublicRoster, type RosterTalent } from '@/lib/roster'
 
 const muted = 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))'
 const faint = 'rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))'
@@ -33,8 +33,10 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   )
 }
 
-export default function RosterTab({ roster, memberId, memberName, isSelf = false, preview = false }: {
+export default function RosterTab({ roster, memberId, memberName, isSelf = false, preview = false, openId = null }: {
   roster: PublicRoster; memberId: string; memberName: string; isSelf?: boolean; preview?: boolean
+  /** Deep link from directory search (?talent=<id>): open this model on arrival. */
+  openId?: string | null
 }) {
   const router = useRouter()
   const [division, setDivision] = useState('All')
@@ -58,6 +60,12 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
     (division === 'All' || t.division === division) && (city === 'All' || t.cities.includes(city)))
 
   const openCard = (t: RosterTalent) => { setOpen(t); setIdx(0); setErr('') }
+  useEffect(() => {
+    if (!openId) return
+    const t = roster.talent.find(x => x.id === openId)
+    if (t) openCard(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, roster.talent])
   const go = (dir: number) => { if (!open) return; const n = open.photos.length; if (n > 1) setIdx(i => ((i + dir) % n + n) % n) }
 
   const viewBook = (t: RosterTalent) => {
@@ -88,6 +96,12 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
         .roster-card:focus-visible .ph { outline: 2px solid var(--t-fg); outline-offset: 2px; }
         @media (max-width: 600px) { .roster-grid { grid-template-columns: repeat(2, 1fr); gap: 14px 8px; } }
       `}</style>
+
+      {roster.draft && !preview && (
+        <div style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.45)', background: 'rgba(var(--t-gold-rgb), 0.08)', borderRadius: 6, padding: '10px 12px', marginBottom: 16, lineHeight: 1.5 }}>
+          DRAFT · Only you can see this roster (admin view). Members won&apos;t see it until you make it live in Admin → Company Rosters.
+        </div>
+      )}
 
       {/* Header: what this is and where it comes from */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 14 }}>
@@ -179,11 +193,27 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
                 REPRESENTED BY {(memberName || 'THE AGENCY').toUpperCase()}
               </div>
 
-              {open.bio && (
-                <div style={{ fontFamily: 'Inter', fontSize: 13.5, lineHeight: 1.65, marginTop: 12, whiteSpace: 'pre-wrap', color: 'rgba(var(--t-fg-rgb), calc(0.85 * var(--t-a)))' }}>
-                  {open.bio}
-                </div>
-              )}
+              {(() => {
+                const { stats, notes } = talentStats(open.bio)
+                return (<>
+                  {stats.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: '12px 14px', marginTop: 16, paddingTop: 14, borderTop: `1px solid ${faint}` }}>
+                      {stats.map(s => (
+                        <div key={s.label} style={{ minWidth: 0 }}>
+                          <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: muted, textTransform: 'uppercase' }}>{s.label}</div>
+                          <div style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {notes.map((n, k) => (
+                    <div key={k} style={{ marginTop: 14 }}>
+                      {n.label && <div style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: muted, textTransform: 'uppercase' }}>{n.label}</div>}
+                      <div style={{ fontFamily: 'Inter', fontSize: 13.5, lineHeight: 1.6, marginTop: 3, color: 'rgba(var(--t-fg-rgb), calc(0.85 * var(--t-a)))' }}>{n.value}</div>
+                    </div>
+                  ))}
+                </>)
+              })()}
 
               <div style={{ marginTop: 'auto', paddingTop: 22, display: 'grid', gap: 8 }}>
                 <a href={open.profile_url} target="_blank" rel="noopener noreferrer" onClick={() => viewBook(open)}

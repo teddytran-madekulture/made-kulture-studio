@@ -7,6 +7,7 @@ import { publicAccountType } from '@/lib/roles'
 import { creditsForImages, photosTaggingMember } from '@/lib/photo-credits'
 import { blockState } from '@/lib/blocks'
 import { liveRosterFor } from '@/lib/roster-sync'
+import { isAdminAuthed } from '@/lib/admin-auth'
 
 const service = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,13 +17,17 @@ const service = createServiceClient(
 // GET /api/directory/<id> — a single member's public profile + portfolio.
 // Members-only both ways: the viewer must be signed in AND listed in the
 // directory. Email/phone are only included when the member opted to show them.
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view profiles.' }, { status: 401 })
 
+  // 2026-10-11: the studio admin (admin cookie in the same browser) may open
+  // ANY profile, listed or not, and without being listed themselves — to see a
+  // company's draft roster in place on the real page. Members are unaffected.
+  const adminView = isAdminAuthed(req)
   const me = await memberAccess(service, user.id)
-  if (!me.listed) return notListedResponse(me, 'view members')
+  if (!me.listed && !adminView) return notListedResponse(me, 'view members')
 
   const { data: p } = await service
     .from('customer_profiles')
@@ -33,7 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   // Only surface members who are actually listed — opted in AND complete, the
   // same test the directory grid uses, so a profile the grid hides can't be
   // reached by URL either.
-  if (!p || !(p.id === user.id || (await memberAccess(service, p.id)).listed)) {
+  if (!p || !(p.id === user.id || adminView || (await memberAccess(service, p.id)).listed)) {
     return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
   }
 
@@ -78,7 +83,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   // Company roster (migration 165) — LIVE rosters only; a draft is admin-only.
   // Read AFTER the members-only gate above, like listings.
-  const roster = await liveRosterFor(service, params.id)
+  const roster = await liveRosterFor(service, params.id, { includeDraft: adminView })
 
   // Photo credits (migration 133): who's credited on each photo, and photos in
   // OTHER members' portfolios that credit this member (the TAGGED tab).
