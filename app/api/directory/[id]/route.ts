@@ -6,6 +6,7 @@ import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { publicAccountType } from '@/lib/roles'
 import { creditsForImages, photosTaggingMember } from '@/lib/photo-credits'
 import { blockState } from '@/lib/blocks'
+import { liveRosterFor } from '@/lib/roster-sync'
 
 const service = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       member: {
         id: p.id, full_name: p.full_name, account_type: publicAccountType(p.account_type), roles: [], instagram: null,
         avatar_url: null, bio: '', links: [], video_url: null, email: null, phone: null, portfolio: [], tagged: [],
-        listings: [], founding_number: null, profile_color: null, credits: [], cv_url: null, cover_url: null,
+        listings: [], roster: null, founding_number: null, profile_color: null, credits: [], cv_url: null, cover_url: null,
         is_self: false, followers: 0, following: 0, is_following: false, blocked_by_me: true,
       },
     })
@@ -74,6 +75,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true })
   if (listErr) console.error('[directory/id] listings lookup failed:', listErr.message)
+
+  // Company roster (migration 165) — LIVE rosters only; a draft is admin-only.
+  // Read AFTER the members-only gate above, like listings.
+  const roster = await liveRosterFor(service, params.id)
 
   // Photo credits (migration 133): who's credited on each photo, and photos in
   // OTHER members' portfolios that credit this member (the TAGGED tab).
@@ -113,6 +118,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       tagged,
       featured,
       listings: listingRows ?? [],
+      roster,
       founding_number: p.founding_number ?? null,
       profile_color: p.profile_color ?? null,
       credits: Array.isArray(p.credits) ? p.credits : [],
