@@ -695,7 +695,12 @@ export default function KioskPage() {
   // Same one-hour handover window the wrap-up text uses, so the screen and the
   // SMS can never contradict each other about whether someone is "right after".
   const handoverSoon = !!(nextStart && occLive && Date.parse(nextStart) - Date.parse(occ.endISO) <= 60 * 60_000)
-  const canAddTime = !!(occLive && started && occ.extendable && headroom >= 0.5)
+  // 2026-10-11: hide ADD TIME once the session is more than 15 min over, on the
+  // tablet's own clock. The tablet only re-checks the booking every 5 minutes, so
+  // without this the button lingered after the server's 15-minute grace closed.
+  // Must match graceMs in app/api/kiosk/extend.
+  const pastGrace = !!(occLive && nowMs > Date.parse(occ.endISO) + 15 * 60_000)
+  const canAddTime = !!(occLive && started && occ.extendable && headroom >= 0.5 && !pastGrace)
   // PORTAL belongs to whoever is ON the set right now — a started session on a
   // set tablet, never the door kiosk and never before the booking begins.
   const showPortal = !!(setSlug && occLive && started && minsLeft > 0)
@@ -1358,10 +1363,12 @@ export default function KioskPage() {
     try {
       const r = await fetch('/api/kiosk/extend', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ set: setSlug, key: kioskKey, hours }),
+        // shownStart: which session this screen is showing — the server refuses
+        // if it has moved on to the next guest (see app/api/kiosk/extend).
+        body: JSON.stringify({ set: setSlug, key: kioskKey, hours, shownStart: occ?.startISO ?? null }),
       })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok) setExtError(d.error || 'Could not price that right now.')
+      if (!r.ok) { setExtError(d.error || 'Could not price that right now.'); if (d.stale) fetchCtx() }
       else { setExtReq({ ...d, hours }); setExt4(''); setExtStep(d.hasCardOnFile ? 'confirm' : 'phone') }
     } catch { setExtError('Could not reach the studio system.') }
     setBusy(false)

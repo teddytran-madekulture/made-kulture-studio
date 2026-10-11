@@ -66,6 +66,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This session has ended, so time can\'t be added here. Tap GET THE TEAM and we\'ll sort it out.', needsTeam: true }, { status: 409 })
   }
 
+  // 2026-10-11 — the tablet only re-checks every 5 minutes, so its screen can be
+  // showing the PREVIOUS guest while the server already sees the next one (a
+  // back-to-back booking made between checks). The tablet sends the start time
+  // of the session it is SHOWING; if that isn't the session the server found,
+  // refuse before any request, text or charge exists — otherwise the next
+  // guest would be texted a pay link for time they never asked for. Older
+  // tablet builds send nothing and skip this (they reload on deploy anyway).
+  const shownStart = typeof body?.shownStart === 'string' ? body.shownStart : ''
+  if (shownStart && occ.startISO && Date.parse(shownStart) !== Date.parse(occ.startISO)) {
+    await tellOwner('tablet screen was out of date (next session already started)')
+    return NextResponse.json({ error: 'This screen was out of date and has just refreshed. Nothing was charged. Please try again.', stale: true }, { status: 409 })
+  }
+
   // Buyouts and off-hours ends are a conversation with a person, not a price.
   if (!occ.extendable) {
     await tellOwner('buyout or ends outside studio hours')
