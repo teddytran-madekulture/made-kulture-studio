@@ -148,7 +148,14 @@ export async function planExtension(
     // Optimistic: a Square customer profile can hold saved cards even when this
     // particular booking wasn't paid with one. The confirm endpoint resolves the
     // actual card (booking's card → else customer's saved cards) before charging.
-    hasCardOnFile: !!customer?.square_customer_id,
+    // ⚠️ 2026-10-10: ALSO true when the booking itself carries a saved card.
+    // A signed-in member's Square profile + card can live on their ACCOUNT and
+    // the booking (square_card_on_file_id) while the guest `customers` row has no
+    // square_customer_id — Isiah (Set C) had a good saved Visa and the tablet
+    // still said "no card", sent him to his phone, and the page asked him to
+    // type it in. The confirm endpoint already searches the account profile too,
+    // and answers needsCard if nothing usable turns up, so erring true is safe.
+    hasCardOnFile: !!customer?.square_customer_id || !!b.square_card_on_file_id,
   }
 }
 
