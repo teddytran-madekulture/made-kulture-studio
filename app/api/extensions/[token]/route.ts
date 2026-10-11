@@ -228,6 +228,30 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       sourceCardId = fallbackCard.cardId
       chargeCustomerId = fallbackCard.customerId
     }
+    // 2026-10-11 — a GUEST checkout stores the card on the booking but may have
+    // no square_customer_id on its customers row and no member profile, so the
+    // candidate list above is EMPTY and we told a guest with a perfectly good
+    // card "No saved card found" (Vintage, Justin Everett, 12:54 PM — right
+    // last 4, then bounced to "finish on your phone"). Ask Square who owns the
+    // booking's card instead of guessing. retrieveCard's customerId can come
+    // back empty (see api/account/cards) — then we still fall through to 402.
+    if (!sourceCardId && b.square_card_on_file_id) {
+      try {
+        const { result } = await square.cardsApi.retrieveCard(b.square_card_on_file_id)
+        const c: any = result.card
+        if (c?.id && c.enabled !== false && c.customerId) {
+          sourceCardId = c.id
+          chargeCustomerId = c.customerId
+          // Backfill so the next lookup (and admin charges) find it directly.
+          if (b.customer_id && !customer?.square_customer_id) {
+            const { error: bfErr } = await db.from('customers').update({ square_customer_id: c.customerId }).eq('id', b.customer_id)
+            if (bfErr) console.error('[extension] square_customer_id backfill failed (non-fatal):', bfErr.message)
+          }
+        }
+      } catch (e) {
+        console.error('[extension] retrieveCard for booking card failed', e)
+      }
+    }
     console.log('[extension] candidates:', candidates.length, 'matchedBookingCard:', !!(sourceCardId && b.square_card_on_file_id === sourceCardId), 'usedFallback:', !!(sourceCardId && fallbackCard && sourceCardId === fallbackCard.cardId))
 
     if (!sourceCardId) {
