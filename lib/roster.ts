@@ -24,6 +24,23 @@ export type PublicRoster = {
   draft?: boolean
   /** Migration 167 — the cities this roster is limited to. Empty/absent = all. */
   only_cities?: string[]
+  /** Migration 168 — the company's own identity, shown in the profile header
+   *  while the roster tab is open. Null when the owner hasn't filled any in. */
+  about?: RosterAbout | null
+  /** Migration 168 — renames the owner's PORTFOLIO tab. Blank = 'Portfolio'. */
+  portfolio_label?: string
+}
+
+export type RosterAbout = { tagline: string; bio: string; instagram: string; website: string }
+
+export const ROSTER_ABOUT_LIMITS = { tagline: 80, bio: 600, instagram: 40, website: 200, label: 40 } as const
+
+/** Null when nothing is filled in, so the header only swaps for a company
+ *  that has actually described itself. */
+export function rosterAbout(r: { about_tagline?: string | null; about_bio?: string | null; about_instagram?: string | null; about_website?: string | null }, fallbackWebsite: string): RosterAbout | null {
+  const tagline = (r.about_tagline ?? '').trim(), bio = (r.about_bio ?? '').trim(), instagram = (r.about_instagram ?? '').trim()
+  if (!tagline && !bio && !instagram) return null
+  return { tagline, bio, instagram, website: (r.about_website ?? '').trim() || fallbackWebsite }
 }
 
 /** Migration 167 — a city list from the admin (array or "Houston, Dallas"):

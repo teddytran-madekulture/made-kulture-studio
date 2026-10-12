@@ -298,9 +298,9 @@ export default function MemberProfilePage() {
     try { host = new URL(withProtocol(l.url)).hostname.replace('www.', '') } catch { /* keep raw */ }
     linkRows.push({ key: 'l' + i, href: withProtocol(l.url), label: l.label || host, what: 'link', external: true, ico: icon(<><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></>) })
   })
-  const links = (
+  const linksOf = (rows: typeof linkRows) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8 }}>
-      {linkRows.map(l => (
+      {rows.map(l => (
         <a key={l.key} className="ig-link" href={l.href} {...(l.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
           onClick={() => trackNow('contact_click', { target_id: member.id, meta: { what: l.what } })}>
           {l.ico}<span>{l.label}</span>
@@ -308,6 +308,7 @@ export default function MemberProfilePage() {
       ))}
     </div>
   )
+  const links = linksOf(linkRows)
   const actions = member.is_self ? (
     <Link href="/account/profile" style={{ ...btn(false), textDecoration: 'none', display: 'inline-block' }}>Edit profile</Link>
   ) : (
@@ -331,6 +332,22 @@ export default function MemberProfilePage() {
     </div>
   )
   const category = [member.account_type === 'brand' ? 'Brand' : member.account_type === 'vendor' ? 'Vendor' : null, ...member.roles].filter(Boolean).join(' · ')
+
+  // Migration 168 — one profile, two businesses. While the roster tab is open
+  // the header describes the COMPANY (tagline, bio, its own Instagram and
+  // site); every other tab shows the member's own. Only when the owner has
+  // filled the company side in — otherwise `about` is null and nothing swaps.
+  const about = tab === 'roster' ? (member.roster?.about ?? null) : null
+  const aboutRows: typeof linkRows = []
+  if (about?.instagram) aboutRows.push({ key: 'aig', href: `https://instagram.com/${about.instagram}`, label: `@${about.instagram}`, what: 'roster_instagram', external: true, ico: icon(<><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /></>) })
+  if (about?.website) {
+    let h = about.website
+    try { h = new URL(withProtocol(about.website)).hostname.replace('www.', '') } catch { /* keep raw */ }
+    aboutRows.push({ key: 'aweb', href: withProtocol(about.website), label: h, what: 'roster_site', external: true, ico: icon(<><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></>) })
+  }
+  const headCategory = about ? (about.tagline || member.roster?.label || '') : category
+  const headBio = about ? about.bio : member.bio
+  const headLinks = about ? linksOf(aboutRows) : links
 
   return (
     <div className="ig-page">
@@ -407,17 +424,17 @@ export default function MemberProfilePage() {
           {stats}
           {/* Desktop: details sit here beside the photo */}
           <div className="ig-d">
-            {category && <div className="ig-cat">{category}</div>}
-            {member.bio && <p className="ig-bio">{member.bio}</p>}
-            {links}
+            {headCategory && <div className="ig-cat">{headCategory}</div>}
+            {headBio && <p className="ig-bio">{headBio}</p>}
+            {headLinks}
           </div>
         </div>
 
         {/* Phone: details run full width under the photo row */}
         <div className="ig-body ig-m">
-          {category && <div className="ig-cat">{category}</div>}
-          {member.bio && <p className="ig-bio">{member.bio}</p>}
-          {links}
+          {headCategory && <div className="ig-cat">{headCategory}</div>}
+          {headBio && <p className="ig-bio">{headBio}</p>}
+          {headLinks}
           <div className="ig-mbtns">{actions}</div>
         </div>
       </div>
@@ -474,7 +491,7 @@ export default function MemberProfilePage() {
         )}
         <button type="button" className={`ig-tab${tab === 'portfolio' ? ' on' : ''}`} onClick={() => setTab('portfolio')}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
-          PORTFOLIO
+          {(member.roster?.portfolio_label || 'Portfolio').toUpperCase()}
         </button>
         {((member.tagged ?? []).length > 0 || member.is_self) && (
           <button type="button" className={`ig-tab${tab === 'tagged' ? ' on' : ''}`} onClick={() => setTab('tagged')}>

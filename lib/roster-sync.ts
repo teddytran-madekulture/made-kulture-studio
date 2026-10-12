@@ -7,7 +7,7 @@
 // written to company_rosters.last_error for the admin page — a failed read must
 // never look like "the agency has no talent". See [[silent-failure-pattern]].
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { inAllowedCities, mapShopifyProducts, siteOrigin, type PublicRoster, type RosterTalent } from '@/lib/roster'
+import { inAllowedCities, mapShopifyProducts, rosterAbout, siteOrigin, type PublicRoster, type RosterTalent } from '@/lib/roster'
 
 const PAGE_SIZE = 250        // Shopify's max for /products.json
 const MAX_PAGES = 12         // 3,000 products — far past any agency
@@ -121,7 +121,7 @@ export async function rosterTalent(db: SupabaseClient, rosterId: string, onlyCit
  *  profile down. */
 export async function liveRosterFor(db: SupabaseClient, ownerId: string, opts: { includeDraft?: boolean } = {}): Promise<PublicRoster | null> {
   const { data: r, error } = await db.from('company_rosters')
-    .select('id, label, source_url, status, only_cities').eq('owner_id', ownerId)
+    .select('id, label, source_url, status, only_cities, about_tagline, about_bio, about_instagram, about_website, portfolio_label').eq('owner_id', ownerId)
     .in('status', opts.includeDraft ? ['live', 'draft'] : ['live']).maybeSingle()
   if (error) { console.error('[roster] lookup failed:', error.message); return null }
   if (!r) return null
@@ -131,7 +131,10 @@ export async function liveRosterFor(db: SupabaseClient, ownerId: string, opts: {
     if (!talent.length) return null
     let company_url = r.source_url
     try { company_url = siteOrigin(r.source_url) } catch {}
-    return { label: r.label || 'Roster', company_url, talent, draft: r.status === 'draft', only_cities: only }
+    return {
+      label: r.label || 'Roster', company_url, talent, draft: r.status === 'draft', only_cities: only,
+      about: rosterAbout(r, company_url), portfolio_label: (r.portfolio_label ?? '').trim(),
+    }
   } catch (e: any) { console.error('[roster]', e?.message ?? e); return null }
 }
 
@@ -148,12 +151,15 @@ export async function directoryModels(db: SupabaseClient, ownerNames: Map<string
   if (!ownerNames.size) return []
   // Live rosters are few; filter owners in JS rather than sending every
   // listed member's id in the query string.
-  const { data: all, error } = await db.from('company_rosters').select('id, owner_id, only_cities').eq('status', 'live')
+  const { data: all, error } = await db.from('company_rosters').select('id, owner_id, only_cities, label').eq('status', 'live')
   if (error) throw new Error(`roster lookup failed: ${error.message}`)
   const rosters = (all ?? []).filter(r => ownerNames.has(r.owner_id))
   if (!rosters.length) return []
   const ownerOf = new Map(rosters.map(r => [r.id, r.owner_id as string]))
   const citiesOf = new Map(rosters.map(r => [r.id, (r.only_cities ?? []) as string[]]))
+  // A roster tab named after the company ("Neil Jou Agency") is the name a
+  // model card should carry; the generic "Roster" falls back to the member's name.
+  const nameOf = new Map(rosters.map(r => [r.id, /^roster$/i.test((r.label ?? '').trim() || 'Roster') ? '' : String(r.label).trim()]))
   const { data: talent, error: tErr } = await db.from('roster_talent')
     .select('id, roster_id, name, division, cities, photos, sort_order')
     .in('roster_id', [...ownerOf.keys()]).eq('active', true)
@@ -163,7 +169,7 @@ export async function directoryModels(db: SupabaseClient, ownerNames: Map<string
     const agencyId = ownerOf.get(t.roster_id)!
     return {
       id: t.id, name: t.name, division: t.division ?? '', cities: t.cities ?? [], photo: t.photos[0],
-      agencyId, agencyName: ownerNames.get(agencyId) ?? '',
+      agencyId, agencyName: nameOf.get(t.roster_id) || ownerNames.get(agencyId) || '',
     }
   })
 }

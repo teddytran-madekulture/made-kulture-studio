@@ -420,7 +420,7 @@ export default function DirectoryExplorePage() {
                     <div style={{ position: 'relative', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
                       <img src={shopifySized(m.photo, 500)} alt={m.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       <span style={{ position: 'absolute', left: 8, top: 8, maxWidth: 'calc(100% - 16px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'Inter', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: '#fff', background: 'rgba(0,0,0,0.62)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 4, padding: '3px 7px' }}>
-                        VIA {(m.agencyName || 'AGENCY').toUpperCase()}
+                        {(m.agencyName || 'AGENCY').toUpperCase()}
                       </span>
                     </div>
                     <div style={{ fontFamily: 'Inter', fontSize: 13.5, fontWeight: 700, marginTop: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
