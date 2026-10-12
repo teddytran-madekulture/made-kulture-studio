@@ -71,6 +71,7 @@ export default function DirectoryExplorePage() {
   const [servicesOnly, setServicesOnly] = useState(false)
   const [models, setModels] = useState<AgencyModel[]>([])
   const [modelsOnly, setModelsOnly] = useState(false)
+  const [agenciesOnly, setAgenciesOnly] = useState(false)
   const [modelLimit, setModelLimit] = useState(MODEL_PAGE)
   const [view, setView] = useState<'explore' | 'people'>('explore')
   useEffect(() => {
@@ -117,9 +118,34 @@ export default function DirectoryExplorePage() {
     )
   }, [roleOptions, roleQuery, sortMode, counts])
 
+  // AGENCIES (2026-10-12) — derived from the agency models the API already
+  // returns, so a member is an agency exactly when they have a LIVE roster
+  // with someone on it (after its city limit). Nobody sets a flag. `photo`
+  // stands in on the Explore grid for an agency with no portfolio of its own,
+  // under an AGENCY pill so it never reads as the member's own work.
+  const agencyOf = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; city: string; photo: string }>()
+    const cityCount = new Map<string, Record<string, number>>()
+    const sorted = [...models].sort((a, b) => rank(seed + ':agency', a.id) - rank(seed + ':agency', b.id))
+    for (const md of sorted) {
+      const a = map.get(md.agencyId) ?? { name: md.agencyName, count: 0, city: '', photo: md.photo }
+      a.count++
+      map.set(md.agencyId, a)
+      const cc = cityCount.get(md.agencyId) ?? {}
+      md.cities.forEach(c => { cc[c] = (cc[c] ?? 0) + 1 })
+      cityCount.set(md.agencyId, cc)
+    }
+    map.forEach((a, id) => {
+      const cc = cityCount.get(id) ?? {}
+      a.city = Object.keys(cc).sort((x, y) => cc[y] - cc[x])[0] ?? ''
+    })
+    return map
+  }, [models, seed])
+
   const filtered = useMemo(() => {
     const pq = peopleQuery.trim().toLowerCase()
     return members.filter(m => {
+      if (agenciesOnly && !agencyOf.has(m.id)) return false
       if (foundingOnly && !m.founding_number) return false
       if (servicesOnly && !(isServiceMember(m.roles) || m.account_type === 'vendor')) return false
       const roleMatch = selected.length === 0 || m.roles.some(r => selected.includes(r))
@@ -128,7 +154,7 @@ export default function DirectoryExplorePage() {
         || (m.instagram || '').toLowerCase().includes(pq)
       return roleMatch && peopleMatch
     }).sort((a, b) => rank(seed, a.id) - rank(seed, b.id))
-  }, [members, selected, peopleQuery, foundingOnly, servicesOnly, seed])
+  }, [members, selected, peopleQuery, foundingOnly, servicesOnly, agenciesOnly, agencyOf, seed])
 
   // Explore feed: ONE photo per member, in shuffled member order. Which photo
   // rotates with the visit seed, so each visit shows a different piece of
@@ -138,9 +164,10 @@ export default function DirectoryExplorePage() {
     for (const m of filtered) {
       const ps = m.photos ?? []
       if (ps.length) out.push({ m, url: ps[rank(seed + ':photo', m.id) % ps.length] })
+      else { const ag = agencyOf.get(m.id); if (ag?.photo) out.push({ m, url: ag.photo }) }
     }
     return out
-  }, [filtered, seed])
+  }, [filtered, agencyOf, seed])
   // Agency models shown: all of them on the Models filter; otherwise only when
   // the search matches a name/city/"women"/"men", or a Model role is selected.
   const modelMatches = useMemo(() => {
@@ -245,14 +272,20 @@ export default function DirectoryExplorePage() {
             Services
           </button>
         )}
+        {agencyOf.size > 0 && (
+          <button onClick={() => { const on = !agenciesOnly; setAgenciesOnly(on); if (on) track('filter', { meta: { role: 'Agencies', results: agencyOf.size } }) }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: agenciesOnly ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', color: agenciesOnly ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Agencies
+          </button>
+        )}
         {models.length > 0 && (
           <button onClick={() => { const on = !modelsOnly; setModelsOnly(on); if (on) track('filter', { meta: { role: 'Agency models', results: models.length } }) }}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: modelsOnly ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))', color: modelsOnly ? 'var(--t-on-fg)' : 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.16 * var(--t-a)))', borderRadius: 8, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
             Agency models
           </button>
         )}
-        {(selected.length > 0 || peopleQuery || foundingOnly || servicesOnly || modelsOnly) && (
-          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false); setServicesOnly(false); setModelsOnly(false) }}
+        {(selected.length > 0 || peopleQuery || foundingOnly || servicesOnly || modelsOnly || agenciesOnly) && (
+          <button onClick={() => { setSelected([]); setPeople(''); setFoundingOnly(false); setServicesOnly(false); setModelsOnly(false); setAgenciesOnly(false) }}
             style={{ background: 'transparent', border: 'none', color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', fontFamily: 'Inter', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
             Clear
           </button>
@@ -355,6 +388,7 @@ export default function DirectoryExplorePage() {
                     <Link key={m.id + i} href={`/account/directory/${m.id}`} className="dx-tile"
                       style={{ position: 'relative', display: 'block', aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 4, background: 'var(--t-surface-hi)' }}>
                       <img src={url} alt={m.full_name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      {agencyOf.has(m.id) && <span style={{ position: 'absolute', top: 7, left: 7, fontFamily: 'Inter', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: '#fff', background: 'rgba(0,0,0,0.62)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 4, padding: '3px 7px' }}>AGENCY · {agencyOf.get(m.id)!.count}</span>}
                       {m.founding_number ? <span className="dx-star" style={{ display: 'none', position: 'absolute', top: 5, right: 5, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.7))' }}><HexCrest size={16} /></span> : null}
                       <div className="dx-cap" style={{ position: 'absolute', inset: 'auto 0 0 0', padding: '28px 10px 9px', background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)', color: '#fff', display: 'flex', alignItems: 'center', gap: 7 }}>
                         <span style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 15, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.full_name}</span>
@@ -380,7 +414,13 @@ export default function DirectoryExplorePage() {
                     <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 20, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: 8 }}>
                       {m.full_name}
                       {(m.account_type === 'brand' || m.account_type === 'vendor') && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: m.account_type === 'vendor' ? 'var(--t-gold)' : 'var(--t-link)', border: m.account_type === 'vendor' ? '1px solid rgba(var(--t-gold-rgb), 0.45)' : '1px solid rgba(138,180,248,0.4)', borderRadius: 4, padding: '2px 6px' }}>{m.account_type === 'vendor' ? 'VENDOR' : 'BRAND'}</span>}
+                      {agencyOf.has(m.id) && <span style={{ fontFamily: 'Inter', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-ok)', border: '1px solid color-mix(in srgb, var(--t-ok) 45%, transparent)', borderRadius: 4, padding: '2px 6px' }}>AGENCY</span>}
                     </div>
+                    {agencyOf.has(m.id) && (() => { const a = agencyOf.get(m.id)!; return (
+                      <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {[a.name && a.name !== m.full_name ? a.name : null, `${a.count} ${a.count === 1 ? 'model' : 'models'}`, a.city || null].filter(Boolean).join(' · ')}
+                      </div>
+                    ) })()}
                     {m.founding_number ? <div style={{ marginTop: 5 }}><FoundingBadge number={m.founding_number} /></div> : null}
                     </div>
                   </div>
