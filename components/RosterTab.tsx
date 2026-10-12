@@ -111,7 +111,7 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
       {/* Header: what this is and where it comes from */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 14 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 13, color: muted, lineHeight: 1.5 }}>
-          {roster.talent.length} {only.length === 1 ? `${only[0]} ` : ''}{roster.talent.length === 1 ? 'face' : 'faces'} represented by {memberName || 'this agency'}.
+          {roster.talent.length} {only.length === 1 ? `${only[0]} ` : ''}{roster.talent.length === 1 ? 'face' : 'faces'} represented by {/^roster$/i.test(roster.label?.trim() || 'Roster') ? (memberName || 'this agency') : roster.label}.
           {' '}Booking goes through the agency.
         </div>
         <a href={roster.company_url} target="_blank" rel="noopener noreferrer"
