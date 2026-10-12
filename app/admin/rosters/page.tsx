@@ -9,7 +9,7 @@ import RosterTab from '@/components/RosterTab'
 import type { RosterTalent } from '@/lib/roster'
 
 type Roster = {
-  id: string; owner_id: string; label: string; source_url: string; include_tag: string
+  id: string; owner_id: string; label: string; source_url: string; include_tag: string; only_cities: string[]
   status: 'draft' | 'live' | 'hidden'
   last_synced_at: string | null; last_sync_count: number | null; last_error: string | null
   owner_name: string; owner_email: string | null; owner_listed: boolean; owner_blockers: string[]
@@ -173,6 +173,10 @@ export default function AdminRostersPage() {
               <div style={{ fontSize: 12.5, color: '#bbb', marginTop: 12, lineHeight: 1.6 }}>
                 {r.last_sync_count ?? 0} people · last synced {central(r.last_synced_at)}
                 {r.status !== 'hidden' && <span style={{ color: '#777' }}> · refreshes nightly</span>}
+                <br />
+                {r.only_cities?.length
+                  ? <>Showing only <b style={{ color: '#eee' }}>{r.only_cities.join(', ')}</b> <span style={{ color: '#777' }}>(the full roster still syncs; everyone else is just hidden)</span></>
+                  : <span style={{ color: '#777' }}>Showing every city</span>}
               </div>
               {r.last_error && <div style={{ fontSize: 12.5, color: '#f0a0a0', marginTop: 6 }}>Last sync problem: {r.last_error}</div>}
               {!r.owner_listed && (
@@ -197,6 +201,12 @@ export default function AdminRostersPage() {
                   const t = prompt('Only include products with this tag (leave blank for all):', r.include_tag)
                   if (t !== null) patch(r.id, { include_tag: t })
                 }}>EDIT TAG</button>
+                <button type="button" style={btn('ghost')} disabled={busy === r.id} onClick={async () => {
+                  const t = prompt('Only show people in these cities, comma-separated (leave blank to show everyone):', (r.only_cities ?? []).join(', '))
+                  if (t === null) return
+                  await patch(r.id, { only_cities: t })
+                  if (preview[r.id]) loadPreview(r.id)
+                }}>CITIES</button>
                 <button type="button" style={btn('danger')} disabled={busy === r.id} onClick={() => remove(r.id)}>DELETE</button>
               </div>
 
@@ -207,7 +217,7 @@ export default function AdminRostersPage() {
                     : 'error' in (pv as any) ? <div style={{ color: '#f0a0a0', fontSize: 13 }}>{(pv as any).error}</div>
                     : (pv as RosterTalent[]).length === 0 ? <div style={{ color: '#888', fontSize: 13 }}>Nobody synced yet. Try SYNC NOW.</div>
                     : <RosterTab preview memberId={r.owner_id} memberName={r.owner_name}
-                        roster={{ label: r.label, company_url: r.source_url, talent: pv as RosterTalent[] }} />}
+                        roster={{ label: r.label, company_url: r.source_url, talent: pv as RosterTalent[], only_cities: r.only_cities }} />}
                 </div>
               )}
             </div>

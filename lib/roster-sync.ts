@@ -7,7 +7,7 @@
 // written to company_rosters.last_error for the admin page — a failed read must
 // never look like "the agency has no talent". See [[silent-failure-pattern]].
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { mapShopifyProducts, siteOrigin, type PublicRoster, type RosterTalent } from '@/lib/roster'
+import { inAllowedCities, mapShopifyProducts, siteOrigin, type PublicRoster, type RosterTalent } from '@/lib/roster'
 
 const PAGE_SIZE = 250        // Shopify's max for /products.json
 const MAX_PAGES = 12         // 3,000 products — far past any agency
@@ -102,14 +102,16 @@ export async function syncRoster(db: SupabaseClient, rosterId: string): Promise<
   }
 }
 
-/** Active talent for a roster, in the site's own order. Throws on a DB error. */
-export async function rosterTalent(db: SupabaseClient, rosterId: string): Promise<RosterTalent[]> {
+/** Active talent for a roster, in the site's own order, limited to
+ *  `onlyCities` when given (migration 167). Throws on a DB error. */
+export async function rosterTalent(db: SupabaseClient, rosterId: string, onlyCities: string[] = []): Promise<RosterTalent[]> {
   const { data, error } = await db.from('roster_talent')
     .select('id, name, division, cities, bio, photos, profile_url')
     .eq('roster_id', rosterId).eq('active', true)
     .order('sort_order', { ascending: true })
   if (error) throw new Error(`roster talent lookup failed: ${error.message}`)
   return (data ?? []).map(t => ({ ...t, cities: t.cities ?? [], photos: t.photos ?? [] }))
+    .filter(t => inAllowedCities(t.cities, onlyCities))
 }
 
 /** The roster a member's directory profile shows — LIVE rosters only, unless
@@ -119,16 +121,17 @@ export async function rosterTalent(db: SupabaseClient, rosterId: string): Promis
  *  profile down. */
 export async function liveRosterFor(db: SupabaseClient, ownerId: string, opts: { includeDraft?: boolean } = {}): Promise<PublicRoster | null> {
   const { data: r, error } = await db.from('company_rosters')
-    .select('id, label, source_url, status').eq('owner_id', ownerId)
+    .select('id, label, source_url, status, only_cities').eq('owner_id', ownerId)
     .in('status', opts.includeDraft ? ['live', 'draft'] : ['live']).maybeSingle()
   if (error) { console.error('[roster] lookup failed:', error.message); return null }
   if (!r) return null
   try {
-    const talent = await rosterTalent(db, r.id)
+    const only: string[] = r.only_cities ?? []
+    const talent = await rosterTalent(db, r.id, only)
     if (!talent.length) return null
     let company_url = r.source_url
     try { company_url = siteOrigin(r.source_url) } catch {}
-    return { label: r.label || 'Roster', company_url, talent, draft: r.status === 'draft' }
+    return { label: r.label || 'Roster', company_url, talent, draft: r.status === 'draft', only_cities: only }
   } catch (e: any) { console.error('[roster]', e?.message ?? e); return null }
 }
 
@@ -145,17 +148,18 @@ export async function directoryModels(db: SupabaseClient, ownerNames: Map<string
   if (!ownerNames.size) return []
   // Live rosters are few; filter owners in JS rather than sending every
   // listed member's id in the query string.
-  const { data: all, error } = await db.from('company_rosters').select('id, owner_id').eq('status', 'live')
+  const { data: all, error } = await db.from('company_rosters').select('id, owner_id, only_cities').eq('status', 'live')
   if (error) throw new Error(`roster lookup failed: ${error.message}`)
   const rosters = (all ?? []).filter(r => ownerNames.has(r.owner_id))
   if (!rosters.length) return []
   const ownerOf = new Map(rosters.map(r => [r.id, r.owner_id as string]))
+  const citiesOf = new Map(rosters.map(r => [r.id, (r.only_cities ?? []) as string[]]))
   const { data: talent, error: tErr } = await db.from('roster_talent')
     .select('id, roster_id, name, division, cities, photos, sort_order')
     .in('roster_id', [...ownerOf.keys()]).eq('active', true)
     .order('sort_order', { ascending: true }).limit(2000)
   if (tErr) throw new Error(`roster talent lookup failed: ${tErr.message}`)
-  return (talent ?? []).filter(t => (t.photos ?? []).length).map(t => {
+  return (talent ?? []).filter(t => (t.photos ?? []).length && inAllowedCities(t.cities ?? [], citiesOf.get(t.roster_id))).map(t => {
     const agencyId = ownerOf.get(t.roster_id)!
     return {
       id: t.id, name: t.name, division: t.division ?? '', cities: t.cities ?? [], photo: t.photos[0],

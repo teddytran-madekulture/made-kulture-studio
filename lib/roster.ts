@@ -22,6 +22,30 @@ export type PublicRoster = {
   talent: RosterTalent[]
   /** True only for an admin viewing a roster that isn't live yet. */
   draft?: boolean
+  /** Migration 167 — the cities this roster is limited to. Empty/absent = all. */
+  only_cities?: string[]
+}
+
+/** Migration 167 — a city list from the admin (array or "Houston, Dallas"):
+ *  trimmed, deduped case-insensitively, capped. */
+export function cleanCityList(raw: unknown): string[] {
+  const parts = Array.isArray(raw) ? raw.map(String) : typeof raw === 'string' ? raw.split(',') : []
+  const out: string[] = []
+  for (const p of parts) {
+    const c = p.replace(/\s+/g, ' ').trim().slice(0, 40)
+    if (c && !out.some(o => o.toLowerCase() === c.toLowerCase())) out.push(c)
+  }
+  return out.slice(0, 10)
+}
+
+/** Does a talent belong on a roster limited to `only`? Empty `only` = everyone.
+ *  ANY match counts, so a Dallas + Houston model shows under Houston. A talent
+ *  with no city tags is left OUT of a city-limited roster — we can't say they
+ *  work here. */
+export function inAllowedCities(cities: string[], only: string[] | null | undefined): boolean {
+  if (!only?.length) return true
+  const want = new Set(only.map(c => c.toLowerCase()))
+  return (cities ?? []).some(c => want.has(c.toLowerCase()))
 }
 
 /** A talent's bio as the agency writes it ("Height:   5ft 9inches" lines plus

@@ -51,11 +51,16 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
     const s = new Set(roster.talent.map(t => t.division).filter(Boolean))
     return ['Women', 'Men'].filter(d => s.has(d))
   }, [roster.talent])
+  // A city-limited roster (migration 167) only offers its own cities as chips —
+  // a Dallas + Houston model must not bring back a DALLAS chip on a Houston roster.
+  const only = roster.only_cities ?? []
   const cities = useMemo(() => {
     const n: Record<string, number> = {}
-    roster.talent.forEach(t => t.cities.forEach(c => { n[c] = (n[c] ?? 0) + 1 }))
+    const ok = (c: string) => !only.length || only.some(o => o.toLowerCase() === c.toLowerCase())
+    roster.talent.forEach(t => t.cities.forEach(c => { if (ok(c)) n[c] = (n[c] ?? 0) + 1 }))
     return Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b))
-  }, [roster.talent])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roster.talent, only.join('|')])
   const shown = roster.talent.filter(t =>
     (division === 'All' || t.division === division) && (city === 'All' || t.cities.includes(city)))
 
@@ -106,7 +111,7 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
       {/* Header: what this is and where it comes from */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 14 }}>
         <div style={{ fontFamily: 'Inter', fontSize: 13, color: muted, lineHeight: 1.5 }}>
-          {roster.talent.length} {roster.talent.length === 1 ? 'face' : 'faces'} represented by {memberName || 'this agency'}.
+          {roster.talent.length} {only.length === 1 ? `${only[0]} ` : ''}{roster.talent.length === 1 ? 'face' : 'faces'} represented by {memberName || 'this agency'}.
           {' '}Booking goes through the agency.
         </div>
         <a href={roster.company_url} target="_blank" rel="noopener noreferrer"

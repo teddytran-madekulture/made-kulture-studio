@@ -3,14 +3,14 @@
 //   GET ?id=<roster>    → that roster's talent, for the admin preview
 //   POST {action:'create', email, url, label?, include_tag?} → create + first sync
 //   POST {action:'sync', id}                                  → sync now
-//   PATCH {id, status?, label?, include_tag?, source_url?}
+//   PATCH {id, status?, label?, include_tag?, source_url?, only_cities?}
 //   DELETE {id}         → roster and its talent rows (nothing on the company site is touched)
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { memberAccess } from '@/lib/directory-access'
-import { siteOrigin } from '@/lib/roster'
+import { cleanCityList, siteOrigin } from '@/lib/roster'
 import { syncRoster, rosterTalent } from '@/lib/roster-sync'
 
 export const dynamic = 'force-dynamic'
@@ -25,12 +25,15 @@ export async function GET(req: NextRequest) {
 
   const id = req.nextUrl.searchParams.get('id')
   if (id) {
-    try { return NextResponse.json({ talent: await rosterTalent(db, id) }) }
+    // The preview shows what members see, so it honours the city limit too.
+    const { data: r, error: rErr } = await db.from('company_rosters').select('only_cities').eq('id', id).maybeSingle()
+    if (rErr) return NextResponse.json({ error: rErr.message }, { status: 500 })
+    try { return NextResponse.json({ talent: await rosterTalent(db, id, r?.only_cities ?? []) }) }
     catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
   }
 
   const { data: rosters, error } = await db.from('company_rosters')
-    .select('id, owner_id, label, source_url, include_tag, status, last_synced_at, last_sync_count, last_error, created_at')
+    .select('id, owner_id, label, source_url, include_tag, only_cities, status, last_synced_at, last_sync_count, last_error, created_at')
     .order('created_at', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -110,6 +113,7 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.label !== undefined) patch.label = String(body.label).trim().slice(0, 40) || 'Roster'
   if (body.include_tag !== undefined) patch.include_tag = String(body.include_tag).trim().slice(0, 60)
+  if (body.only_cities !== undefined) patch.only_cities = cleanCityList(body.only_cities)
   if (body.source_url !== undefined) {
     try { patch.source_url = siteOrigin(String(body.source_url)) }
     catch { return NextResponse.json({ error: 'That website address is not valid.' }, { status: 400 }) }
