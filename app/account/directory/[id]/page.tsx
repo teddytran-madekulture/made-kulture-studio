@@ -9,6 +9,7 @@ import Link from 'next/link'
 import ListingsTab, { type PublicListing } from '@/components/ListingsTab'
 import RosterTab from '@/components/RosterTab'
 import type { PublicRoster } from '@/lib/roster'
+import { secondSwapsHeader, type SecondProfile } from '@/lib/second-profile'
 
 type PhotoCredit = { id: string; role: string; member: { id: string; name: string; avatar_url: string | null } | null; name: string | null; instagram: string | null; pending: boolean }
 // creditId / role / by are set when the photo is from ANOTHER member's portfolio
@@ -38,6 +39,8 @@ type Member = {
   listings?: PublicListing[]
   /** Migration 165 — a company's synced roster (live rosters only). */
   roster?: PublicRoster | null
+  /** Migration 170 — a vendor's own work: names the PORTFOLIO tab and swaps the header on it. */
+  second?: SecondProfile | null
   is_self: boolean
   followers: number
   following: number
@@ -340,9 +343,13 @@ export default function MemberProfilePage() {
   // the header describes the COMPANY (tagline, bio, its own Instagram and
   // site); every other tab shows the member's own. Only when the owner has
   // filled the company side in — otherwise `about` is null and nothing swaps.
-  // Migration 169 — the second identity can live on either tab.
-  const aboutTab = member.roster?.about_on === 'portfolio' ? 'portfolio' : 'roster'
-  const about = tab === aboutTab ? (member.roster?.about ?? null) : null
+  // Migration 170 (2026-10-13) — the PORTFOLIO tab's identity lives on the
+  // profile (member.second, vendors only); the roster's only ever describes the
+  // ROSTER tab. One tab, one source.
+  const second = member.second ?? null
+  const about = tab === 'roster' ? (member.roster?.about ?? null)
+    : tab === 'portfolio' && secondSwapsHeader(second) ? second
+    : null
   const aboutRows: typeof linkRows = []
   if (about?.instagram) aboutRows.push({ key: 'aig', href: `https://instagram.com/${about.instagram}`, label: `@${about.instagram}`, what: 'roster_instagram', external: true, ico: icon(<><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /></>) })
   if (about?.website) {
@@ -350,7 +357,7 @@ export default function MemberProfilePage() {
     try { h = new URL(withProtocol(about.website)).hostname.replace('www.', '') } catch { /* keep raw */ }
     aboutRows.push({ key: 'aweb', href: withProtocol(about.website), label: h, what: 'roster_site', external: true, ico: icon(<><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></>) })
   }
-  const headCategory = about ? (about.tagline || member.roster?.label || '') : category
+  const headCategory = about ? (about.tagline || (tab === 'roster' ? member.roster?.label : second?.label) || '') : category
   const headBio = about ? about.bio : member.bio
   const headLinks = about ? linksOf(aboutRows) : links
 
@@ -496,7 +503,7 @@ export default function MemberProfilePage() {
         )}
         <button type="button" className={`ig-tab${tab === 'portfolio' ? ' on' : ''}`} onClick={() => setTab('portfolio')}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
-          {(member.roster?.portfolio_label || 'Portfolio').toUpperCase()}
+          {(member.second?.label || 'Portfolio').toUpperCase()}
         </button>
         {((member.tagged ?? []).length > 0 || member.is_self) && (
           <button type="button" className={`ig-tab${tab === 'tagged' ? ' on' : ''}`} onClick={() => setTab('tagged')}>

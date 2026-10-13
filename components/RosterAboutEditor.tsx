@@ -2,10 +2,10 @@
 // Settings → Edit profile: "YOUR COMPANY PAGE" (migration 168). Renders NOTHING
 // for an account without a roster, so ordinary members never see it.
 //
-// A profile with a roster shows two businesses: the roster tab (e.g. Neil Jou
-// Agency) and the portfolio tab (e.g. Neil Jou Studios). Whatever is filled in
-// here replaces the profile header while a visitor has the roster tab open;
-// the normal profile fields above stay the header for the portfolio tab.
+// Whatever is filled in here replaces the profile header while a visitor has
+// the ROSTER tab open. 2026-10-13 (migration 170): the PORTFOLIO tab's own
+// name/identity moved to the profile itself (components/SecondProfileEditor),
+// so this card only ever describes the roster tab — one tab, one place.
 //
 // Its own card with its own SAVE — it sits OUTSIDE the profile <form>, because
 // a nested form is invalid and its button would submit the profile instead.
@@ -60,8 +60,8 @@ export default function RosterAboutEditor() {
     const r = await fetch('/api/account/roster', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        label: row.label, portfolio_label: row.portfolio_label, about_tagline: row.about_tagline,
-        about_bio: row.about_bio, about_instagram: row.about_instagram, about_website: row.about_website, about_on: row.about_on,
+        label: row.label, about_tagline: row.about_tagline,
+        about_bio: row.about_bio, about_instagram: row.about_instagram, about_website: row.about_website,
       }),
     })
     const d = await r.json().catch(() => ({}))
@@ -72,29 +72,14 @@ export default function RosterAboutEditor() {
 
   return (
     <div style={{ marginTop: 36, paddingTop: 28, borderTop: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))' }}>
-      <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6 }}>YOUR SECOND PROFILE</div>
+      <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6 }}>YOUR ROSTER TAB</div>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: muted, lineHeight: 1.55, margin: '0 0 20px' }}>
-        Your profile has two tabs: your roster and your portfolio. Running two businesses? Write the second one here, and the top of your profile switches to it
-        when someone opens the {row.about_on === 'portfolio' ? 'portfolio' : 'roster'} tab. Leave it blank and your normal profile shows on both.
+        Is your roster a different business from the rest of your profile? Describe it here, and the top of your profile switches to it
+        when someone opens the {row.label || 'roster'} tab. Leave it blank and your normal profile shows there too.
         {row.status !== 'live' && <><br /><span style={{ color: 'var(--t-gold)' }}>Your roster isn&apos;t live yet, so members can&apos;t see this part yet.</span></>}
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0 14px' }}>
-        <F label="ROSTER TAB NAME"><input style={input} value={row.label} onChange={set('label')} maxLength={L.label} placeholder="e.g. Neil Jou Agency" /></F>
-        <F label="PORTFOLIO TAB NAME" hint="optional"><input style={input} value={row.portfolio_label} onChange={set('portfolio_label')} maxLength={L.label} placeholder="e.g. Neil Jou Studios" /></F>
-      </div>
-      <F label="SHOW IT ON">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {(['roster', 'portfolio'] as const).map(k => (
-            <button key={k} type="button" onClick={() => { setRow(r => r && { ...r, about_on: k }); setMsg(null) }}
-              style={{ fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, padding: '9px 14px', borderRadius: 999, cursor: 'pointer',
-                border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))',
-                background: row.about_on === k ? 'var(--t-fg)' : 'transparent', color: row.about_on === k ? 'var(--t-on-fg)' : 'var(--t-fg)' }}>
-              The {(k === 'roster' ? (row.label || 'Roster') : (row.portfolio_label || 'Portfolio'))} tab
-            </button>
-          ))}
-        </div>
-      </F>
+      <F label="ROSTER TAB NAME"><input style={input} value={row.label} onChange={set('label')} maxLength={L.label} placeholder="e.g. Neil Jou Agency" /></F>
       <F label="TAGLINE" hint="the line under your name">
         <input style={input} value={row.about_tagline} onChange={set('about_tagline')} maxLength={L.tagline} placeholder="e.g. Model & Talent Agency · Houston" />
       </F>
@@ -111,7 +96,7 @@ export default function RosterAboutEditor() {
         <button type="button" onClick={save} disabled={saving} style={{
           background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4, padding: '12px 26px',
           fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, letterSpacing: '0.1em', cursor: 'pointer', opacity: saving ? 0.6 : 1,
-        }}>{saving ? 'SAVING...' : 'SAVE SECOND PROFILE'}</button>
+        }}>{saving ? 'SAVING...' : 'SAVE ROSTER TAB'}</button>
         {msg && <span style={{ fontFamily: 'Inter', fontSize: 13, color: msg.ok ? 'var(--t-ok, #6bffaa)' : 'var(--t-err, #f0a0a0)' }}>{msg.text}</span>}
       </div>
     </div>

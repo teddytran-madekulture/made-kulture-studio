@@ -29,9 +29,15 @@
     "incremental": false
   },
   "files": [
-    "app/api/admin/inbox/route.ts",
-    "app/api/cron/agent-email/route.ts",
-    "lib/agent/gmail.ts",
-    "app/admin/inbox/page.tsx"
+    "lib/second-profile.ts",
+    "app/api/account/second-profile/route.ts",
+    "components/SecondProfileEditor.tsx",
+    "components/RosterAboutEditor.tsx",
+    "app/api/account/roster/route.ts",
+    "app/api/directory/[id]/route.ts",
+    "app/account/directory/[id]/page.tsx",
+    "app/account/profile/page.tsx",
+    "lib/roles.ts",
+    "lib/directory-stats.ts"
   ]
 }

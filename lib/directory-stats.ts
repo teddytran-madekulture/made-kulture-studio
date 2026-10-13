@@ -53,6 +53,7 @@ const AD_TAGS: [string, string[]][] = [
   ['Gear', ['Equipment Rental']],
   ['Catering', ['Catering']],
   ['Educators', ['Educator']],
+  ['Film labs', ['Film Lab']],
 ]
 export function directoryAdTags(c: DirectoryCounts): string[] {
   const has = new Set(c.roles.filter(r => r.count > 0).map(r => r.role.toLowerCase()))

@@ -74,7 +74,8 @@ export const ROLE_CATEGORIES: RoleCategory[] = [
     label: 'Production Services',
     // 2026-10-12: agencies provide TALENT as their service (cast + book models
     // for a shoot; the client pays the agency, never us), so they are vendors.
-    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Animal Wrangler', 'Catering', 'Model & Talent Agency', 'Educator'],
+    // 2026-10-13: Film Lab — develop / scan / print for film shooters.
+    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Animal Wrangler', 'Catering', 'Model & Talent Agency', 'Educator', 'Film Lab'],
   },
 ]
 
@@ -110,6 +111,7 @@ export const SERVICE_TAG_SUGGESTIONS: Record<string, string[]> = {
   // 2026-10-12: people who TEACH (lighting workshops, posing coaches, mentors).
   // One role on purpose; the tags are what let a 'posing coach' search find them.
   'Educator': ['workshop', 'class', 'lighting', 'posing', 'coaching', 'mentorship', 'editing', 'one-on-one'],
+  'Film Lab': ['film developing', 'scanning', 'C-41', 'E-6', 'black and white', 'push/pull', 'prints', '35mm', '120', 'darkroom'],
   // 2026-10-13: creatives can list services under their own role too.
   'Makeup Artist': ['makeup', 'glam', 'editorial', 'beauty', 'bridal', 'sfx', 'airbrush', 'on-set touch-ups'],
   'Hair Stylist': ['hair', 'styling', 'braids', 'wigs', 'editorial', 'bridal', 'on-set touch-ups'],

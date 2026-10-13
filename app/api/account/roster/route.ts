@@ -1,7 +1,8 @@
 // /api/account/roster — the OWNER's side of a company roster (migration 168).
 //   GET   → { roster: null } when this account has no roster (or it's hidden),
 //           else the fields the owner may edit
-//   PATCH {label?, portfolio_label?, about_tagline?, about_bio?, about_instagram?, about_website?, about_on?}
+//   PATCH {label?, about_tagline?, about_bio?, about_instagram?, about_website?}
+//   (2026-10-13: the portfolio tab's name/identity moved to /api/account/second-profile)
 //
 // The owner describes their company here; they can NEVER change status, cities,
 // the source site or the tag — those stay admin-only in /api/admin/rosters, so
@@ -41,10 +42,8 @@ export async function PATCH(req: NextRequest) {
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (body.label !== undefined) patch.label = text(body.label, L.label).replace(/\s+/g, ' ') || 'Roster'
-  if (body.portfolio_label !== undefined) patch.portfolio_label = text(body.portfolio_label, L.label).replace(/\s+/g, ' ')
   if (body.about_tagline !== undefined) patch.about_tagline = text(body.about_tagline, L.tagline).replace(/\s+/g, ' ')
   if (body.about_bio !== undefined) patch.about_bio = text(body.about_bio, L.bio)
-  if (body.about_on !== undefined) patch.about_on = body.about_on === 'portfolio' ? 'portfolio' : 'roster'
   if (body.about_instagram !== undefined) patch.about_instagram = cleanIgHandle(body.about_instagram).slice(0, L.instagram)
   if (body.about_website !== undefined) {
     const w = text(body.about_website, L.website)

@@ -9,6 +9,7 @@ import RolePicker from '@/components/RolePicker'
 import PortfolioManager from '@/components/PortfolioManager'
 import ListingsManager from '@/components/ListingsManager'
 import RosterAboutEditor from '@/components/RosterAboutEditor'
+import SecondProfileEditor from '@/components/SecondProfileEditor'
 import ImageCropper from '@/components/ImageCropper'
 import { stampCopyright } from '@/lib/jpeg-copyright'
 import { HexCrest } from '@/components/FoundingBadge'
@@ -677,6 +678,8 @@ function ProfileSettings() {
         )}
         </div>
       </form>
+      {/* Migration 170 — only renders for a VENDOR account */}
+      {sec === 'edit' && <SecondProfileEditor />}
       {/* Migration 168 — only renders for an account that has a company roster */}
       {sec === 'edit' && <RosterAboutEditor />}
       {coverSrc && <ImageCropper src={coverSrc} aspect={3} outWidth={1800} onCancel={closeCover} onCropped={onCoverCropped} />}

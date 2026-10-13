@@ -7,6 +7,7 @@ import { publicAccountType } from '@/lib/roles'
 import { creditsForImages, photosTaggingMember } from '@/lib/photo-credits'
 import { blockState } from '@/lib/blocks'
 import { liveRosterFor } from '@/lib/roster-sync'
+import { secondProfileOf, SECOND_PROFILE_COLUMNS } from '@/lib/second-profile'
 import { isAdminAuthed } from '@/lib/admin-auth'
 
 const service = createServiceClient(
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const { data: p } = await service
     .from('customer_profiles')
-    .select('id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, show_email, show_phone, directory_opt_in, account_type, founding_number, profile_color, cover_url, credits, cv_url')
+    .select(`id, full_name, roles, instagram, avatar_url, bio, links, video_url, phone, show_email, show_phone, directory_opt_in, account_type, founding_number, profile_color, cover_url, credits, cv_url, ${SECOND_PROFILE_COLUMNS}`)
     .eq('id', params.id)
     .maybeSingle()
 
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       member: {
         id: p.id, full_name: p.full_name, account_type: publicAccountType(p.account_type), roles: [], instagram: null,
         avatar_url: null, bio: '', links: [], video_url: null, email: null, phone: null, portfolio: [], tagged: [],
-        listings: [], roster: null, founding_number: null, profile_color: null, credits: [], cv_url: null, cover_url: null,
+        listings: [], roster: null, second: null, founding_number: null, profile_color: null, credits: [], cv_url: null, cover_url: null,
         is_self: false, followers: 0, following: 0, is_following: false, blocked_by_me: true,
       },
     })
@@ -124,6 +125,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       featured,
       listings: listingRows ?? [],
       roster,
+      // Migration 170 — a vendor's own work on the PORTFOLIO tab. Null unless filled in.
+      second: secondProfileOf(p),
       founding_number: p.founding_number ?? null,
       profile_color: p.profile_color ?? null,
       credits: Array.isArray(p.credits) ? p.credits : [],
