@@ -15,6 +15,32 @@ import { getLiveEditorials } from '@/lib/featured-editorial-server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { dropPhase, depositFor, dollars, runLabel, type SetDrop } from '@/lib/set-drops'
 import { isVideoUrl } from '@/lib/media-url'
+import { getDirectoryCounts, directoryAdTags } from '@/lib/directory-stats'
+
+// "JOIN THE DIRECTORY" (2026-10-13, Teddy picked option A). A text ad, no member
+// photos: the locked wall behind "join free to see who's here" is the STUDIO's
+// own set photos, blurred (same rule as components/DirectoryWall — never members'
+// portfolio images on a public screen). Counts and tags are live; the ad only
+// runs once there are enough members to be worth bragging about.
+const DIRECTORY_AD_MIN = 8
+const WALL = ['set-c', 'vintage', 'concrete', 'set-a', 'cottage', 'watering-hole', 'set-b', 'studio-one'].map(s => `/images/sets/${s}.webp`)
+async function directoryAd() {
+  const c = await getDirectoryCounts(supabaseAdmin())
+  if (c.total < DIRECTORY_AD_MIN) return null
+  return {
+    id: 'directory-join', kind: 'directory' as const,
+    title: 'The Directory', subtitle: '', setName: '', setSlug: undefined, postUrl: '',
+    promoLabel: 'MADE KULTURE / THE DIRECTORY',
+    promoHeadline: 'EVERYONE YOU NEED\nFOR THE NEXT SHOOT.',
+    promoText: 'Not just creatives. The people and resources behind every shoot in Houston, in one place.',
+    promoCta: 'SCAN TO JOIN FREE',
+    promoUrl: '/signup',
+    tags: directoryAdTags(c), memberCount: c.total,
+    // Old tablet builds that don't know kind:'directory' fall back to the photo
+    // ad layout over these set photos, which still reads fine.
+    credits: [], photos: WALL, intervalSec: 7,
+  }
+}
 
 // Live Set Drops ride along as ADS in the idle showcase (QR to the drop page),
 // and as a short list for the home-screen pill. Ends by itself: a drop past its
@@ -41,6 +67,8 @@ export const fetchCache = 'force-no-store'
 
 export async function GET() {
   const drops = await liveDrops().catch(() => [])
+  // A failed count just means no directory ad this round.
+  const dirAd = await directoryAd().catch(e => { console.error('[kiosk showcase] directory ad:', e?.message ?? e); return null })
   const dropAds = drops.map(({ d, phase }) => {
     const reserving = phase === 'pre_reserve'
     const photos = [d.hero_url, ...(d.gallery ?? []), ...(d.past_gallery ?? []).map(p => p.url)]
@@ -67,7 +95,7 @@ export async function GET() {
     credits: e.credits, photos: e.photos, intervalSec: e.intervalSec,
   }))
   return NextResponse.json({
-    editorials: [...dropAds, ...editorials],
+    editorials: [...dropAds, ...(dirAd ? [dirAd] : []), ...editorials],
     drops: drops.map(({ d, phase }) => ({
       slug: d.slug, name: d.name, phase,
       line: phase === 'pre_reserve'

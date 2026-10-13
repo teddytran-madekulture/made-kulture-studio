@@ -23,6 +23,11 @@ export interface ShowcaseEditorial {
   promoLabel?: string; promoUrl?: string; promoCta?: string   // editorial used as an ad
   promoHeadline?: string; promoText?: string                  // big ad text over the photo
   credits: { role: string; handle: string }[]; photos: string[]; intervalSec: number
+  /** 2026-10-13: 'directory' = the text-only JOIN THE DIRECTORY ad (no member
+   *  photos; `photos` are studio set shots used only as the blurred wall). */
+  kind?: 'directory'
+  tags?: string[]
+  memberCount?: number
 }
 
 const CHAMP = '#c9b27e'
@@ -162,6 +167,8 @@ function One({ e, i, onDismiss, portrait, footer }: { e: ShowcaseEditorial; i: n
     </div>
   )
 
+  if (e.kind === 'directory') return <DirectoryAd e={e} qr={qr} onDismiss={onDismiss} portrait={portrait} footer={footer} />
+
   // AD LAYOUT (2026-10-08, Teddy): an editorial used as an ad must READ as an
   // ad from across the room, so the photo goes full bleed and a huge headline
   // sits over its lower half (darkened so white text holds over anything).
@@ -231,6 +238,90 @@ function One({ e, i, onDismiss, portrait, footer }: { e: ShowcaseEditorial; i: n
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// JOIN THE DIRECTORY (2026-10-13). Text first, like the home page's directory
+// section: headline, the "not just creatives" tag row, then the members-only
+// wall (STUDIO set photos, heavily blurred, never members' work) with the lock
+// line, and a big QR to signup. Reads from across the room in both orientations.
+function DirectoryAd({ e, qr, onDismiss, portrait, footer }: {
+  e: ShowcaseEditorial; qr: { n: number; d: string } | null; onDismiss: () => void; portrait: boolean; footer?: ReactNode
+}) {
+  const headline = (e.promoHeadline || e.title || '').toUpperCase()
+  const tags = (e.tags ?? []).slice(0, 12)
+  const wall = (
+    <div style={{ position: 'relative', flex: 1, minHeight: portrait ? 260 : 0, overflow: 'hidden', borderRadius: 10, background: '#0b0b0b' }}>
+      <div aria-hidden style={{ position: 'absolute', inset: -30, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, filter: 'blur(16px) saturate(0.85)', opacity: 0.75 }}>
+        {[...e.photos, ...e.photos, ...e.photos].slice(0, 20).map((src, k) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={k} src={src} alt="" draggable={false} style={{ width: '100%', aspectRatio: k % 3 === 0 ? '3/4' : k % 3 === 1 ? '4/5' : '1/1', objectFit: 'cover', borderRadius: 4, display: 'block' }} />
+        ))}
+      </div>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24, textAlign: 'center',
+                    background: 'radial-gradient(ellipse at center, rgba(8,8,8,0.35), rgba(8,8,8,0.88))' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.32em', color: 'rgba(255,255,255,0.7)' }}>MEMBERS ONLY</div>
+        <div style={{ fontFamily: 'Anton, "Bebas Neue", Inter, sans-serif', fontSize: portrait ? 52 : 46, lineHeight: 1, color: '#fff', textTransform: 'uppercase', maxWidth: 560 }}>
+          Join free to see who&rsquo;s here
+        </div>
+      </div>
+    </div>
+  )
+  const qrBlock = qr && (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
+      <div style={{ background: '#fff', padding: 10, borderRadius: 10, width: portrait ? 176 : 160, flexShrink: 0 }}>
+        <svg viewBox={`0 0 ${qr.n} ${qr.n}`} style={{ display: 'block', width: '100%', height: 'auto' }} shapeRendering="crispEdges">
+          <path d={qr.d} fill="#0b0b0d" />
+        </svg>
+      </div>
+      <div>
+        <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '0.24em', color: CHAMP }}>{(e.promoCta || 'SCAN TO JOIN FREE').toUpperCase()}</div>
+        {!!e.memberCount && (
+          <div style={{ fontSize: 15, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.6)', marginTop: 10 }}>
+            <span style={{ color: CHAMP, fontWeight: 700 }}>{e.memberCount}</span> MEMBERS AND GROWING
+          </div>
+        )}
+      </div>
+    </div>
+  )
+  const copy = (
+    <div>
+      <div style={{ fontSize: portrait ? 17 : 16, fontWeight: 700, letterSpacing: '0.32em', color: CHAMP }}>{(e.promoLabel || 'THE DIRECTORY').toUpperCase()}</div>
+      <div style={{ fontFamily: 'Anton, "Bebas Neue", Inter, sans-serif', fontSize: portrait ? 104 : 92, lineHeight: 0.92, marginTop: 16, color: '#fff', whiteSpace: 'pre-line', letterSpacing: '0.005em' }}>
+        {headline}
+      </div>
+      {e.promoText && <div style={{ fontSize: portrait ? 24 : 21, lineHeight: 1.45, color: 'rgba(255,255,255,0.8)', marginTop: 22, maxWidth: 680 }}>{e.promoText}</div>}
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 24 }}>
+          {tags.map(t => (
+            <span key={t} style={{ fontSize: 15, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#fff',
+                                   border: '1px solid rgba(201,178,126,0.45)', borderRadius: 6, padding: '8px 14px' }}>{t}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+  return (
+    <div onClick={onDismiss} role="button" aria-label="Tap to return"
+      style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#050505', color: '#fff', fontFamily: 'Inter, sans-serif',
+               display: 'flex', flexDirection: 'column', cursor: 'pointer', userSelect: 'none' }}>
+      {portrait ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 30, padding: '56px 44px 40px' }}>
+          {copy}
+          {wall}
+          {qrBlock}
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 40, padding: '48px 56px' }}>
+          <div style={{ flex: '0 0 52%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 28 }}>
+            {copy}
+            {qrBlock}
+          </div>
+          {wall}
+        </div>
+      )}
+      {footer && <div onClick={ev => ev.stopPropagation()} style={{ flexShrink: 0, cursor: 'default' }}>{footer}</div>}
     </div>
   )
 }
