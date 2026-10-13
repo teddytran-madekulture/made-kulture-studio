@@ -74,7 +74,7 @@ export const ROLE_CATEGORIES: RoleCategory[] = [
     label: 'Production Services',
     // 2026-10-12: agencies provide TALENT as their service (cast + book models
     // for a shoot; the client pays the agency, never us), so they are vendors.
-    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Animal Wrangler', 'Catering', 'Model & Talent Agency'],
+    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Animal Wrangler', 'Catering', 'Model & Talent Agency', 'Educator'],
   },
 ]
 
@@ -107,6 +107,9 @@ export const SERVICE_TAG_SUGGESTIONS: Record<string, string[]> = {
   'Animal Wrangler': ['animal', 'dog', 'cat', 'horse', 'snake', 'reptile', 'bird', 'exotic'],
   'Catering': ['catering', 'craft services', 'food', 'coffee', 'drinks', 'snacks'],
   'Model & Talent Agency': ['models', 'talent', 'casting', 'fashion', 'commercial', 'fitness', 'actors', 'influencers'],
+  // 2026-10-12: people who TEACH (lighting workshops, posing coaches, mentors).
+  // One role on purpose; the tags are what let a 'posing coach' search find them.
+  'Educator': ['workshop', 'class', 'lighting', 'posing', 'coaching', 'mentorship', 'editing', 'one-on-one'],
 }
 
 /** Does this member offer a production service (and so get listings)? */
