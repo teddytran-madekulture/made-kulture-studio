@@ -36,7 +36,7 @@ function Photo({ l, aspect, minHeight }: { l: ShowcaseListing; aspect?: string; 
   return (
     <Link href={openHref(l)} style={{ position: 'relative', display: 'block', background: 'var(--t-surface-hi)', aspectRatio: aspect, minHeight, overflow: 'hidden' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {l.photos[0] && <img src={l.photos[0]} alt={l.title} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+      {l.photos[0] && <img src={l.photos[0]} alt={l.title} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', display: 'block' }} />}
       {l.featured && <span style={{ ...mono, fontSize: 9, position: 'absolute', top: 12, left: 12, color: '#fff', border: '1px solid rgba(255,255,255,0.75)', background: 'rgba(0,0,0,0.3)', padding: '3px 7px' }}>Featured</span>}
       {l.photos.length > 1 && <span style={{ fontFamily: 'Inter', fontSize: 11, position: 'absolute', bottom: 10, right: 10, color: '#fff', background: 'rgba(0,0,0,0.45)', padding: '3px 9px', borderRadius: 999 }}>{l.photos.length} photos</span>}
     </Link>

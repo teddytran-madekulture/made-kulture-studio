@@ -31,11 +31,11 @@ function Photos({ l, idx, setIdx, aspect, fit, onOpen }: {
   const go = (dir: number) => { if (n > 1) setIdx(((idx + dir) % n + n) % n) }
   const i = Math.min(idx, Math.max(0, n - 1))
   return (
-    <div style={{ position: 'relative', aspectRatio: aspect, background: '#0b0b0b', cursor: onOpen ? 'pointer' : 'default' }}
+    <div style={{ position: 'relative', aspectRatio: aspect, overflow: 'hidden', background: '#0b0b0b', cursor: onOpen ? 'pointer' : 'default' }}
       onClick={onOpen}
       onTouchStart={e => setX0(e.touches[0].clientX)}
       onTouchEnd={e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; setX0(null); if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1) }}>
-      {l.photos[i] && <img src={l.photos[i]} alt={l.title} loading="lazy" draggable={false} style={{ width: '100%', height: '100%', objectFit: fit, display: 'block' }} />}
+      {l.photos[i] && <img src={l.photos[i]} alt={l.title} loading="lazy" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, objectPosition: fit === 'cover' ? 'center 30%' : 'center', display: 'block' }} />}
       {n > 1 && (<>
         {([['prev', -1], ['next', 1]] as const).map(([k, dir]) => (
           <button key={k} type="button" aria-label={k === 'prev' ? 'Previous photo' : 'Next photo'} onClick={e => { e.stopPropagation(); go(dir) }}
