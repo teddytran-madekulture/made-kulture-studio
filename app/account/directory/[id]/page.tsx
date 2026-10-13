@@ -223,7 +223,10 @@ export default function MemberProfilePage() {
           try { wantsTagged = new URLSearchParams(window.location.search).get('tab') === 'tagged' } catch {}
           // A company's roster is the reason to visit its profile — it wins.
           if (d.member.roster?.talent?.length && !wantsTagged) setTab('roster')
-          else if ((d.member.listings ?? []).length > 0 && !wantsTagged) setTab('listings')
+          // Listings lead only when they ARE the profile (a vendor, or nobody with
+          // a portfolio) — a makeup artist's portfolio still opens first.
+          else if ((d.member.listings ?? []).length > 0 && !wantsTagged
+            && (d.member.account_type === 'vendor' || !(d.member.portfolio ?? []).length)) setTab('listings')
           if (!d.member.is_self) track('profile_view', { target_id: d.member.id, meta: { photos: d.member.portfolio?.length ?? 0 } })
         }
         setLoading(false)

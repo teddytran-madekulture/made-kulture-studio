@@ -110,6 +110,13 @@ export const SERVICE_TAG_SUGGESTIONS: Record<string, string[]> = {
   // 2026-10-12: people who TEACH (lighting workshops, posing coaches, mentors).
   // One role on purpose; the tags are what let a 'posing coach' search find them.
   'Educator': ['workshop', 'class', 'lighting', 'posing', 'coaching', 'mentorship', 'editing', 'one-on-one'],
+  // 2026-10-13: creatives can list services under their own role too.
+  'Makeup Artist': ['makeup', 'glam', 'editorial', 'beauty', 'bridal', 'sfx', 'airbrush', 'on-set touch-ups'],
+  'Hair Stylist': ['hair', 'styling', 'braids', 'wigs', 'editorial', 'bridal', 'on-set touch-ups'],
+  'Wardrobe Stylist': ['styling', 'wardrobe', 'pulls', 'fashion', 'editorial', 'personal styling'],
+  'Nail Artist': ['nails', 'manicure', 'nail art', 'editorial', 'beauty'],
+  'Photographer': ['headshots', 'portraits', 'fashion', 'product', 'events', 'editorial', 'brand'],
+  'Videographer': ['video', 'reels', 'music video', 'brand film', 'events', 'bts'],
 }
 
 /** Does this member offer a production service (and so get listings)? */

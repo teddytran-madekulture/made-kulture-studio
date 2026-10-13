@@ -88,8 +88,17 @@ function pathOf(url: string): string | null {
 
 export default function ListingsManager({ roles }: { roles: string[] }) {
   const supabase = createClient()
+  // 2026-10-13: any listed member can post listings under THEIR OWN roles — a
+  // Makeup Artist lists "Editorial glam" under Makeup Artist, a Photographer a
+  // headshot session. Service roles come first (a vendor's main business), then
+  // the member's other roles. No roles at all ⇒ the service categories, as before.
+  // ⚠️ This must NOT go through isServiceMember: that function also decides who
+  // needs the Vendor Agreement to be LISTED (lib/directory-listing), and widening
+  // it would delist every creative who hasn't signed. The agreement still gates
+  // CREATING a listing (here + the service_listings INSERT policy).
   const myServiceRoles = SERVICE_ROLES.filter(r => roles.some(x => x.toLowerCase() === r.toLowerCase()))
-  const categories = myServiceRoles.length ? myServiceRoles : SERVICE_ROLES
+  const myOtherRoles = roles.filter(r => r && !SERVICE_ROLES.some(s => s.toLowerCase() === r.toLowerCase()))
+  const categories = myServiceRoles.length || myOtherRoles.length ? [...myServiceRoles, ...myOtherRoles] : SERVICE_ROLES
   const [uid, setUid] = useState<string | null>(null)
   const [list, setList] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
@@ -262,7 +271,7 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
             </div>
             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 14, fontSize: 13, color: 'var(--t-fg)', cursor: 'pointer', lineHeight: 1.5 }}>
               <input type="checkbox" checked={tick} onChange={e => setTick(e.target.checked)} style={{ marginTop: 3 }} />
-              I have read and agree to the {VENDOR_AGREEMENT_TITLE}. I understand Made Kulture is not a party to my rentals and does not handle payment, logistics, insurance or disputes.
+              I have read and agree to the {VENDOR_AGREEMENT_TITLE}. I understand Made Kulture is not a party to my services or rentals and does not handle payment, logistics, insurance or disputes.
             </label>
             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 14, fontSize: 13, color: 'var(--t-fg)', cursor: 'pointer', lineHeight: 1.5 }}>
               <input type="checkbox" checked={textMe} onChange={e => setTextMe(e.target.checked)} style={{ marginTop: 3 }} />
@@ -291,7 +300,8 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
         <div style={{ border: line, borderRadius: 8, padding: 16 }}>
           <label style={label}>CATEGORY</label>
           <select value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })} style={{ ...inputStyle, colorScheme: 'dark' }}>
-            {categories.map(c => <option key={c} value={c} style={{ background: '#111', color: '#eee' }}>{c}</option>)}
+            {/* An older listing may sit in a category the member no longer holds — keep it selectable. */}
+            {(categories.includes(draft.category) ? categories : [draft.category, ...categories]).map(c => <option key={c} value={c} style={{ background: '#111', color: '#eee' }}>{c}</option>)}
           </select>
           <label style={label}>TITLE</label>
           <input value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} maxLength={120} placeholder="2021 Mercedes G-Wagon (black)" style={inputStyle} />

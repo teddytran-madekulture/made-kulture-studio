@@ -40,7 +40,12 @@ export default function ServicesPage() {
     }).catch(() => { setErr('Could not load services.'); setLoading(false) })
   }, [])
 
-  const cats = useMemo(() => SERVICE_ROLES.filter(c => listings.some(l => l.category === c)), [listings])
+  // Every category that has a live listing: production services first (in
+  // their usual order), then members' own roles A–Z (Makeup Artist, Photographer…).
+  const cats = useMemo(() => {
+    const used = Array.from(new Set(listings.map(l => l.category).filter(Boolean)))
+    return [...SERVICE_ROLES.filter(c => used.includes(c)), ...used.filter(c => !SERVICE_ROLES.includes(c)).sort((a, b) => a.localeCompare(b))]
+  }, [listings])
 
   // Ranked, so tag-stuffing doesn't pay: a word found in the TITLE scores
   // highest, then category, then details/notes/vendor, and a tag-only match
@@ -77,7 +82,7 @@ export default function ServicesPage() {
     <div>
       <DirectoryHeader active="services" />
       <p style={{ fontFamily: 'Inter', fontSize: 14, color: muted, margin: '0 0 18px', lineHeight: 1.6 }}>
-        Vehicles, wardrobe, props, gear, animals and catering from vendors in the Made Kulture network. Request straight from a listing. You arrange pricing and logistics directly with the vendor.
+        Glam, styling, photographers, models, vehicles, wardrobe, props, gear and catering from the Made Kulture network. Request straight from a listing. You arrange pricing and logistics directly with the vendor.
       </p>
 
       {gate ? (
