@@ -12,7 +12,10 @@ export type VisibleListing = {
   price_cents: number | null; price_unit: string | null; price_extras: string; notes: string
   photos: string[]; tags: string[]
   featured: boolean; featured_at: string | null; created_at: string
-  vendor: { id: string; name: string; avatar_url: string | null }
+  /** 2026-10-12: business = a Vendor account (say its whole name, never just
+   *  the first word — "Neil" for Neil Jou Agency). roster = the tab name of a
+   *  LIVE company roster, so the listing can link straight to it. */
+  vendor: { id: string; name: string; avatar_url: string | null; business: boolean; roster: string | null }
   is_self: boolean
 }
 
@@ -25,11 +28,15 @@ export async function loadVisibleListings(db: SupabaseClient, viewerId: string):
   const ids = Array.from(new Set((rows ?? []).map(r => r.user_id)))
   if (ids.length === 0) return []
 
-  const [{ data: profs, error: pErr }, { data: pics, error: picErr }] = await Promise.all([
+  const [{ data: profs, error: pErr }, { data: pics, error: picErr }, { data: rosters, error: rErr }] = await Promise.all([
     db.from('customer_profiles').select('id, full_name, roles, bio, instagram, links, account_type, directory_opt_in, vendor_terms_accepted_at, avatar_url').in('id', ids),
     db.from('portfolio_images').select('user_id').in('user_id', ids),
+    db.from('company_rosters').select('owner_id, label').eq('status', 'live').in('owner_id', ids),
   ])
   if (pErr || picErr) throw new Error((pErr || picErr)!.message)
+  // A roster lookup failure only costs the "view roster" link, never the listings.
+  if (rErr) console.error('[service-listings] roster lookup:', rErr.message)
+  const rosterOf = new Map((rosters ?? []).map(r => [r.owner_id as string, String(r.label || 'Roster')]))
   const withPhotos = new Set((pics ?? []).map(p => p.user_id))
   const listed = new Map((profs ?? [])
     .filter(p => p.directory_opt_in && profileBlockers(p as any, withPhotos.has(p.id)).length === 0)
@@ -42,7 +49,7 @@ export async function loadVisibleListings(db: SupabaseClient, viewerId: string):
       price_cents: r.price_cents, price_unit: r.price_unit, price_extras: r.price_extras ?? '', notes: r.notes,
       photos: r.photos ?? [], tags: r.tags ?? [],
       featured: !!r.featured, featured_at: r.featured_at ?? null, created_at: r.created_at,
-      vendor: { id: v.id, name: v.full_name ?? '', avatar_url: v.avatar_url ?? null },
+      vendor: { id: v.id, name: v.full_name ?? '', avatar_url: v.avatar_url ?? null, business: v.account_type === 'vendor', roster: rosterOf.get(v.id) ?? null },
       is_self: r.user_id === viewerId,
     }
   })

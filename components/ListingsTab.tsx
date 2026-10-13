@@ -12,7 +12,7 @@ export type PublicListing = {
   id: string; category: string; title: string; details: string; rate: string; price_cents?: number | null; price_unit?: string | null; price_extras?: string; notes: string; photos: string[]
   tags?: string[]
   /** Set on the Services page, where listings from many vendors share one grid. */
-  vendor?: { id: string; name: string; avatar_url: string | null }
+  vendor?: { id: string; name: string; avatar_url: string | null; business?: boolean; roster?: string | null }
   is_self?: boolean
 }
 
@@ -63,6 +63,9 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
   // Per-listing vendor (Services page) falls back to the profile's owner.
   const vName = (l: PublicListing) => l.vendor?.name || memberName
   const vId = (l: PublicListing) => l.vendor?.id || memberId
+  // How the copy refers to the vendor: a business by its whole name, a person
+  // by first name ("directly with Ryan" vs "directly with Neil Jou Agency").
+  const vShort = (l: PublicListing) => (l.vendor?.business ? vName(l) : vName(l).split(' ')[0]) || 'the vendor'
   const mine = (l: PublicListing) => l.is_self ?? isSelf
   const router = useRouter()
   const [photoIdx, setPhotoIdx] = useState<Record<string, number>>({})
@@ -179,7 +182,7 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
                   {(open.tags ?? []).map(t => <span key={t} style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 12, border: line, color: muted }}>{t}</span>)}
                 </div>
               )}
-              <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.5, marginBottom: 16 }}>Pricing, payment, insurance and logistics are arranged directly with {vName(open).split(' ')[0] || 'the vendor'}. Made Kulture isn’t part of the arrangement.</div>
+              <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.5, marginBottom: 16 }}>Pricing, payment, insurance and logistics are arranged directly with {vShort(open)}. Made Kulture isn’t part of the arrangement.</div>
               {!mine(open) && (
                 <div style={{ marginBottom: 14 }}>
                   {reportMsg ? <div style={{ fontSize: 12, color: 'var(--t-gold)' }}>{reportMsg}</div>
@@ -209,6 +212,15 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
                   )}
                 </div>
               )}
+              {/* 2026-10-12: on the Services page a listing links to the vendor's
+                  profile — straight to the roster for an agency, so "who are your
+                  models?" is one tap from the listing. */}
+              {open.vendor && (
+                <a href={`/account/directory/${open.vendor.id}`}
+                  style={{ display: 'block', textAlign: 'center', boxSizing: 'border-box', width: '100%', padding: '13px 0', marginBottom: 10, borderRadius: 4, border: '1px solid rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))', color: 'var(--t-fg)', textDecoration: 'none', fontSize: 12.5, fontWeight: 700, letterSpacing: '0.1em' }}>
+                  {open.vendor.roster ? `VIEW THE ${open.vendor.roster.toUpperCase()} →` : `VIEW ${vName(open).toUpperCase()}'S PROFILE →`}
+                </a>
+              )}
               {!mine(open) && <button type="button" onClick={() => { const l = open; setOpen(null); startRequest(l) }} style={{ ...primaryBtn, width: '100%', padding: '14px 0' }}>REQUEST</button>}
             </div>
           </div>
@@ -225,7 +237,7 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
             <input type="date" value={date} onChange={e => setDate(e.target.value)} style={input} />
             <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: muted, margin: '14px 0 6px' }}>DETAILS <span style={{ color: 'var(--t-gold)' }}>· optional</span></label>
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={4} maxLength={1500} placeholder="Times, location, what the shoot is, pickup or delivery…" style={{ ...input, resize: 'vertical', lineHeight: 1.5 }} />
-            <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>This sends {vName(req).split(' ')[0] || 'them'} a message. Made Kulture connects members but isn’t part of the arrangement: pricing, payment, insurance and logistics are between you and the vendor.</div>
+            <div style={{ fontSize: 12, color: muted, marginTop: 10, lineHeight: 1.5 }}>This sends {vShort(req)} a message. Made Kulture connects members but isn’t part of the arrangement: pricing, payment, insurance and logistics are between you and the vendor.</div>
             {error && <div style={{ color: '#e6a0a0', fontSize: 13, marginTop: 10 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button type="button" onClick={send} disabled={sending} style={{ ...primaryBtn, flex: 1, opacity: sending ? 0.6 : 1 }}>{sending ? 'SENDING…' : 'SEND REQUEST'}</button>
