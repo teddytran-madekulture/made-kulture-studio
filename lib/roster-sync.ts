@@ -121,7 +121,7 @@ export async function rosterTalent(db: SupabaseClient, rosterId: string, onlyCit
  *  profile down. */
 export async function liveRosterFor(db: SupabaseClient, ownerId: string, opts: { includeDraft?: boolean } = {}): Promise<PublicRoster | null> {
   const { data: r, error } = await db.from('company_rosters')
-    .select('id, label, source_url, status, only_cities, about_tagline, about_bio, about_instagram, about_website, portfolio_label').eq('owner_id', ownerId)
+    .select('id, label, source_url, status, only_cities, about_tagline, about_bio, about_instagram, about_website, portfolio_label, about_on').eq('owner_id', ownerId)
     .in('status', opts.includeDraft ? ['live', 'draft'] : ['live']).maybeSingle()
   if (error) { console.error('[roster] lookup failed:', error.message); return null }
   if (!r) return null
@@ -134,6 +134,7 @@ export async function liveRosterFor(db: SupabaseClient, ownerId: string, opts: {
     return {
       label: r.label || 'Roster', company_url, talent, draft: r.status === 'draft', only_cities: only,
       about: rosterAbout(r, company_url), portfolio_label: (r.portfolio_label ?? '').trim(),
+      about_on: r.about_on === 'portfolio' ? 'portfolio' : 'roster',
     }
   } catch (e: any) { console.error('[roster]', e?.message ?? e); return null }
 }

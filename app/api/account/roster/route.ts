@@ -1,7 +1,7 @@
 // /api/account/roster — the OWNER's side of a company roster (migration 168).
 //   GET   → { roster: null } when this account has no roster (or it's hidden),
 //           else the fields the owner may edit
-//   PATCH {label?, portfolio_label?, about_tagline?, about_bio?, about_instagram?, about_website?}
+//   PATCH {label?, portfolio_label?, about_tagline?, about_bio?, about_instagram?, about_website?, about_on?}
 //
 // The owner describes their company here; they can NEVER change status, cities,
 // the source site or the tag — those stay admin-only in /api/admin/rosters, so
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 const db = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-const FIELDS = 'id, status, label, source_url, about_tagline, about_bio, about_instagram, about_website, portfolio_label'
+const FIELDS = 'id, status, label, source_url, about_tagline, about_bio, about_instagram, about_website, portfolio_label, about_on'
 
 async function me() {
   const { data: { user } } = await createClient().auth.getUser()
@@ -44,6 +44,7 @@ export async function PATCH(req: NextRequest) {
   if (body.portfolio_label !== undefined) patch.portfolio_label = text(body.portfolio_label, L.label).replace(/\s+/g, ' ')
   if (body.about_tagline !== undefined) patch.about_tagline = text(body.about_tagline, L.tagline).replace(/\s+/g, ' ')
   if (body.about_bio !== undefined) patch.about_bio = text(body.about_bio, L.bio)
+  if (body.about_on !== undefined) patch.about_on = body.about_on === 'portfolio' ? 'portfolio' : 'roster'
   if (body.about_instagram !== undefined) patch.about_instagram = cleanIgHandle(body.about_instagram).slice(0, L.instagram)
   if (body.about_website !== undefined) {
     const w = text(body.about_website, L.website)

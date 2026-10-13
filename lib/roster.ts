@@ -29,6 +29,8 @@ export type PublicRoster = {
   about?: RosterAbout | null
   /** Migration 168 — renames the owner's PORTFOLIO tab. Blank = 'Portfolio'. */
   portfolio_label?: string
+  /** Migration 169 — which tab swaps the header to `about`. Default 'roster'. */
+  about_on?: 'roster' | 'portfolio'
 }
 
 export type RosterAbout = { tagline: string; bio: string; instagram: string; website: string }

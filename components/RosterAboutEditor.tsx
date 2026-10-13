@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react'
 import { ROSTER_ABOUT_LIMITS as L } from '@/lib/roster'
 
 type Row = {
-  status: string; label: string; source_url: string
+  status: string; label: string; source_url: string; about_on: 'roster' | 'portfolio'
   about_tagline: string; about_bio: string; about_instagram: string; about_website: string; portfolio_label: string
 }
 
@@ -61,7 +61,7 @@ export default function RosterAboutEditor() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         label: row.label, portfolio_label: row.portfolio_label, about_tagline: row.about_tagline,
-        about_bio: row.about_bio, about_instagram: row.about_instagram, about_website: row.about_website,
+        about_bio: row.about_bio, about_instagram: row.about_instagram, about_website: row.about_website, about_on: row.about_on,
       }),
     })
     const d = await r.json().catch(() => ({}))
@@ -72,10 +72,10 @@ export default function RosterAboutEditor() {
 
   return (
     <div style={{ marginTop: 36, paddingTop: 28, borderTop: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))' }}>
-      <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6 }}>YOUR COMPANY PAGE</div>
+      <div style={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6 }}>YOUR SECOND PROFILE</div>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: muted, lineHeight: 1.55, margin: '0 0 20px' }}>
-        Your profile has two tabs: your roster and your own portfolio. When someone opens the roster tab, the top of your profile switches to what you write here.
-        Leave it blank and your normal profile shows on both.
+        Your profile has two tabs: your roster and your portfolio. Running two businesses? Write the second one here, and the top of your profile switches to it
+        when someone opens the {row.about_on === 'portfolio' ? 'portfolio' : 'roster'} tab. Leave it blank and your normal profile shows on both.
         {row.status !== 'live' && <><br /><span style={{ color: 'var(--t-gold)' }}>Your roster isn&apos;t live yet, so members can&apos;t see this part yet.</span></>}
       </p>
 
@@ -83,23 +83,35 @@ export default function RosterAboutEditor() {
         <F label="ROSTER TAB NAME"><input style={input} value={row.label} onChange={set('label')} maxLength={L.label} placeholder="e.g. Neil Jou Agency" /></F>
         <F label="PORTFOLIO TAB NAME" hint="optional"><input style={input} value={row.portfolio_label} onChange={set('portfolio_label')} maxLength={L.label} placeholder="e.g. Neil Jou Studios" /></F>
       </div>
+      <F label="SHOW IT ON">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {(['roster', 'portfolio'] as const).map(k => (
+            <button key={k} type="button" onClick={() => { setRow(r => r && { ...r, about_on: k }); setMsg(null) }}
+              style={{ fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, padding: '9px 14px', borderRadius: 999, cursor: 'pointer',
+                border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))',
+                background: row.about_on === k ? 'var(--t-fg)' : 'transparent', color: row.about_on === k ? 'var(--t-on-fg)' : 'var(--t-fg)' }}>
+              The {(k === 'roster' ? (row.label || 'Roster') : (row.portfolio_label || 'Portfolio'))} tab
+            </button>
+          ))}
+        </div>
+      </F>
       <F label="TAGLINE" hint="the line under your name">
         <input style={input} value={row.about_tagline} onChange={set('about_tagline')} maxLength={L.tagline} placeholder="e.g. Model & Talent Agency · Houston" />
       </F>
-      <F label="COMPANY BIO">
+      <F label="BIO">
         <textarea style={{ ...input, resize: 'vertical', minHeight: 110, lineHeight: 1.5 }} value={row.about_bio} onChange={set('about_bio')} maxLength={L.bio} rows={4} />
         <div style={{ fontFamily: 'Inter', fontSize: 11, color: muted, textAlign: 'right', marginTop: 4 }}>{row.about_bio.length}/{L.bio}</div>
       </F>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0 14px' }}>
-        <F label="COMPANY INSTAGRAM"><input style={input} value={row.about_instagram} onChange={set('about_instagram')} maxLength={80} placeholder="@handle" /></F>
-        <F label="COMPANY WEBSITE"><input style={input} value={row.about_website} onChange={set('about_website')} maxLength={L.website} placeholder={host(row.source_url)} /></F>
+        <F label="INSTAGRAM"><input style={input} value={row.about_instagram} onChange={set('about_instagram')} maxLength={80} placeholder="@handle" /></F>
+        <F label="WEBSITE"><input style={input} value={row.about_website} onChange={set('about_website')} maxLength={L.website} placeholder={host(row.source_url)} /></F>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <button type="button" onClick={save} disabled={saving} style={{
           background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 4, padding: '12px 26px',
           fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600, letterSpacing: '0.1em', cursor: 'pointer', opacity: saving ? 0.6 : 1,
-        }}>{saving ? 'SAVING...' : 'SAVE COMPANY PAGE'}</button>
+        }}>{saving ? 'SAVING...' : 'SAVE SECOND PROFILE'}</button>
         {msg && <span style={{ fontFamily: 'Inter', fontSize: 13, color: msg.ok ? 'var(--t-ok, #6bffaa)' : 'var(--t-err, #f0a0a0)' }}>{msg.text}</span>}
       </div>
     </div>

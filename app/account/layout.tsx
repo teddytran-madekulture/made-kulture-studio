@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import AccountRail from '@/components/AccountRail'
 import SettingsShell from '@/components/SettingsShell'
+import VendorTermsGate from '@/components/VendorTermsGate'
 
 // Runs before first paint so a light-mode user never sees a dark flash:
 // saved choice first, otherwise LIGHT. 2026-10-02 (Teddy): the account area is
@@ -19,11 +21,21 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const { data: prof } = await supabase
     .from('customer_profiles').select('onboarded').eq('id', user.id).maybeSingle()
   if (prof && prof.onboarded === false) redirect('/welcome')
+  // 2026-10-12 — a Vendor must sign the Vendor Agreement before using the
+  // account area (components/VendorTermsGate.tsx).
+  // Separate service-role read so it can never disturb the onboarding check
+  // above; a failed lookup logs and lets them through (the listing INSERT
+  // policy still refuses listings from anyone who hasn't signed).
+  const { data: vend, error: vendErr } = await createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    .from('customer_profiles').select('account_type, full_name, vendor_terms_accepted_at').eq('id', user.id).maybeSingle()
+  if (vendErr) console.error('[account layout] vendor terms lookup:', vendErr.message)
+  const needsVendorTerms = vend?.account_type === 'vendor' && !vend?.vendor_terms_accepted_at
 
   return (
     <div className="acct-theme" style={{ background: 'var(--t-bg)', minHeight: '100vh', color: 'var(--t-fg)' }}>
       <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       {/* Icon rail (desktop, slides out on hover) / top + bottom bars (phones) */}
+      {needsVendorTerms && <VendorTermsGate businessName={(vend?.full_name ?? '').trim()} />}
       <AccountRail />
       <div className="acct-main">
         <SettingsShell>

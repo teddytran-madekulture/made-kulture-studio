@@ -72,7 +72,9 @@ export const ROLE_CATEGORIES: RoleCategory[] = [
   // ⚠️ Keep the label in sync with SERVICES_CATEGORY below.
   {
     label: 'Production Services',
-    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Animal Wrangler', 'Catering'],
+    // 2026-10-12: agencies provide TALENT as their service (cast + book models
+    // for a shoot; the client pays the agency, never us), so they are vendors.
+    roles: ['Vehicle Rental', 'Wardrobe Rental', 'Prop Rental', 'Equipment Rental', 'Animal Wrangler', 'Catering', 'Model & Talent Agency'],
   },
 ]
 
@@ -104,6 +106,7 @@ export const SERVICE_TAG_SUGGESTIONS: Record<string, string[]> = {
   'Equipment Rental': ['lighting', 'camera', 'lens', 'grip', 'drone', 'audio', 'fog'],
   'Animal Wrangler': ['animal', 'dog', 'cat', 'horse', 'snake', 'reptile', 'bird', 'exotic'],
   'Catering': ['catering', 'craft services', 'food', 'coffee', 'drinks', 'snacks'],
+  'Model & Talent Agency': ['models', 'talent', 'casting', 'fashion', 'commercial', 'fitness', 'actors', 'influencers'],
 }
 
 /** Does this member offer a production service (and so get listings)? */

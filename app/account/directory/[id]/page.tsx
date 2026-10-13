@@ -337,7 +337,9 @@ export default function MemberProfilePage() {
   // the header describes the COMPANY (tagline, bio, its own Instagram and
   // site); every other tab shows the member's own. Only when the owner has
   // filled the company side in — otherwise `about` is null and nothing swaps.
-  const about = tab === 'roster' ? (member.roster?.about ?? null) : null
+  // Migration 169 — the second identity can live on either tab.
+  const aboutTab = member.roster?.about_on === 'portfolio' ? 'portfolio' : 'roster'
+  const about = tab === aboutTab ? (member.roster?.about ?? null) : null
   const aboutRows: typeof linkRows = []
   if (about?.instagram) aboutRows.push({ key: 'aig', href: `https://instagram.com/${about.instagram}`, label: `@${about.instagram}`, what: 'roster_instagram', external: true, ico: icon(<><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /></>) })
   if (about?.website) {
