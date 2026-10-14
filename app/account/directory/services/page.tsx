@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import DirectoryHeader from '@/components/DirectoryHeader'
 import ListingsTab, { type PublicListing } from '@/components/ListingsTab'
+import { onePerVendor } from '@/lib/one-per-vendor'
 import { SERVICE_ROLES } from '@/lib/roles'
 
 const muted = 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))'
@@ -50,7 +51,7 @@ export default function ServicesPage() {
   // Ranked, so tag-stuffing doesn't pay: a word found in the TITLE scores
   // highest, then category, then details/notes/vendor, and a tag-only match
   // scores least. A snake wrangler tagged "car" sinks below actual cars.
-  const shown = useMemo(() => {
+  const matched = useMemo(() => {
     const words = q.toLowerCase().split(/[\s,]+/).filter(Boolean).map(stem)
     const has = (text: string, w: string) => {
       const t = text.toLowerCase()
@@ -72,6 +73,14 @@ export default function ServicesPage() {
     // Stable sort keeps newest-first within the same score.
     return scored.sort((a, b) => b.score - a.score).map(x => x.l)
   }, [listings, q, cat])
+
+  // 2026-10-14: BROWSING shows one card per vendor ("+3 more from Mad Film
+  // Lab" links to the rest), so one vendor can't fill the grid. A SEARCH shows
+  // every match — someone typing "E-6" wants the E-6 listing, not its sibling.
+  const grouped = useMemo(() => {
+    if (q.trim()) return { shown: matched, more: {} as Record<string, number> }
+    return onePerVendor(matched, deep.request || deep.open)
+  }, [matched, q, deep])
 
   const chip = (on: boolean): React.CSSProperties => ({
     fontFamily: 'Inter', fontSize: 13, padding: '8px 14px', borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap',
@@ -99,10 +108,10 @@ export default function ServicesPage() {
           </div>
         )}
         <div style={{ fontFamily: 'Inter', fontSize: 13, color: muted, margin: '6px 0 14px' }}>
-          {loading ? 'Loading…' : err ? <span style={{ color: '#e6a0a0' }}>{err}</span> : `${shown.length} listing${shown.length === 1 ? '' : 's'}`}
+          {loading ? 'Loading…' : err ? <span style={{ color: '#e6a0a0' }}>{err}</span> : `${matched.length} listing${matched.length === 1 ? '' : 's'}`}
         </div>
         {!loading && !err && (
-          <ListingsTab listings={shown} showVendor openId={deep.open} requestId={deep.request}
+          <ListingsTab listings={grouped.shown} moreFrom={grouped.more} showVendor openId={deep.open} requestId={deep.request}
             emptyText={listings.length === 0 ? 'No services listed yet. Rent out vehicles, wardrobe, props, gear or animals? Add a Production Services role to your profile.' : 'Nothing matches that search. Try a different word.'} />
         )}
       </>)}

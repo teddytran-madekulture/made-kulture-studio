@@ -19,6 +19,7 @@ import { memberAccess } from '@/lib/directory-access'
 import { isProfileComplete, cleanIgHandle } from '@/lib/directory-listing'
 import { pickEditorialForVisit } from '@/lib/featured-editorial-server'
 import { loadVisibleListings, showcaseOrder } from '@/lib/service-listings'
+import { onePerVendor } from '@/lib/one-per-vendor'
 import { blockedIds } from '@/lib/blocks'
 import { loadActiveCalls, callStatusLabel } from '@/lib/open-calls-server'
 
@@ -139,7 +140,10 @@ export async function GET() {
   // of the home page still works. (The Services page itself reports the error.)
   try {
     const all = (await loadVisibleListings(service, user.id)).filter(l => !hidden.has(l.vendor.id))
-    out.services = showcaseOrder(all).slice(0, 3)
+    // One card per vendor first, so one vendor can't take the whole row.
+    const ordered = showcaseOrder(all)
+    const firsts = onePerVendor(ordered).shown
+    out.services = [...firsts, ...ordered.filter(l => !firsts.includes(l))].slice(0, 3)
     out.servicesTotal = all.length
   } catch (e: any) { console.error('[directory/home] services', e?.message) }
 

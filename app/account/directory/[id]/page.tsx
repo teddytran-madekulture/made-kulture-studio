@@ -222,10 +222,12 @@ export default function MemberProfilePage() {
           setMember(d.member); setFollowing(!!d.member.is_following); setFollowers(d.member.followers ?? 0)
           // A vendor's listings ARE their profile — open on them, unless the
           // visitor came from a "you were tagged" email (?tab=tagged).
-          let wantsTagged = false
-          try { wantsTagged = new URLSearchParams(window.location.search).get('tab') === 'tagged' } catch {}
+          let wantsTagged = false, wantsListings = false
+          try { const t = new URLSearchParams(window.location.search).get('tab'); wantsTagged = t === 'tagged'; wantsListings = t === 'listings' } catch {}
           // A company's roster is the reason to visit its profile — it wins.
-          if (d.member.roster?.talent?.length && !wantsTagged) setTab('roster')
+          // ?tab=listings — the Services page's "+N more from X" link.
+          if (wantsListings && (d.member.listings ?? []).length > 0) setTab('listings')
+          else if (d.member.roster?.talent?.length && !wantsTagged) setTab('roster')
           // Listings lead only when they ARE the profile (a vendor, or nobody with
           // a portfolio) — a makeup artist's portfolio still opens first.
           else if ((d.member.listings ?? []).length > 0 && !wantsTagged

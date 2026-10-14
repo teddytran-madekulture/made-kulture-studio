@@ -54,8 +54,10 @@ function Photos({ l, idx, setIdx, aspect, fit, onOpen }: {
   )
 }
 
-export default function ListingsTab({ memberId = '', memberName = '', listings, isSelf = false, showVendor = false, emptyText, openId, requestId }: {
+export default function ListingsTab({ memberId = '', memberName = '', listings, isSelf = false, showVendor = false, emptyText, openId, requestId, moreFrom }: {
   memberId?: string; memberName?: string; listings: PublicListing[]; isSelf?: boolean; showVendor?: boolean; emptyText?: string
+  /** Services page: vendor id -> how many of their listings this grid is hiding. */
+  moreFrom?: Record<string, number>
   /** Deep link from the directory home's "Production services" row: open this
    *  listing's detail pop-up (openId) or its REQUEST form (requestId) on arrival. */
   openId?: string | null; requestId?: string | null
@@ -150,6 +152,11 @@ export default function ListingsTab({ memberId = '', memberName = '', listings, 
             {l.rate && <div style={{ fontSize: 14, color: 'var(--t-fg)', marginBottom: 8 }}>{l.rate}</div>}
             {l.details && <div style={{ fontSize: 13, color: muted, lineHeight: 1.55, marginBottom: 6, ...clamp2 }}>{l.details}</div>}
             <button type="button" onClick={() => openDetail(l)} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: 'var(--t-gold)', marginBottom: 12 }}>View details →</button>
+            {l.vendor && (moreFrom?.[l.vendor.id] ?? 0) > 0 && (
+              <a href={`/account/directory/${l.vendor.id}?tab=listings`} style={{ display: 'block', fontSize: 12, color: muted, textDecoration: 'none', border: line, borderRadius: 4, padding: '8px 10px', marginBottom: 10, textAlign: 'center' }}>
+                +{moreFrom![l.vendor.id]} more from {l.vendor.name} →
+              </a>
+            )}
             {!mine(l) && <button type="button" onClick={() => startRequest(l)} style={{ ...primaryBtn, marginTop: 'auto' }}>REQUEST</button>}
           </div>
         </div>

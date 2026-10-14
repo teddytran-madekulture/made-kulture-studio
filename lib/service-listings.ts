@@ -60,3 +60,4 @@ export function showcaseOrder(list: VisibleListing[]): VisibleListing[] {
   const feat = list.filter(l => l.featured).sort((a, b) => Date.parse(b.featured_at ?? '0') - Date.parse(a.featured_at ?? '0'))
   return [...feat, ...list.filter(l => !l.featured)]
 }
+
