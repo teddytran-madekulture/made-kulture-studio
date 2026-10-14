@@ -817,6 +817,8 @@ export default function AdminDashboard() {
   const [custPricingDraft,  setCustPricingDraft]  = useState<{ hourly_rate: string; equipment_discount_percent: string; sets: Record<string, string>; comp_no_card: boolean; short_notice: boolean; short_notice_until: string; short_notice_view: boolean }>({ hourly_rate: '', equipment_discount_percent: '', sets: {}, comp_no_card: false, short_notice: false, short_notice_until: '', short_notice_view: false })
   const [custPricingSaving, setCustPricingSaving] = useState(false)
   const [plusBusy, setPlusBusy] = useState(false)
+  // 2026-10-14: SELL Plus on a card on file (customer standing in the studio).
+  const [sellPlus, setSellPlus] = useState<null | { loading: boolean; cards: any[]; cardId: string; cents: number | null; isIntro: boolean; autoRenew: boolean; msg: string; ok: boolean }>(null)
   const [dupGroups,         setDupGroups]         = useState<any[]>([])
   const [dupLoading,        setDupLoading]         = useState(false)
   const [dupPanelOpen,      setDupPanelOpen]       = useState(false)
@@ -1008,6 +1010,33 @@ export default function AdminDashboard() {
       if (match) fetchCustomerDetail(match.id)
     })()
   }, [fetchCustomerDetail])
+
+  // Never carry a half-open sale from one customer to the next.
+  useEffect(() => { setSellPlus(null) }, [custDetail?.id])
+  const openSellPlus = async () => {
+    if (!custDetail) return
+    setSellPlus({ loading: true, cards: [], cardId: '', cents: null, isIntro: false, autoRenew: false, msg: '', ok: false })
+    const [cr, qr] = await Promise.all([
+      fetch(`/api/admin/booking-cards?email=${encodeURIComponent(custDetail.email || '')}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/admin/customers/${custDetail.id}/plus`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'quote' }) }).then(r => r.json()).catch(() => ({})),
+    ])
+    const cards = (cr.cards ?? []).filter((c: any) => c.prepaidType !== 'PREPAID')
+    setSellPlus({ loading: false, cards, cardId: cards[0]?.id ?? '', cents: qr.cents ?? null, isIntro: !!qr.isIntro, autoRenew: false,
+      msg: qr.error ? qr.error : !cards.length ? 'No card on file for this email. Have them buy Plus on madekulture.com/plus.' : '', ok: false })
+  }
+  const confirmSellPlus = async () => {
+    if (!custDetail || !sellPlus) return
+    const card = sellPlus.cards.find(c => c.id === sellPlus.cardId)
+    if (!card || sellPlus.cents == null) return
+    setSellPlus(p => p && ({ ...p, loading: true, msg: '' }))
+    const r = await fetch(`/api/admin/customers/${custDetail.id}/plus`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sell', squareCardId: card.id, squareCustomerId: card.squareCustomerId, expectedCents: sellPlus.cents, autoRenew: sellPlus.autoRenew }) })
+    const d = await r.json().catch(() => ({}))
+    if (r.status === 409 && d.code === 'price_changed') { setSellPlus(p => p && ({ ...p, loading: false, cents: d.cents, isIntro: false, msg: d.error })); return }
+    if (!r.ok) { setSellPlus(p => p && ({ ...p, loading: false, msg: d.error || 'Failed.' })); return }
+    setSellPlus(p => p && ({ ...p, loading: false, ok: true, msg: `Charged $${(d.cents / 100).toFixed(0)}. Plus is active for 1 year. Receipt emailed.` }))
+    await fetchCustomerDetail(custDetail.id)
+  }
 
   // Grant (comp) / revoke / toggle-auto-renew a customer's Plus membership.
   const plusAction = async (action: string, extra: Record<string, any> = {}) => {
@@ -4551,8 +4580,38 @@ export default function AdminDashboard() {
                             </div>
                             {active
                               ? <button disabled={plusBusy} onClick={() => plusAction('revoke')} style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff8080', fontSize: 10, letterSpacing: '0.08em', padding: '5px 10px', cursor: 'pointer' }}>REVOKE</button>
-                              : <button disabled={plusBusy} onClick={() => plusAction('grant')} style={{ background: '#d4a843', border: 'none', color: '#080808', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', padding: '6px 12px', cursor: 'pointer' }}>GRANT · 1 YEAR</button>}
+                              : <div style={{ display: 'flex', gap: 6 }}>
+                                  <button disabled={plusBusy || !!sellPlus?.loading} onClick={openSellPlus} style={{ background: '#d4a843', border: 'none', color: '#080808', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', padding: '6px 12px', cursor: 'pointer' }}>SELL · CHARGE CARD</button>
+                                  <button disabled={plusBusy} onClick={() => plusAction('grant')} style={{ background: 'transparent', border: '1px solid rgba(212,168,67,0.5)', color: '#e6c07a', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', padding: '5px 10px', cursor: 'pointer' }}>GIFT (COMP)</button>
+                                </div>}
                           </div>
+                          {!active && sellPlus && (
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>
+                              {sellPlus.loading && !sellPlus.cards.length ? 'Finding their card…' : (<>
+                                {sellPlus.cards.length > 0 && !sellPlus.ok && (<>
+                                  <div style={{ marginBottom: 8 }}>
+                                    {sellPlus.cents != null && <>Price: <strong style={{ color: '#fff' }}>${(sellPlus.cents / 100).toFixed(0)}</strong>{sellPlus.isIntro ? ' (new-member intro)' : ' (standard)'} for 1 year</>}
+                                  </div>
+                                  <select value={sellPlus.cardId} onChange={e => setSellPlus(p => p && ({ ...p, cardId: e.target.value }))}
+                                    style={{ width: '100%', background: '#111', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: 12, marginBottom: 8, colorScheme: 'dark' }}>
+                                    {sellPlus.cards.map(c => <option key={c.id} value={c.id} style={{ background: '#111', color: '#fff' }}>{c.brand} ···· {c.last4}{c.expMonth ? ` · exp ${c.expMonth}/${String(c.expYear).slice(-2)}` : ''}</option>)}
+                                  </select>
+                                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 10, cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={sellPlus.autoRenew} onChange={e => setSellPlus(p => p && ({ ...p, autoRenew: e.target.checked }))} />
+                                    They agreed to auto-renew yearly on this card (leave off if you didn&apos;t ask)
+                                  </label>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button disabled={sellPlus.loading || sellPlus.cents == null || !sellPlus.cardId} onClick={confirmSellPlus}
+                                      style={{ background: '#d4a843', border: 'none', color: '#080808', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '8px 12px', cursor: 'pointer' }}>
+                                      {sellPlus.loading ? 'CHARGING…' : `CHARGE $${sellPlus.cents != null ? (sellPlus.cents / 100).toFixed(0) : '—'} & ACTIVATE`}
+                                    </button>
+                                    <button onClick={() => setSellPlus(null)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', fontSize: 11, padding: '8px 12px', cursor: 'pointer' }}>CANCEL</button>
+                                  </div>
+                                </>)}
+                                {sellPlus.msg && <div role="status" style={{ marginTop: 8, color: sellPlus.ok ? '#7cdc96' : '#e6c07a', lineHeight: 1.5 }}>{sellPlus.msg}</div>}
+                              </>)}
+                            </div>
+                          )}
                           {active && (
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{expLabel ? `Renews/expires ${expLabel}` : 'No expiry'} · auto-renew {po.plus_auto_renew ? 'on' : 'off'}</span>
