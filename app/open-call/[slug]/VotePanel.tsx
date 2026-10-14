@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const GOLD = '#c9b27e'
 const mono = '"JetBrains Mono", ui-monospace, monospace'
@@ -61,7 +62,7 @@ export default function VotePanel({ slug }: { slug: string }) {
         Voting is for members listed in the directory.{' '}
         {s.optedIn ? `Finish your profile to vote${s.blockers?.length ? ` (missing: ${s.blockers.join(', ')})` : ''}.` : 'Join the directory and finish your profile to vote.'}
       </p>
-      <Link href="/account/profile" style={btn}>FINISH MY PROFILE ↗</Link>
+      <Link href="/account/profile" style={btn}>FINISH MY PROFILE <ArrowUpRight /></Link>
     </div>
   )
 

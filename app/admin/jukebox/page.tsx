@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { readVibe, VIBE_MINUTES } from '@/lib/jukebox'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 
@@ -139,8 +140,8 @@ export default function AdminJukeboxPage() {
                         style={{ background: 'none', border: `1px solid ${C.line}`, color: C.dim, borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         ⟳ Update players now
                       </button>
-                      <a href={`/jukebox/player?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.accent, textDecoration: 'none' }}>Open player ↗</a>
-                      <a href={`/jukebox?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.dim, textDecoration: 'none' }}>Guest page ↗</a>
+                      <a href={`/jukebox/player?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.accent, textDecoration: 'none' }}>Open player <ArrowUpRight /></a>
+                      <a href={`/jukebox?zone=${zone.slug}`} target="_blank" rel="noreferrer" style={{ color: C.dim, textDecoration: 'none' }}>Guest page <ArrowUpRight /></a>
                     </div>
                   </div>
                   {/* Spotify connect (only when this zone is on Spotify) */}

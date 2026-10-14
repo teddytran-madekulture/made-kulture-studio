@@ -13,6 +13,7 @@ import { isVideoUrl } from '@/lib/media-url'
 import {
   dropTerms, depositFor, depositorRate, dollars, runLabel, fmtInstant, type SetDrop, type DropPledge, type DropProgress,
 } from '@/lib/set-drops'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e', green: '#7bd88f', red: '#ff8a80', amber: '#f0b44c' }
 const inp: React.CSSProperties = { background: '#0b0b0d', border: `1px solid ${C.line}`, color: C.text, padding: '9px 11px', fontFamily: 'Inter, sans-serif', fontSize: 13, colorScheme: 'dark', width: '100%', boxSizing: 'border-box' }
@@ -252,7 +253,7 @@ export default function SetDropsAdmin() {
                 <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 28, marginTop: 4 }}>{drop.name}</div>
                 <div style={small}>{runLabel(drop)}{drop.pre_reserve_ends_at ? ` · reservations close ${fmtInstant(drop.pre_reserve_ends_at)}` : ''}</div>
               </div>
-              <a href={`/drops/${drop.slug}`} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>{drop.status === 'draft' ? 'PREVIEW PAGE ↗' : 'VIEW PUBLIC PAGE ↗'}</a>
+              <a href={`/drops/${drop.slug}`} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: 'none' }}>{drop.status === 'draft' ? 'PREVIEW PAGE' : 'VIEW PUBLIC PAGE'} <ArrowUpRight /></a>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginTop: 18 }}>
               {[

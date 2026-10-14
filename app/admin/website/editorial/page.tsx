@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { EDITORIAL_DEFAULTS, EDITORIAL_MAX_CREDITS, EDITORIAL_MAX_ITEMS, EDITORIAL_MAX_PHOTOS, cleanHandle, centralToday, editorialStatus, type EditorialsConfig, type FeaturedEditorial } from '@/lib/featured-editorial'
 import { shrinkImage } from '@/lib/shrink-image'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const C = { card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 const inp: React.CSSProperties = { background: '#0b0b0d', border: `1px solid ${C.line}`, color: C.text, padding: '9px 11px', fontFamily: 'Inter, sans-serif', fontSize: 13, colorScheme: 'dark', width: '100%', boxSizing: 'border-box' }
@@ -306,7 +307,7 @@ export default function FeaturedEditorialPage() {
         <button onClick={save} disabled={busy || uploading > 0 || !dirty} style={{ background: dirty ? C.accent : 'rgba(255,255,255,0.12)', color: '#080808', border: 'none', padding: '11px 22px', fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', cursor: dirty ? 'pointer' : 'default' }}>
           {busy ? 'SAVING…' : dirty ? 'SAVE' : 'SAVED'}
         </button>
-        <a href="/" target="_blank" rel="noreferrer" style={{ ...small, color: C.text }}>View home page ↗</a>
+        <a href="/" target="_blank" rel="noreferrer" style={{ ...small, color: C.text }}>View home page <ArrowUpRight /></a>
         {msg && <span style={{ ...small, color: msg.startsWith('⚠️') ? '#fbbf24' : '#4ade80' }}>{msg}</span>}
       </div>
     </div>

@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { shrinkImage } from '@/lib/shrink-image'
 import { OPEN_CALL_BUCKET, OPEN_CALL_IMAGE_EDGE, OPEN_CALL_MIN_EDGE, OPEN_CALL_MAX_CREDITS, OPEN_CALL_MIN_IMAGES, type OpenCallPhase } from '@/lib/open-calls'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const GOLD = '#c9b27e'
 const mono = '"JetBrains Mono", ui-monospace, monospace'
@@ -70,7 +71,7 @@ export default function OpenCallClient({ slug, title, setName, setSlug, maxImage
           ))}
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link href="/account/profile" style={btnPrimary}>FINISH YOUR DIRECTORY PROFILE ↗</Link>
+          <Link href="/account/profile" style={btnPrimary}>FINISH YOUR DIRECTORY PROFILE <ArrowUpRight /></Link>
           {mine.status === 'pending' && phase === 'open' && (
             <button style={btnGhost} onClick={async () => {
               if (!confirm('Withdraw this entry? Your images will be deleted and you can submit a new one.')) return
@@ -91,7 +92,7 @@ export default function OpenCallClient({ slug, title, setName, setSlug, maxImage
         <p style={{ ...help, fontSize: 15 }}>
           {phase === 'upcoming' ? 'Dates and details coming soon.' : phase === 'voting' ? 'Submissions are closed and the directory vote is on.' : 'Submissions for this open call are closed.'}
         </p>
-        <Link href="/account/directory" style={btnPrimary}>GO TO THE DIRECTORY ↗</Link>
+        <Link href="/account/directory" style={btnPrimary}>GO TO THE DIRECTORY <ArrowUpRight /></Link>
       </section>
     )
   }
@@ -237,7 +238,7 @@ function EntryForm({ slug, setName, setSlug, maxImages, rolling, onDone }: { slu
           <li>{setName ? `${setName} recognisable in most frames` : 'Shot on a Made Kulture set'}</li>
           <li>Photographer and everyone pictured credited</li>
         </ul>
-        <a href="/submissions/rules" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 8, fontSize: 12.5, color: GOLD }}>Full rules ↗</a>
+        <a href="/submissions/rules" target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 8, fontSize: 12.5, color: GOLD }}>Full rules <ArrowUpRight /></a>
       </div>
 
       <div style={{ marginBottom: 34 }}>

@@ -14,6 +14,7 @@ import { FOCAL_POSITION, type HeroSlide } from '@/lib/hero-slides'
 import FeaturedEditorial from '@/components/FeaturedEditorial'
 import DirectoryTeaser from '@/components/DirectoryTeaser'
 import { liveEditorial, creditsLine, type FeaturedEditorial as FeaturedEditorialData } from '@/lib/featured-editorial'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 
 const SETS = [
@@ -241,7 +242,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           </p>
           <div style={{ marginTop:'auto', paddingTop:40, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <span className="label" style={{ color: pathHover === 'a' ? '#080808' : '#fff' }}>RESERVE A SET</span>
-            <span style={{ fontSize:20, color: pathHover === 'a' ? '#080808' : 'rgba(255,255,255,0.6)' }}>↗</span>
+            <span style={{ fontSize:20, color: pathHover === 'a' ? '#080808' : 'rgba(255,255,255,0.6)' }}><ArrowUpRight size={20} /></span>
           </div>
         </Link>
         <Link href="/book?type=studio"
@@ -254,7 +255,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           </p>
           <div style={{ marginTop:'auto', paddingTop:40, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <span className="label" style={{ color: pathHover === 'a' ? '#fff' : '#000' }}>FULL TAKEOVER</span>
-            <span style={{ fontSize:20, color: pathHover === 'a' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }}>↗</span>
+            <span style={{ fontSize:20, color: pathHover === 'a' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }}><ArrowUpRight size={20} /></span>
           </div>
         </Link>
         </div>
@@ -398,7 +399,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
             </p>
             <div style={{ display:'flex', gap:16, marginTop:24 }}>
               <a href="https://www.instagram.com/madekulture/" target="_blank" rel="noreferrer"
-                style={{ fontSize:11, color:'#c9b27e', letterSpacing:'0.12em', textDecoration:'none' }}>INSTAGRAM ↗</a>
+                style={{ fontSize:11, color:'#c9b27e', letterSpacing:'0.12em', textDecoration:'none' }}>INSTAGRAM <ArrowUpRight /></a>
             </div>
           </div>
         </div>

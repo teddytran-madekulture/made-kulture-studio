@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { trackNow } from '@/lib/track'
 import { sizedImage, talentStats, type PublicRoster, type RosterTalent } from '@/lib/roster'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const muted = 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))'
 const faint = 'rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))'
@@ -117,7 +118,7 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
         <a href={roster.company_url} target="_blank" rel="noopener noreferrer"
           onClick={() => { if (!preview) trackNow('contact_click', { target_id: memberId, meta: { what: 'roster_site' } }) }}
           style={{ fontFamily: 'Inter', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--t-fg)', textDecoration: 'none', borderBottom: `1px solid ${faint}` }}>
-          {hostOf(roster.company_url).toUpperCase()} ↗
+          {hostOf(roster.company_url).toUpperCase()} <ArrowUpRight />
         </a>
       </div>
 
@@ -222,8 +223,13 @@ export default function RosterTab({ roster, memberId, memberName, isSelf = false
 
               <div style={{ marginTop: 'auto', paddingTop: 22, display: 'grid', gap: 8 }}>
                 <a href={open.profile_url} target="_blank" rel="noopener noreferrer" onClick={() => viewBook(open)}
-                  style={{ display: 'block', textAlign: 'center', padding: '13px 0', borderRadius: 4, background: 'var(--t-fg)', color: 'var(--t-on-fg)', fontFamily: 'Inter', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textDecoration: 'none' }}>
-                  VIEW FULL BOOK ON {hostOf(roster.company_url).toUpperCase()} ↗
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 14px', borderRadius: 4, background: 'var(--t-fg)', color: 'var(--t-on-fg)', fontFamily: 'Inter', textDecoration: 'none' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.12em' }}>
+                    VIEW FULL BOOK <ArrowUpRight size={16} style={{ verticalAlign: 'middle' }} />
+                  </span>
+                  <span style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.08em', opacity: 0.6 }}>
+                    on {hostOf(roster.company_url)}
+                  </span>
                 </a>
                 {!isSelf && (
                   <button type="button" onClick={askAgency} disabled={preview || asking}

@@ -5,6 +5,7 @@ import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { fmt as nl } from '@/lib/fmt'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 
 interface Gear {
@@ -130,7 +131,7 @@ export default function GearClient({ content = {} }: { content?: PageContent }) 
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 40, textAlign: 'center' }}>
           <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>Ready to shoot? Add any of this gear to your session at checkout.</p>
           <Link href="/book" style={{ display: 'inline-block', background: '#fff', color: '#080808', padding: '13px 28px', textDecoration: 'none', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em' }}>
-            BOOK A SESSION ↗
+            BOOK A SESSION <ArrowUpRight />
           </Link>
         </div>
       </div>

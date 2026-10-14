@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import RosterTab from '@/components/RosterTab'
 import type { RosterTalent } from '@/lib/roster'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 type Roster = {
   id: string; owner_id: string; label: string; source_url: string; include_tag: string; only_cities: string[]
@@ -188,7 +189,7 @@ export default function AdminRostersPage() {
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
                 <button type="button" style={btn('light')} onClick={() => togglePreview(r.id)}>{pv ? 'CLOSE PREVIEW' : 'PREVIEW'}</button>
-                <a href={`/account/directory/${r.owner_id}`} target="_blank" rel="noopener noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>VIEW THEIR PROFILE ↗</a>
+                <a href={`/account/directory/${r.owner_id}`} target="_blank" rel="noopener noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>VIEW THEIR PROFILE <ArrowUpRight /></a>
                 <button type="button" style={btn('ghost')} disabled={busy === r.id} onClick={() => sync(r.id)}>{busy === r.id ? 'WORKING…' : 'SYNC NOW'}</button>
                 {r.status !== 'live' && (
                   <button type="button" style={btn('go')} disabled={busy === r.id}

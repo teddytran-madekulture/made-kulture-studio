@@ -10,6 +10,7 @@ import { SITE_IMAGE_SLOTS, type SiteImageSlot } from '@/lib/site-images'
 import { SITE_SETTINGS_DEFAULTS, HERO_HEIGHT_MIN, HERO_HEIGHT_MAX } from '@/lib/site-settings'
 import { getContentPage, type ContentField } from '@/lib/site-content'
 import { parseList, type ListItem } from '@/lib/content-list'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e' }
 
@@ -339,7 +340,7 @@ export default function PageEditor({ slug }: { slug: string }) {
       <div style={{ maxWidth: 820, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 8 }}>
           <h1 style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 40, letterSpacing: '0.03em', margin: 0 }}>EDIT — {page?.label?.toUpperCase() ?? 'WEBSITE'}</h1>
-          <a href="/" target="_blank" rel="noreferrer" style={{ fontSize: 12, letterSpacing: '0.1em', color: C.accent, textDecoration: 'none' }}>VIEW LIVE SITE ↗</a>
+          <a href="/" target="_blank" rel="noreferrer" style={{ fontSize: 12, letterSpacing: '0.1em', color: C.accent, textDecoration: 'none' }}>VIEW LIVE SITE <ArrowUpRight /></a>
         </div>
         <p style={{ color: C.dim, fontSize: 14, lineHeight: 1.6, marginTop: 6, marginBottom: 24, maxWidth: 640 }}>
           Photos and words for each page, together. Everything saves automatically and goes live immediately — no publishing step. Reset returns any item to its original. Wrap words in **double asterisks** to make them bold.

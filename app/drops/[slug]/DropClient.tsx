@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { dropTerms, depositFor, dollars, runLabel, fmtInstant, type SetDrop } from '@/lib/set-drops'
 import SetVideo from '@/components/SetVideo'
 import { isVideoUrl } from '@/lib/media-url'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const anton = 'Anton, "Bebas Neue", sans-serif'
 const mono = '"JetBrains Mono", ui-monospace, monospace'
@@ -91,8 +92,8 @@ export default function DropClient({ slug }: { slug: string }) {
           )}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 28, pointerEvents: 'auto' }}>
             {phase === 'pre_reserve' && !mine && <a href="#reserve" style={btn}>VOTE TO BUILD IT · {dollars(depositFor(drop, Math.max(1, Number(drop.min_hours) || 1)))}{drop.deposit_mode === 'per_hour' ? '/HR' : ''} DEPOSIT</a>}
-            {(phase === 'open' || (phase === 'early_access' && mine && mine.status !== 'refunded')) && <Link href={bookHref} style={btn}>BOOK YOUR DATES ↗</Link>}
-            {drop.open_call && <Link href={`/submissions#${drop.open_call.slug}`} style={ghost}>OPEN CALL ↗</Link>}
+            {(phase === 'open' || (phase === 'early_access' && mine && mine.status !== 'refunded')) && <Link href={bookHref} style={btn}>BOOK YOUR DATES <ArrowUpRight /></Link>}
+            {drop.open_call && <Link href={`/submissions#${drop.open_call.slug}`} style={ghost}>OPEN CALL <ArrowUpRight /></Link>}
           </div>
         </div>
       </section>

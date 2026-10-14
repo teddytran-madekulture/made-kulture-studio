@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import SiteNav from '@/components/SiteNav'
 import SetGallery from '@/components/SetGallery'
 import SetVideo from '@/components/SetVideo'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 // Individual landing page per set — one indexable page per space so searches
 // like "studio with pool Houston" have somewhere specific to land. Linked from
@@ -110,7 +111,7 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
 
               {surcharge > 0 && (
                 <Link href="/signup" style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#c9b27e', textDecoration: 'none' }}>
-                  Sign up free for member rates ↗
+                  Sign up free for member rates <ArrowUpRight />
                 </Link>
               )}
 
@@ -125,7 +126,7 @@ export default async function SetLandingPage({ params }: { params: { slug: strin
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
                 <Link href={`/book?type=set&set=${set.slug}`}
                   style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '14px 24px', textDecoration: 'none' }}>
-                  BOOK {set.name.toUpperCase()} ↗
+                  BOOK {set.name.toUpperCase()} <ArrowUpRight />
                 </Link>
                 <Link href="/tour"
                   style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.2)', padding: '14px 24px', textDecoration: 'none' }}>

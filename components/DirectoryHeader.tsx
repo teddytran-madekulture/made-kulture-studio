@@ -5,6 +5,7 @@
 // quiet way back to booking the studio.
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const TABS = [
   { key: 'home', label: 'Home', href: '/account/directory' },
@@ -47,7 +48,7 @@ export default function DirectoryHeader({ active, onView }: { active?: string; o
           }}>{t.label}</Link>
         ))}
       </nav>
-      <Link href="/book" style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', textDecoration: 'none', whiteSpace: 'nowrap' }}>Book the studio ↗</Link>
+      <Link href="/book" style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.55 * var(--t-a)))', textDecoration: 'none', whiteSpace: 'nowrap' }}>Book the studio <ArrowUpRight /></Link>
     </div>
   )
 }

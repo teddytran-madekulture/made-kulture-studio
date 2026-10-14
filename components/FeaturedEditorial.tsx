@@ -6,6 +6,7 @@
 // Data: lib/featured-editorial.ts. Editor: /admin/website/editorial.
 import { useEffect, useState } from 'react'
 import { handleUrl, type FeaturedEditorial as FE } from '@/lib/featured-editorial'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 export default function FeaturedEditorial({ e, isMobile }: { e: FE; isMobile: boolean }) {
   const [i, setI] = useState(0)
@@ -90,7 +91,7 @@ export default function FeaturedEditorial({ e, isMobile }: { e: FE; isMobile: bo
             </button>
           )}
           {e.postUrl && (
-            <a href={e.postUrl} target="_blank" rel="noopener noreferrer" className="label" style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>VIEW POST ↗</a>
+            <a href={e.postUrl} target="_blank" rel="noopener noreferrer" className="label" style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>VIEW POST <ArrowUpRight /></a>
           )}
         </div>
       </div>

@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { THEMES, hiddenOnPath, type ActiveMarketing } from '@/lib/marketing-tools'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 let cache: Promise<ActiveMarketing | null> | null = null
 function loadMarketing(): Promise<ActiveMarketing | null> {
@@ -126,7 +127,7 @@ export function PopupCard({ p, onClose, narrow }: { p: PopupCardData; onClose?: 
       {((p.buttonLabel && p.buttonUrl) || (p.link2Label && p.link2Url)) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', marginTop: 6 }}>
           {p.buttonLabel && p.buttonUrl && (
-            <Linkish href={p.buttonUrl} onClick={onClose} style={{ background: '#d4a843', color: '#080808', textDecoration: 'none', padding: '14px 22px', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>{p.buttonLabel} ↗</Linkish>
+            <Linkish href={p.buttonUrl} onClick={onClose} style={{ background: '#d4a843', color: '#080808', textDecoration: 'none', padding: '14px 22px', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>{p.buttonLabel} <ArrowUpRight /></Linkish>
           )}
           {p.link2Label && p.link2Url && (
             <Linkish href={p.link2Url} onClick={onClose} style={{ color: '#fff', textDecoration: 'none', borderBottom: '1px solid rgba(255,255,255,0.5)', paddingBottom: 3, fontFamily: mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}>{p.link2Label} →</Linkish>

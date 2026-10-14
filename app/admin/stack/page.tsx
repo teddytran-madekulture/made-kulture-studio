@@ -5,6 +5,7 @@
 // live in Bitwarden; this page just tells you which Bitwarden entry to open.
 
 import { useEffect, useState } from 'react'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const GOLD = '#d4a843'
 
@@ -93,7 +94,7 @@ export default function AdminStackPage() {
               <div key={s.name} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '14px 16px', marginBottom: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
                   <a href={s.url} target="_blank" rel="noreferrer" style={{ fontSize: 15, fontWeight: 700, color: '#fff', textDecoration: 'none' }}>
-                    {s.name} <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>↗</span>
+                    {s.name} <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}><ArrowUpRight /></span>
                   </a>
                   <span style={{ fontSize: 12, color: '#4ade80' }}>{s.cost}</span>
                 </div>

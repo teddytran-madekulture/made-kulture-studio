@@ -2,6 +2,7 @@
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 // Sidebar shell for the Website workspace (/admin/website/*) — the site-design
 // side of the house, kept separate from the business-ops admin dashboard. Same
@@ -65,7 +66,7 @@ function SidebarInner() {
       </nav>
 
       <div style={{ padding: '16px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <a href="/" target="_blank" rel="noreferrer" style={{ background: '#fff', border: 'none', padding: '10px', textAlign: 'center', textDecoration: 'none', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>VIEW LIVE SITE ↗</a>
+        <a href="/" target="_blank" rel="noreferrer" style={{ background: '#fff', border: 'none', padding: '10px', textAlign: 'center', textDecoration: 'none', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>VIEW LIVE SITE <ArrowUpRight /></a>
         <a href="/admin/dashboard" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px', fontFamily: 'Inter, sans-serif', fontSize: 11, textAlign: 'center', textDecoration: 'none', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)' }}>← BACK TO ADMIN</a>
       </div>
     </>

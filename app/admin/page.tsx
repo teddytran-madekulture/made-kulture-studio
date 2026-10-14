@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 // Google "G" logo SVG
 function GoogleIcon() {
@@ -313,7 +314,7 @@ export default function AdminLogin() {
               cursor:      (!loading && password) ? 'pointer' : 'not-allowed',
             }}
           >
-            {loading ? 'SIGNING IN...' : 'SIGN IN ↗'}
+            {loading ? 'SIGNING IN...' : <>SIGN IN <ArrowUpRight /></>}
           </button>
         </form>
 

@@ -8,6 +8,7 @@ import { useIsMobile } from '@/lib/use-is-mobile'
 import type { PageContent } from '@/lib/site-content'
 import { parseList } from '@/lib/content-list'
 import { fmt as nl } from '@/lib/fmt'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -100,7 +101,7 @@ function SetCard({ set, num }: { set: ApiSet; num: string }) {
           <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 27, letterSpacing: '0.02em', color: '#fff', lineHeight: 1 }}>{set.name.toUpperCase()}</div>
           <div style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.65)', marginTop: 8 }}>${set.rate_per_hour} / HR</div>
         </div>
-        <span style={{ flexShrink: 0, width: 36, height: 36, border: '1px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: hovered ? '#fff' : 'transparent', color: hovered ? '#080808' : '#fff', fontSize: 14, transition: 'background 0.25s ease, color 0.25s ease' }}>↗</span>
+        <span style={{ flexShrink: 0, width: 36, height: 36, border: '1px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: hovered ? '#fff' : 'transparent', color: hovered ? '#080808' : '#fff', fontSize: 14, transition: 'background 0.25s ease, color 0.25s ease' }}><ArrowUpRight size={16} /></span>
       </div>
     </Link>
   )
@@ -144,7 +145,7 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
             {/* A clickable photo with no label is an invisible affordance — the
                 whole point is that people know the page is there. */}
             <div style={{ position: 'absolute', bottom: 24, left: 28, display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.78)', border: '1px solid rgba(255,255,255,0.28)', background: 'rgba(8,8,8,0.38)', padding: '9px 14px' }}>
-              VIEW SET ↗
+              VIEW SET <ArrowUpRight />
             </div>
           </Link>
           <div style={{ background: '#0a0a0a', padding: isMobile ? '40px 28px' : '48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
@@ -166,7 +167,7 @@ function PremiumBlock({ set, num, isMobile }: { set: ApiSet; num: string; isMobi
             </div>
             <Link href={`/book?type=set&set=${set.slug}`}
               style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '14px 24px', textDecoration: 'none', display: 'inline-block', textAlign: 'center' }}>
-              BOOK {set.name.toUpperCase()} ↗
+              BOOK {set.name.toUpperCase()} <ArrowUpRight />
             </Link>
           </div>
         </div>
@@ -346,7 +347,7 @@ export default function SetsClient({ content = {} }: { content?: PageContent }) 
                 </div>
                 <Link href="/book?type=studio"
                   style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: '#080808', background: '#fff', padding: '14px 24px', textDecoration: 'none', display: 'inline-block', textAlign: 'center', marginTop: 4 }}>
-                  BOOK THE FULL STUDIO ↗
+                  BOOK THE FULL STUDIO <ArrowUpRight />
                 </Link>
               </div>
             </div>

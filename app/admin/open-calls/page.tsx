@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react'
 import { shrinkImage } from '@/lib/shrink-image'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e', green: '#7bd88f', red: '#ff8a80' }
 const inp: React.CSSProperties = { background: '#0b0b0d', border: `1px solid ${C.line}`, color: C.text, padding: '9px 11px', fontFamily: 'Inter, sans-serif', fontSize: 13, colorScheme: 'dark', width: '100%', boxSizing: 'border-box' }
@@ -84,7 +85,7 @@ export default function OpenCallsAdmin() {
         <select value={sel ?? ''} onChange={e => setSel(e.target.value)} style={{ ...inp, width: 'auto' }}>
           {calls.map(c => <option key={c.id} value={c.id}>{c.title} · {c.phase}</option>)}
         </select>
-        {call && <a href={`/submissions#${call.slug}`} target="_blank" rel="noreferrer" style={{ ...small, color: C.accent }}>View public page ↗</a>}
+        {call && <a href={`/submissions#${call.slug}`} target="_blank" rel="noreferrer" style={{ ...small, color: C.accent }}>View public page <ArrowUpRight /></a>}
       </div>
       <p style={{ ...small, marginBottom: 20 }}>Members only see the shortlist during voting, and never see the counts. Picking a winner doesn&rsquo;t publish anything. Feature it in Website Editor → Featured Editorial and comp the Plus year from the customer&rsquo;s Plus panel.</p>
       {msg && <p style={{ color: C.red, fontSize: 13 }}>{msg}</p>}

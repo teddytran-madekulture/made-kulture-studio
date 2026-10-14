@@ -6,6 +6,7 @@ import NavAuthLink from '@/components/NavAuthLink'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import { shortNoticeActive, shortNoticeViewActive, todayDateStr } from '@/lib/short-notice'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -277,7 +278,7 @@ export default function AvailabilityPage() {
             color: '#000', background: '#fff', padding: '12px 24px',
             borderRadius: 2, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
           }}>
-            BOOK FULL WAREHOUSE ↗
+            BOOK FULL WAREHOUSE <ArrowUpRight />
           </Link>
         </div>
 
@@ -291,7 +292,7 @@ export default function AvailabilityPage() {
                   Made Kulture Plus unlocks short-notice booking — and if you ever have to cancel, even last minute, your booking comes back as studio credit instead of being forfeited.
                 </div>
               </div>
-              <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: '#000', background: '#d4a843', padding: '12px 24px', borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>GO PLUS ↗</span>
+              <span style={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: '#000', background: '#d4a843', padding: '12px 24px', borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>GO PLUS <ArrowUpRight /></span>
             </div>
           </Link>
         )}

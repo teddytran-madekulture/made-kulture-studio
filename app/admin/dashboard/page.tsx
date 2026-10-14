@@ -18,6 +18,7 @@ import { bookingHourToISO } from '@/lib/booking-times'
 // share the API routes' pricing instead of keeping a fourth copy of the rate
 // table. Do not import from lib/extensions here — that one pulls in Supabase.
 import { RATE_BY_NAME, guestSurchargePerHourOf, guestFeePerHourOf, effectiveHourlyRate } from '@/lib/guest-rate'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -4068,7 +4069,7 @@ export default function AdminDashboard() {
                 <div key={which} style={{ marginBottom: 36 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 10 }}>
                     <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: '#fff', letterSpacing: '0.02em' }}>{title}</div>
-                    <a href={`/rental-agreement?type=${which}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textDecoration: 'underline' }}>View on site ↗</a>
+                    <a href={`/rental-agreement?type=${which}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textDecoration: 'underline' }}>View on site <ArrowUpRight /></a>
                     {value !== def && (
                       <button onClick={() => setter(def)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}>Reset to default</button>
                     )}

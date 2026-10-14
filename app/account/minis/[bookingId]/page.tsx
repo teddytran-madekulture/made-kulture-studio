@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { slotsFor, maxParty, SLOT_CHOICES, DEFAULTS, fmtPhone } from '@/lib/mini-sessions'
 import { shrinkImage } from '@/lib/shrink-image'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 const muted = (a: number) => `rgba(var(--t-fg-rgb), calc(${a} * var(--t-a)))`
 const font = { fontFamily: 'Inter' }
@@ -213,7 +214,7 @@ export default function MiniSetupPage() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input style={{ ...input, flex: 1, minWidth: 220 }} readOnly value={m.shareUrl} onFocus={e => e.currentTarget.select()} />
               <button style={btn(true)} onClick={() => { navigator.clipboard?.writeText(m.shareUrl).then(() => setNotice('Link copied.')).catch(() => {}) }}>Copy</button>
-              <a href={m.shareUrl} target="_blank" rel="noreferrer" style={{ ...btn(), textDecoration: 'none', display: 'inline-block' }}>Open ↗</a>
+              <a href={m.shareUrl} target="_blank" rel="noreferrer" style={{ ...btn(), textDecoration: 'none', display: 'inline-block' }}>Open <ArrowUpRight /></a>
             </div>
             <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 14, ...font, fontSize: 13, color: muted(0.65) }}>
               <span><b style={{ color: 'var(--t-fg)' }}>{roster.counts.booked}</b> booked</span>

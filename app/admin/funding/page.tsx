@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import ArrowUpRight from '@/components/ArrowUpRight'
 
 interface Opp {
   id: string; name: string; type: string | null; amount: string | null; fit: number
@@ -100,7 +101,7 @@ export default function FundingPage() {
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 220, flex: 1 }}>
                         <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
-                          {o.url ? <a href={o.url} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{o.name} <span style={{ color: C.accent, fontSize: 12 }}>↗</span></a> : o.name}
+                          {o.url ? <a href={o.url} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{o.name} <span style={{ color: C.accent, fontSize: 12 }}><ArrowUpRight /></span></a> : o.name}
                         </div>
                         <div style={{ fontSize: 12, color: C.dim, marginTop: 3 }}>
                           {o.type ? o.type : ''}{o.amount ? ` · ${o.amount}` : ''}{o.deadline ? ` · ${o.deadline}` : ''}
