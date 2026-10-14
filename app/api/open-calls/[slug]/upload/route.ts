@@ -11,6 +11,7 @@ import { randomBytes } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { OPEN_CALL_BUCKET, openCallPhase, type OpenCall } from '@/lib/open-calls'
 
 export const dynamic = 'force-dynamic'
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const call = data as (Pick<OpenCall, 'id' | 'status' | 'opens_at' | 'closes_at' | 'voting_opens_at' | 'voting_closes_at' | 'max_images'>) | null
   if (!call) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (openCallPhase(call) !== 'open') return NextResponse.json({ error: 'Submissions are closed.' }, { status: 409 })
+  try { const a = await memberAccess(supabaseAdmin(), user.id); if (!a.listed) return notListedResponse(a, 'enter an open call') }
+  catch (e) { console.error('[open-call upload] access lookup failed:', e); return NextResponse.json({ error: 'Could not check your directory profile. Please try again.' }, { status: 500 }) }
 
   // Generous enough to re-pick photos a few times, tight enough that nobody
   // turns the bucket into free hosting.

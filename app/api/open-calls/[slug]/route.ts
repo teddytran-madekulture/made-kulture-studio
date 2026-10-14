@@ -12,6 +12,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { sendOwnerPush } from '@/lib/push'
 import { sendSimpleEmail } from '@/lib/email'
 import { rateLimit } from '@/lib/rate-limit'
+import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import {
   OPEN_CALL_BUCKET, OPEN_CALL_MIN_IMAGES, matchingImages, cleanCredits, cleanHandle, centralDate, openCallPhase, type OpenCall,
 } from '@/lib/open-calls'
@@ -53,9 +54,14 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
   const call = await getCall(params.slug)
   if (!call || call.status === 'draft') return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const user = await me()
+  // 2026-10-14: entrants must be LISTED in the Creative Directory (same gate as
+  // voting). Sent up front so the page can say what's missing before uploads.
+  let access: Awaited<ReturnType<typeof memberAccess>> | null = null
+  if (user) { try { access = await memberAccess(supabaseAdmin(), user.id) } catch (e) { console.error('[open-call] access lookup failed:', e) } }
   return NextResponse.json({
     call, phase: openCallPhase(call),
     signedIn: !!user,
+    listed: access?.listed ?? null, optedIn: access?.optedIn ?? null, blockers: access?.blockers ?? [],
     mine: user ? await myEntry(call, user.id) : null,
   })
 }
@@ -66,6 +72,10 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   const call = await getCall(params.slug)
   if (!call) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (openCallPhase(call) !== 'open') return NextResponse.json({ error: 'Submissions are closed for this open call.' }, { status: 409 })
+  // Entrant must be listed in the Creative Directory. A failed lookup refuses
+  // rather than letting an unlisted member through.
+  try { const a = await memberAccess(supabaseAdmin(), user.id); if (!a.listed) return notListedResponse(a, 'enter an open call') }
+  catch (e) { console.error('[open-call] access lookup failed:', e); return NextResponse.json({ error: 'Could not check your directory profile. Please try again.' }, { status: 500 }) }
 
   const rl = await rateLimit(`opencall:submit:${user.id}`, 10, 60 * 60_000, { failOpen: true })
   if (!rl.allowed) return NextResponse.json({ error: rl.message }, { status: 429 })

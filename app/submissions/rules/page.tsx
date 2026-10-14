@@ -98,7 +98,7 @@ export default async function RulesPage() {
 
           <Section n="04" title="Eligibility">
             <UL items={[
-              'You must be 18 or older and have a Made Kulture account in good standing.',
+              'You must be 18 or older, have a Made Kulture account in good standing, and be listed in the Made Kulture Creative Directory when you submit.',
               'Employees and contractors of Made Kulture, and members of their households, may submit to Featured Editorial but are not eligible for open call prizes.',
               'Void where prohibited by law.',
             ]} />
@@ -108,6 +108,7 @@ export default async function RulesPage() {
             <UL items={[
               'Shoot on the open call’s set during a session booked at Made Kulture.',
               <><b style={{ color: '#fff' }}>Teams.</b> Editorials are usually made by a team. One person submits the series on the team&rsquo;s behalf and is the entrant. The team must agree who submits before entering; if there is a disagreement later, we deal only with the person who submitted and do not decide disputes between team members.</>,
+              <><b style={{ color: '#fff' }}>Group bookings.</b> If several people shot on the same booking, each of them may enter their own series, as long as each series is their own work and they are listed in the Creative Directory. Being part of the booking counts; you do not have to be the person who paid for it.</>,
               <><b style={{ color: '#fff' }}>One series, one entry.</b> The same series, or a substantially similar edit of it, can only be entered once per open call. If team members submit it separately, we keep the earliest entry and decline the others. Deliberately entering the same work more than once can disqualify every copy.</>,
               'Submit your series, meeting the requirements below, from your account on madekulture.com/submissions before the deadline.',
               'One entry per member per open call. You can withdraw and resubmit until the deadline. Late, incomplete or corrupted entries are not accepted.',

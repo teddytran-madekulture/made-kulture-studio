@@ -40,6 +40,7 @@ export default function OpenCallClient({ slug, title, setName, setSlug, maxImage
   const [loading, setLoading] = useState(true)
   const [phase, setPhase] = useState<OpenCallPhase>('open')
   const [signedIn, setSignedIn] = useState(false)
+  const [access, setAccess] = useState<{ listed: boolean | null; optedIn: boolean | null; blockers: string[] }>({ listed: null, optedIn: null, blockers: [] })
   const [mine, setMine] = useState<Mine | null>(null)
   const [done, setDone] = useState(false)
   const [expanded, setExpanded] = useState(!collapsible)
@@ -47,7 +48,7 @@ export default function OpenCallClient({ slug, title, setName, setSlug, maxImage
   const load = async () => {
     const r = await fetch(`/api/open-calls/${slug}`, { cache: 'no-store' })
     const d = await r.json().catch(() => ({}))
-    if (r.ok) { setPhase(d.phase); setSignedIn(!!d.signedIn); setMine(d.mine ?? null) }
+    if (r.ok) { setPhase(d.phase); setSignedIn(!!d.signedIn); setMine(d.mine ?? null); setAccess({ listed: d.listed ?? null, optedIn: d.optedIn ?? null, blockers: d.blockers ?? [] }) }
     setLoading(false)
   }
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,6 +121,27 @@ export default function OpenCallClient({ slug, title, setName, setSlug, maxImage
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
             <Link href={`/signup?next=${encodeURIComponent(here)}`} style={btnPrimary}>CREATE A FREE ACCOUNT</Link>
             <Link href={`/login?next=${encodeURIComponent(here)}`} style={btnGhost}>SIGN IN</Link>
+          </div>
+        </div>
+        <FinePrint title={title} setName={setName} closes={closes} rolling={rolling} />
+      </section>
+    )
+  }
+
+  // 2026-10-14: only members LISTED in the Creative Directory can enter.
+  // (null = the lookup failed; let the form show and the server decide.)
+  if (access.listed === false) {
+    return (
+      <section style={wrap}>
+        <div style={{ border: LINE, padding: '32px 28px', background: '#0b0b0d' }}>
+          <div style={{ ...lbl, color: GOLD }}>ONE STEP FIRST</div>
+          <h2 style={{ fontFamily: anton, fontSize: 'clamp(30px, 5vw, 44px)', margin: '0 0 10px', letterSpacing: '0.02em' }}>JOIN THE CREATIVE DIRECTORY</h2>
+          <p style={{ ...help, fontSize: 15, maxWidth: 620 }}>
+            Open calls are for members listed in the Creative Directory, where the vote happens and where credited work shows up on your profile.
+            {access.optedIn ? ` Your profile just needs: ${access.blockers.join(', ')}.` : ' Turn on your directory listing and finish your profile, then come back here to submit.'}
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
+            <Link href="/account/profile" style={btnPrimary}>FINISH YOUR PROFILE <ArrowUpRight /></Link>
           </div>
         </div>
         <FinePrint title={title} setName={setName} closes={closes} rolling={rolling} />
