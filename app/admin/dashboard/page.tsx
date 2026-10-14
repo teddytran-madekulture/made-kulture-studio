@@ -781,6 +781,9 @@ export default function AdminDashboard() {
   // buyout rate) until you type over it. Kept as a string so the field can be
   // cleared — a number input bound to 0 would never let the 0 go.
   const [manualTotalTyped, setManualTotalTyped] = useState<string | null>(null)
+  // 2026-10-14: guest vs member for the manual-booking price. null = unknown
+  // (no email yet, or the lookup failed) -> plain set rate, as before.
+  const [manualMember, setManualMember] = useState<{ isMember: boolean | null; surcharge: number }>({ isMember: null, surcharge: 10 })
   const [submitting,   setSubmitting]   = useState(false)
   const [submitError,  setSubmitError]  = useState('')
   const [submitSuccess,setSubmitSuccess]= useState(false)
@@ -1426,7 +1429,22 @@ export default function AdminDashboard() {
   const manualRate = manual.setSlug === 'studio'
     ? (Number(buyoutRate) || 400)
     : effectiveRateFor(SETS.find(x => x.id === manual.setSlug)?.name || '', null, SET_RATES)
-  const manualAutoTotal = Math.max(Math.round(spanHours(manual.startHour, manual.endHour) * manualRate * 100) / 100, 0)
+  // A guest (no website login) pays the set rate + the guest surcharge per
+  // hour, exactly like website checkout. Buyouts have no surcharge.
+  const manualGuestAdd = manual.setSlug !== 'studio' && manualMember.isMember === false ? manualMember.surcharge : 0
+  const manualAutoTotal = Math.max(Math.round(spanHours(manual.startHour, manual.endHour) * (manualRate + manualGuestAdd) * 100) / 100, 0)
+  useEffect(() => {
+    const email = (manual.email || '').trim()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setManualMember(m => ({ ...m, isMember: null })); return }
+    let live = true
+    const t = setTimeout(() => {
+      fetch(`/api/admin/customers/member-status?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (live && d) setManualMember({ isMember: d.isMember ?? null, surcharge: Number(d.guestSurchargePerHour ?? 10) }) })
+        .catch(() => { if (live) setManualMember(m => ({ ...m, isMember: null })) })
+    }, 400)
+    return () => { live = false; clearTimeout(t) }
+  }, [manual.email])
   const manualTotal = manualTotalTyped === null ? manualAutoTotal : (Number(manualTotalTyped) || 0)
   // The buyout rate is otherwise only loaded on the Sets tab.
   useEffect(() => {
@@ -1443,10 +1461,13 @@ export default function AdminDashboard() {
     if ((charging || linking) && !(manualTotal > 0)) { setSubmitError('Enter an amount above $0 to charge or send a link.'); setSubmitting(false); return }
     const endpoint = charging ? '/api/admin/charge' : '/api/admin/bookings'
     const force = manualShareFloor || undefined
+    // Only the AUTO guest price is split out; a typed amount is the admin's call.
+    const guestSurchargeAmount = manualTotalTyped === null && manualGuestAdd
+      ? Math.round(spanHours(manual.startHour, manual.endHour) * manualGuestAdd * 100) / 100 : 0
     const body = charging
-      ? { squareCardId: selectedCard!.id, squareCustomerId: selectedCard!.squareCustomerId || selectedCustomer?.squareCustomerId, ...manual, totalAmount: manualTotal, force }
+      ? { squareCardId: selectedCard!.id, squareCustomerId: selectedCard!.squareCustomerId || selectedCustomer?.squareCustomerId, ...manual, totalAmount: manualTotal, force, guestSurchargeAmount }
       // A link booking starts at $0 — the Square webhook adds the amount once they pay.
-      : { ...manual, totalAmount: linking ? 0 : manualTotal, force }
+      : { ...manual, totalAmount: linking ? 0 : manualTotal, force, guestSurchargeAmount: linking ? 0 : guestSurchargeAmount }
     const res  = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { setSubmitError(data.error || 'Failed'); setManualOverridable(!!data.overridable); setSubmitting(false); return }
@@ -5353,7 +5374,9 @@ export default function AdminDashboard() {
                     onChange={e => setManualTotalTyped(e.target.value.replace(/[^\d.]/g, ''))} style={inputStyle} />
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
                     {manualTotalTyped === null
-                      ? `Auto: ${spanHours(manual.startHour, manual.endHour)} hr × $${manualRate}/hr. Type to override.`
+                      ? (manualGuestAdd
+                          ? `Auto: ${spanHours(manual.startHour, manual.endHour)} hr × $${manualRate + manualGuestAdd}/hr GUEST RATE ($${manualRate} + $${manualGuestAdd} guest surcharge, no website account). Type to override.`
+                          : `Auto: ${spanHours(manual.startHour, manual.endHour)} hr × $${manualRate}/hr${manualMember.isMember ? ' MEMBER RATE' : manual.setSlug !== 'studio' && manual.email ? ' (couldn\'t check membership)' : ''}. Type to override.`)
                       : <>Custom amount. <button type="button" onClick={() => setManualTotalTyped(null)} style={{ background: 'none', border: 'none', color: '#e6c07a', cursor: 'pointer', padding: 0, fontSize: 11 }}>Use auto (${manualAutoTotal})</button></>}
                   </div>
                 </Field>

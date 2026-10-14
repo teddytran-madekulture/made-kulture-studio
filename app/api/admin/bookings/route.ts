@@ -115,6 +115,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { setSlug, date, startHour, endHour, name, email, phone, notes, totalAmount, sendSms } = body
 
+  // 2026-10-14: the form now pre-prices a guest at the guest rate and sends the
+  // surcharge part. Record it so add-time / overtime price this booking like a
+  // website guest booking. Clamped to the total; anything odd falls back to 0.
+  const gs = Math.max(0, Math.min(Number(body.guestSurchargeAmount) || 0, Number(totalAmount) || 0))
+
   const clash = await manualBookingConflict(supabase, { setSlug, date, startHour, endHour, force: !!body.force })
   if (clash) return NextResponse.json(clash.body, { status: clash.status })
   const SLUG_TO_NAME = await adminSetNames(supabase)
@@ -148,11 +153,10 @@ export async function POST(req: NextRequest) {
       end_time:     endISO,
       status:       'confirmed',
       total_amount: totalAmount,
-      base_amount:  totalAmount,
-      // Explicitly 0, not left NULL: an admin priced this by hand, so there is
-      // no guest surcharge in it. NULL would mean "unknown" and would make the
-      // extension pricing hedge on a booking we know the answer for. (100)
-      guest_surcharge_amount: 0,
+      base_amount:  Math.round((Number(totalAmount) - gs) * 100) / 100,
+      // Explicit, never NULL: NULL means "unknown" and makes extension pricing
+      // hedge (migration 100). 0 unless the form priced a guest at guest rate.
+      guest_surcharge_amount: gs,
       source:       'manual',
       notes,
       ...(await adminRewardFields(email, totalAmount)),

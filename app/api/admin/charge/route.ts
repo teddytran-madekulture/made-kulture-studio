@@ -65,7 +65,9 @@ export async function POST(req: NextRequest) {
     notes,
     sendSms,
     force,
+    guestSurchargeAmount,
   } = await req.json()
+  const gs = Math.max(0, Math.min(Number(guestSurchargeAmount) || 0, Number(totalAmount) || 0))
 
   // Check the window BEFORE taking any money.
   const clash = await manualBookingConflict(supabase, { setSlug, date, startHour, endHour, force: !!force })
@@ -122,9 +124,9 @@ export async function POST(req: NextRequest) {
         // That left the row's breakdown unreconstructable: total - base - fees
         // is how the rest of the app works out what a booking is made of, and on
         // these rows it silently read as "the whole total is unaccounted for".
-        base_amount:            totalAmount,
-        // Priced by an admin — no guest surcharge. Explicit 0, see migration 100.
-        guest_surcharge_amount: 0,
+        base_amount:            Math.round((Number(totalAmount) - gs) * 100) / 100,
+        // 0 unless the form priced a guest at the guest rate (2026-10-14). Explicit, see migration 100.
+        guest_surcharge_amount: gs,
         square_payment_id:  squarePaymentId,
         // 2026-10-14: was square_customer_id + square_card_id — NEITHER column
         // exists on bookings, so every insert from this route failed AFTER the
