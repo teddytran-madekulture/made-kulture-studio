@@ -7,6 +7,7 @@ import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { randomUUID } from 'crypto'
+import { refundPayment } from '@/lib/square-refund'
 import { createCalendarEvent, gcalSyncEnabled } from '@/lib/gcal'
 import { STUDIO_ADDRESS } from '@/lib/calendar'
 import { bookingHourToISO, bookingEndISO, bookingSpanHours } from '@/lib/booking-times'
@@ -125,8 +126,11 @@ export async function POST(req: NextRequest) {
         // Priced by an admin — no guest surcharge. Explicit 0, see migration 100.
         guest_surcharge_amount: 0,
         square_payment_id:  squarePaymentId,
-        square_customer_id: squareCustomerId,
-        square_card_id:     squareCardId,
+        // 2026-10-14: was square_customer_id + square_card_id — NEITHER column
+        // exists on bookings, so every insert from this route failed AFTER the
+        // card was charged (Christopher Joseph, $40, Oct 14). The card column
+        // is square_card_on_file_id, same as every other insert site.
+        square_card_on_file_id: squareCardId,
         source:             'manual',
         notes,
         ...(await adminRewardFields(email, totalAmount)),
@@ -134,7 +138,20 @@ export async function POST(req: NextRequest) {
       .select('id, check_in_token')
       .single()
 
-    if (bookingError) console.error('Supabase error:', bookingError)
+    // The card is already charged here. A failed insert must NEVER report
+    // success (it used to log and return 200, leaving money with no booking):
+    // refund the charge and tell the admin exactly what happened.
+    if (bookingError || !booking?.id) {
+      console.error('[admin/charge] booking insert failed AFTER charge — refunding', squarePaymentId, bookingError)
+      let refunded = false
+      try { await refundPayment({ paymentId: squarePaymentId, amountCents, reason: 'Booking could not be saved' }); refunded = true }
+      catch (e) { console.error('[admin/charge] REFUND FAILED — refund by hand in Square:', squarePaymentId, e) }
+      return NextResponse.json({
+        error: refunded
+          ? `The booking could not be saved, so the $${(amountCents / 100).toFixed(2)} charge was refunded. Nothing was booked. (${bookingError?.message ?? 'no row returned'})`
+          : `The card was charged $${(amountCents / 100).toFixed(2)} but the booking could not be saved AND the automatic refund failed. Refund payment ${squarePaymentId} in Square. (${bookingError?.message ?? 'no row returned'})`,
+      }, { status: 500 })
+    }
 
     // 4a. Door codes — same gap as /api/admin/bookings: a manually charged
     //     booking never got one. Skipped for an already-ended window.
