@@ -1013,6 +1013,12 @@ export default function AdminDashboard() {
 
   // Never carry a half-open sale from one customer to the next.
   useEffect(() => { setSellPlus(null) }, [custDetail?.id])
+  // From a booking: jump to that customer and open the sale straight away.
+  const [pendingSellFor, setPendingSellFor] = useState<string | null>(null)
+  useEffect(() => {
+    if (pendingSellFor && custDetail?.id === pendingSellFor) { setPendingSellFor(null); openSellPlus() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [custDetail?.id, pendingSellFor])
   const openSellPlus = async () => {
     if (!custDetail) return
     setSellPlus({ loading: true, cards: [], cardId: '', cents: null, isIntro: false, autoRenew: false, msg: '', ok: false })
@@ -4925,6 +4931,15 @@ export default function AdminDashboard() {
                 {detailBooking.guest_count != null
                   ? `CHANGE PARTY SIZE \u00b7 ${detailBooking.guest_count} ${detailBooking.guest_count === 1 ? 'PERSON' : 'PEOPLE'}`
                   : 'SET PARTY SIZE'}
+              </button>
+            )}
+            {/* 2026-10-14: sell Plus to the person on this booking (walk-ins
+                who want to move/extend inside 48h). Opens their customer card
+                with the SELL panel already open. */}
+            {detailBooking.customer_id && !detailBooking.plus && (
+              <button onClick={() => { const id = detailBooking.customer_id!; setDetailBooking(null); setView('customers'); setPendingSellFor(id); fetchCustomerDetail(id) }}
+                style={{ background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.45)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#e6c07a' }}>
+                ★ SELL PLUS MEMBERSHIP
               </button>
             )}
             {detailBooking.status !== 'cancelled' && detailBooking.sets?.name && (
