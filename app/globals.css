@@ -176,3 +176,25 @@ html[data-acct-theme="light"] .acct-theme .pc-edge { border-top-color: var(--pc-
 @media (max-width: 640px) { .acct-hide-mobile { display: none !important; } }
 
 section { border-top: 1px solid var(--border); }
+
+/* 2026-10-14 accessibility pass ---------------------------------------------
+   Custom checkboxes (checkout agreement, SMS consent, guest limit, directory
+   opt-in): a REAL checkbox, visually hidden, sits in front of the drawn box so
+   keyboard + screen-reader users can tick it. The drawn box shows its focus. */
+.mk-check {
+  position: absolute; left: 0; top: 2px; width: 18px; height: 18px;
+  margin: 0; opacity: 0; cursor: pointer;
+}
+.mk-check:focus-visible + .mk-check-box { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* Text fields are 16px on phones. iOS zooms the page into any field smaller
+   than that, and inside the App Store app it never zooms back out — that is
+   why the viewport used to lock zoom (maximumScale 1), which also stopped
+   low-vision visitors from pinch-zooming (WCAG 1.4.4). With 16px fields the
+   auto-zoom never triggers, so pinch-zoom is allowed again (app/layout.tsx).
+   !important because most fields set fontSize inline. Kiosk keeps its own lock. */
+@media (max-width: 768px) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea {
+    font-size: 16px !important;
+  }
+}

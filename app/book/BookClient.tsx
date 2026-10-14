@@ -1503,7 +1503,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
             <input
               value={gearSearch}
               onChange={e => setGearSearch(e.target.value)}
-              placeholder="Search equipment…"
+              aria-label="Search equipment" placeholder="Search equipment…"
               style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', padding: '12px 14px', fontFamily: 'Inter, sans-serif', fontSize: 14, boxSizing: 'border-box', marginBottom: 16 }}
             />
 
@@ -1578,10 +1578,13 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 { key: 'phone', label: 'PHONE (TEXT)',  type: 'tel',   placeholder: '(832) 000-0000' },
               ].map(field => (
                 <div key={field.key}>
-                  <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
+                  <label htmlFor={`book-${field.key}`} style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
                     {field.label}
                   </label>
                   <input
+                    id={`book-${field.key}`}
+                    // a11y + autofill (WCAG 1.3.5): browsers fill these from the saved profile.
+                    autoComplete={field.key === 'name' ? 'name' : field.key === 'email' ? 'email' : 'tel'}
                     type={field.type}
                     placeholder={field.placeholder}
                     value={(booking as any)[field.key]}
@@ -1597,7 +1600,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 </div>
               ))}
               <div>
-                <label style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
+                <label htmlFor="book-notes" style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
                   {prepPrompts.length ? 'SET PREP + NOTES (OPTIONAL)' : 'NOTES (OPTIONAL)'}
                 </label>
                 {/* ⚠️ Reuses the notes field on purpose — no extra step, no extra
@@ -1617,6 +1620,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   </div>
                 )}
                 <textarea
+                  id="book-notes"
                   placeholder={prepPrompts.length ? 'Answer above, plus anything else we should know' : 'Anything we should know — concept, special requests, etc.'}
                   value={booking.notes}
                   onChange={e => setBooking(b => ({ ...b, notes: e.target.value }))}
@@ -1632,11 +1636,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               </div>
 
               {/* SMS Consent */}
-              <div
-                onClick={() => setBooking(b => ({ ...b, smsConsent: !b.smsConsent }))}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
+              <label
+                style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
               >
-                <div style={{
+                {/* 2026-10-14 a11y: a REAL checkbox (visually hidden) so keyboard and
+                    screen-reader users can tick it. The drawn box below is its picture. */}
+                <input type="checkbox" className="mk-check" checked={!!booking.smsConsent}
+                  onChange={() => setBooking(b => ({ ...b, smsConsent: !b.smsConsent }))} />
+                <div aria-hidden="true" className="mk-check-box" style={{
                   width: 18, height: 18, flexShrink: 0, marginTop: 2,
                   border: `1px solid ${booking.smsConsent ? '#fff' : 'rgba(255,255,255,0.3)'}`,
                   background: booking.smsConsent ? '#fff' : 'transparent',
@@ -1650,14 +1657,17 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   {' '}·{' '}
                   <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
                 </p>
-              </div>
+              </label>
 
               {/* Rental agreement & waiver — required */}
-              <div
-                onClick={() => setBooking(b => ({ ...b, agreementAck: !b.agreementAck }))}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 16 }}
+              <label
+                style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 16 }}
               >
-                <div style={{
+                {/* 2026-10-14 a11y: a REAL checkbox (visually hidden) so keyboard and
+                    screen-reader users can tick it. The drawn box below is its picture. */}
+                <input type="checkbox" className="mk-check" checked={!!booking.agreementAck}
+                  onChange={() => setBooking(b => ({ ...b, agreementAck: !b.agreementAck }))} />
+                <div aria-hidden="true" className="mk-check-box" style={{
                   width: 18, height: 18, flexShrink: 0, marginTop: 2,
                   border: `1px solid ${booking.agreementAck ? '#fff' : 'rgba(255,255,255,0.3)'}`,
                   background: booking.agreementAck ? '#fff' : 'transparent',
@@ -1671,7 +1681,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                     {booking.type === 'studio' ? 'Full Warehouse Rental Agreement' : 'Individual Set Rental Agreement'} &amp; Waiver
                   </a>, on behalf of myself and everyone in my party.
                 </p>
-              </div>
+              </label>
 
               {/* Soft cleaning-fee disclosure — full warehouse only */}
               {booking.type === 'studio' && (
@@ -1697,11 +1707,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               )}
 
               {/* Guest-limit acknowledgment — sets only (buyouts have no head count) */}
-              {booking.type !== 'studio' && <div
-                onClick={() => setBooking(b => ({ ...b, guestAck: !b.guestAck }))}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
+              {booking.type !== 'studio' && <label
+                style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
               >
-                <div style={{
+                {/* 2026-10-14 a11y: a REAL checkbox (visually hidden) so keyboard and
+                    screen-reader users can tick it. The drawn box below is its picture. */}
+                <input type="checkbox" className="mk-check" checked={!!booking.guestAck}
+                  onChange={() => setBooking(b => ({ ...b, guestAck: !b.guestAck }))} />
+                <div aria-hidden="true" className="mk-check-box" style={{
                   width: 18, height: 18, flexShrink: 0, marginTop: 2,
                   border: `1px solid ${booking.guestAck ? '#fff' : 'rgba(255,255,255,0.3)'}`,
                   background: booking.guestAck ? '#fff' : 'transparent',
@@ -1720,7 +1733,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       so changing a rate updates this text — do NOT hardcode either. */}
                   I understand extra guests beyond the <strong style={{ color: '#fff' }}>{guestPricing.capacityPerSet}-person limit</strong> are charged <strong style={{ color: '#fff' }}>${guestPricing.perPersonFee}/person per hour</strong>, and that arriving with guests I didn’t declare may additionally result in a <strong style={{ color: '#fff' }}>${guestPricing.penaltyPerHead}/guest</strong> penalty. Multiple incidences can result in a note or ban on my account.
                 </p>
-              </div>}
+              </label>}
             </div>
             <NavRow onBack={back} onNext={next} canNext={canNext[6]} />
           </StepWrapper>
@@ -2477,9 +2490,9 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, marginBottom: 18 }}>
             Send a ${grandTotal} payment link to whoever&rsquo;s covering the bill. We&rsquo;ll hold this slot for 30 minutes while they pay.
           </div>
-          <input value={payerName} onChange={e => setPayerName(e.target.value)} placeholder="Their name (optional)"
+          <input value={payerName} onChange={e => setPayerName(e.target.value)} aria-label="Their name (optional)" autoComplete="off" placeholder="Their name (optional)"
             style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontFamily: 'Inter', fontSize: 14, padding: '13px 15px', marginBottom: 10, outline: 'none' }} />
-          <input value={payerContact} onChange={e => setPayerContact(e.target.value)} placeholder="Their phone or email"
+          <input value={payerContact} onChange={e => setPayerContact(e.target.value)} aria-label="Their phone or email" autoComplete="off" placeholder="Their phone or email"
             style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontFamily: 'Inter', fontSize: 14, padding: '13px 15px', marginBottom: 16, outline: 'none' }} />
           {delegateError && (
             <div style={{ fontFamily: 'Inter', fontSize: 12, color: '#ff6b6b', marginBottom: 16, padding: '10px 14px', border: '1px solid rgba(255,100,100,0.2)', background: 'rgba(255,100,100,0.05)' }}>
@@ -2603,7 +2616,7 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input value={promo} onChange={e => { setPromo(e.target.value); setPromoErr(null) }} onKeyDown={e => e.key === 'Enter' && applyPromo()} placeholder="Promo code"
+                  <input value={promo} onChange={e => { setPromo(e.target.value); setPromoErr(null) }} onKeyDown={e => e.key === 'Enter' && applyPromo()} aria-label="Promo code" placeholder="Promo code"
                     style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.14)', color: '#fff', fontFamily: 'Inter', fontSize: 13, padding: '10px 12px', outline: 'none', textTransform: 'uppercase' }} />
                   <button onClick={applyPromo} disabled={!promo.trim() || promoBusy}
                     style={{ background: promo.trim() ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)', color: promo.trim() ? '#080808' : 'rgba(255,255,255,0.4)', border: 'none', padding: '0 18px', fontFamily: 'Inter', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', cursor: promo.trim() ? 'pointer' : 'default' }}>

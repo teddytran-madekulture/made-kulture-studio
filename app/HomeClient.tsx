@@ -408,7 +408,7 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
           {/* 2026-10-07: Support + legal links — App Store / Google Play reviewers
               (and guests without an account) look for these in the footer. */}
           <span style={{ display:'flex', gap:22, flexWrap:'wrap' }}>
-            {[['SUPPORT','/support'],['PRIVACY','/privacy-policy'],['TERMS','/terms']].map(([l, href]) => (
+            {[['SUPPORT','/support'],['PRIVACY','/privacy-policy'],['TERMS','/terms'],['ACCESSIBILITY','/accessibility']].map(([l, href]) => (
               <Link key={l} href={href} className="label" style={{ textDecoration:'none' }}>{l}</Link>
             ))}
           </span>

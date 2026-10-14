@@ -620,11 +620,13 @@ function ProfileSettings() {
         </Field>
 
         {/* Directory opt-in */}
-        <div
-          onClick={() => setForm(f => ({ ...f, directory_opt_in: !f.directory_opt_in }))}
-          style={{ background: 'rgba(var(--t-fg-rgb), calc(0.03 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', borderRadius: 8, padding: '16px 18px', marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
+        <label
+          style={{ position: 'relative', background: 'rgba(var(--t-fg-rgb), calc(0.03 * var(--t-a)))', border: '1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a)))', borderRadius: 8, padding: '16px 18px', marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
         >
-          <div style={{ width: 18, height: 18, flexShrink: 0, marginTop: 2, border: `1px solid ${form.directory_opt_in ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))'}`, background: form.directory_opt_in ? 'var(--t-fg)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* 2026-10-14 a11y: real checkbox (visually hidden); the drawn box is its picture. */}
+          <input type="checkbox" className="mk-check" checked={!!form.directory_opt_in}
+            onChange={() => setForm(f => ({ ...f, directory_opt_in: !f.directory_opt_in }))} />
+          <div aria-hidden="true" className="mk-check-box" style={{ width: 18, height: 18, flexShrink: 0, marginTop: 2, border: `1px solid ${form.directory_opt_in ? 'var(--t-fg)' : 'rgba(var(--t-fg-rgb), calc(0.3 * var(--t-a)))'}`, background: form.directory_opt_in ? 'var(--t-fg)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {form.directory_opt_in && <span style={{ color: 'var(--t-on-fg)', fontSize: 11, lineHeight: 1 }}>✓</span>}
           </div>
           <div>
@@ -633,7 +635,7 @@ function ProfileSettings() {
               Let other Made Kulture members find you by role for collaborations. Only your name, roles, and Instagram are shown — never your email or phone. It works both ways: <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))' }}>if you turn this off, you also won&apos;t be able to browse the directory.</strong>
             </div>
           </div>
-        </div>
+        </label>
         </>)}
         </>)}
 

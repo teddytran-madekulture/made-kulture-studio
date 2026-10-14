@@ -9,11 +9,13 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // 2026-10-08: was 5. iOS zooms the page in whenever a text field under 16px
-  // is tapped, and inside the App Store app (WKWebView) it never zooms back
-  // out — every screen after sign-up stayed cropped on the right. 1 stops that
-  // auto-zoom. Safari on iPhone still lets people pinch-zoom the website.
-  maximumScale: 1,
+  // 2026-10-14: back to 5. It was 1 (2026-10-08) to stop iOS auto-zooming
+  // into small text fields inside the App Store app — but that also blocked
+  // pinch-zoom for low-vision visitors on Android (WCAG 1.4.4, flagged on every
+  // page by accessibility scanners). The auto-zoom is now prevented the right
+  // way: every text field is 16px on phones (app/globals.css). The kiosk
+  // tablets keep their own lock in app/kiosk/layout.tsx.
+  maximumScale: 5,
 }
 
 export const metadata: Metadata = {
