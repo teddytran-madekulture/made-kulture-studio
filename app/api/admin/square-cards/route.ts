@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
+import { isCardUsable } from '@/lib/card-expiry'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     )
 
     const cards = (result.cards || [])
-      .filter(c => !c.enabled === false) // only active cards
+      .filter(c => isCardUsable(c)) // enabled AND not expired
       .map(c => ({
         id:       c.id,
         brand:    c.cardBrand,

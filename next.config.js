@@ -61,6 +61,11 @@ const SQUARESPACE_REDIRECTS = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Loads instrumentation.ts — the console scrubber that keeps the Square
+  // access token out of the Vercel logs (2026-10-14). Required on Next 14.
+  experimental: {
+    instrumentationHook: true,
+  },
   images: {
     domains: ['vvaftjcjydxdlkojnrfm.supabase.co'],
   },

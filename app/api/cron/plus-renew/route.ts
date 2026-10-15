@@ -4,6 +4,7 @@ import { Client, Environment } from 'square'
 import { sendSimpleEmail } from '@/lib/email'
 import { sendSMS, sendOwnerSMS } from '@/lib/sms'
 import { getPlusPricing } from '@/lib/plus-pricing'
+import { isCardExpired } from '@/lib/card-expiry'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
     let cardId: string | null = null
     try {
       const cardsRes = await square.cardsApi.listCards(undefined, c.square_customer_id)
-      cardId = (cardsRes.result.cards ?? []).find(x => x.enabled)?.id ?? null
+      cardId = (cardsRes.result.cards ?? []).find(x => x.enabled && !isCardExpired(x))?.id ?? null
     } catch { /* fall through */ }
     if (!cardId) { await notifyFailOnce('We couldn’t renew your membership', 'Your card on file couldn’t be used to renew Plus. Add a card and re-subscribe to keep your benefits.'); failed++; continue }
 

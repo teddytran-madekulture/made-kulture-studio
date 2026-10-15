@@ -21,6 +21,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { planExtension, durationLabel, type ExtensionKind } from '@/lib/extensions'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
+import { isCardUsable } from '@/lib/card-expiry'
 import { patchCalendarEvent } from '@/lib/gcal'
 import { createBookingPin, createBackDoorPin, checkInUrl } from '@/lib/igloohome'
 import { sendSMS } from '@/lib/sms'
@@ -215,7 +216,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     for (const cid of candidates) {
       try {
         const { result } = await square.cardsApi.listCards(undefined, cid)
-        const cards = (result.cards ?? []).filter((c: any) => c.enabled !== false)
+        const cards = (result.cards ?? []).filter((c: any) => isCardUsable(c))
         // Best case: this customer owns the exact card stored on the booking.
         const bookingCard = b.square_card_on_file_id ? cards.find((c: any) => c.id === b.square_card_on_file_id) : null
         if (bookingCard) { sourceCardId = bookingCard.id!; chargeCustomerId = cid; break }
@@ -239,7 +240,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       try {
         const { result } = await square.cardsApi.retrieveCard(b.square_card_on_file_id)
         const c: any = result.card
-        if (c?.id && c.enabled !== false && c.customerId) {
+        if (c?.id && isCardUsable(c) && c.customerId) {
           sourceCardId = c.id
           chargeCustomerId = c.customerId
           // Backfill so the next lookup (and admin charges) find it directly.

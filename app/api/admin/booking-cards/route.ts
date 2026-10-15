@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
+import { isCardUsable } from '@/lib/card-expiry'
 
 // GET /api/admin/booking-cards?bookingId=XXX
 // Resolves the saved cards available to charge for a booking's customer —
@@ -80,7 +81,9 @@ export async function GET(req: NextRequest) {
       try {
         const { result } = await square.cardsApi.listCards(undefined, cid)
         for (const c of result.cards ?? []) {
-          if (c.enabled === false || !c.id) continue
+          // Expired cards stay "enabled" in Square — hide them so staff can't
+          // pick one (2026-10-14: a 09/2024 card was offered and failed).
+          if (!c.id || !isCardUsable(c)) continue
           const fp = c.fingerprint || c.id
           const isBookingCard = !!bookingCardId && c.id === bookingCardId
           const existing = byFingerprint.get(fp)

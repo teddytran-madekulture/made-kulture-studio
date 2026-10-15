@@ -1,3 +1,4 @@
+import { isCardExpired } from '@/lib/card-expiry'
 import { Client } from 'square'
 
 // Shared "find or create" for Square customer profiles — the guard that stops
@@ -86,7 +87,7 @@ export async function findCardOnFileByEmail(
     for (const c of result.customers ?? []) {
       if (!c.id) continue
       const cards = await square.cardsApi.listCards(undefined, c.id).then(r => r.result.cards ?? []).catch(() => [])
-      const card = cards.find(k => k.enabled && k.id)
+      const card = cards.find(k => k.enabled && k.id && !isCardExpired(k))
       if (card?.id) return { customerId: c.id, cardId: card.id }
     }
   } catch (e) {
