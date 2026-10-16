@@ -5,6 +5,8 @@ import { colorByKey } from '@/lib/profile-colors'
 import { cleanCredits } from '@/lib/profile-credits'
 import { cleanIgHandle } from '@/lib/directory-listing'
 import { phone10, sendPhoneCode, checkPhoneCode } from '@/lib/phone-verify'
+import { cleanBirthDate, isUnderAge, UNDERAGE_MESSAGE } from '@/lib/birth-date'
+import { sendOwnerPush } from '@/lib/push'
 
 // Service role client — needed to read the customers table (RLS restricts to service_role only)
 const serviceSupabase = createServiceClient(
@@ -50,6 +52,15 @@ export async function PUT(req: NextRequest) {
 
   const body = await req.json()
   const { full_name, phone, instagram, sms_opt_in, roles, directory_opt_in, avatar_url } = body
+
+  // An account blocked as under 18 (migration 171) can't edit anything —
+  // above all it can't switch the directory back on.
+  {
+    const { data: blk, error: blkErr } = await serviceSupabase.from('customer_profiles')
+      .select('underage_blocked_at').eq('id', user.id).maybeSingle()
+    if (blkErr) console.error('[profile] underage lookup:', blkErr.message)
+    if (blk?.underage_blocked_at) return NextResponse.json({ error: UNDERAGE_MESSAGE, underage: true }, { status: 403 })
+  }
 
   // A pasted Instagram URL is stored as the bare handle (lib/directory-listing).
   const igClean = typeof instagram === 'string' ? (cleanIgHandle(instagram) || null) : instagram
@@ -162,6 +173,39 @@ export async function PUT(req: NextRequest) {
         label: String(l.label ?? '').slice(0, 40),
         url: String(l.url).slice(0, 300),
       }))
+  }
+
+  // ── Birth date (migration 171, 2026-10-16) ─────────────────────────────────
+  // Set once by the member, then fixed: written with the service role and only
+  // while the column is still NULL, so a later PUT can't quietly change it.
+  // Done BEFORE the upsert so both return paths below read it back.
+  if (body.birth_date !== undefined && body.birth_date !== null && body.birth_date !== '') {
+    const bd = cleanBirthDate(body.birth_date)
+    if (!bd) return NextResponse.json({ error: 'Please enter a valid birth date.' }, { status: 400 })
+    if (isUnderAge(bd)) {
+      // Google/Apple sign-up or existing member entering an under-18 date: the
+      // auth account already exists, so block it instead. Out of the directory,
+      // stamped, and Teddy is told so he can delete it.
+      const { data: blocked, error: ubErr } = await serviceSupabase.from('customer_profiles')
+        .update({ birth_date: bd, underage_blocked_at: new Date().toISOString(), directory_opt_in: false })
+        .eq('id', user.id).is('birth_date', null).select('full_name').maybeSingle()
+      if (ubErr) console.error('[profile] underage block failed:', ubErr.message)
+      if (blocked) {
+        await sendOwnerPush({
+          title: 'Under-18 account blocked',
+          body: `${blocked.full_name || user.email} entered an under-18 birth date. The account is blocked from the directory, messages and castings. Delete it in Recent Signups if you like.`,
+          url: '/admin/signups',
+          tag: `underage-${user.id}`,
+        }).catch(() => {})
+      }
+      return NextResponse.json({ error: UNDERAGE_MESSAGE, underage: true }, { status: 403 })
+    }
+    const { error: bdErr } = await serviceSupabase.from('customer_profiles')
+      .update({ birth_date: bd }).eq('id', user.id).is('birth_date', null)
+    if (bdErr) {
+      console.error('[profile] birth_date update failed:', bdErr.message)
+      return NextResponse.json({ error: 'Your birth date didn\u2019t save. Please try again.' }, { status: 500 })
+    }
   }
 
   const { data, error } = await supabase

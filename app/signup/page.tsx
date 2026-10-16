@@ -8,6 +8,7 @@ import { CREATIVE_ROLES, SERVICE_ROLES } from '@/lib/roles'
 import { cleanIgHandle } from '@/lib/directory-listing'
 import RolePicker from '@/components/RolePicker'
 import { useTurnstile } from '@/components/Turnstile'
+import { cleanBirthDate, todayIso, isUnderAge, UNDERAGE_MESSAGE } from '@/lib/birth-date'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -21,6 +22,7 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false)
   const [showPw, setShowPw]   = useState(false)
   const [password2, setPassword2] = useState('')
+  const [birthDate, setBirthDate] = useState('')   // YYYY-MM-DD — required, migration 171 (2026-10-16)
   // Founding Creatives counter ("63 of 100 left") — public, no sign-in needed.
   const [foundingLeft, setFoundingLeft] = useState<{ left: number; cap: number } | null>(null)
   useEffect(() => {
@@ -51,6 +53,11 @@ export default function SignupPage() {
   const signUpEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     if (form.password !== password2) { setError('Passwords do not match'); return }
+    const bd = cleanBirthDate(birthDate)
+    if (!bd) { setError('Please enter your birth date.'); return }
+    // Accounts are 18+ (the parent signs up, not the kid). The DB trigger
+    // refuses it too, so this is the friendly copy of a rule enforced server-side.
+    if (isUnderAge(bd)) { setError(UNDERAGE_MESSAGE); return }
     setLoading(true); setError('')
     const igHandle = cleanIgHandle(form.instagram)
     const { error } = await supabase.auth.signUp({
@@ -62,6 +69,7 @@ export default function SignupPage() {
           instagram: igHandle || null,
           directory_opt_in: accountType === 'customer' ? false : directoryOptIn,
           account_type: accountType,
+          birth_date: bd,   // handle_new_user copies it to customer_profiles (migration 171)
         },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`,
         captchaToken: bot.token,
@@ -206,6 +214,10 @@ export default function SignupPage() {
           <input placeholder={accountType === 'brand' ? 'Company name' : accountType === 'vendor' ? 'Your name or business name' : 'Full name'} value={form.full_name} onChange={set('full_name')} required style={inputStyle} />
           <input type="email" placeholder="Email address" value={form.email} onChange={set('email')} required style={inputStyle} />
           <input placeholder="Phone number" value={form.phone} onChange={set('phone')} style={inputStyle} />
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Your birth date <span style={{ color: 'rgba(255,255,255,0.25)' }}>(private, never shown on your profile)</span></span>
+            <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} min="1900-01-01" max={todayIso()} required style={{ ...inputStyle, colorScheme: 'dark' }} />
+          </label>
           <input placeholder="Instagram (optional)" value={form.instagram} onChange={set('instagram')} style={inputStyle} />
 
           {accountType === 'creative' && (

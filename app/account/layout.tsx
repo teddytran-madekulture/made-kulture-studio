@@ -21,6 +21,19 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const { data: prof } = await supabase
     .from('customer_profiles').select('onboarded').eq('id', user.id).maybeSingle()
   if (prof && prof.onboarded === false) redirect('/welcome')
+  // 2026-10-16 — birth date is required (migration 171). A member without one
+  // gets the one-field version of /welcome. Its OWN query on purpose: if the
+  // column is ever missing the select errors, and folding it into the query
+  // above would silently switch off the onboarding redirect too. An error here
+  // just logs and lets them through.
+  if (prof) {
+    const { data: bdRow, error: bdErr } = await supabase
+      .from('customer_profiles').select('birth_date, underage_blocked_at').eq('id', user.id).maybeSingle()
+    if (bdErr) console.error('[account layout] birth_date lookup:', bdErr.message)
+    // Missing date -> the one-field screen; under 18 -> the blocked screen.
+    // Both live on /welcome, which reads the profile and picks the view.
+    else if (bdRow && (!bdRow.birth_date || bdRow.underage_blocked_at)) redirect('/welcome')
+  }
   // 2026-10-12 — a Vendor must sign the Vendor Agreement before using the
   // account area (components/VendorTermsGate.tsx).
   // Separate service-role read so it can never disturb the onboarding check
