@@ -3,7 +3,6 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
-import { addRewardForCharge } from '@/lib/rewards'
 import { refundPayment } from '@/lib/square-refund'
 import { notifyDelegatedRefund } from '@/lib/refund-notify'
 import { issueCredit } from '@/lib/credits'
@@ -286,8 +285,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       })
       squareRef = result.payment?.id ?? null
       moneyNote = `charged $${owed.toFixed(2)}`
-      // 2026-10-15 — extra-guest card charges earn rewards like any other.
-      if (squareRef) await addRewardForCharge(supabase, params.id, owedCents, 'extra guests')
     }
 
     // ── Now the row. Verified, because the money has already moved. ──────────

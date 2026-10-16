@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Client, Environment } from 'square'
 import { randomUUID } from 'crypto'
+import { addRewardForCharge } from '@/lib/rewards'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireStaff } from '@/lib/staff-auth'
 import { audit } from '@/lib/audit'
@@ -110,6 +111,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         buyerEmailAddress: customer?.email || undefined,
       })
       squarePaymentId = result.payment?.id ?? null
+      // 2026-10-15 — gear earns at checkout, so gear added later earns too.
+      if (squarePaymentId) await addRewardForCharge(db, params.id, totalCents, 'added gear')
     } catch (e: any) {
       console.error('[add-gear] charge failed', e)
       return NextResponse.json({ error: e?.errors?.[0]?.detail || 'Card charge failed.' }, { status: 402 })

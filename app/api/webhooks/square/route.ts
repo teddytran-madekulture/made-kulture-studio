@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
+import { addRewardForCharge } from '@/lib/rewards'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -103,6 +104,10 @@ export async function POST(req: NextRequest) {
           if (bumpErr || !bumped?.length) {
             console.error(`[Square webhook] add-ons marked paid but booking ${bookingId} total NOT bumped by ${addAmount}`, bumpErr)
           }
+          // 2026-10-15 — money paid through a link (extra time, added gear) earns
+          // rewards like a card charge. Claim-guarded above, so a retried
+          // delivery never gets here twice. Non-fatal.
+          await addRewardForCharge(supabase, bookingId, Math.round(addAmount * 100), 'paid link')
         }
       }
     }

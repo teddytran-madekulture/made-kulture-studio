@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js'
 import { sendSMSResult } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
-import { addRewardForCharge } from '@/lib/rewards'
 
 const square = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN!,
@@ -108,11 +107,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       buyerEmailAddress: customer?.email || undefined,
     })
     const squarePaymentId = result.payment!.id!
-
-    // 2026-10-15 — card money taken on top of a booking earns rewards too. This
-    // route never called it, so Reina LaRouge's +1hr on Set D (Oct 14, $40 via
-    // CHARGE CARD) earned 5% on $40 instead of $80. Non-fatal; never throws.
-    await addRewardForCharge(supabase, params.id, Math.round(Number(amount) * 100), 'extra guests')
 
     // ── Reflect it on the booking total ──────────────────────────────────────
     // ⚠️ This route NEVER used to do this at all — it took the money and the

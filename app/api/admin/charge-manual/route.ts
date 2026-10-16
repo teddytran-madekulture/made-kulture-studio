@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { sendSMSResult } from '@/lib/sms'
 import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
+import { addRewardForCharge } from '@/lib/rewards'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 
 // POST /api/admin/charge-manual
@@ -106,6 +107,9 @@ export async function POST(req: NextRequest) {
     })
 
     const squarePaymentId = result.payment!.id!
+    // 2026-10-15 — a keyed-in card charged against a booking earns rewards,
+    // same as the saved-card CHARGE button.
+    if (bookingId) await addRewardForCharge(supabase, bookingId, Math.round(Number(amount) * 100), 'booking adjustment')
 
     // Update the linked booking: bump the total by what was charged, and/or
     // attach the saved card.
