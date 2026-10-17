@@ -41,6 +41,12 @@ export default function WelcomePage() {
         setHasBirthDate(!!d.profile.birth_date)
         setBlocked(!!d.profile.underage_blocked_at)
         setBirthdayOnly(d.profile.onboarded === true && !d.profile.birth_date)
+        // Already onboarded, date on file, not blocked: nothing to do here.
+        // (2026-10-17 — Teddy saved his birthday, got bounced back here by a
+        // stale cached redirect, and was shown the full first-time form.)
+        if (d.profile.onboarded === true && d.profile.birth_date && !d.profile.underage_blocked_at) {
+          window.location.replace('/account'); return
+        }
       }
       setLoading(false)
     }).catch(() => setLoading(false))
@@ -65,7 +71,7 @@ export default function WelcomePage() {
       }).catch(() => null)
       if (r && r.status === 403) { setSaving(false); setBlocked(true); return }
       if (!r || !r.ok) { setSaving(false); setError('Something went wrong saving. Please try again.'); return }
-      router.replace('/account')
+      window.location.replace('/account')   // hard nav — see note above
       return
     }
     if (!name.trim()) { setError('Please add your name.'); return }
@@ -82,7 +88,7 @@ export default function WelcomePage() {
     }).catch(() => null)
     if (res && res.status === 403) { setSaving(false); setBlocked(true); return }
     if (!res || !res.ok) { setSaving(false); setError('Something went wrong saving. Please try again.'); return }
-    router.replace('/account')
+    window.location.replace('/account')
   }
 
   const input: React.CSSProperties = {
