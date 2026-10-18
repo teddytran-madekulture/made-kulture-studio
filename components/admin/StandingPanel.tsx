@@ -3,13 +3,15 @@
 // Dropped into the booking detail panel and the customer detail panel on the
 // admin dashboard. Self-contained on purpose: the dashboard is 5,000 lines, and
 // everything this needs comes from /api/admin/incidents.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { shrinkImage } from '@/lib/shrink-image'
 import { LEVEL_COLOR, LEVEL_LABEL, SEVERITIES, severityAtLeast, type Severity, type StandingConfig, type Standing } from '@/lib/standing'
 
 interface Incident {
   id: string; occurred_on: string; category: string; severity: Severity; points: number
   details: string; fee_cents: number | null; customer_notified_at: string | null
   voided_at: string | null; void_reason: string | null
+  photos?: { path: string; url: string }[]
 }
 interface Meter {
   customer: { id: string; name: string | null; email: string | null; banned: boolean | null; suspended_until: string | null }
@@ -49,6 +51,13 @@ export default function StandingPanel({ customerId, bookingId }: { customerId?: 
   const [msg, setMsg] = useState<string | null>(null)
   const [f, setF] = useState({ category: '', severity: 'minor' as Severity, occurredOn: todayCentral(), details: '', notify: false })
   const [notifyTouched, setNotifyTouched] = useState(false)
+  // Edit (2026-10-18) — one incident at a time
+  const [editId, setEditId] = useState<string | null>(null)
+  const [ef, setEf] = useState({ category: '', severity: 'minor' as Severity, occurredOn: '', details: '', fee: '' })
+  // Photos — which incident the hidden file picker is adding to
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [photoFor, setPhotoFor] = useState<string | null>(null)
+  const [photoBusy, setPhotoBusy] = useState<string | null>(null)
 
   const q = customerId ? `customerId=${customerId}` : bookingId ? `bookingId=${bookingId}` : ''
   const load = async () => {
@@ -105,6 +114,68 @@ export default function StandingPanel({ customerId, bookingId }: { customerId?: 
       if (!r.ok) { setMsg(`⚠️ ${d.error || 'Not voided.'}`); return }
       setM(d); setMsg('Voided. Standing recalculated.')
     } finally { setBusy(false) }
+  }
+
+  const startEdit = (i: Incident) => {
+    setEditId(i.id); setMsg(null)
+    setEf({ category: i.category, severity: i.severity, occurredOn: i.occurred_on, details: i.details ?? '', fee: i.fee_cents ? (i.fee_cents / 100).toFixed(2) : '' })
+  }
+  const saveEdit = async () => {
+    if (!editId) return
+    const feeNum = ef.fee.trim() === '' ? null : Number(ef.fee.replace(/[$,\s]/g, ''))
+    if (feeNum !== null && (!Number.isFinite(feeNum) || feeNum < 0)) { setMsg('⚠️ Fee must be a dollar amount.'); return }
+    setBusy(true); setMsg(null)
+    try {
+      const r = await fetch('/api/admin/incidents', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incidentId: editId, edit: {
+          category: ef.category, severity: ef.severity, occurredOn: ef.occurredOn, details: ef.details,
+          feeCents: feeNum === null ? null : Math.round(feeNum * 100),
+        } }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setMsg(`⚠️ ${d.error || 'Not saved.'}`); return }
+      setM(d); setEditId(null)
+      setMsg(d.unchanged ? 'No changes.' : `Saved. Now: ${LEVEL_LABEL[d.standing.level as keyof typeof LEVEL_LABEL]}.`)
+    } catch { setMsg('⚠️ Not saved — check your connection.') }
+    finally { setBusy(false) }
+  }
+
+  const pickPhotos = (id: string) => { setPhotoFor(id); fileRef.current?.click() }
+  const uploadPhotos = async (files: FileList | null) => {
+    const id = photoFor
+    if (!id || !files?.length) return
+    setPhotoBusy(id); setMsg(null)
+    let ok = 0; const errs: string[] = []
+    for (const file of Array.from(files)) {
+      try {
+        // Shrink to fit the 4.5 MB function cap. If the browser can't decode it
+        // (HEIC on desktop Chrome), send the original when it is small enough.
+        let blob: Blob = file
+        try { blob = await shrinkImage(file) } catch { if (file.size > 4 * 1024 * 1024) throw new Error('could not shrink this photo') }
+        const fd = new FormData()
+        fd.append('incidentId', id)
+        fd.append('photo', blob instanceof File ? blob : new File([blob], 'photo.jpg', { type: 'image/jpeg' }))
+        const r = await fetch('/api/admin/incidents/photo', { method: 'POST', body: fd })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.error || `upload failed (${r.status})`)
+        ok++
+      } catch (e: any) { errs.push(`${file.name}: ${e?.message || 'failed'}`) }
+    }
+    setPhotoBusy(null); setPhotoFor(null)
+    if (fileRef.current) fileRef.current.value = ''
+    await load()
+    setMsg(errs.length ? `⚠️ ${ok} added. ${errs.join(' · ')}` : `${ok} photo${ok === 1 ? '' : 's'} added.`)
+  }
+  const removePhoto = async (id: string, path: string) => {
+    if (!window.confirm('Remove this photo from the incident?')) return
+    setPhotoBusy(id)
+    try {
+      const r = await fetch('/api/admin/incidents/photo', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ incidentId: id, path }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setMsg(`⚠️ ${d.error || 'Not removed.'}`); return }
+      await load(); setMsg('Photo removed.')
+    } finally { setPhotoBusy(null) }
   }
 
   const suspend = async (until: string | null) => {
@@ -166,14 +237,65 @@ export default function StandingPanel({ customerId, bookingId }: { customerId?: 
                 {i.occurred_on}{i.customer_notified_at ? ' · emailed' : ''}{i.fee_cents ? ` · $${(i.fee_cents / 100).toFixed(2)} fee` : ''}
                 {i.voided_at ? ` · VOIDED: ${i.void_reason ?? ''}` : ''}
               </div>
-              {i.details && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4, lineHeight: 1.5 }}>{i.details}</div>}
-              {!i.voided_at && (
-                <button onClick={() => voidIt(i.id)} disabled={busy} style={{ background: 'none', border: 'none', padding: 0, marginTop: 4, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.4)', textDecoration: 'underline' }}>void</button>
+              {i.details && editId !== i.id && <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4, lineHeight: 1.5 }}>{i.details}</div>}
+
+              {editId === i.id && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                  <select value={ef.category} onChange={e => setEf(p => ({ ...p, category: e.target.value }))} style={inp}>
+                    {cfg.categories.map(c => <option key={c.key} value={c.key} style={optStyle}>{c.label}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select value={ef.severity} onChange={e => setEf(p => ({ ...p, severity: e.target.value as Severity }))} style={inp}>
+                      {SEVERITIES.map(s => <option key={s} value={s} style={optStyle}>{s} · {cfg.points[s]} pt</option>)}
+                    </select>
+                    <input type="date" value={ef.occurredOn} onChange={e => setEf(p => ({ ...p, occurredOn: e.target.value }))} style={inp} />
+                  </div>
+                  <textarea value={ef.details} onChange={e => setEf(p => ({ ...p, details: e.target.value }))} rows={3} placeholder="Details" style={{ ...inp, resize: 'vertical' }} />
+                  <input inputMode="decimal" value={ef.fee} onChange={e => setEf(p => ({ ...p, fee: e.target.value }))} placeholder="Fee / replacement cost $ (record only — does not charge)" style={inp} />
+                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
+                    Saving does not email the customer. The change is noted on their record.
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={saveEdit} disabled={busy} style={{ ...btn('#fbbf24'), flex: 1, padding: '8px' }}>{busy ? 'SAVING…' : 'SAVE CHANGES'}</button>
+                    <button onClick={() => setEditId(null)} disabled={busy} style={{ ...btn('rgba(255,255,255,0.3)'), padding: '8px' }}>CANCEL</button>
+                  </div>
+                </div>
+              )}
+
+              {!!i.photos?.length && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {i.photos.map(ph => (
+                    <div key={ph.path} style={{ position: 'relative' }}>
+                      <a href={ph.url} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={ph.url} alt="Incident photo" style={{ width: 64, height: 64, objectFit: 'cover', display: 'block', border: '1px solid rgba(255,255,255,0.12)' }} />
+                      </a>
+                      {!i.voided_at && (
+                        <button onClick={() => removePhoto(i.id, ph.path)} disabled={photoBusy === i.id} aria-label="Remove photo"
+                          style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, lineHeight: '16px', padding: 0, background: 'rgba(0,0,0,0.75)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 9, fontSize: 11, cursor: 'pointer' }}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!i.voided_at && editId !== i.id && (
+                <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
+                  {[
+                    { t: 'edit', f: () => startEdit(i) },
+                    { t: photoBusy === i.id ? 'uploading…' : '+ photos', f: () => pickPhotos(i.id) },
+                    { t: 'void', f: () => voidIt(i.id) },
+                  ].map(b => (
+                    <button key={b.t} onClick={b.f} disabled={busy || photoBusy === i.id} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.5)', textDecoration: 'underline' }}>{b.t}</button>
+                  ))}
+                </div>
               )}
             </div>
           ))}
         </div>
       )}
+
+      <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => uploadPhotos(e.target.files)} />
 
       {!open ? (
         <button onClick={() => setOpen(true)} style={{ ...btn('rgba(251,191,36,0.6)'), width: '100%' }}>LOG INCIDENT</button>

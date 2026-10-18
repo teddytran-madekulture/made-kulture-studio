@@ -2,6 +2,7 @@
 //   GET   ?customerId= | ?bookingId=   → one customer's meter + record
 //   GET   (no params)                  → recent incidents across everyone
 //   POST  { customerId|bookingId, category, severity, occurredOn, details, feeCents?, notify? }
+//   PATCH { incidentId, edit: { category?, severity?, occurredOn?, details?, feeCents? } } → edit (2026-10-18)
 //   PATCH { incidentId, voidReason }            → void (never delete)
 //   PATCH { customerId, suspendedUntil|null }   → dated suspension / lift it
 //
@@ -123,6 +124,68 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
+
+  // ── Edit (2026-10-18). Points always follow the severity through config, so
+  // an edit can never leave a row whose points disagree with its severity.
+  // A voided incident is closed — edit refused. Every change is written to
+  // customer_notes as a before → after line, so the record stays honest.
+  // ⚠️ Never re-sends the customer email; that only happens at logging time.
+  if (body.incidentId && body.edit && typeof body.edit === 'object') {
+    const e = body.edit
+    const { data: cur, error: rErr } = await db.from('customer_incidents').select(INC_COLS).eq('id', body.incidentId).maybeSingle()
+    if (rErr) return NextResponse.json({ error: rErr.message }, { status: 500 })
+    if (!cur) return NextResponse.json({ error: 'Incident not found.' }, { status: 404 })
+    if (cur.voided_at) return NextResponse.json({ error: 'A voided incident can’t be edited.' }, { status: 409 })
+    const config = await loadStandingConfig(db)
+    const patch: Record<string, any> = {}
+    const changes: string[] = []
+    if (e.category !== undefined && e.category !== cur.category) {
+      const cat = config.categories.find(x => x.key === e.category)
+      if (!cat) return NextResponse.json({ error: 'Unknown category.' }, { status: 400 })
+      patch.category = cat.key
+      const old = config.categories.find(x => x.key === cur.category)?.label ?? cur.category
+      changes.push(`category ${old} → ${cat.label}`)
+    }
+    if (e.severity !== undefined && e.severity !== cur.severity) {
+      if (!SEVERITIES.includes(e.severity)) return NextResponse.json({ error: 'Unknown severity.' }, { status: 400 })
+      patch.severity = e.severity
+      patch.points = config.points[e.severity as Severity]
+      changes.push(`severity ${cur.severity} (${cur.points} pt) → ${e.severity} (${patch.points} pt)`)
+    }
+    if (e.occurredOn !== undefined && e.occurredOn !== cur.occurred_on) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(e.occurredOn))) return NextResponse.json({ error: 'Bad date.' }, { status: 400 })
+      patch.occurred_on = e.occurredOn
+      changes.push(`date ${cur.occurred_on} → ${e.occurredOn}`)
+    }
+    if (e.details !== undefined) {
+      const d = String(e.details ?? '').trim().slice(0, 2000)
+      if (d !== (cur.details ?? '')) { patch.details = d; changes.push('details updated') }
+    }
+    if (e.feeCents !== undefined) {
+      const n = Number(e.feeCents)
+      const fee = e.feeCents === null || e.feeCents === '' || !Number.isFinite(n) || n <= 0 ? null : Math.round(n)
+      if (fee !== (cur.fee_cents ?? null)) {
+        patch.fee_cents = fee
+        const $ = (c: number | null) => c ? `$${(c / 100).toFixed(2)}` : 'none'
+        changes.push(`fee ${$(cur.fee_cents ?? null)} → ${$(fee)}`)
+      }
+    }
+    if (!changes.length) {
+      const c0 = await customerFor({ customerId: cur.customer_id })
+      return NextResponse.json({ ok: true, unchanged: true, ...(c0 ? await meter(c0) : {}) })
+    }
+    const { data: upd, error: uErr } = await db.from('customer_incidents').update(patch)
+      .eq('id', body.incidentId).is('voided_at', null).select('id')
+    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
+    if (!upd?.length) return NextResponse.json({ error: 'Incident was voided or removed — not saved.' }, { status: 409 })
+    const { error: nErr } = await db.from('customer_notes').insert({
+      customer_id: cur.customer_id, tag: 'note',
+      note: `Incident from ${cur.occurred_on} edited: ${changes.join('; ')}.`,
+    })
+    if (nErr) console.error('[incidents] edit note failed (non-fatal)', nErr)
+    const c = await customerFor({ customerId: cur.customer_id })
+    return NextResponse.json({ ok: true, changes, ...(c ? await meter(c) : {}) })
+  }
 
   if (body.incidentId) {
     const reason = String(body.voidReason ?? '').trim()

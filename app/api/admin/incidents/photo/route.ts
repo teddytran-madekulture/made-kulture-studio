@@ -1,4 +1,5 @@
-// POST /api/admin/incidents/photo  (multipart: incidentId, photo) — admin only.
+// POST   /api/admin/incidents/photo  (multipart: incidentId, photo) — admin only.
+// DELETE /api/admin/incidents/photo  { incidentId, path } — detach + remove one photo (2026-10-18).
 // One photo per request: a Vercel function caps the request body at 4.5 MB, so
 // the client downsizes to a ~1600px JPEG and sends them one at a time.
 // Upload first, then append the path — a failed upload never leaves the row
@@ -39,4 +40,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: uErr?.message || 'Could not attach the photo.' }, { status: 500 })
   }
   return NextResponse.json({ ok: true, path })
+}
+
+// Detach first, then remove the file: a failed storage delete leaves an orphan
+// file (harmless, private), never a row pointing at nothing.
+export async function DELETE(req: NextRequest) {
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body = await req.json().catch(() => ({}))
+  const incidentId = String(body.incidentId ?? ''), path = String(body.path ?? '')
+  if (!incidentId || !path) return NextResponse.json({ error: 'Missing photo.' }, { status: 400 })
+  const { data: inc, error } = await db.from('customer_incidents').select('id, photo_urls').eq('id', incidentId).maybeSingle()
+  if (error || !inc) return NextResponse.json({ error: 'Incident not found.' }, { status: 404 })
+  const existing: string[] = Array.isArray(inc.photo_urls) ? inc.photo_urls : []
+  if (!existing.includes(path)) return NextResponse.json({ error: 'That photo is not on this incident.' }, { status: 404 })
+  const { data: upd, error: uErr } = await db.from('customer_incidents')
+    .update({ photo_urls: existing.filter(p => p !== path) }).eq('id', incidentId).select('id')
+  if (uErr || !upd?.length) return NextResponse.json({ error: uErr?.message || 'Could not remove the photo.' }, { status: 500 })
+  const { error: rmErr } = await db.storage.from('incident-photos').remove([path])
+  if (rmErr) console.error('[incident-photo] storage remove failed (orphan file left)', rmErr)
+  return NextResponse.json({ ok: true })
 }
