@@ -122,6 +122,18 @@ export default function ExtendConfirmPage() {
         // dead-ending them.
         setCardMode(true)
         setError('We couldn’t find a usable card on your account — enter one below.')
+      } else if (d.canRetry) {
+        // A decline (bank block, drained prepaid, limit). The request stays
+        // pending server-side and a different card gets its own idempotency key,
+        // so open the card form instead of letting them re-tap the same card.
+        // Square's raw detail ("CARDHOLDER_INSUFFICIENT_PERMISSIONS"...) is not
+        // shown — it means nothing to a guest. 2026-10-20, after Cassidyboi
+        // retried one blocked card 8 times on the Cottage set.
+        const wasKeyed = cardMode
+        setCardMode(true)
+        setError(wasKeyed
+          ? 'That card was declined too. Try a different card, or text (832) 408-1631.'
+          : 'Your bank declined that card. Try another card below.')
       } else {
         setError(d.error || 'Something went wrong — text (832) 408-1631.')
       }
