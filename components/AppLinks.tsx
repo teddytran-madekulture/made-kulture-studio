@@ -10,8 +10,10 @@
 //                     and in iPhone browsers that aren't Safari (Safari gets
 //                     Apple's own Smart App Banner from app/layout.tsx instead).
 //
-// The buttons are text, not Apple's/Google's official badge artwork, which
-// can't be downloaded from here. Swap in the official badges later if wanted.
+// The buttons are the OFFICIAL badges (public/badges): Apple's black SVG from
+// toolbox.marketingtools.apple.com and Google's PNG from play.google.com/badges,
+// trimmed of the transparent padding Google builds in so both sit at one height.
+// Brand rules: don't recolour, stretch or redraw them.
 import { useEffect, useState } from 'react'
 import { inNativeApp } from '@/lib/native-push'
 import { APP_STORE_URL, PLAY_STORE_URL, APP_LINK_PATH, platformFromUA, isIosNonSafari, type Platform } from '@/lib/app-links'
@@ -29,21 +31,20 @@ export function useAppEnv(): AppEnv {
   return env
 }
 
-const btnBase: React.CSSProperties = {
-  display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center',
-  minWidth: 150, padding: '9px 16px', borderRadius: 8, textDecoration: 'none',
-  border: '1px solid rgba(255,255,255,0.35)', background: '#000', color: '#fff', lineHeight: 1.1,
-}
-const small: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.7)' }
-const big: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em', marginTop: 2 }
+const BADGE_H = 44
 
 function StoreButton({ store }: { store: 'ios' | 'android' }) {
   const ios = store === 'ios'
   return (
-    <a href={ios ? APP_STORE_URL : PLAY_STORE_URL} target="_blank" rel="noreferrer" style={btnBase}
-      aria-label={ios ? 'Download Made Kulture on the App Store' : 'Get Made Kulture on Google Play'}>
-      <span style={small}>{ios ? 'Download on the' : 'Get it on'}</span>
-      <span style={big}>{ios ? 'App Store' : 'Google Play'}</span>
+    <a href={ios ? APP_STORE_URL : PLAY_STORE_URL} target="_blank" rel="noreferrer" style={{ display: 'inline-block', lineHeight: 0 }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={ios ? '/badges/app-store.svg' : '/badges/google-play.png'}
+        alt={ios ? 'Download on the App Store' : 'Get it on Google Play'}
+        height={BADGE_H}
+        width={ios ? Math.round(BADGE_H * 119.66407 / 40) : Math.round(BADGE_H * 564 / 168)}
+        style={{ height: BADGE_H, width: 'auto', display: 'block' }}
+      />
     </a>
   )
 }
