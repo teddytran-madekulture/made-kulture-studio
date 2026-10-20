@@ -610,6 +610,7 @@ export async function POST(req: NextRequest) {
     let savedCardId: string | null = null
     let squarePaymentId: string | null = null
     let usedCard: any = null   // the Square card object, for its fingerprint (migration 113)
+    let saveFromPayment = false   // createCard refused the nonce - save the card from the payment instead
 
     if (body.sourceId) {
       // Reuse an existing Square profile for this email — never spawn a duplicate.
@@ -666,13 +667,27 @@ export async function POST(req: NextRequest) {
         customerId = prof.square_customer_id
         savedCardId = onFile.id
       } else {
-        const { result: cardResult } = await square.cardsApi.createCard({
-          idempotencyKey: randomUUID(),
-          sourceId: body.sourceId,
-          card: { customerId: customerId!, referenceId: `made-kulture-${primary.date}` },
-        })
-        savedCardId = cardResult.card!.id!
-        usedCard = cardResult.card ?? null
+        try {
+          const { result: cardResult } = await square.cardsApi.createCard({
+            idempotencyKey: randomUUID(),
+            sourceId: body.sourceId,
+            card: { customerId: customerId!, referenceId: `made-kulture-${primary.date}` },
+          })
+          savedCardId = cardResult.card!.id!
+          usedCard = cardResult.card ?? null
+        } catch (saveErr: any) {
+          // 2026-10-20: Square sometimes refuses to SAVE a card (INVALID_CARD_DATA
+          // on createCard) that it will still CHARGE - Bryant Troy, Vintage,
+          // 11 tries on 2026-10-19, nothing charged, no booking. Fallback:
+          // authorise the nonce, screen it, save the card FROM that payment,
+          // then capture. Teddy's rule still holds (every booking keeps a real
+          // card on file): if the save-from-payment fails too, the hold is
+          // VOIDED and the booking refused. With nothing to charge there is no
+          // payment to save from, so that case fails exactly as before.
+          if (chargeCents <= 0) throw saveErr
+          console.warn('[bookings] createCard refused, trying save-from-payment:', saveErr?.errors?.[0]?.code ?? saveErr)
+          saveFromPayment = true
+        }
       }
 
       // Same card as a suspended account? Checked BEFORE any money moves.
@@ -713,10 +728,11 @@ export async function POST(req: NextRequest) {
         })
 
         const { result: paymentResult } = await square.paymentsApi.createPayment({
-          sourceId: isWallet ? body.sourceId : savedCardId!, idempotencyKey: randomUUID(),
+          sourceId: (isWallet || saveFromPayment) ? body.sourceId : savedCardId!, idempotencyKey: randomUUID(),
           // A wallet card's fingerprint is only known once Square has it, so
-          // authorise first, screen it, then capture (or void) below.
-          ...(isWallet ? { autocomplete: false } : {}),
+          // authorise first, screen it, then capture (or void) below. Same for
+          // the save-from-payment fallback.
+          ...((isWallet || saveFromPayment) ? { autocomplete: false } : {}),
           amountMoney: { amount: BigInt(chargeCents), currency: 'USD' },
           customerId: customerId!, locationId: process.env.SQUARE_LOCATION_ID!,
           ...(orderId ? { orderId } : {}),
@@ -729,6 +745,39 @@ export async function POST(req: NextRequest) {
           buyerEmailAddress: body.email,
         })
         squarePaymentId = paymentResult.payment!.id!
+
+        if (saveFromPayment) {
+          const heldId = squarePaymentId
+          const voidHold = () => square.paymentsApi.cancelPayment(heldId)
+            .catch(e => console.error('[bookings] fallback void failed - CHECK SQUARE for a stranded hold', heldId, e))
+          const heldCard = paymentResult.payment?.cardDetails?.card ?? null
+          if (heldCard?.fingerprint) {
+            const screen = await screenBooking(supabase, {
+              fingerprint: heldCard.fingerprint, zip: heldCard.billingAddress?.postalCode, name: body.name,
+              excludeIds: ownIds, where: 'website checkout (card, saved from payment)', bookerLabel,
+            })
+            if (screen.block) {
+              await voidHold()
+              return NextResponse.json({ error: await blockMessage() }, { status: 403 })
+            }
+          }
+          try {
+            const { result: cardResult } = await square.cardsApi.createCard({
+              idempotencyKey: randomUUID(),
+              sourceId: heldId,   // Square can save a card from a payment it authorised
+              card: { customerId: customerId!, referenceId: `made-kulture-${primary.date}` },
+            })
+            savedCardId = cardResult.card!.id!
+            usedCard = cardResult.card ?? heldCard
+          } catch (e2: any) {
+            console.error('[bookings] save-from-payment also refused - voiding hold:', e2?.errors?.[0]?.code ?? e2)
+            await voidHold()
+            return NextResponse.json({
+              error: 'We couldn\'t save that card to hold your booking, so nothing was charged. Please try a different card, or text (832) 408-1631.',
+            }, { status: 402 })
+          }
+          await square.paymentsApi.completePayment(heldId, {})
+        }
 
         if (isWallet) {
           usedCard = paymentResult.payment?.cardDetails?.card ?? null
