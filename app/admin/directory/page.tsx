@@ -150,6 +150,22 @@ export default function AdminDirectoryPage() {
     } catch (e: any) { setError(e.message) } finally { setBusy(null) }
   }
 
+  async function setAccountType(m: Member, accountType: Member['accountType']) {
+    if (accountType === m.accountType) return
+    if (accountType === 'vendor' && !confirm(`Make ${m.name || 'this member'} a Vendor? They'll have to sign the Vendor Agreement before they can use their account.`)) return
+    setBusy(m.id); setError('')
+    try {
+      const res = await fetch(`/api/admin/directory/${m.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountType }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+      // Trust the server's echo, not the value we sent.
+      setMembers(list => list.map(x => x.id === m.id ? { ...x, accountType: data.accountType } : x))
+    } catch (e: any) { setError(e.message) } finally { setBusy(null) }
+  }
+
   async function setFounding(m: Member, action: 'grant' | 'revoke') {
     if (action === 'revoke' && !confirm(`Remove ${m.name || 'this member'}'s First 100 badge? They lose the badge and the 15-photo limit, and won't get it back automatically.`)) return
     setBusy(m.id); setError('')
@@ -226,7 +242,13 @@ export default function AdminDirectoryPage() {
                 <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 15, fontWeight: 600, color: '#fff' }}>
                   {m.name || <span style={{ color: 'rgba(255,255,255,0.35)' }}>(no name)</span>}
                 </span>
-                <span style={chip('mute')}>{m.accountType}</span>
+                <select value={m.accountType} disabled={busy === m.id} title="Account type"
+                  onChange={e => setAccountType(m, e.target.value as Member['accountType'])}
+                  style={{ ...chip('mute'), background: '#141414', color: '#fff', colorScheme: 'dark', cursor: 'pointer', opacity: busy === m.id ? 0.5 : 1 }}>
+                  {(['customer', 'creative', 'brand', 'vendor'] as const).map(t => (
+                    <option key={t} value={t} style={{ background: '#141414', color: '#fff' }}>{t}</option>
+                  ))}
+                </select>
                 {m.foundingNumber && <span style={{ ...chip('mute'), color: '#e6c07a', borderColor: 'rgba(230,192,122,0.5)' }}>First 100 · No. {m.foundingNumber}</span>}
                 {m.listed
                   ? <span style={chip('good')}>listed</span>

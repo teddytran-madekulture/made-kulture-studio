@@ -6,6 +6,8 @@ import { FOUNDING_CAP } from '@/lib/founding'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
+const ACCOUNT_TYPES = ['customer', 'creative', 'brand', 'vendor']
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -46,6 +48,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (typeof n !== 'number') return NextResponse.json({ error: `All ${FOUNDING_CAP} Founding spots are taken. Remove one first.` }, { status: 409 })
     return NextResponse.json({ id: params.id, foundingNumber: n })
+  }
+
+  // { accountType } — set a member's account type by hand (2026-10-19). Built
+  // because a member who picked Vendor by mistake hits VendorTermsGate and can't
+  // reach Settings to change it himself. Switching TO vendor shows them the
+  // Vendor Agreement next visit; switching away from vendor clears the gate.
+  // vendor_terms_accepted_at is left alone either way (it's the signed record).
+  if (body?.accountType !== undefined) {
+    const t = String(body.accountType)
+    if (!ACCOUNT_TYPES.includes(t)) return NextResponse.json({ error: 'Unknown account type.' }, { status: 400 })
+    const { data, error } = await supabase.from('customer_profiles')
+      .update({ account_type: t }).eq('id', params.id).select('id, account_type')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data?.length) return NextResponse.json({ error: 'No profile with that id — nothing was changed.' }, { status: 404 })
+    return NextResponse.json({ id: data[0].id, accountType: data[0].account_type })
   }
 
   if (typeof body?.optedIn !== 'boolean') {
