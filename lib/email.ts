@@ -270,6 +270,17 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
       </tr>
     </table>` : ''}
 
+    <!-- Get the app (2026-10-20). /app sends each phone to its own store; a
+         computer gets a page with both + a QR. Only promise what the app does. -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td align="center">
+          <p style="margin:0 0 10px;font-size:12px;color:#888;line-height:1.6;">Your bookings, the Creative Directory and your messages, one tap away.</p>
+          <a href="${APP_URL}/app" style="display:inline-block;background:#111;border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:12px;text-decoration:none;padding:11px 20px;border-radius:4px;">Get the Made Kulture app</a>
+        </td>
+      </tr>
+    </table>
+
     <!-- When You Arrive -->
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:20px 24px;margin-bottom:16px;">
       <tr>

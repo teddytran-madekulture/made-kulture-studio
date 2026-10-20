@@ -3,6 +3,7 @@ import './globals.css'
 import JuneChatWidget from '@/components/JuneChatWidget'
 import { MarketingOverlays } from '@/components/MarketingTools'
 import { InstallCatcher } from '@/components/MemberApp'
+import { APP_STORE_ID } from '@/lib/app-links'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
@@ -50,6 +51,10 @@ export const metadata: Metadata = {
   // /admin overrides both with its own MK Admin manifest.
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: 'Made Kulture', statusBarStyle: 'black-translucent' },
+  // Apple's Smart App Banner (2026-10-20): Safari on iPhone shows "Made Kulture
+  // — Open/Get" above the page. Safari only, and iOS hides it on its own inside
+  // the app. Other browsers get components/AppLinks AppStrip instead.
+  itunes: { appId: APP_STORE_ID },
 }
 
 // LocalBusiness structured data — how Google understands who/where we are.

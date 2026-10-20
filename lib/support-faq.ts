@@ -67,7 +67,7 @@ export const CATEGORIES: Category[] = [
         ],
         notes: ['Signed up with Google or Apple? You don’t have a password — just use that button.', 'Still stuck? Contact support below.'] },
       { slug: 'get-app', q: 'How do I get the Made Kulture app?', tags: 'app iphone android download install',
-        a: 'Download Made Kulture from the App Store or Google Play and sign in with your account. On a computer or Android you can also install it straight from the website: [Get the app](/account/app).' },
+        a: 'Download Made Kulture from the App Store or Google Play and sign in with your account. On your phone, [madekulture.com/app](/app) opens the right store for you.' },
       { slug: 'notifications', q: 'How do I turn notifications on or off?', tags: 'notifications push alerts test',
         steps: [
           SETTINGS,

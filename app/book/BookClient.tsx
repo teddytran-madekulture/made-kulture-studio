@@ -10,6 +10,7 @@ import StudioConditions from '@/components/StudioConditions'
 import { shortNoticeActive, plusActive, todayDateStr, chiTodayStr, chiNowDecimal } from '@/lib/short-notice'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 import { bookingHourToISO } from '@/lib/booking-times'
+import { AppPromoCard } from '@/components/AppLinks'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -2002,6 +2003,9 @@ function SuccessScreen({ booking, setCart, loggedIn }: { booking: BookingState; 
             </Link>
           </div>
         )}
+
+        {/* 2026-10-20: the store apps. Renders nothing inside the app itself. */}
+        <AppPromoCard />
 
         <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 28px', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', textDecoration: 'none', fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 11, fontWeight: 500, letterSpacing: '0.18em' }}>
           BACK TO HOME

@@ -15,6 +15,7 @@ import FeaturedEditorial from '@/components/FeaturedEditorial'
 import DirectoryTeaser from '@/components/DirectoryTeaser'
 import { liveEditorial, creditsLine, type FeaturedEditorial as FeaturedEditorialData } from '@/lib/featured-editorial'
 import ArrowUpRight from '@/components/ArrowUpRight'
+import { StoreButtons } from '@/components/AppLinks'
 
 
 const SETS = [
@@ -401,6 +402,8 @@ export default function HomeClient({ images = {}, focals = {}, settings, content
               <a href="https://www.instagram.com/madekulture/" target="_blank" rel="noreferrer"
                 style={{ fontSize:11, color:'#c9b27e', letterSpacing:'0.12em', textDecoration:'none' }}>INSTAGRAM <ArrowUpRight /></a>
             </div>
+            {/* 2026-10-20 store apps. Hidden inside the app itself (AppLinks). */}
+            <div style={{ marginTop:20 }}><StoreButtons show="both" /></div>
           </div>
         </div>
         <div style={{ borderTop:'1px solid rgba(255,255,255,0.08)', paddingTop:24, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:16 }}>

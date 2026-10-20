@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { THEMES, hiddenOnPath, type ActiveMarketing } from '@/lib/marketing-tools'
 import ArrowUpRight from '@/components/ArrowUpRight'
+import { AppStrip, useAppStripEligible } from '@/components/AppLinks'
 
 let cache: Promise<ActiveMarketing | null> | null = null
 function loadMarketing(): Promise<ActiveMarketing | null> {
@@ -44,7 +45,13 @@ export function AnnouncementBar() {
   const key = a ? `mk_announce_closed:${a.text}` : ''
   const [closed, setClosed] = useState(false)
   useEffect(() => { if (key) setClosed(store.get('session', key) === '1') }, [key])
-  const show = !!a && !closed && !hiddenOnPath(pathname)
+  const showMk = !!a && !closed && !hiddenOnPath(pathname)
+  // 2026-10-20: with no announcement running, Android and non-Safari iPhone
+  // browsers get the "get the app" strip in the same slot (same offset
+  // plumbing, so the nav never overlaps it). An announcement always wins.
+  const [appEligible, closeAppStrip] = useAppStripEligible()
+  const showApp = !showMk && appEligible && !hiddenOnPath(pathname)
+  const show = showMk || showApp
 
   useEffect(() => {
     if (!show || !ref.current) { setVar('--mk-announce-h', '0px'); return }
@@ -56,6 +63,17 @@ export function AnnouncementBar() {
     return () => { ro?.disconnect(); setVar('--mk-announce-h', '0px') }
   }, [show])
 
+  if (showApp) {
+    return (
+      <div ref={ref} role="region" aria-label="Get the app" style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 101, background: '#080808', color: '#fff',
+        borderBottom: '1px solid rgba(255,255,255,0.12)',
+        padding: '9px 44px', textAlign: 'center', fontFamily: 'Inter, sans-serif', fontSize: 13, lineHeight: 1.4, fontWeight: 500,
+      }}>
+        <AppStrip onClose={closeAppStrip} />
+      </div>
+    )
+  }
   if (!show || !a) return null
   const t = THEMES[a.theme] ?? THEMES.gold
   return (

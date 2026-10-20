@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { StoreButtons } from '@/components/AppLinks'
 import { inNativeApp, nativePushAvailable, nativePushPermission, nativePushStatus, nativePushEnable, nativePushDisable, bootNativePush } from '@/lib/native-push'
 
 declare global { interface Window { __mkInstall?: any } }
@@ -183,7 +184,13 @@ export function GetAppCard() {
     </div>
   )
 
-  const installBody = s.ios ? (
+  // 2026-10-20: the store apps are live, so step 1 is the App Store / Google
+  // Play, not Add to Home Screen. The old home-screen steps are kept below
+  // (unused) in case the store route ever needs a fallback.
+  const installBody = (
+    <><div style={{ marginBottom: 12 }}>Free for iPhone and Android. Download it, then sign in with this account.</div><StoreButtons show="auto" /></>
+  )
+  const legacyInstallBody = s.ios ? (
     <ol style={{ margin: 0, paddingLeft: 18 }}>
       <li>Open <strong style={{ color: fg }}>madekulture.com</strong> in <strong style={{ color: fg }}>Safari</strong>.</li>
       <li>Tap the <strong style={{ color: fg }}>Share</strong> button <ShareIcon /> at the bottom of the screen.</li>
@@ -199,8 +206,8 @@ export function GetAppCard() {
   const iosNeedsInstall = s.ios && !s.standalone
   const notifBody = s.needsUpdate ? (
     <>Update the Made Kulture app from the App Store to turn on notifications.</>
-  ) : iosNeedsInstall ? (
-    <>On iPhone, notifications work once the app is on your home screen. Finish step 1, open the app, and turn them on there.</>
+  ) : s.ios ? (
+    <>On iPhone, notifications come through the app. Download it above, sign in, and turn them on there.</>
   ) : !s.pushSupported ? (
     <>This browser doesn’t support notifications. You’ll still get every request and message by email.</>
   ) : (
@@ -212,9 +219,9 @@ export function GetAppCard() {
       <p style={{ fontSize: 14, color: muted, lineHeight: 1.6, marginTop: 0 }}>
         {s.native
           ? 'You’re in the Made Kulture app. Turn on notifications to hear about messages and requests the moment they land.'
-          : 'Made Kulture works like an app on your phone, straight from the website. No App Store: your bookings, door codes, the directory and your messages, one tap away.'}
+          : 'Get Made Kulture on your phone: your bookings, the directory and your messages, one tap away.'}
       </p>
-      {!s.native && step(1, 'Put Made Kulture on your home screen', s.standalone, installBody)}
+      {!s.native && step(1, 'Get the app', false, installBody)}
       {step(s.native ? 1 : 2, 'Turn on notifications', s.pushOn, notifBody)}
       {s.pushOn && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
