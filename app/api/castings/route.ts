@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   if (role) query = query.contains('roles_needed', [role])
   // 2026-10-06: strip PostgREST filter syntax before interpolating — a comma
   // or paren in `q` rewrote the OR (same guard directory/credits already had).
-  const safeQ = q.replace(/[%,()*]/g, '').slice(0, 60)
+  const safeQ = (q ?? '').replace(/[%,()*]/g, '').slice(0, 60)  // q is null when there is no search — 2026-10-19 fix
   if (safeQ) query = query.or(`title.ilike.%${safeQ}%,description.ilike.%${safeQ}%`)
 
   const { data: rows, error } = await query.order('created_at', { ascending: false })
