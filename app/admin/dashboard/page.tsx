@@ -1816,6 +1816,13 @@ export default function AdminDashboard() {
         phone:        editBooking.customers?.phone || '',
         customerName: editBooking.customers?.name || '',
         sendSms:      editState.sendSms,
+        // ⚠️ 2026-10-21: without `lines` the route mints the link and RECORDS
+        // NOTHING — no unpaid add-on, so the booking showed no balance, the edit
+        // modal read "No change" (the new end time was already saved above), the
+        // unpaid-link reminder couldn't see it, and the Square webhook had nothing
+        // to reconcile when it was paid (Tre Slater, +1 hr on a buyout). Add
+        // Charge always sent lines; this path didn't.
+        lines: [{ label: 'Booking change balance', amount: editDiff, quantity: 1 }],
       }),
     })
     const linkData = await linkRes.json()
