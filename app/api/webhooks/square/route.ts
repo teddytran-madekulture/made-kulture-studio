@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { addRewardForCharge } from '@/lib/rewards'
+import { sendOwnerPush } from '@/lib/push'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -108,6 +109,27 @@ export async function POST(req: NextRequest) {
           // rewards like a card charge. Claim-guarded above, so a retried
           // delivery never gets here twice. Non-fatal.
           await addRewardForCharge(supabase, bookingId, Math.round(addAmount * 100), 'paid link')
+
+          // 2026-10-21 — tell Teddy the link got paid, so he never wonders whether
+          // to follow up. Claim-guarded above (a retried delivery never gets here),
+          // lands in Notifications history too. Non-fatal.
+          try {
+            const { data: who } = await supabase
+              .from('bookings').select('customers ( name )').eq('id', bookingId).single()
+            const name = (who as any)?.customers?.name || 'A customer'
+            const { count: left } = await supabase
+              .from('booking_add_ons').select('id', { count: 'exact', head: true })
+              .eq('booking_id', bookingId).eq('paid', false)
+            const amt = `$${addAmount.toFixed(2).replace(/\.00$/, '')}`
+            await sendOwnerPush({
+              title: `${name} paid ${amt}`,
+              body: left ? `Link paid. ${left} more unpaid on that booking.` : 'Link paid, balance cleared.',
+              url: '/admin/balances',
+              tag: `paid-${orderId}`,
+            })
+          } catch (e) {
+            console.error('[Square webhook] paid push failed', e)
+          }
         }
       }
     }

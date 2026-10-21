@@ -19,6 +19,7 @@ import { bookingHourToISO } from '@/lib/booking-times'
 // table. Do not import from lib/extensions here — that one pulls in Supabase.
 import { RATE_BY_NAME, guestSurchargePerHourOf, guestFeePerHourOf, effectiveHourlyRate } from '@/lib/guest-rate'
 import ArrowUpRight from '@/components/ArrowUpRight'
+import BalancesBadge from '@/components/BalancesBadge'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -572,14 +573,14 @@ const NAV_DIM = 'rgba(255,255,255,0.45)'
 function navHdr(label: string) {
   return <div style={{ padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }}>{label}</div>
 }
-function navLink(href: string, icon: string, label: string, color?: string) {
+function navLink(href: string, icon: string, label: string, color?: string, badge?: React.ReactNode) {
   return (
     <a key={href} href={href} style={{
       width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box' as const,
       background: 'transparent', borderLeft: '2px solid transparent', textDecoration: 'none',
       padding: '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13, color: color || NAV_DIM,
     }}>
-      <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: icon === 'J' ? 800 : undefined }}>{icon}</span>{label}
+      <span style={{ width: 16, textAlign: 'center' as const, flexShrink: 0, fontWeight: icon === 'J' ? 800 : undefined }}>{icon}</span>{label}{badge}
     </a>
   )
 }
@@ -2157,6 +2158,7 @@ export default function AdminDashboard() {
           {bookingsOpen && (
             <div>
               {([['list', '≡', 'List View'], ['calendar', '⊡', 'Calendar']] as const).map(([v, icon, label]) => navView(v, icon, label, true))}
+              {navLink('/admin/balances', '$', 'Balances', undefined, <BalancesBadge />)}
             </div>
           )}
 

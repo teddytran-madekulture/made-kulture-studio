@@ -2,6 +2,7 @@
 import AppleSecretBanner from '@/components/AppleSecretBanner'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import BalancesBadge from '@/components/BalancesBadge'
 import type { ReactNode, CSSProperties } from 'react'
 
 // Shared admin sidebar for the standalone admin pages (marketing, promos, portfolio,
@@ -17,7 +18,7 @@ import type { ReactNode, CSSProperties } from 'react'
 const DIM = 'rgba(255,255,255,0.45)'
 const sectionHdr: CSSProperties = { padding: '14px 12px 6px 14px', color: 'rgba(255,255,255,0.25)', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em' }
 
-function Item({ href, icon, label, active, color, indent }: { href: string; icon: string; label: string; active?: boolean; color?: string; indent?: boolean }) {
+function Item({ href, icon, label, active, color, indent, badge }: { href: string; icon: string; label: string; active?: boolean; color?: string; indent?: boolean; badge?: ReactNode }) {
   return (
     <a href={href} style={{
       width: '100%', display: 'flex', alignItems: 'center', gap: 10, boxSizing: 'border-box',
@@ -26,7 +27,7 @@ function Item({ href, icon, label, active, color, indent }: { href: string; icon
       padding: indent ? '9px 12px 9px 30px' : '9px 12px', fontFamily: 'Inter, sans-serif', fontSize: 13,
       color: active ? '#fff' : (color || DIM),
     }}>
-      <span style={{ width: 16, textAlign: 'center', flexShrink: 0, fontWeight: label === 'June Inbox' ? 800 : undefined }}>{icon}</span>{label}
+      <span style={{ width: 16, textAlign: 'center', flexShrink: 0, fontWeight: label === 'June Inbox' ? 800 : undefined }}>{icon}</span>{label}{badge}
     </a>
   )
 }
@@ -54,6 +55,7 @@ function SidebarInner() {
         <div style={sectionHdr}>BOOKINGS</div>
         <Item href={`${D}list`} icon="≡" label="List View" />
         <Item href={`${D}calendar`} icon="⊡" label="Calendar" />
+        <Item href="/admin/balances" icon="$" label="Balances" active={on('/admin/balances')} badge={<BalancesBadge />} />
 
         <div style={sectionHdr}>MESSAGES</div>
         <Item href="/admin/inbox" icon="J" label="June Inbox" active={on('/admin/inbox')} color="#d4a843" />
