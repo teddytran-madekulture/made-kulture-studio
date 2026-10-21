@@ -74,6 +74,27 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 2026-10-21: the card saved ON THE BOOKING can live on a Square profile
+    // that neither the linked customer nor the email search finds — a signed-in
+    // member paying with a card saved under their ACCOUNT's Square profile
+    // (customer_profiles.square_customer_id), filed under a different email.
+    // Tre Slater's $400 buyout had a card on the booking and this screen showed
+    // none. Ask Square who owns that exact card and add the owner. If the card
+    // itself was disabled or deleted, say so instead of an empty list.
+    let bookingCardProblem: string | null = null
+    if (bookingCardId) {
+      try {
+        const { result } = await square.cardsApi.retrieveCard(bookingCardId)
+        const bc = result.card
+        if (bc?.customerId) candidateIds.add(bc.customerId)
+        if (bc && !bc.enabled) bookingCardProblem = 'The card used for this booking was removed or disabled in Square.'
+        else if (bc && !isCardUsable(bc)) bookingCardProblem = 'The card used for this booking has expired.'
+      } catch (e) {
+        console.error('[booking-cards] retrieveCard failed for booking card', e)
+        bookingCardProblem = 'The card used for this booking could not be found in Square.'
+      }
+    }
+
     // List enabled cards on each candidate; dedupe the same physical card
     // (same fingerprint saved onto multiple duplicate profiles) to one entry.
     const byFingerprint = new Map<string, any>()
@@ -140,7 +161,7 @@ export async function GET(req: NextRequest) {
       console.error('[booking-cards] card_alerts lookup threw (non-fatal):', e)
     }
 
-    return NextResponse.json({ cards })
+    return NextResponse.json({ cards, bookingCardProblem })
   } catch (err: any) {
     console.error('[booking-cards] error:', err)
     return NextResponse.json({ cards: [], error: err?.message || 'Failed to load cards' }, { status: 200 })
