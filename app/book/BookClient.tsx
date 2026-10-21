@@ -656,6 +656,22 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
     && isBookedAsEnd(h) && sharedFits(booking.startHour, h - booking.startHour)
   const setLabel = (slug: string) => sets.find(x => x.id === slug)?.name ?? slug
 
+  // ── 2026-10-21 RANGE REQUESTS (individual sets only) ──────────────────────
+  // A gold (request) hour used to open a panel with an hours picker, while a
+  // normal booking is tap-start, tap-end. Tricia (Plus) tried 11-3 on Set D
+  // the day before, saw only "not available" and texted. Now a request is picked
+  // the same way as a booking: tap the gold start, then tap the end on the grid
+  // (the panel's hour buttons stay as a fallback, same state). And a WHITE start
+  // whose end runs past the open block becomes a request for the whole range
+  // instead of a greyed-out end. ⚠️ Full-warehouse (type 'studio') share-the-floor
+  // asks are deliberately untouched — every helper below is a no-op for them.
+  const SN_MAX_HOURS = 4   // same cap as the panel's 1-4 hr buttons
+  const snRequestOpen = booking.type !== 'studio' && requestHour !== null && !requestDone
+  const snFreeRange = (s0: number, e0: number) => !bookedSlots.some(b => b.start < e0 && b.end > s0)
+  const snEndAt = (h: number) => snRequestOpen && h > requestHour! && (h - requestHour!) >= minHours
+    && (h - requestHour!) <= SN_MAX_HOURS && h <= CLOSE_HOUR && snFreeRange(requestHour!, h)
+  const inRequestRange = (h: number) => snRequestOpen && h >= requestHour! && h <= requestHour! + requestHours
+
   // For time grid: clicking selects start, second click selects end
   // If a start hour was pre-filled from the availability chart, begin in 'end' mode
   const [selecting, setSelecting] = useState<'start' | 'end'>(startParam ? 'end' : 'start')
@@ -1118,8 +1134,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   {setCart.length > 0
                     ? 'The white times below are already open — add them to this booking. Need a time that isn’t open yet? Finish this booking first, then ask — it’s confirmed separately, with its own door code.'
                     : plusBlocks.length
-                      ? 'The white times below are already open — book them now. The gold ones aren’t open yet, but you can tap one to ask and we’ll text you back.'
-                      : 'The studio isn’t open on this date yet. Tap any gold time below to ask for it and we’ll text you back.'}
+                      ? 'The white times below are already open — book them now. Gold times need a quick approval: tap a start, then tap where you want to end, and send the request. We’ll text you back.'
+                      : 'The studio isn’t open on this date yet. Tap a gold start time, then tap where you want to end, and send the request. We’ll text you back.'}
                 </div>
               </div>
             )}
@@ -1158,6 +1174,16 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                         : `No ${minHours}-hour window is open for a full takeover on this date. Try another day, or text the studio at (832) 408-1631 and we'll see what we can do.`)
                     : `No ${minHours}-hour window is open on this set on this date. Try another day or another set.`}
                 </div>
+              </div>
+            )}
+            {booking.type !== 'studio' && (plusWindowDate || needsApproval) && (
+              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 10 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 12, height: 12, background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.6)' }} />Open: book now
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'rgba(201,178,126,0.9)' }}>
+                  <span style={{ width: 12, height: 12, background: 'rgba(201,178,126,0.28)', border: '1px solid rgba(201,178,126,0.75)' }} />Needs approval: tap to request
+                </span>
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.06)', marginBottom: 32 }}>
@@ -1229,6 +1255,14 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   && setCart.length === 0
                   && booking.startHour === null && h % 1 === 0 && h <= CLOSE_HOUR - minHours
                   && !blockedAsStart)
+                // Range requests (sets only) — see snEndAt above.
+                const snEnd = snEndAt(h)
+                const plusAskEnd = booking.type !== 'studio' && plusWindowDate && !!notOpenForPlus
+                  && selecting === 'end' && booking.startHour !== null && booking.endHour === null
+                  && h > booking.startHour && (h - booking.startHour) >= minHours
+                  && (h - booking.startHour) <= SN_MAX_HOURS && h <= CLOSE_HOUR
+                  && setCart.length === 0 && snFreeRange(booking.startHour, h)
+                const inReq = inRequestRange(h)
                 const inRange   = isInRange(h)
                 const start     = isStart(h)
                 const end       = isEnd(h)
@@ -1242,23 +1276,33 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 if (isPast)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.15)' }
                 if (booked)       { bg = '#0d0d0d'; color = 'rgba(255,255,255,0.12)' }
                 if (sharedAsk)    { bg = requestHour === h ? 'rgba(201,178,126,0.28)' : 'rgba(201,178,126,0.07)'; color = requestHour === h ? '#fff' : 'rgba(201,178,126,0.75)' }
+                if (snEnd || plusAskEnd) { bg = 'rgba(201,178,126,0.07)'; color = 'rgba(201,178,126,0.75)' }
+                if (inReq)        { bg = 'rgba(201,178,126,0.28)'; color = '#fff' }
                 if (inRange)      { bg = '#fff'; color = '#080808' }
                 if (start || end) { bg = '#fff'; color = '#080808' }
                 if (isPending)    { bg = 'rgba(255,255,255,0.2)'; color = '#fff' }
 
                 return (
                   <button key={h}
-                    onClick={() => requestable
+                    onClick={() => (snRequestOpen && h === requestHour)
+                      ? (setRequestHour(null), setRequestErr(null))
+                      : snEnd
+                      ? (setRequestHours(h - requestHour!), setRequestConsent(false), setRequestErr(null))
+                      : plusAskEnd
+                      ? (setRequestHour(booking.startHour!), setRequestHours(h - booking.startHour!),
+                         setBooking(b => ({ ...b, startHour: null, endHour: null })), setSelecting('start'),
+                         setRequestConsent(false), setRequestDone(null), setRequestErr(null))
+                      : requestable
                       ? (sharedAskEndAt(h)
                           ? (setRequestHour(booking.startHour!), setRequestHours(h - booking.startHour!))
                           : (setRequestHour(h), setRequestHours(minHours)),
                          setRequestConsent(false), setRequestDone(null), setRequestErr(null))
-                      : handleHourClick(h)}
-                    title={sharedAsk ? 'A set is booked during this window — tap to ask to share the floor' : requestable ? 'Not open this early/late — tap to ask' : undefined}
-                    disabled={!requestable && (booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || beforeStartWhilePickingEnd || !!notOpenForPlus)}
+                      : ((booking.type !== 'studio' && requestHour !== null) && setRequestHour(null), handleHourClick(h))}
+                    title={(snEnd || plusAskEnd) ? 'Tap to request up to this time' : sharedAsk ? 'A set is booked during this window — tap to ask to share the floor' : requestable ? 'Not open this early/late — tap to ask' : undefined}
+                    disabled={!requestable && !snEnd && !plusAskEnd && !(snRequestOpen && h === requestHour) && (booked || isInvalidEnd || isInvalidStart || isPast || closeAsStart || opensGap || blockedAsStart || beforeStartWhilePickingEnd || !!notOpenForPlus)}
                     style={{
                       background: bg, border: 'none', padding: '16px 8px',
-                      cursor: requestable ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart || blockedAsStart || beforeStartWhilePickingEnd) ? 'default' : 'pointer',
+                      cursor: (requestable || snEnd || plusAskEnd) ? 'pointer' : (booked || isPast || notOpenForPlus) ? 'not-allowed' : (isInvalidEnd || isInvalidStart || closeAsStart || blockedAsStart || beforeStartWhilePickingEnd) ? 'default' : 'pointer',
                       textAlign: 'center', transition: 'background 0.1s',
                     }}
                   >
@@ -1317,7 +1361,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 ) : (
                   <>
                     <div style={{ fontFamily: 'Inter', fontSize: 14, color: '#fff', marginBottom: 6 }}>
-                      {booking.type === 'studio' ? `Share the floor from ${fmt12(requestHour)}?` : `Ask for ${fmt12(requestHour)}?`}
+                      {booking.type === 'studio' ? `Share the floor from ${fmt12(requestHour)}?` : `Request ${fmt12(requestHour)} \u2013 ${fmt12(requestHour + requestHours)}`}
                     </div>
                     {booking.type === 'studio' ? (
                       <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 16 }}>
@@ -1331,7 +1375,17 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                       </div>
                     ) : (
                       <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.55, marginBottom: 16 }}>
-                        The studio isn&rsquo;t already open then, so we have to confirm it. Set it up here and we&rsquo;ll do the rest &mdash; you won&rsquo;t need to come back and book.
+                        {(() => {
+                          // Which slice of the request is already open (Plus blocks)?
+                          const rEnd = requestHour + requestHours
+                          const ov = plusBlocks
+                            .map(b => ({ s: Math.max(b.start, requestHour), e: Math.min(b.end, rEnd) }))
+                            .filter(x => x.e > x.s)
+                          return ov.length
+                            ? <>{ov.map(x => `${fmt12(x.s)}\u2013${fmt12(x.e)}`).join(', ')} is already open &middot; the rest needs a quick approval. If we approve, you&rsquo;re booked for the whole time.</>
+                            : <>This time isn&rsquo;t open yet, so it needs a quick approval. If we approve, you&rsquo;re booked &mdash; no need to come back.</>
+                        })()}
+                        <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.4)' }}>Tap a different end time on the grid to change it.</div>
                       </div>
                     )}
                     {booking.type === 'studio' && !loggedIn ? (
