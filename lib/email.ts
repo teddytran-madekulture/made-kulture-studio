@@ -550,7 +550,7 @@ export async function sendBookingReminder(data: BookingReminderData) {
     </table>
 
     <!-- Manage booking -->
-    <p style="margin:16px 0 4px;font-size:13px;color:#666;">Need to cancel? Cancellations within 48 hours are non-refundable.</p>
+    <p style="margin:16px 0 4px;font-size:13px;color:#666;">Need to cancel? Cancel 48+ hours before your start and the full amount comes back as studio credit (it never expires). Cancellations within 48 hours aren&rsquo;t credited.</p>
     <p style="margin:0 0 24px;font-size:13px;color:#666;">To manage your booking, visit <a href="${APP_URL}/account" style="color:${ACCENT_COLOR};text-decoration:none;">your account page</a>.</p>
 
     <p style="margin:0;font-size:11px;color:#555;">Booking reference: #${bookingId.slice(0, 8).toUpperCase()}</p>
@@ -684,7 +684,7 @@ export async function sendCancellationOwnerAlert(opts: {
       </td></tr>
       <tr><td style="padding:6px 0;">
         <span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">Timing</span><br/>
-        <span style="font-size:15px;color:${opts.within48 ? '#ff8080' : '#4ade80'};">${opts.within48 ? 'Within 48 hours — no refund' : '48+ hours out — refund applies'}</span>
+        <span style="font-size:15px;color:${opts.within48 ? '#ff8080' : '#4ade80'};">${opts.within48 ? 'Within 48 hours — not credited (unless Plus)' : '48+ hours out — full value back as studio credit'}</span>
       </td></tr>
     </table>
   `
