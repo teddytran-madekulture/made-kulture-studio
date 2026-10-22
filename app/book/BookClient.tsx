@@ -2758,6 +2758,22 @@ function SquarePaymentPanel({ grandTotal, booking, setCart, selectedSet, hourCou
             >
               {paying ? 'PROCESSING...' : `CONFIRM & PAY $${chargeDollars}`}
             </button>
+
+            {/* 2026-10-22 — Teddy: no refunds, studio credit only, stated right
+                under the button so nobody pays without seeing it. Keep in step
+                with the Terms CANCELLATION POLICY and lib/support-faq cancel-policy. */}
+            <div style={{
+              marginTop: 12, padding: '12px 14px', border: '1px solid rgba(212,168,67,0.55)',
+              background: 'rgba(212,168,67,0.08)', fontFamily: 'Inter', lineHeight: 1.55,
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: '#d4a843' }}>
+                NON-REFUNDABLE · STUDIO CREDIT ONLY
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+                Cancel 48+ hours before your start and the full amount comes back as studio credit that never expires. Cancellations within 48 hours aren&rsquo;t credited.{' '}
+                <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }}>Policy</a>
+              </div>
+            </div>
           </>
         )}
         </div>{/* /self-pay block */}
