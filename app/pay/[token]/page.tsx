@@ -308,6 +308,16 @@ export default function PayPage({ params }: { params: { token: string } }) {
           {paying ? 'PROCESSING…' : `PAY $${req.amount}`}
         </button>
 
+        {/* 2026-10-22 — same notice as under CONFIRM & PAY on /book, so the
+            person actually paying sees it too. Keep the wording in step. */}
+        <div style={{ marginTop: 14, padding: '12px 14px', border: `1px solid ${CHAMP_DIM}`, borderRadius: 10, background: 'rgba(201,178,126,0.07)', lineHeight: 1.55 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: CHAMP }}>NON-REFUNDABLE · STUDIO CREDIT ONLY</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+            Cancel 48+ hours before the start and the full amount comes back as studio credit that never expires. Cancellations within 48 hours aren&rsquo;t credited.{' '}
+            <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }}>Policy</a>
+          </div>
+        </div>
+
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.32)', textAlign: 'center', marginTop: 14, lineHeight: 1.6 }}>
           Secured by Square. Made Kulture never sees your card number.
         </div>
