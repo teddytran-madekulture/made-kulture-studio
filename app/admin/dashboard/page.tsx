@@ -1808,12 +1808,30 @@ export default function AdminDashboard() {
       const d = await saveRes.json()
       setEditError(d.error || 'Failed to update booking'); setEditOverridable(!!d.overridable); setEditAction(null); return
     }
+    // 2026-10-21 — describe WHAT changed, so Balances, the paid push and the
+    // reminder text say "Extended 11 AM–5 PM → 11 AM–6 PM", not a generic label.
+    const changeLabel = (() => {
+      const t = (h: number) => fmt12(h).replace(':00 ', ' ')
+      const oS = localHour(editBooking.start_time), oE = localHour(editBooking.end_time)
+      const nS = editState.startHour, nE = editState.endHour
+      const parts: string[] = []
+      if (editState.setName !== setNameOf(editBooking)) parts.push(`${setNameOf(editBooking)} → ${editState.setName}`)
+      if (editState.date !== localDateStr(editBooking.start_time)) {
+        const d = (ds: string) => new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        parts.push(`${d(localDateStr(editBooking.start_time))} → ${d(editState.date)}`)
+      }
+      if (oS !== nS || oE !== nE) {
+        const verb = nE - nS > oE - oS ? 'Extended' : 'Changed'
+        parts.push(`${verb} ${t(oS)}–${t(oE)} → ${t(nS)}–${t(nE)}`)
+      }
+      return parts.length ? parts.join(', ') : 'Booking change balance'
+    })()
     // Create payment link
     const linkRes = await fetch(`/api/admin/bookings/${editBooking.id}/payment-link`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount:       editDiff,
-        description:  `Made Kulture — ${editState.setName} Booking Extension`,
+        description:  `Made Kulture — ${editState.setName}: ${changeLabel}`,
         phone:        editBooking.customers?.phone || '',
         customerName: editBooking.customers?.name || '',
         sendSms:      editState.sendSms,
@@ -1823,7 +1841,7 @@ export default function AdminDashboard() {
         // unpaid-link reminder couldn't see it, and the Square webhook had nothing
         // to reconcile when it was paid (Tre Slater, +1 hr on a buyout). Add
         // Charge always sent lines; this path didn't.
-        lines: [{ label: 'Booking change balance', amount: editDiff, quantity: 1 }],
+        lines: [{ label: changeLabel, amount: editDiff, quantity: 1 }],
       }),
     })
     const linkData = await linkRes.json()
