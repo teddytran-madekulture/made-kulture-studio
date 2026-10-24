@@ -3,6 +3,7 @@ import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendCastingConfirmedEmail } from '@/lib/email'
 import { sendCastingConfirmedSMS } from '@/lib/sms'
+import { sendMemberPush } from '@/lib/member-push'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,10 +24,6 @@ async function notifyConfirmed(castingId: string, userId: string, authorId: stri
     const email = authUser?.user?.email
     if (email) await sendCastingConfirmedEmail({ to: email, castingTitle: title, castingId, role })
   }
-  if (prof?.notify_sms === true && prof?.phone) {
-    await sendCastingConfirmedSMS(prof.phone, title, role, castingId)
-  }
-
   // Drop a DM from the author into their thread (create it if needed).
   const [a, b] = [authorId, userId].sort()
   let convId: string | null = null
@@ -43,6 +40,13 @@ async function notifyConfirmed(castingId: string, userId: string, authorId: stri
       conversation_id: convId, sender_id: authorId,
       body: `You're confirmed${asRole} for "${title}" — looking forward to working with you!\n\nOpen the casting: ${appUrl}/account/castings/${castingId}`,
     })
+  }
+  // AFTER the DM so the app-icon number includes it.
+  // 2026-10-23: app push (this alert never had one), and the text becomes a
+  // fallback for members with no app notifications — same rule as messages.
+  const pushed = await sendMemberPush(userId, { title: `You're confirmed: ${title}`, body: role ? `As ${role}. Tap to open the casting.` : 'Tap to open the casting.', url: `/account/castings/${castingId}`, tag: `cast-${castingId}` })
+  if (pushed === 0 && prof?.notify_sms === true && prof?.phone) {
+    await sendCastingConfirmedSMS(prof.phone, title, role, castingId)
   }
 }
 

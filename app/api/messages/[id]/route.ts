@@ -116,9 +116,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // App push (migration 137): every message, unless they're in the thread
     // right now. NOT throttled like the email — the tag collapses a burst into
     // one notification per conversation instead.
+    let pushed = 0
     if (!activeRecently) {
       const { data: sp } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
-      await sendMemberPush(recipientId, { title: sp?.full_name || 'New message', body: text.slice(0, 140), url: `/account/messages/${params.id}`, tag: `msg-${params.id}` })
+      pushed = await sendMemberPush(recipientId, { title: sp?.full_name || 'New message', body: text.slice(0, 140), url: `/account/messages/${params.id}`, tag: `msg-${params.id}` })
     }
     if (!activeRecently && cooldownOk) {
       const { data: recipProf } = await service.from('customer_profiles').select('notify_email, notify_sms, phone').eq('id', recipientId).maybeSingle()
@@ -130,7 +131,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const email = authUser?.user?.email
         if (email) { await sendNewMessageEmail({ to: email, fromName, conversationId: params.id }); sent = true }
       }
-      if (recipProf?.notify_sms === true && recipProf?.phone) {
+      // 2026-10-23: TEXT ONLY AS A FALLBACK. If the app push reached a device, skip
+      // the text (app + email is enough); members who opted into texts but have no
+      // app with notifications on still get it.
+      if (pushed === 0 && recipProf?.notify_sms === true && recipProf?.phone) {
         await sendMessageSMS(recipProf.phone, fromName, params.id); sent = true
       }
       if (sent) {

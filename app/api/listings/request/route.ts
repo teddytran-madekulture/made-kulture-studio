@@ -76,6 +76,11 @@ export async function POST(req: NextRequest) {
   const meCol = a === user.id ? 'last_read_a' : 'last_read_b'
   await service.from('conversations').update({ [meCol]: new Date().toISOString() }).eq('id', convId)
 
+  // App push to the vendor (migration 137). Sent FIRST so the text below can
+  // be skipped when it landed. Non-fatal; the email is the guaranteed channel.
+  const { data: sp } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
+  const pushed = await sendMemberPush(listing.user_id, { title: `Request: ${listing.title}`, body: `${sp?.full_name || 'A member'} · ${label}${note ? ` · ${note.slice(0, 80)}` : ''}`, url: `/account/messages/${convId}`, tag: `msg-${convId}` })
+
   // Email the vendor — unthrottled, but respects their notify_email opt-out.
   // A failure is reported back (emailed: false), never swallowed into a fake success.
   let emailed = false
@@ -96,17 +101,15 @@ export async function POST(req: NextRequest) {
     }
     // Text the vendor too, if they opted in (Vendor Agreement step or
     // Settings -> Directory & notifications). Unthrottled, like the email.
-    if (vendorProf?.notify_sms === true && vendorProf?.phone) {
+    // 2026-10-23: TEXT ONLY AS A FALLBACK. If the app push reached a device, skip
+    // the text (app + email is enough); members who opted into texts but have no
+    // app with notifications on still get it.
+    if (pushed === 0 && vendorProf?.notify_sms === true && vendorProf?.phone) {
       await sendListingRequestSMS(vendorProf.phone, senderProf?.full_name || 'A member', listing.title, label, convId!)
     }
   } catch (e) {
     console.error('[listings/request] vendor email failed:', e)
   }
-
-  // App push to the vendor (migration 137). Non-fatal; email above is the
-  // guaranteed channel.
-  const { data: sp } = await service.from('customer_profiles').select('full_name').eq('id', user.id).maybeSingle()
-  const pushed = await sendMemberPush(listing.user_id, { title: `Request: ${listing.title}`, body: `${sp?.full_name || 'A member'} · ${label}${note ? ` · ${note.slice(0, 80)}` : ''}`, url: `/account/messages/${convId}`, tag: `msg-${convId}` })
 
   return NextResponse.json({ conversationId: convId, emailed, pushed })
 }

@@ -6,6 +6,7 @@
 // [[silent-failure-pattern]].
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { GetAppBanner } from '@/components/MemberApp'
 import { SERVICE_ROLES, SERVICE_TAG_SUGGESTIONS } from '@/lib/roles'
 import { PRICE_UNITS, formatPrice, isPriceUnit, parseLegacyRate, type PriceUnit } from '@/lib/listing-rate'
 import { VENDOR_AGREEMENT_SECTIONS, VENDOR_AGREEMENT_TITLE, VENDOR_AGREEMENT_VERSION } from '@/lib/vendor-agreement'
@@ -231,6 +232,9 @@ export default function ListingsManager({ roles }: { roles: string[] }) {
 
   return (
     <div style={{ fontFamily: 'Inter' }}>
+      {/* 2026-10-23: a listing request is a lead and the first vendor to answer
+          usually gets it, so push vendors to the app. Hides once they have it. */}
+      <GetAppBanner accountWide storageKey="mk-app-banner-listings" reason="Get listing requests the second they come in, so you can answer first." />
       {myServiceRoles.length === 0 && (
         <div style={{ fontSize: 13, color: muted, border: '1px dashed rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', borderRadius: 8, padding: '14px 16px', marginBottom: 18, lineHeight: 1.55 }}>
           Listings are for <strong>Production Services</strong> members (vehicle, wardrobe, prop or equipment rental, catering). Set your account type to <strong>Vendor</strong> (or add one of those roles) in Edit profile and your listings will show on your directory profile.

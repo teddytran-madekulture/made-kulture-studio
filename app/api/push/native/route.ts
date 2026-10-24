@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     enabled = !!data
   }
-  return NextResponse.json({ configured: apnsConfigured(), enabled })
+  // anyDevice (2026-10-23): this ACCOUNT has the app with notifications on
+  // somewhere, so a desktop page can stop nudging someone who has it on their phone.
+  const { count } = await service.from('native_push_tokens').select('id', { count: 'exact', head: true }).eq('user_id', user.id)
+  return NextResponse.json({ configured: apnsConfigured(), enabled, anyDevice: (count ?? 0) > 0 })
 }
 
 export async function POST(req: NextRequest) {

@@ -237,11 +237,19 @@ export function GetAppCard() {
 
 /** The compact nudge. Renders nothing once notifications are on for this
  *  device, or after it's dismissed (remembered per device). */
-export function GetAppBanner({ reason, storageKey = 'mk-app-banner' }: { reason: string; storageKey?: string }) {
+//  accountWide (2026-10-23): also hide when the account has the app with
+//  notifications on ANY phone, so a vendor on a laptop isn't nagged about an
+//  app already on their phone. Stays hidden until that check answers.
+export function GetAppBanner({ reason, storageKey = 'mk-app-banner', accountWide = false }: { reason: string; storageKey?: string; accountWide?: boolean }) {
   const { s } = useMemberApp()
   const [hidden, setHidden] = useState(true)
+  const [hasApp, setHasApp] = useState<boolean | null>(accountWide ? null : false)
   useEffect(() => { try { setHidden(localStorage.getItem(storageKey) === '1') } catch { setHidden(false) } }, [storageKey])
-  if (!s.ready || s.pushOn || hidden) return null
+  useEffect(() => {
+    if (!accountWide) return
+    fetch('/api/push/native', { cache: 'no-store' }).then(r => (r.ok ? r.json() : {})).then((d: any) => setHasApp(!!d.anyDevice)).catch(() => setHasApp(true))
+  }, [accountWide])
+  if (!s.ready || s.pushOn || hidden || hasApp !== false) return null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(var(--t-gold-rgb), 0.45)', background: 'rgba(var(--t-gold-rgb), 0.07)', borderRadius: 10, padding: '12px 14px', margin: '0 0 16px', fontFamily: 'Inter' }}>
       <div style={{ flex: 1, fontSize: 13, color: fg, lineHeight: 1.45 }}>

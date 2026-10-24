@@ -68,11 +68,14 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         const email = authUser?.user?.email
         if (email) await sendCastingInterestEmail({ to: email, interestedName, castingTitle: title, castingId: params.id })
       }
-      if (authorProf?.notify_sms === true && authorProf?.phone) {
+      // App push (2026-10-05) — same as messages get. Opens the applicants panel.
+      const pushed = await sendMemberPush(c.author_id, { title: `New applicant: ${title}`, body: `${interestedName} is interested`, url: `/account/castings/${params.id}#applicants`, tag: `cast-${params.id}` })
+      // 2026-10-23: TEXT ONLY AS A FALLBACK. If the app push reached a device, skip
+      // the text (app + email is enough); members who opted into texts but have no
+      // app with notifications on still get it.
+      if (pushed === 0 && authorProf?.notify_sms === true && authorProf?.phone) {
         await sendCastingInterestSMS(authorProf.phone, interestedName, title, params.id)
       }
-      // App push (2026-10-05) — same as messages get. Opens the applicants panel.
-      await sendMemberPush(c.author_id, { title: `New applicant: ${title}`, body: `${interestedName} is interested`, url: `/account/castings/${params.id}#applicants`, tag: `cast-${params.id}` })
     } catch { /* notification failures never break interest */ }
   }
 
