@@ -32,6 +32,10 @@ export default function KioskMusicHost() {
   const [cfg, setCfg] = useState<{ set: string; key?: string; zone: string; src: string } | null>(null)
 
   useEffect(() => {
+    // ⚠️ globals.css zooms body 1.25x above 769px. The kiosk resets its own,
+    // but the iframe sits in THIS body — left zoomed, the whole kiosk renders
+    // 25% larger in a narrower viewport (seen on Set D, 2026-10-24).
+    document.body.style.zoom = '1'
     const q = new URLSearchParams(window.location.search)
     const set = (q.get('set') || '').trim()
     const zone = (q.get('jukebox') || '').trim()
