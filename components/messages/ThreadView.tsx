@@ -2,7 +2,8 @@
 // One 1:1 directory conversation (2026-10-05).
 //  • Desktop: the right pane of the two-pane inbox (app/account/messages/layout.tsx),
 //    filling its height — header, scrolling messages, pinned reply box.
-//  • Phone: a fixed chat screen between the top bar (52px) and bottom nav (62px).
+//  • Phone: a fixed chat screen between the top bar (52px) and the floating
+//    bottom pill (its top edge = --mk-acctbar-h, set by AccountRail).
 //    It follows window.visualViewport so the reply box rides on the keyboard,
 //    and the bottom nav + June button hide while typing.
 //  • The input is 16px: iOS Safari ZOOMS the page on focus for anything smaller
@@ -146,8 +147,8 @@ export default function ThreadView({ id, pane = false }: { id: string; pane?: bo
         position: 'fixed', left: 0, right: 0, zIndex: 50, background: 'var(--t-bg)',
         top: TOP + (vv?.top ?? 0),
         height: vv
-          ? (typing ? `${vv.h - TOP}px` : `calc(${vv.h - TOP - 62}px - env(safe-area-inset-bottom))`)
-          : `calc(100dvh - ${TOP + 62}px - env(safe-area-inset-bottom))`,
+          ? (typing ? `${vv.h - TOP}px` : `calc(${vv.h - TOP}px - var(--mk-acctbar-h, 96px))`)
+          : `calc(100dvh - ${TOP}px - var(--mk-acctbar-h, 96px))`,
         display: 'flex', flexDirection: 'column', padding: '10px 14px', boxSizing: 'border-box', overflowX: 'hidden',
       }
     : { height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0 }

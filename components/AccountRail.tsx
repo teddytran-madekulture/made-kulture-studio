@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -52,6 +52,10 @@ const Icon = ({ name, active }: { name: string; active?: boolean }) => (
 )
 
 const THEME_KEY = 'mk-acct-theme'
+// The floating phone pill's TOP edge, measured from the screen bottom
+// (.am-bar bottom offset + its 58px height). Read by June's button and the
+// phone chat screen through --mk-acctbar-h.
+const ACCTBAR_SPACE = 'calc(max(env(safe-area-inset-bottom), 30px) + 44px)'
 
 export default function AccountRail() {
   const pathname = usePathname() || ''
@@ -91,14 +95,43 @@ export default function AccountRail() {
     document.addEventListener('dragstart', block)
     return () => { document.removeEventListener('contextmenu', block); document.removeEventListener('dragstart', block) }
   }, [])
-  // Lift the June button above the phone bottom bar.
+  // Lift the June button (and size the phone chat screen) above the floating
+  // bottom pill. --mk-acctbar-h = how much of the screen bottom the pill owns,
+  // i.e. the pill's TOP edge. Keep in step with .am-bar's bottom + height.
   useEffect(() => {
     const root = document.documentElement
     const mq = window.matchMedia('(max-width: 768px)')
-    const set = () => root.style.setProperty('--mk-acctbar-h', mq.matches ? '62px' : '0px')
+    const set = () => root.style.setProperty('--mk-acctbar-h', mq.matches ? ACCTBAR_SPACE : '0px')
     set(); mq.addEventListener('change', set)
     return () => { mq.removeEventListener('change', set); root.style.setProperty('--mk-acctbar-h', '0px') }
   }, [])
+
+  // 2026-10-23 — Instagram-style bottom pill: shrinks while scrolling DOWN,
+  // back to full size scrolling UP, at the top of the page, on a new page, or
+  // when tapped. A tap on a shrunk pill only expands it (no accidental jump),
+  // same as Instagram. html[data-acctbar="min"] lets June shrink with it.
+  const [barMin, setBarMin] = useState(false)
+  const lastY = useRef(0)
+  useEffect(() => {
+    lastY.current = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      const dy = y - lastY.current
+      if (y < 40) setBarMin(false)
+      else if (dy > 8) setBarMin(true)
+      else if (dy < -8) setBarMin(false)
+      if (Math.abs(dy) > 8 || y < 40) lastY.current = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => { setBarMin(false) }, [pathname])
+  useEffect(() => { if (moreOpen) setBarMin(false) }, [moreOpen])
+  useEffect(() => {
+    const r = document.documentElement
+    if (barMin) r.dataset.acctbar = 'min'; else delete r.dataset.acctbar
+    return () => { delete r.dataset.acctbar }
+  }, [barMin])
 
   const flipTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light'
@@ -142,11 +175,19 @@ export default function AccountRail() {
           .am-top { display: flex; position: sticky; top: 0; z-index: 60; height: 52px; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--t-bg); border-bottom: 1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a))); }
           .am-top a { font-family: Anton, 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: .04em; color: var(--t-fg); text-decoration: none; }
           .am-top button { background: none; border: none; color: var(--t-fg); padding: 6px; cursor: pointer; }
-          .am-bar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; height: 62px; padding-bottom: env(safe-area-inset-bottom); background: var(--t-bg); border-top: 1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a))); justify-content: space-around; align-items: center; }
-          .am-bar a, .am-bar button { position: relative; color: var(--t-fg); background: none; border: none; padding: 10px; display: flex; cursor: pointer; }
-          .am-bar .ar-dot { left: 24px; top: 2px; min-width: 22px; height: 22px; border-radius: 11px; font-size: 13px; padding: 0 6px; }
-          .am-sheet { display: block; position: fixed; left: 0; right: 0; bottom: 62px; z-index: 61; background: var(--t-surface); border-top: 1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a))); border-radius: 16px 16px 0 0; padding: 10px 10px 14px; box-shadow: 0 -10px 30px rgba(0,0,0,.3); }
-          .am-scrim { position: fixed; inset: 0; bottom: 62px; z-index: 60; background: rgba(0,0,0,.35); }
+          /* Floating pill (2026-10-23). It used to be a 62px strip with the iPhone
+             home-indicator inset carved OUT of the 62, leaving the icons ~28px
+             of room pressed onto the swipe line. Now it floats clear of it.
+             bottom + height must match ACCTBAR_SPACE (the pill's top edge). */
+          .am-bar { display: flex; position: fixed; z-index: 60; left: 50%; bottom: calc(max(env(safe-area-inset-bottom), 30px) - 14px); width: min(calc(100% - 28px), 420px); height: 58px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: var(--t-bg); background: color-mix(in srgb, var(--t-bg) 78%, transparent); -webkit-backdrop-filter: blur(22px) saturate(160%); backdrop-filter: blur(22px) saturate(160%); border: 1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a))); box-shadow: 0 10px 34px rgba(0,0,0,.38); justify-content: space-between; align-items: center; transform: translateX(-50%); transform-origin: 50% 100%; transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+          .am-bar.min { transform: translateX(-50%) translateY(6px) scale(.84); }
+          .am-bar a, .am-bar button { position: relative; flex: 1; height: 46px; color: var(--t-fg); background: none; border: none; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 999px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+          .am-bar a.on, .am-bar button.on { background: rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a))); }
+          .am-bar .ar-dot { left: 50%; margin-left: 3px; top: 1px; min-width: 22px; height: 22px; border-radius: 11px; font-size: 13px; padding: 0 6px; }
+          html[data-acctbar="min"] .mk-june-launcher { transform: scale(.8) translateY(8px); }
+          .mk-june-launcher { transform-origin: 100% 100%; transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+          .am-sheet { display: block; position: fixed; left: 10px; right: 10px; bottom: calc(var(--mk-acctbar-h, 62px) + 10px); z-index: 61; background: var(--t-surface); border: 1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a))); border-radius: 18px; padding: 10px 10px 14px; box-shadow: 0 -10px 30px rgba(0,0,0,.3); }
+          .am-scrim { position: fixed; inset: 0; z-index: 59; background: rgba(0,0,0,.35); }
         }
       `}</style>
 
@@ -186,17 +227,18 @@ export default function AccountRail() {
       </div>
 
       {/* Phone: bottom bar */}
-      <nav className="am-bar" aria-label="Account menu">
+      <nav className={`am-bar${barMin ? ' min' : ''}`} aria-label="Account menu"
+        onClickCapture={e => { if (barMin) { e.preventDefault(); e.stopPropagation(); setBarMin(false) } }}>
         {MOBILE_BAR.map(href => {
           const it = ITEMS.find(i => i.href === href)!
           return (
-            <Link key={href} href={href} aria-label={it.label}>
+            <Link key={href} href={href} aria-label={it.label} className={isActive(href) ? 'on' : undefined}>
               <Icon name={it.icon} active={isActive(href)} />
               {badge(href) && <span className="ar-dot">{badgeText(href)}</span>}
             </Link>
           )
         })}
-        <button type="button" aria-label="More" onClick={() => setMoreOpen(o => !o)}><Icon name="more" active={moreOpen} /></button>
+        <button type="button" aria-label="More" className={moreOpen ? 'on' : undefined} onClick={() => setMoreOpen(o => !o)}><Icon name="more" active={moreOpen} /></button>
       </nav>
       {moreOpen && (
         <>
