@@ -63,7 +63,9 @@ export async function GET(_req: NextRequest, { params }: { params: { code: strin
   // Pass-through: /t/<code>?jukebox=main-studio makes that tablet also play the
   // zone's music (2026-10-05, Set D). Slug-shaped values only.
   const jz = (_req.nextUrl.searchParams.get('jukebox') || '').trim()
-  if (/^[a-z0-9-]{2,40}$/.test(jz)) url.searchParams.set('jukebox', jz)
+  // 2026-10-24: a music tablet starts on /kiosk/host (the music layer, which
+  // shows the kiosk in an iframe) so kiosk reloads don't stop the music.
+  if (/^[a-z0-9-]{2,40}$/.test(jz)) { url.searchParams.set('jukebox', jz); url.pathname = '/kiosk/host' }
   // 307 keeps it a temporary redirect: browsers and Fully won't cache the
   // destination, so a rotated key takes effect on the next load rather than
   // living forever in a tablet's redirect cache.

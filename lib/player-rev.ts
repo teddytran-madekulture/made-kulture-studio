@@ -5,7 +5,8 @@
 // admin page) cut the music in the studio. They watch this instead.
 //
 // BUMP THIS ONLY when a deploy actually changes what the tablets run:
-//   app/jukebox/player/page.tsx, or anything it imports, or the shape of
+//   app/jukebox/player/page.tsx, app/kiosk/host/page.tsx (the Set D music
+//   layer, 2026-10-24), or anything they import, or the shape of
 //   /api/jukebox/state or /api/jukebox/advance that the player depends on.
 //
 // Leave it alone for every other change and the tablets will never notice the

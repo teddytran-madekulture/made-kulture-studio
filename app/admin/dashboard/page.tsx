@@ -4921,6 +4921,12 @@ export default function AdminDashboard() {
             <Detail label="TIME"     value={`${fmtTime(detailBooking.start_time)} – ${fmtTime(detailBooking.end_time)}`} />
             <Detail label="DURATION" value={fmtDuration(detailBooking.start_time, detailBooking.end_time)} />
             <Detail label="TOTAL"    value={moneyLabel(detailBooking)} />
+            {/* 2026-10-24: the non-member surcharge was recorded (migration 100) but
+                shown nowhere, so a guest-rate total looked like a member one.
+                Only rows that actually paid it; NULL (pre-Sept rows) shows nothing. */}
+            {Number(detailBooking.guest_surcharge_amount) > 0 && (
+              <Detail label="GUEST RATE" value={`+$${Number(detailBooking.guest_surcharge_amount).toLocaleString()} · not signed in as a member when booked`} />
+            )}
             <Detail label="STATUS"   value={detailBooking.status.toUpperCase()} />
             <Detail label="SOURCE"   value={detailBooking.source || '—'} />
             {detailBooking.notes && <Detail label="NOTES" value={detailBooking.notes} />}

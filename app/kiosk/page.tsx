@@ -18,7 +18,7 @@ import KioskShowcase, { type ShowcaseEditorial } from '@/components/KioskShowcas
 import ZoomableImage from '@/components/ZoomableImage'
 import qrcode from 'qrcode-generator'
 import { POSE_CATEGORIES, POSE_GUIDE_ENABLED } from '@/lib/pose-categories'
-import { useJukeboxPlayer } from '@/components/jukebox/useJukeboxPlayer'
+import { getMusicHost, isFramed, type MusicHostApi, type MusicHostState } from '@/lib/kiosk-music-bridge'
 
 const IDLE_MS = 90_000
 // SHOWCASE: how long the home screen sits untouched, with nobody booked, before
@@ -98,6 +98,31 @@ const IconBell = () => (
   </svg>
 )
 
+const IDLE_MUSIC: MusicHostState = { display: { title: '', artist: '', source: 'idle' }, snapshot: null, zoneName: '', needsTap: false }
+
+/** The music host's state + controls, or inert defaults when there is no host. */
+function useMusicBridge(active: boolean) {
+  const hostRef = useRef<MusicHostApi | null>(null)
+  const [st, setSt] = useState<MusicHostState>(IDLE_MUSIC)
+  useEffect(() => {
+    if (!active) return
+    const h = getMusicHost(); hostRef.current = h
+    if (!h) return
+    const pull = () => { try { setSt(h.getState()) } catch {} }
+    pull()
+    const un = h.subscribe(pull)
+    // A reload never runs React cleanup — drop the subscription on the way out.
+    window.addEventListener('pagehide', un)
+    return () => { window.removeEventListener('pagehide', un); un() }
+  }, [active])
+  const skipHouseTrack = useCallback(() => { try { hostRef.current?.skipHouseTrack() } catch {} }, [])
+  const setVolume = useCallback((v: number) => { try { hostRef.current?.setVolume(v) } catch {} }, [])
+  const getVolume = useCallback((): number => { try { return hostRef.current?.getVolume() ?? 100 } catch { return 100 } }, [])
+  const nudge = useCallback(() => { try { hostRef.current?.nudge() } catch {} }, [])
+  const refresh = useCallback(() => { try { hostRef.current?.refresh() } catch {} }, [])
+  return { ...st, skipHouseTrack, setVolume, getVolume, nudge, refresh }
+}
+
 export default function KioskPage() {
   const [kioskKey, setKioskKey] = useState<string | undefined>(undefined)
   const [setSlug, setSetSlug]   = useState<string | null>(null)
@@ -115,8 +140,14 @@ export default function KioskPage() {
     setSetSlug(q.get('set'))
     // MUSIC HOST (2026-10-05): `&jukebox=<zone>` makes this tablet ALSO play
     // that zone's music (Set D → main-studio). Set tablets only.
+    // 2026-10-24: the music now lives in a separate layer, /kiosk/host, with
+    // this page in an iframe on top — so a kiosk reload no longer stops it.
+    // Opened top-level (an old start URL, or a reload of one), hop over there.
     const jz = (q.get('jukebox') || '').trim()
-    if (q.get('set') && /^[a-z0-9-]{2,40}$/.test(jz)) setMusicZone(jz)
+    if (q.get('set') && /^[a-z0-9-]{2,40}$/.test(jz)) {
+      if (!isFramed()) { window.location.replace('/kiosk/host' + window.location.search); return }
+      if (getMusicHost()) setMusicZone(jz)
+    }
     setBooted(true)
   }, [])
 
@@ -215,42 +246,14 @@ export default function KioskPage() {
   const needsReload = useRef(false)               // a newer build is live, waiting for idle
   const screenRef = useRef<Screen>('home')
 
-  // ── MUSIC HOST (2026-10-05) ───────────────────────────────────────────────
-  // Fully Kiosk can only show one page, and the studio music used to be its own
-  // page (/jukebox/player) — so switching this tablet to anything else stopped
-  // the music. On a tablet started with &jukebox=<zone>, the SAME player engine
-  // runs inside the kiosk page instead.
-  // ⚠️ The YouTube iframe lives in a node appended to <body> OUTSIDE React.
-  // Every kiosk screen is a separate early return, so anything rendered inside
-  // them would unmount on the first tap and kill the music.
-  const [musicHostReady, setMusicHostReady] = useState(false)
-  useEffect(() => {
-    if (!musicZone) return
-    if (!document.getElementById('kiosk-yt-wrap')) {
-      const wrapEl = document.createElement('div')
-      wrapEl.id = 'kiosk-yt-wrap'
-      wrapEl.setAttribute('aria-hidden', 'true')
-      Object.assign(wrapEl.style, { position: 'fixed', left: '0', bottom: '0', width: '200px', height: '200px', opacity: '0.001', pointerEvents: 'none', zIndex: '-1', overflow: 'hidden' })
-      const inner = document.createElement('div')
-      inner.id = 'kiosk-yt'
-      wrapEl.appendChild(inner)
-      document.body.appendChild(wrapEl)
-    }
-    setMusicHostReady(true)
-  }, [musicZone])
-  const music = useJukeboxPlayer({
-    zone: musicZone || '', playerKey: kioskKey, started: musicHostReady && !!musicZone,
-    ytElementId: 'kiosk-yt', selfUpdate: false,
-    // Updates land only on HOME and at a silent moment / between house tracks.
-    canReload: () => screenRef.current === 'home',
-  })
-  const musicZoneRef = useRef<string | null>(null); musicZoneRef.current = musicZone
-  const musicUpdateRef = useRef(music.requestUpdate); musicUpdateRef.current = music.requestUpdate
-  // A music tablet never reloads mid-song; everyone else reloads as before.
-  const reloadKiosk = useCallback(() => {
-    if (musicZoneRef.current) musicUpdateRef.current()
-    else window.location.reload()
-  }, [])
+  // ── MUSIC (2026-10-05, moved 2026-10-24) ──────────────────────────────────
+  // On a music tablet the player lives in the PARENT page (/kiosk/host) and
+  // this kiosk is an iframe on top of it. Reloading this page (every deploy)
+  // leaves the music playing. Everything below just reads the host's state and
+  // forwards actions to it — see lib/kiosk-music-bridge.ts.
+  const music = useMusicBridge(!!musicZone)
+  // Reloading the kiosk layer never touches the music any more.
+  const reloadKiosk = useCallback(() => { window.location.reload() }, [])
   // Autoplay can be blocked until the screen is touched — the next tap anywhere starts it.
   useEffect(() => {
     if (!music.needsTap) return
@@ -297,7 +300,7 @@ export default function KioskPage() {
   // version endpoint; when the live build changes, reload — but only while idle
   // on HOME so we never interrupt a check-in or a June chat. If a new build lands
   // while someone's mid-use, we flag it and reload the moment they return home.
-  useEffect(() => { screenRef.current = screen }, [screen])
+  useEffect(() => { screenRef.current = screen; try { getMusicHost()?.setKioskScreen(screen) } catch {} }, [screen])
 
   // ── PORTAL (2026-09-29) ───────────────────────────────────────────────────
   // The QR hub: the guest's phone gets /portal/<token> for THIS session and

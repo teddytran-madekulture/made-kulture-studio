@@ -3,11 +3,12 @@
 //
 // Two hosts, one engine — so the queue logic can never drift between them:
 //   • /jukebox/player?zone=…          — a dedicated music device (as before)
-//   • /kiosk?set=…&jukebox=<zone>     — a set's kiosk tablet that ALSO plays the
-//                                       studio music (Set D hosts main-studio).
-//                                       Fully Kiosk can only show one page, so
-//                                       the music has to live inside the kiosk
-//                                       page or it stops when you leave it.
+//   • /kiosk/host?set=…&jukebox=<zone> — a set's kiosk tablet that ALSO plays
+//                                       the studio music (Set D hosts main-studio).
+//                                       Since 2026-10-24 the player lives in this
+//                                       host page and the kiosk is an iframe on
+//                                       top, so kiosk reloads don't stop the music
+//                                       (lib/kiosk-music-bridge.ts).
 //
 // The server queue drives it: plays the current approved request, asks the
 // server to advance on song-end, falls back to the zone's house playlist when
