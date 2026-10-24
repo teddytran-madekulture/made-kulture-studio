@@ -3,6 +3,7 @@ import './globals.css'
 import JuneChatWidget from '@/components/JuneChatWidget'
 import { MarketingOverlays } from '@/components/MarketingTools'
 import { InstallCatcher } from '@/components/MemberApp'
+import { PUSH_TAP_BOOT_SCRIPT } from '@/lib/native-push'
 import { APP_STORE_ID } from '@/lib/app-links'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
@@ -90,6 +91,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        {/* App only: catch a notification tap before the homepage draws (lib/native-push.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: PUSH_TAP_BOOT_SCRIPT }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(LOCAL_BUSINESS_JSONLD) }}

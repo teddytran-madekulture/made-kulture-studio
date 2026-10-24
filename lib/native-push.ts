@@ -115,15 +115,32 @@ export async function nativePushDisable(): Promise<void> {
   try { localStorage.removeItem(TOKEN_KEY) } catch {}
 }
 
-/** Tapping a notification opens the page it's about. Install once per page load. */
+// 2026-10-23 — NOTIFICATION TAP → THE RIGHT PAGE, with no homepage flash.
+// The app always loads the homepage first. The plugin HOLDS a tap that arrives
+// before anyone is listening (iOS retainUntilConsumed; Android BridgeActivity
+// replays the launch intent), so a cold-start tap was never lost, but the
+// listener only went on after React hydrated, so the guest watched the whole
+// homepage draw and THEN got thrown to the thread. It looked like "it opens
+// the homepage". Now an inline <script> at the top of <body> (app/layout.tsx)
+// listens while the page is still parsing, blanks the page and replaces it.
+// installNativePushTapHandler() stays as the fallback for when window.Capacitor
+// wasn't injected yet at parse time; window.__mkPushTap stops a double listener.
+// ⚠️ Same-page taps (only the #hash differs) must NOT blank the page: replace()
+// would just change the hash and leave it hidden forever.
+const TAP_NAV_JS = `function(ev){var u=ev&&ev.notification&&ev.notification.data&&ev.notification.data.url;if(typeof u!=='string'||u.charAt(0)!=='/'||u.charAt(1)==='/')return;var a=document.createElement('a');a.href=u;if(a.pathname===location.pathname&&a.search===location.search){if(a.hash)location.hash=a.hash;return}var d=document.documentElement;d.style.background='#080808';d.style.visibility='hidden';location.replace(u)}`
+
+/** Inline boot script for the root layout. Plain ES5, no imports. */
+export const PUSH_TAP_BOOT_SCRIPT = `(function(){try{var c=window.Capacitor;if(!c||!c.isNativePlatform||!c.isNativePlatform())return;if(c.isPluginAvailable&&!c.isPluginAvailable('${PLUGIN}'))return;if(window.__mkPushTap)return;window.__mkPushTap=c.nativeCallback('${PLUGIN}','addListener',{eventName:'pushNotificationActionPerformed'},${TAP_NAV_JS})}catch(e){}})()`
+
+/** Fallback: tapping a notification opens the page it's about. Once per page load. */
 export function installNativePushTapHandler(): void {
   const c = cap()
   const w = window as any
   if (!c || !nativePushAvailable() || w.__mkPushTap) return
-  w.__mkPushTap = c.nativeCallback(PLUGIN, 'addListener', { eventName: 'pushNotificationActionPerformed' }, (ev) => {
-    const url = ev?.notification?.data?.url
-    if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')) window.location.href = url
-  })
+  // Run the SAME boot script, so there is one copy of the tap logic.
+  const el = document.createElement('script')
+  el.text = PUSH_TAP_BOOT_SCRIPT
+  document.head.appendChild(el)
 }
 
 const ASKED_KEY = 'mk-native-push-asked'
