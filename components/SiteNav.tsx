@@ -56,6 +56,41 @@ export default function SiteNav({ active }: { active?: string }) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // 2026-10-23 — the member badge on the public nav. The app opens on the
+  // homepage, so a member who taps the app icon (red number) needs to see where
+  // that number lives: on ☰, and again on MESSAGES / CASTINGS inside the menu.
+  // Same two counts as AccountRail (lib/member-badge.ts). NO polling — fetched
+  // on sign-in, when the menu opens, and when the app/tab comes back.
+  const [unread, setUnread] = useState(0)
+  const [applicants, setApplicants] = useState(0)
+  useEffect(() => {
+    if (authed !== true) { setUnread(0); setApplicants(0); return }
+    const load = () => {
+      fetch('/api/messages/unread', { cache: 'no-store' }).then(r => (r.ok ? r.json() : { unread: 0 })).then(d => setUnread(d.unread ?? 0)).catch(() => {})
+      fetch('/api/castings/unseen', { cache: 'no-store' }).then(r => (r.ok ? r.json() : { unseen: 0 })).then(d => setApplicants(d.unseen ?? 0)).catch(() => {})
+    }
+    load()
+    const onShow = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onShow)
+    window.addEventListener('pageshow', onShow)
+    window.addEventListener('mk-badges', load)
+    return () => {
+      document.removeEventListener('visibilitychange', onShow)
+      window.removeEventListener('pageshow', onShow)
+      window.removeEventListener('mk-badges', load)
+    }
+  }, [authed, menuOpen])
+  const badgeTotal = unread + applicants
+  const badge = (n: number, big = false) => n > 0 ? (
+    <span aria-hidden style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      minWidth: big ? 30 : 20, height: big ? 30 : 20, padding: '0 6px', borderRadius: 999,
+      background: '#E5372B', color: '#fff', boxShadow: '0 0 0 2px #080808',
+      fontFamily: 'Inter, sans-serif', fontSize: big ? 15 : 11, fontWeight: 700, lineHeight: 1, letterSpacing: 0,
+    }}>{n > 9 ? '9+' : n}</span>
+  ) : null
+  const menuLine = { fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(28px, min(9.5vw, 4.6vh), 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0', display: 'flex', alignItems: 'center', gap: 14 } as const
+
   const isActive = (label: string) => active && label.toLowerCase() === active.toLowerCase()
 
   return (
@@ -103,9 +138,12 @@ export default function SiteNav({ active }: { active?: string }) {
                 fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', whiteSpace: 'nowrap',
               }}>BOOK NOW</Link>
             )}
-            <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu"
-              style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 34, lineHeight: 1, cursor: 'pointer', padding: 4, zIndex: 101 }}>
+            <button onClick={() => setMenuOpen(o => !o)} aria-label={badgeTotal > 0 && !menuOpen ? `Menu, ${badgeTotal} new` : 'Menu'}
+              style={{ position: 'relative', background: 'transparent', border: 'none', color: '#fff', fontSize: 34, lineHeight: 1, cursor: 'pointer', padding: 4, zIndex: 101 }}>
               {menuOpen ? '✕' : '☰'}
+              {!menuOpen && badgeTotal > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -8 }}>{badge(badgeTotal)}</span>
+              )}
             </button>
           </div>
         ) : (
@@ -176,10 +214,19 @@ export default function SiteNav({ active }: { active?: string }) {
             <svg width="14" height="14" viewBox="0 0 10 10" aria-hidden style={{ color: '#c9b27e', flexShrink: 0 }}><path d="M5 0L10 5L5 10L0 5Z" fill="currentColor"/></svg>
           </Link>
           {authed === true && (
-            <Link href="/account" onClick={() => setMenuOpen(false)}
-              style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 'clamp(28px, min(9.5vw, 4.6vh), 64px)', letterSpacing: '0.02em', lineHeight: 1.08, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', padding: '6px 0' }}>
-              ACCOUNT
-            </Link>
+            <>
+              <Link href="/account/messages" onClick={() => setMenuOpen(false)} style={menuLine}>
+                MESSAGES{badge(unread, true)}
+              </Link>
+              {applicants > 0 && (
+                <Link href="/account/castings" onClick={() => setMenuOpen(false)} style={menuLine}>
+                  CASTINGS{badge(applicants, true)}
+                </Link>
+              )}
+              <Link href="/account" onClick={() => setMenuOpen(false)} style={menuLine}>
+                ACCOUNT
+              </Link>
+            </>
           )}
           {authed === false && (
             <>
