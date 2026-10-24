@@ -23,6 +23,11 @@
 // the server stops reporting it (30 min, "Back to house music", or the admin
 // switch). Time running out finishes the current track first; a person ending
 // it switches at once. Repeats and >15-min videos inside the Mix are skipped.
+// 2026-10-24: SPOTIFY zones keep the vibe too. Spotify has no Mix, so the
+// player asks /api/jukebox/vibe-tracks for a list of similar songs
+// (ListenBrainz radio → Spotify search, lib/spotify-vibe.ts) and plays it as a
+// plain track list. It ends at the list's end, when time runs out (after the
+// current track), or when a person ends it — same rules as YouTube.
 //
 // ⚠️ BUMP lib/player-rev.ts when you change this file — the dedicated music
 // devices only reload when JUKEBOX_PLAYER_REV changes.
@@ -129,6 +134,7 @@ export function useJukeboxPlayer(opts: {
   const vibeCurId = useRef<string | null>(null)    // Mix track currently on
   const vibeTuned = useRef(false)                  // shuffle/loop turned off for this Mix
   const vibeSeen = useRef<Set<string>>(new Set())  // played this stretch — no repeats
+  const spVibeTrack = useRef<string | null>(null)  // Spotify vibe: track currently on
 
   // ── Self-update safety ──
   // Is sound coming out of the speaker right now? House music counts.
@@ -216,7 +222,7 @@ export function useJukeboxPlayer(opts: {
           const cur = st?.track_window?.current_track
           if (cur?.name) {
             const a = (cur.artists || []).map((x: any) => x.name).join(', ')
-            setDisplay({ title: cur.name, artist: a, source: 'house' }); reportHouse(cur.name, a)
+            setDisplay({ title: cur.name, artist: a, source: src }); reportHouse(cur.name, a)
           }
         }).catch(() => {})
       } catch {}
@@ -353,10 +359,36 @@ export function useJukeboxPlayer(opts: {
             ;(async () => { await spSetMode('shuffle', 'true'); await spSetMode('repeat', 'context'); await spSkip() })()
           }
         }
+        if (modeRef.current === 'vibe') {
+          const cur = st.track_window?.current_track
+          if (cur?.id && !st.paused && cur.id !== spVibeTrack.current) {
+            const first = spVibeTrack.current === null
+            spVibeTrack.current = cur.id
+            // Time ran out during the previous track — it's finished, so switch now.
+            if (!first && vibeEnding.current) { if (lastState.current?.zone) goHouse(lastState.current.zone); return }
+            const a = (cur.artists || []).map((x: any) => x.name).join(', ')
+            setDisplay({ title: cur.name, artist: a, source: 'vibe' }); reportHouse(cur.name, a)
+          }
+        }
         // Natural end heuristic: was playing, now paused at position 0.
         if (spWasPlaying.current && st.paused && st.position === 0) {
           spWasPlaying.current = false
           if (modeRef.current === 'house' && reloadAtSeam()) return
+          if (modeRef.current === 'vibe') {
+            // The vibe list may just be between tracks — only call it over if
+            // it's still stopped a moment later.
+            const seed = vibeSeed.current
+            setTimeout(() => {
+              if (modeRef.current !== 'vibe' || vibeSeed.current !== seed || pausedLocal.current) return
+              try {
+                sp.current?.getCurrentState?.().then((now: any) => {
+                  if (modeRef.current !== 'vibe' || vibeSeed.current !== seed) return
+                  if (!now || now.paused) { if (lastState.current?.zone) goHouse(lastState.current.zone) }
+                }).catch(() => {})
+              } catch {}
+            }, 3000)
+            return
+          }
           onSongEnd(); return
         }
         if (!st.paused) spWasPlaying.current = true
@@ -445,10 +477,35 @@ export function useJukeboxPlayer(opts: {
     vibeEnding.current = false
     vibeSeen.current.add(v.seed_id)
     currentReqId.current = null
-    currentSource.current = 'youtube'; setEngine('youtube')
     modeRef.current = 'vibe'
-    spStop(); ytVibe(v.seed_id)
     setDisplay({ title: 'Keeping the vibe going', artist: '', source: 'vibe' })
+    if (lastState.current?.zone?.source === 'spotify') {
+      currentSource.current = 'spotify'; setEngine('spotify')
+      ytStop(); spVibe(v.seed_id)
+    } else {
+      currentSource.current = 'youtube'; setEngine('youtube')
+      spStop(); ytVibe(v.seed_id)
+    }
+  }
+  // Spotify: fetch the similar-songs list and play it in order, once.
+  const spVibe = async (seed: string) => {
+    spWasPlaying.current = false
+    spHouseTuned.current = true   // never let the house shuffle/repeat tuning touch a vibe list
+    spVibeTrack.current = null
+    let ids: string[] = []
+    try {
+      const r = await fetch('/api/jukebox/vibe-tracks', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zone: zoneRef.current, key: keyRef.current }),
+      })
+      if (r.ok) ids = ((await r.json())?.ids ?? []).filter((x: any) => typeof x === 'string' && x)
+    } catch {}
+    // A request or a person may have taken over while we were asking.
+    if (modeRef.current !== 'vibe' || vibeSeed.current !== seed) return
+    if (!ids.length) { if (lastState.current?.zone) goHouse(lastState.current.zone); return }
+    await spSetMode('shuffle', 'false')
+    await spApiPlay({ uris: ids.map(id => `spotify:track:${id}`) })
+    await spSetMode('repeat', 'off')
   }
   // A Mix track just started playing.
   const onVibeTrack = () => {
@@ -526,7 +583,7 @@ export function useJukeboxPlayer(opts: {
     }
     if (reloadIfQuiet()) return
     // Keep the vibe going — only reachable with nothing playing or queued.
-    if (s.vibe?.seed_id && !wantsSpotify) {
+    if (s.vibe?.seed_id) {
       if (modeRef.current !== 'vibe' || vibeSeed.current !== s.vibe.seed_id) goVibe(s.vibe)
       return
     }

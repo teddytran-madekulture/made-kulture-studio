@@ -122,11 +122,9 @@ export default function AdminJukeboxPage() {
                     <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: zone.auto_approve ? C.accent : C.dim, cursor: 'pointer' }} title="Requests skip approval and go straight into the queue">
                       <input type="checkbox" checked={zone.auto_approve} onChange={e => saveSettings({ auto_approve: e.target.checked })} /> Auto-approve requests
                     </label>
-                    {zone.source !== 'spotify' && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: zone.vibe_enabled !== false ? C.accent : C.dim, cursor: 'pointer' }} title={`When the last guest song ends, keep playing similar songs (YouTube Mix) for ${VIBE_MINUTES} minutes before going back to the house playlist`}>
-                        <input type="checkbox" checked={zone.vibe_enabled !== false} onChange={e => saveSettings({ vibe_enabled: e.target.checked })} /> Keep the vibe going ({VIBE_MINUTES} min)
-                      </label>
-                    )}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: zone.vibe_enabled !== false ? C.accent : C.dim, cursor: 'pointer' }} title={`When the last guest song ends, keep playing similar songs (${zone.source === 'spotify' ? 'ListenBrainz picks, played on Spotify' : 'YouTube Mix'}) for ${VIBE_MINUTES} minutes before going back to the house playlist`}>
+                      <input type="checkbox" checked={zone.vibe_enabled !== false} onChange={e => saveSettings({ vibe_enabled: e.target.checked })} /> Keep the vibe going ({VIBE_MINUTES} min)
+                    </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: C.dim }}>
                       Source
                       <select value={zone.source} onChange={e => saveSettings({ source: e.target.value })} style={{ ...inp, width: 'auto', padding: '6px 8px', fontWeight: 600, color: zone.source === 'spotify' ? '#1db954' : C.accent }}>

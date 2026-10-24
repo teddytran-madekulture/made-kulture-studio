@@ -8,6 +8,10 @@
 // finished NATURALLY (a skip is not a vote for more of the same), a YouTube zone
 // with vibe_enabled records that song as the seed of a 30-minute YouTube Mix and
 // returns it as `vibe`; the player plays the Mix instead of the house playlist.
+// 2026-10-24: Spotify zones too — the player fetches similar songs from
+// /api/jukebox/vibe-tracks (ListenBrainz) instead of a Mix. A seed must come
+// from the SAME engine as the zone, so a stray YouTube request on a Spotify
+// zone (or vice versa) never seeds.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -68,7 +72,8 @@ export async function POST(req: NextRequest) {
 
   // Queue empty. Seed the vibe from the song that just finished — only when it
   // played to its end (endedId: the player saw it finish) on a YouTube zone.
-  const seedable = !!endedId && retired && retired.source !== 'spotify' && zone.source !== 'spotify' && zone.vibe_enabled !== false
+  const sameEngine = !!retired && ((retired.source === 'spotify') === (zone.source === 'spotify'))
+  const seedable = !!endedId && retired && sameEngine && zone.vibe_enabled !== false
   if (seedable) {
     const until = new Date(Date.now() + VIBE_MINUTES * 60_000).toISOString()
     const { error } = await db.from('jukebox_zones').update({

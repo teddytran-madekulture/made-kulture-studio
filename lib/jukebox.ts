@@ -37,13 +37,14 @@ export type VibeInfo = { seed_id: string; seed_title: string | null; until: stri
 //                   Only reported for 15 min (MAX_REQUEST_SECONDS) past expiry,
 //                   so a stale flag can't hold a player in limbo.
 // Neither        — go to house now (ended by a person, switched off, or none).
-// Spotify zones have no Mix, so they never get a vibe.
+// Spotify zones (2026-10-24) get one too: the player asks /api/jukebox/vibe-tracks
+// for similar songs (ListenBrainz → Spotify search) instead of a YouTube Mix.
 export function readVibe(z: {
   source?: string | null; vibe_enabled?: boolean | null; vibe_seed_id?: string | null
   vibe_seed_title?: string | null; vibe_until?: string | null
 }, now: number = Date.now()): { vibe: VibeInfo | null; vibe_winding_down: boolean } {
   const none = { vibe: null, vibe_winding_down: false }
-  if (!z || z.vibe_enabled === false || z.source === 'spotify' || !z.vibe_seed_id || !z.vibe_until) return none
+  if (!z || z.vibe_enabled === false || !z.vibe_seed_id || !z.vibe_until) return none
   const t = new Date(z.vibe_until).getTime()
   if (!Number.isFinite(t)) return none
   if (t > now) return { vibe: { seed_id: z.vibe_seed_id, seed_title: z.vibe_seed_title ?? null, until: z.vibe_until }, vibe_winding_down: false }
