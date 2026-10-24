@@ -750,6 +750,21 @@ export default function AdminDashboard() {
   const [editDoorCode, setEditDoorCode] = useState<{ front: string | null; back: string | null } | null>(null)
   const [doorSending, setDoorSending]   = useState(false)
   const [doorSendMsg, setDoorSendMsg]   = useState<{ ok: boolean; text: string } | null>(null)
+  // Booking Detail → DOOR CODE (2026-10-24): fetched only on SHOW, per booking.
+  const [detailCode, setDetailCode] = useState<{ id: string; front: string | null; back: string | null } | null>(null)
+  const [detailCodeBusy, setDetailCodeBusy] = useState(false)
+  const [detailCodeErr, setDetailCodeErr] = useState('')
+  useEffect(() => { setDetailCode(null); setDetailCodeErr('') }, [detailBooking?.id])
+  const showDetailCode = async (id: string) => {
+    setDetailCodeBusy(true); setDetailCodeErr(''); setDoorSendMsg(null)
+    try {
+      const r = await fetch(`/api/admin/bookings/${id}/door-code`, { cache: 'no-store' })
+      const d = await r.json().catch(() => ({} as any))
+      if (!r.ok) setDetailCodeErr(d.error || 'Could not load the door code.')
+      else setDetailCode({ id, front: d.front ?? null, back: d.back ?? null })
+    } catch { setDetailCodeErr('Could not reach the server.') }
+    setDetailCodeBusy(false)
+  }
   const [editCards,   setEditCards]   = useState<SquareCard[]>([])
   const [editCard,    setEditCard]    = useState<SquareCard | null>(null)
   const [editSquareCustId, setEditSquareCustId] = useState<string | null>(null)
@@ -4931,6 +4946,38 @@ export default function AdminDashboard() {
             <Detail label="SOURCE"   value={detailBooking.source || '—'} />
             {detailBooking.notes && <Detail label="NOTES" value={detailBooking.notes} />}
             {detailBooking.square_payment_id && <Detail label="SQUARE PAYMENT ID" value={detailBooking.square_payment_id} mono />}
+            {detailBooking.status !== 'cancelled' && (
+              <div>
+                <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 500, letterSpacing: '0.15em', color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>DOOR CODE</div>
+                {detailCode?.id === detailBooking.id ? (
+                  detailCode.front || detailCode.back ? (
+                    <>
+                      {detailCode.front && <div style={{ fontFamily: 'monospace', fontSize: 20, color: '#fff', letterSpacing: '0.16em' }}>{detailCode.front} <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>FRONT</span></div>}
+                      {detailCode.back && <div style={{ fontFamily: 'monospace', fontSize: 20, color: '#fff', letterSpacing: '0.16em', marginTop: 4 }}>{detailCode.back} <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)' }}>BACK</span></div>}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                        <button onClick={() => handleSendDoorCode(detailBooking.id)} disabled={doorSending}
+                          style={{ background: doorSending ? 'rgba(212,168,67,0.25)' : 'rgba(212,168,67,0.9)', border: 'none', color: '#0b0b0d', padding: '9px 14px', cursor: doorSending ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', fontWeight: 700 }}>
+                          {doorSending ? 'SENDING...' : 'TEXT IT TO THEM'}
+                        </button>
+                        <button onClick={() => setDetailCode(null)}
+                          style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
+                          HIDE
+                        </button>
+                      </div>
+                      {doorSendMsg && <div style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5, color: doorSendMsg.ok ? '#4ade80' : '#fbbf24' }}>{doorSendMsg.text}</div>}
+                    </>
+                  ) : (
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>No door code on this booking.</div>
+                  )
+                ) : (
+                  <button onClick={() => showDetailCode(detailBooking.id)} disabled={detailCodeBusy}
+                    style={{ background: 'transparent', border: '1px solid rgba(212,168,67,0.5)', color: '#e6c07a', padding: '8px 14px', cursor: detailCodeBusy ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em' }}>
+                    {detailCodeBusy ? 'LOADING...' : 'SHOW'}
+                  </button>
+                )}
+                {detailCodeErr && <div style={{ fontSize: 11, marginTop: 6, color: '#fbbf24' }}>{detailCodeErr}</div>}
+              </div>
+            )}
             {detailBooking.customer_id && <StandingPanel customerId={detailBooking.customer_id} bookingId={detailBooking.id} />}
           </div>
 
