@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
+import { syncMemberBadge } from '@/lib/member-push'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -57,6 +58,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       .update({ seen_by_author_at: new Date().toISOString() })
       .eq('casting_id', params.id).is('seen_by_author_at', null)
     if (seenErr) console.error('[castings/id] mark seen failed:', seenErr.message)
+    else await syncMemberBadge(user.id)   // bring the app-icon number down
   }
   const myStatus = participants.find(p => p.id === user.id)?.status ?? null
 

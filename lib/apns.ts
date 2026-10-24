@@ -55,8 +55,31 @@ export type ApnsResult = { token: string; ok: boolean; status: number; reason?: 
  *  token will never work again (uninstalled / wrong app) — prune it. */
 export async function sendApns(
   tokens: string[],
-  msg: { title: string; body: string; url?: string; tag?: string },
+  msg: { title: string; body: string; url?: string; tag?: string; badge?: number },
 ): Promise<ApnsResult[]> {
+  const payload = JSON.stringify({
+    aps: {
+      alert: { title: msg.title, body: msg.body }, sound: 'default',
+      ...(msg.tag ? { 'thread-id': msg.tag } : {}),
+      // 2026-10-23: the number on the app icon (lib/member-badge.ts). Omitted
+      // when unknown, which leaves whatever the icon already shows.
+      ...(typeof msg.badge === 'number' ? { badge: Math.max(0, Math.floor(msg.badge)) } : {}),
+    },
+    url: msg.url ?? '/account',
+  })
+  return deliver(tokens, payload, { priority: '10', collapseId: msg.tag })
+}
+
+/** 2026-10-23 — set ONLY the app-icon number, no banner and no sound. Used to
+ *  bring the number down when a member reads something (sending 0 clears it).
+ *  Apple: a badge-only notification is still push-type 'alert'; priority 5 is
+ *  the power-friendly lane for anything that doesn't need to wake the screen. */
+export async function sendApnsBadge(tokens: string[], badge: number): Promise<ApnsResult[]> {
+  const payload = JSON.stringify({ aps: { badge: Math.max(0, Math.floor(badge)) } })
+  return deliver(tokens, payload, { priority: '5' })
+}
+
+async function deliver(tokens: string[], payload: string, opt: { priority: '5' | '10'; collapseId?: string }): Promise<ApnsResult[]> {
   if (!tokens.length) return []
   if (!apnsConfigured()) return tokens.map(t => ({ token: t, ok: false, status: 0, reason: 'not configured', dead: false }))
 
@@ -65,11 +88,6 @@ export async function sendApns(
     console.error('[apns] could not sign provider token — check APNS_PRIVATE_KEY:', e?.message)
     return tokens.map(t => ({ token: t, ok: false, status: 0, reason: 'bad key', dead: false }))
   }
-
-  const payload = JSON.stringify({
-    aps: { alert: { title: msg.title, body: msg.body }, sound: 'default', ...(msg.tag ? { 'thread-id': msg.tag } : {}) },
-    url: msg.url ?? '/account',
-  })
 
   const client = http2.connect(HOST)
   client.on('error', e => console.error('[apns] connection error:', e.message))
@@ -83,9 +101,9 @@ export async function sendApns(
         authorization: `bearer ${jwt}`,
         'apns-topic': process.env.APNS_TOPIC || 'com.madekulture.app',
         'apns-push-type': 'alert',
-        'apns-priority': '10',
+        'apns-priority': opt.priority,
       }
-      if (msg.tag) headers['apns-collapse-id'] = msg.tag.slice(0, 64)
+      if (opt.collapseId) headers['apns-collapse-id'] = opt.collapseId.slice(0, 64)
       const req = client.request(headers)
       req.setEncoding('utf8')
       req.on('response', h => { status = Number(h[':status']) || 0 })

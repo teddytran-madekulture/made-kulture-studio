@@ -132,7 +132,7 @@ export default function AccountRail() {
         .ar-it.on { font-weight: 700; }
         .ar-it .lbl { opacity: 0; transition: opacity .12s ease; }
         .ar:hover .ar-it .lbl, .ar:has(:focus-visible) .ar-it .lbl { opacity: 1; }
-        .ar-dot { position: absolute; left: 30px; top: 8px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--t-gold); color: var(--t-on-fg); font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: Inter; }
+        .ar-dot { position: absolute; left: 30px; top: 8px; min-width: 18px; height: 18px; border-radius: 9px; background: #E5372B; color: #fff; box-shadow: 0 0 0 2px var(--t-bg); font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-family: Inter; }
         .ar-home { margin-bottom: 10px; }
         .ar-home::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -6px; height: 1px; background: rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a))); }
         .ar-bot { display: flex; flex-direction: column; gap: 2px; }
@@ -144,7 +144,7 @@ export default function AccountRail() {
           .am-top button { background: none; border: none; color: var(--t-fg); padding: 6px; cursor: pointer; }
           .am-bar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; height: 62px; padding-bottom: env(safe-area-inset-bottom); background: var(--t-bg); border-top: 1px solid rgba(var(--t-fg-rgb), calc(0.1 * var(--t-a))); justify-content: space-around; align-items: center; }
           .am-bar a, .am-bar button { position: relative; color: var(--t-fg); background: none; border: none; padding: 10px; display: flex; cursor: pointer; }
-          .am-bar .ar-dot { left: 26px; top: 4px; }
+          .am-bar .ar-dot { left: 24px; top: 2px; min-width: 22px; height: 22px; border-radius: 11px; font-size: 13px; padding: 0 6px; }
           .am-sheet { display: block; position: fixed; left: 0; right: 0; bottom: 62px; z-index: 61; background: var(--t-surface); border-top: 1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a))); border-radius: 16px 16px 0 0; padding: 10px 10px 14px; box-shadow: 0 -10px 30px rgba(0,0,0,.3); }
           .am-scrim { position: fixed; inset: 0; bottom: 62px; z-index: 60; background: rgba(0,0,0,.35); }
         }

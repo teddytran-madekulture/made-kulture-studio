@@ -59,7 +59,7 @@ export type FcmResult = { token: string; ok: boolean; dead: boolean; status: num
 
 /** Send one notification to each token. Never throws — failures come back per
  *  token; `dead` means Google says the token is gone (prune it). */
-export async function sendFcm(tokens: string[], msg: { title: string; body: string; url?: string; tag?: string }): Promise<FcmResult[]> {
+export async function sendFcm(tokens: string[], msg: { title: string; body: string; url?: string; tag?: string; badge?: number }): Promise<FcmResult[]> {
   if (!fcmConfigured() || tokens.length === 0) return tokens.map(t => ({ token: t, ok: false, dead: false, status: 0 }))
   let sa: ServiceAccount, bearer: string
   try { sa = serviceAccount(); bearer = await accessToken() }
@@ -82,7 +82,12 @@ export async function sendFcm(tokens: string[], msg: { title: string; body: stri
             android: {
               priority: 'HIGH',
               ...(msg.tag ? { collapse_key: msg.tag.slice(0, 64) } : {}),
-              notification: { sound: 'default', ...(msg.tag ? { tag: msg.tag.slice(0, 64) } : {}) },
+              notification: {
+                sound: 'default', ...(msg.tag ? { tag: msg.tag.slice(0, 64) } : {}),
+                // Icon count on launchers that show one (Samsung etc.); most
+                // Android phones show a dot regardless and clear it themselves.
+                ...(typeof msg.badge === 'number' && msg.badge > 0 ? { notification_count: Math.floor(msg.badge) } : {}),
+              },
             },
           },
         }),

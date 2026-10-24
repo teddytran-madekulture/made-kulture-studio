@@ -3,7 +3,8 @@
 // Non-fatal by design: email remains the guaranteed channel, push is the
 // faster one on top. Dead endpoints (404/410) are pruned.
 import { createClient } from '@supabase/supabase-js'
-import { sendApns } from '@/lib/apns'
+import { sendApns, sendApnsBadge } from '@/lib/apns'
+import { memberBadgeCount } from '@/lib/member-badge'
 import { sendFcm } from '@/lib/fcm'
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -32,9 +33,15 @@ async function sendNativePush(userId: string, opts: PushMsg): Promise<number> {
     if (!rows?.length) return 0
     const ios = rows.filter((r: any) => r.platform === 'ios').map((r: any) => r.token)
     const android = rows.filter((r: any) => r.platform === 'android').map((r: any) => r.token)
+    // App-icon number. Computed AFTER the caller wrote the new message/applicant,
+    // so it already includes this one. A failed count sends no number at all
+    // (the icon keeps what it had) rather than a wrong one.
+    let badge: number | undefined
+    try { badge = await memberBadgeCount(userId) } catch (e) { console.error('[member-push] badge count failed:', (e as Error).message) }
+    const withBadge = { ...opts, badge }
     const [a, g] = await Promise.all([
-      ios.length ? sendApns(ios, opts) : Promise.resolve([]),
-      android.length ? sendFcm(android, opts) : Promise.resolve([]),
+      ios.length ? sendApns(ios, withBadge) : Promise.resolve([]),
+      android.length ? sendFcm(android, withBadge) : Promise.resolve([]),
     ])
     const results = [...a, ...g]
     const ok = results.filter(r => r.ok).map(r => r.token)
@@ -79,5 +86,24 @@ async function sendWebPush(userId: string, opts: PushMsg): Promise<number> {
   } catch (e) {
     console.error('[member-push] error:', e)
     return 0
+  }
+}
+
+/** 2026-10-23 — after a member READS something, bring the number on their
+ *  iPhone app icon down to match (0 clears it). Silent: no banner, no sound.
+ *  Android needs nothing — its icon dot follows the notification tray.
+ *  Call it AFTER the read is written. Never throws, never blocks the caller's
+ *  response on failure. A failed count sends nothing (never a guessed 0). */
+export async function syncMemberBadge(userId: string): Promise<void> {
+  try {
+    const { data: rows, error } = await supabase.from('native_push_tokens').select('token').eq('user_id', userId).eq('platform', 'ios')
+    if (error) { console.error('[member-push] badge sync lookup failed:', error.message); return }
+    if (!rows?.length) return
+    const n = await memberBadgeCount(userId)
+    const results = await sendApnsBadge(rows.map((r: any) => r.token), n)
+    const dead = results.filter(r => r.dead).map(r => r.token)
+    if (dead.length) await supabase.from('native_push_tokens').delete().in('token', dead)
+  } catch (e) {
+    console.error('[member-push] badge sync failed:', (e as Error).message)
   }
 }
