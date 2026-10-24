@@ -653,18 +653,19 @@ function ProfileSettings() {
           <label htmlFor="notify_sms" style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginBottom: 16 }}>
             <input type="checkbox" id="notify_sms" checked={!!form.notify_sms} onChange={e => setForm(f => ({ ...f, notify_sms: e.target.checked }))} style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0, cursor: 'pointer' }} />
             <span style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', lineHeight: 1.55 }}>
-              Text me about new messages and casting interest. By checking this you agree to receive recurring automated text messages from <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))' }}>Made Kulture</strong>. Message frequency varies. Message &amp; data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
+              Text me about new messages and casting interest when the app can&apos;t reach me. By checking this you agree to receive recurring automated text messages from <strong style={{ color: 'rgba(var(--t-fg-rgb), calc(0.7 * var(--t-a)))' }}>Made Kulture</strong>. Message frequency varies. Message &amp; data rates may apply. Reply STOP to opt out, HELP for help. See our{' '}
               <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t-gold)' }} onClick={e => e.stopPropagation()}>Terms</a> and{' '}
               <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t-gold)' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>.
             </span>
           </label>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
-          <input type="checkbox" id="sms_opt_in" checked={!!form.sms_opt_in} onChange={set('sms_opt_in')} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-          <label htmlFor="sms_opt_in" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', cursor: 'pointer' }}>
-            Send me SMS reminders before my bookings
-          </label>
+        {/* 2026-10-23: the old "Send me SMS reminders before my bookings" box was
+            removed. Nothing that sends booking texts ever read sms_opt_in, so it
+            looked like a choice and wasn't one. Booking texts are part of the
+            service (door code above all), so they always go. */}
+        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.45 * var(--t-a)))', lineHeight: 1.5, marginBottom: 32 }}>
+          Booking texts (your door code, reminders and the 15-minute heads-up) always go to the number on your booking.
         </div>
 
         </>)}
