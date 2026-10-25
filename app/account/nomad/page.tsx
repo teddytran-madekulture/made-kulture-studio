@@ -1,7 +1,8 @@
 'use client'
 // /account/nomad — the member side of Nomad (2026-10-25): start the membership,
 // the night bank, book / share / join stays, studio blocks, visitors.
-// Dates are Mexico City calendar dates (the API sends `today` in that zone).
+// HOUSES: every stay belongs to a house. Its dates, hours and rules come from
+// that house (d.houses[i], with its own `today`), never the program defaults.
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 
@@ -11,6 +12,9 @@ const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US'
 const fmtIso = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'
 const addDays = (d: string, n: number) => { const x = new Date(`${d}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10) }
 const hourLabel = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? 'am' : 'pm'}`
+/** A house's member-facing settings; falls back to the program defaults. */
+const houseOf = (d: any, id?: string) => (d.houses || []).find((h: any) => h.id === id) || { ...d.settings, today: d.today, name: 'the house', city: '', has_studio: true }
+const multiHouse = (d: any) => (d.houses || []).length > 1
 
 const T: Record<string, React.CSSProperties> = {
   h1: { fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 6px' },
@@ -65,11 +69,13 @@ export default function NomadAccountPage() {
   if (err) return <div style={{ ...T.p, color: 'var(--t-err)' }}>{err}</div>
   if (!d) return <div style={T.small}>Loading…</div>
 
-  const m = d.membership, s = d.settings
+  const m = d.membership
+  const houses: any[] = d.houses || []
   return (
     <div style={{ maxWidth: 760 }}>
       <h1 style={T.h1}>NOMAD</h1>
-      <p style={T.p}>Your home base in Mexico City. {s.house_name}{s.house_address ? ` · ${s.house_address}` : ''}</p>
+      <p style={T.p}>{houses.length > 1 ? `Your home bases: ${houses.map(h => h.city).join(' · ')}.` : houses[0] ? `Your home base in ${houses[0].city}.` : 'Your creative home base.'}</p>
+      {houses.filter(h => h.address).map(h => <p key={h.id} style={{ ...T.small, margin: '-6px 0 12px' }}>{h.name} · {h.address}</p>)}
       {msg && <div style={{ ...T.card, borderColor: msg.ok ? 'rgba(var(--t-gold-rgb),0.4)' : 'var(--t-err)', color: msg.ok ? 'var(--t-fg)' : 'var(--t-err)', fontFamily: 'Inter', fontSize: 14 }}>{msg.text}</div>}
 
       {!m && <NotMember d={d} />}
@@ -113,12 +119,17 @@ function CardPicker({ value, onChange }: { value: string; onChange: (id: string)
 
 function Start({ d, post, busy }: any) {
   const s = d.settings
+  const open = (d.houses || []).filter((h: any) => h.active)
+  // With one house, state its real rules; with several, they differ, and each is shown before booking.
+  const h1 = open.length === 1 ? open[0] : null
   const [card, setCard] = useState('')
   const [agree, setAgree] = useState(false)
   return (
     <div style={T.card}>
       <h2 style={T.h2}>Start your membership</h2>
-      <p style={T.p}><strong style={{ color: 'var(--t-fg)' }}>{money(s.dues_cents)} a month.</strong> Each paid month adds {s.nights_per_month} nights to your night bank (it holds up to {s.night_cap}). Stays up to {s.max_nights_per_stay} nights. Extra nights past your bank are {money(s.extra_night_cents)} each{s.busy_multiplier > 1 ? `, and busy dates count ${s.busy_multiplier}× nights` : ''}. Made Kulture Plus is included while you’re a member.</p>
+      <p style={T.p}><strong style={{ color: 'var(--t-fg)' }}>{money(s.dues_cents)} a month.</strong> Each paid month adds {s.nights_per_month} nights to your night bank (it holds up to {s.night_cap}). {h1
+        ? <>Stays up to {h1.max_nights_per_stay} nights. Extra nights past your bank are {money(h1.extra_night_cents)} each{h1.busy_multiplier > 1 ? `, and busy dates count ${h1.busy_multiplier}× nights` : ''}.</>
+        : <>Stay lengths and extra-night prices are set by each house ({open.map((h: any) => h.city).join(', ')}). You’ll see them, and confirm any extra charge, before you book.</>} Made Kulture Plus is included while you’re a member.</p>
       <div style={{ ...T.label, marginTop: 14 }}>House rules</div>
       <ol style={{ ...T.p, paddingLeft: 18 }}>{RULES.map(r => <li key={r} style={{ marginBottom: 4 }}>{r}</li>)}</ol>
       <div style={{ ...T.label, marginTop: 14 }}>Card for Nomad</div>
@@ -138,7 +149,7 @@ function Member({ d, post, busy }: any) {
   const m = d.membership, s = d.settings
   const [changingCard, setChangingCard] = useState(false)
   const [card, setCard] = useState(m.square_card_id || '')
-  const [prefill, setPrefill] = useState<{ checkIn: string; checkOut: string } | null>(null)
+  const [prefill, setPrefill] = useState<{ checkIn: string; checkOut: string; houseId: string } | null>(null)
   const upcoming = (d.myStays || []).filter((x: any) => ['confirmed', 'requested'].includes(x.status) && x.check_out >= d.today)
   return (
     <>
@@ -174,7 +185,7 @@ function Member({ d, post, busy }: any) {
           <h2 style={T.h2}>Join requests</h2>
           {d.joinRequests.map((r: any) => (
             <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-              <span style={T.p}>{r.who} wants to stay {fmt(r.check_in)} to {fmt(r.check_out)}</span>
+              <span style={T.p}>{r.who} wants to stay {fmt(r.check_in)} to {fmt(r.check_out)}{multiHouse(d) ? ` in ${houseOf(d, r.house_id).city}` : ''}</span>
               <span style={{ display: 'flex', gap: 8 }}>
                 <button disabled={busy} onClick={() => post({ action: 'approve_join', stayId: r.id }, 'Approved.')} style={btn(true)}>Approve</button>
                 <button disabled={busy} onClick={() => post({ action: 'decline_join', stayId: r.id }, 'Declined.')} style={btn()}>Decline</button>
@@ -194,9 +205,9 @@ function Member({ d, post, busy }: any) {
       {(d.calendar || []).length === 0 && <p style={T.p}>Nobody else is booked yet.</p>}
       {(d.calendar || []).map((c: any) => (
         <div key={c.id} style={{ ...T.card, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontFamily: 'Inter', fontSize: 14 }}><strong>{c.who}</strong> · {fmt(c.check_in)} to {fmt(c.check_out)} {c.status === 'requested' && <span style={gold}>PENDING</span>}</span>
-          {m.status === 'active' && c.join !== 'no' && c.status === 'confirmed' && (
-            <button onClick={() => { setPrefill({ checkIn: c.check_in, checkOut: c.check_out }); if (typeof window !== 'undefined') document.getElementById('nomad-book')?.scrollIntoView({ behavior: 'smooth' }) }} style={btn()}>
+          <span style={{ fontFamily: 'Inter', fontSize: 14 }}><strong>{c.who}</strong> · {multiHouse(d) ? `${houseOf(d, c.house_id).city} · ` : ''}{fmt(c.check_in)} to {fmt(c.check_out)} {c.status === 'requested' && <span style={gold}>PENDING</span>}</span>
+          {m.status === 'active' && c.join !== 'no' && c.status === 'confirmed' && (d.houses || []).some((h: any) => h.id === c.house_id && h.active) && (
+            <button onClick={() => { setPrefill({ checkIn: c.check_in, checkOut: c.check_out, houseId: c.house_id }); if (typeof window !== 'undefined') document.getElementById('nomad-book')?.scrollIntoView({ behavior: 'smooth' }) }} style={btn()}>
               {c.join === 'instant' ? 'Join' : 'Ask to join'}
             </button>
           )}
@@ -208,21 +219,22 @@ function Member({ d, post, busy }: any) {
 }
 
 function StayCard({ x, d, post, busy }: any) {
-  const s = d.settings
-  const [blockDay, setBlockDay] = useState(x.check_in >= d.today ? x.check_in : d.today)
+  const s = houseOf(d, x.house_id)
+  const today = s.today || d.today
+  const [blockDay, setBlockDay] = useState(x.check_in >= today ? x.check_in : today)
   const [blockHour, setBlockHour] = useState(s.studio_open_hour)
-  const [v, setV] = useState({ day: addDays(d.today, 1) > x.check_in ? addDays(d.today, 1) : x.check_in, name: '', role: '', phone: '' })
+  const [v, setV] = useState({ day: addDays(today, 1) > x.check_in ? addDays(today, 1) : x.check_in, name: '', role: '', phone: '' })
   const days: string[] = []; for (let dd = x.check_in; dd <= x.check_out; dd = addDays(dd, 1)) days.push(dd)
   const hours: number[] = []; for (let h = s.studio_open_hour; h + s.studio_block_hours <= s.studio_close_hour; h++) hours.push(h)
   const myBlocks = (d.studio || []).filter((b: any) => b.stay_id === x.id)
-  const taken = (d.studio || []).filter((b: any) => b.day === blockDay)
+  const taken = (d.studio || []).filter((b: any) => b.day === blockDay && b.house_id === x.house_id)
   const visitors = (d.visitors || []).filter((y: any) => y.stay_id === x.id)
   return (
     <div style={T.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600 }}>{fmt(x.check_in)} → {fmt(x.check_out)}</div>
-          <div style={T.small}>Check-in from {hourLabel(s.check_in_hour)}, check-out by {hourLabel(s.check_out_hour)} (Mexico City time) · {x.visibility === 'private' ? 'Private' : x.visibility === 'any' ? 'Open to any member' : 'Shared with people you chose'} · {x.nights_cost} bank nights{x.extra_nights ? ` + ${x.extra_nights} extra` : ''}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600 }}>{multiHouse(d) ? `${s.city} · ` : ''}{fmt(x.check_in)} → {fmt(x.check_out)}</div>
+          <div style={T.small}>Check-in from {hourLabel(s.check_in_hour)}, check-out by {hourLabel(s.check_out_hour)} ({s.city || 'house'} time) · {x.visibility === 'private' ? 'Private' : x.visibility === 'any' ? 'Open to any member' : 'Shared with people you chose'} · {x.nights_cost} bank nights{x.extra_nights ? ` + ${x.extra_nights} extra` : ''}</div>
         </div>
         <span style={gold}>{x.status === 'requested' ? 'WAITING ON APPROVAL' : 'CONFIRMED'}</span>
       </div>
@@ -231,6 +243,7 @@ function StayCard({ x, d, post, busy }: any) {
 
       {x.status === 'confirmed' && (
         <>
+          {s.has_studio !== false && <>
           <div style={{ ...T.label, marginTop: 14 }}>Studio room · {s.studio_block_hours}-hour blocks</div>
           {myBlocks.map((b: any) => (
             <div key={b.id} style={{ ...T.small, display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -239,12 +252,13 @@ function StayCard({ x, d, post, busy }: any) {
             </div>
           ))}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-            <select value={blockDay} onChange={e => setBlockDay(e.target.value)} style={T.input}>{days.filter(dd => dd >= d.today).map(dd => <option key={dd} value={dd}>{fmt(dd)}</option>)}</select>
+            <select value={blockDay} onChange={e => setBlockDay(e.target.value)} style={T.input}>{days.filter(dd => dd >= today).map(dd => <option key={dd} value={dd}>{fmt(dd)}</option>)}</select>
             <select value={blockHour} onChange={e => setBlockHour(Number(e.target.value))} style={T.input}>
               {hours.map(h => { const clash = taken.some((b: any) => h < b.start_hour + b.hours && b.start_hour < h + s.studio_block_hours); return <option key={h} value={h} disabled={clash}>{hourLabel(h)}–{hourLabel(h + s.studio_block_hours)}{clash ? ' (taken)' : ''}</option> })}
             </select>
             <button disabled={busy} onClick={() => post({ action: 'studio_block', stayId: x.id, day: blockDay, startHour: blockHour }, 'Studio booked.')} style={btn(true)}>Book studio</button>
           </div>
+          </>}
 
           <div style={{ ...T.label, marginTop: 16 }}>Visitors · register by the day before</div>
           {visitors.map((y: any) => (
@@ -254,7 +268,7 @@ function StayCard({ x, d, post, busy }: any) {
             </div>
           ))}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-            <select value={v.day} onChange={e => setV(o => ({ ...o, day: e.target.value }))} style={T.input}>{days.filter(dd => dd > d.today).map(dd => <option key={dd} value={dd}>{fmt(dd)}</option>)}</select>
+            <select value={v.day} onChange={e => setV(o => ({ ...o, day: e.target.value }))} style={T.input}>{days.filter(dd => dd > today).map(dd => <option key={dd} value={dd}>{fmt(dd)}</option>)}</select>
             <input placeholder="Name" value={v.name} onChange={e => setV(o => ({ ...o, name: e.target.value }))} style={{ ...T.input, width: 150 }} />
             <input placeholder="Model, MUA…" value={v.role} onChange={e => setV(o => ({ ...o, role: e.target.value }))} style={{ ...T.input, width: 130 }} />
             <input placeholder="Phone" value={v.phone} onChange={e => setV(o => ({ ...o, phone: e.target.value }))} style={{ ...T.input, width: 130 }} />
@@ -263,26 +277,30 @@ function StayCard({ x, d, post, busy }: any) {
         </>
       )}
 
-      {x.check_in > d.today && (
+      {x.check_in > today && (
         <button disabled={busy} onClick={() => post({ action: 'cancel_stay', stayId: x.id }, 'Stay cancelled.')} style={{ ...btn(), marginTop: 14 }}>Cancel this stay</button>
       )}
-      {x.check_in > d.today && <div style={{ ...T.small, marginTop: 6 }}>Cancel {s.free_cancel_days}+ days before check-in and your nights come back to your bank. Later than that, they’re used.</div>}
+      {x.check_in > today && <div style={{ ...T.small, marginTop: 6 }}>Cancel {s.free_cancel_days}+ days before check-in and your nights come back to your bank. Later than that, they’re used.</div>}
     </div>
   )
 }
 
 function BookForm({ d, post, busy, prefill }: any) {
-  const s = d.settings
-  const [checkIn, setCheckIn] = useState(addDays(d.today, 14))
-  const [checkOut, setCheckOut] = useState(addDays(d.today, 18))
+  const open = (d.houses || []).filter((h: any) => h.active)
+  const [houseId, setHouseId] = useState<string>(open[0]?.id || '')
+  const s = houseOf(d, houseId)
+  const today = s.today || d.today
+  const [checkIn, setCheckIn] = useState(addDays(today, 14))
+  const [checkOut, setCheckOut] = useState(addDays(today, 18))
   const [visibility, setVisibility] = useState('chosen')
   const [shareWith, setShareWith] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [extra, setExtra] = useState<any>(null)
-  useEffect(() => { if (prefill) { setCheckIn(prefill.checkIn); setCheckOut(prefill.checkOut); setExtra(null) } }, [prefill])
+  useEffect(() => { if (prefill) { setCheckIn(prefill.checkIn); setCheckOut(prefill.checkOut); if (prefill.houseId) setHouseId(prefill.houseId); setExtra(null) } }, [prefill])
+  if (!open.length) return <div style={{ ...T.card, marginTop: 8 }}><p style={{ ...T.p, margin: 0 }}>No house is open for booking right now.</p></div>
 
   async function book(acceptExtra = false) {
-    const r = await post({ action: 'book', checkIn, checkOut, visibility, shareWith, notes, acceptExtra }, 'Booked. Check your stays above.')
+    const r = await post({ action: 'book', houseId, checkIn, checkOut, visibility, shareWith, notes, acceptExtra }, 'Booked. Check your stays above.')
     if (r.j?.needsExtra) setExtra(r.j)
     else if (r.ok) { setExtra(null); setNotes('') }
   }
@@ -290,8 +308,15 @@ function BookForm({ d, post, busy, prefill }: any) {
   return (
     <div id="nomad-book" style={{ ...T.card, marginTop: 8 }}>
       <h2 style={T.h2}>Book a stay</h2>
+      {open.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {open.map((h: any) => (
+            <button key={h.id} onClick={() => { setHouseId(h.id); setExtra(null) }} style={{ ...btn(houseId === h.id), padding: '8px 14px' }}>{h.city}</button>
+          ))}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <label><span style={T.label}>Check-in</span><input type="date" value={checkIn} min={addDays(d.today, 1)} max={addDays(d.today, s.booking_window_days)} onChange={e => { setCheckIn(e.target.value); setExtra(null) }} style={T.input} /></label>
+        <label><span style={T.label}>Check-in</span><input type="date" value={checkIn} min={addDays(today, 1)} max={addDays(today, s.booking_window_days)} onChange={e => { setCheckIn(e.target.value); setExtra(null) }} style={T.input} /></label>
         <label><span style={T.label}>Check-out</span><input type="date" value={checkOut} min={addDays(checkIn, 1)} max={addDays(checkIn, s.max_nights_per_stay)} onChange={e => { setCheckOut(e.target.value); setExtra(null) }} style={T.input} /></label>
       </div>
       <div style={{ ...T.label, marginTop: 14 }}>Who can stay at the same time</div>
@@ -316,7 +341,7 @@ function BookForm({ d, post, busy, prefill }: any) {
 
       {extra ? (
         <div style={{ ...T.card, marginTop: 12, borderColor: 'rgba(var(--t-gold-rgb),0.5)' }}>
-          <p style={T.p}>This stay uses {extra.cost} nights. {extra.fromBank} come from your bank, and {extra.extraNights} extra night{extra.extraNights === 1 ? '' : 's'} cost {money(extra.extraCents)}, charged to your Nomad card{d.calendar?.some((c: any) => c.join === 'request') ? ' (when the stay is confirmed)' : ''}.</p>
+          <p style={T.p}>This stay uses {extra.cost} nights. {extra.fromBank} come from your bank, and {extra.extraNights} extra night{extra.extraNights === 1 ? '' : 's'} cost {money(extra.extraCents)}, charged to your Nomad card{d.calendar?.some((c: any) => c.join === 'request' && c.house_id === houseId) ? ' (when the stay is confirmed)' : ''}.</p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button disabled={busy} onClick={() => book(true)} style={btn(true)}>Book and pay {money(extra.extraCents)}</button>
             <button onClick={() => setExtra(null)} style={btn()}>Change dates</button>

@@ -1,6 +1,8 @@
 'use client'
-// Nomad admin: Members · Stays · House · Settings (2026-10-25). Rendered by
-// app/admin/nomad/page.tsx next to the Applications tab.
+// Nomad admin: Members · Stays · This week · Houses · Settings (2026-10-25).
+// Rendered by app/admin/nomad/page.tsx next to the Applications tab.
+// Houses (migration 175): each house has its own time zone, lock and any rule
+// that differs from the program defaults in Settings.
 import { useCallback, useEffect, useState } from 'react'
 
 const C = { card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', gold: '#d4a843', green: '#4ade80', amber: '#fbbf24', red: '#f87171' }
@@ -16,7 +18,7 @@ const day = (iso: string | null) => iso ? new Intl.DateTimeFormat('en-US', { tim
 const STATUS_COLOR: Record<string, string> = { pending: C.gold, starting: C.gold, active: C.green, past_due: C.amber, paused: C.red, ended: C.dim, confirmed: C.green, requested: C.amber, cancelled: C.dim, declined: C.dim }
 const Pill = ({ s }: { s: string }) => <span style={{ ...btn(STATUS_COLOR[s] || C.text, true), cursor: 'default', padding: '3px 8px' }}>{s.replace('_', ' ').toUpperCase()}</span>
 
-export default function NomadOps({ section }: { section: 'members' | 'stays' | 'house' | 'settings' }) {
+export default function NomadOps({ section }: { section: 'members' | 'stays' | 'house' | 'houses' | 'settings' }) {
   const [d, setD] = useState<any>(null)
   const [err, setErr] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -50,6 +52,7 @@ export default function NomadOps({ section }: { section: 'members' | 'stays' | '
       {section === 'members' && <Members d={d} act={act} busy={busy} />}
       {section === 'stays' && <Stays d={d} act={act} busy={busy} />}
       {section === 'house' && <House d={d} />}
+      {section === 'houses' && <Houses d={d} act={act} busy={busy} />}
       {section === 'settings' && <Settings d={d} act={act} busy={busy} />}
     </div>
   )
@@ -107,20 +110,36 @@ function Members({ d, act, busy }: any) {
     </>
   )
 }
-const confirmEnd = () => typeof window !== 'undefined' && window.confirm('End this membership now? Plus is removed and future stays stay booked until you cancel them.')
+const confirmEnd = () => typeof window !== 'undefined' && window.confirm('End this membership now? Plus is removed and their future stays are cancelled (nights are not returned).')
+
+function HousePicker({ d, value, onChange, all = true }: any) {
+  if ((d.houses || []).length < 2) return null
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} style={{ ...input, marginBottom: 14 }}>
+      {all && <option value="" style={{ background: C.card, color: C.text }}>All houses</option>}
+      {d.houses.map((h: any) => <option key={h.id} value={h.id} style={{ background: C.card, color: C.text }}>{h.name}{h.active ? '' : ' (closed)'}</option>)}
+    </select>
+  )
+}
 
 function Stays({ d, act, busy }: any) {
-  const upcoming = d.stays.filter((x: any) => ['confirmed', 'requested'].includes(x.status))
+  const [houseId, setHouseId] = useState('')
+  const rows = d.stays.filter((x: any) => !houseId || x.house_id === houseId)
+  const upcoming = rows.filter((x: any) => ['confirmed', 'requested'].includes(x.status))
+  const multi = (d.houses || []).length > 1
+  const houseOf = (id: string) => (d.houses || []).find((h: any) => h.id === id)
   return (
     <>
       <p style={{ ...small, marginBottom: 14 }}>Upcoming and recent stays. Door codes show here only. They’re live codes, so never paste them into a group chat.</p>
+      <HousePicker d={d} value={houseId} onChange={setHouseId} />
       {upcoming.length === 0 && <div style={small}>No upcoming stays.</div>}
       <div style={{ display: 'grid', gap: 10 }}>
-        {d.stays.map((x: any) => (
+        {rows.map((x: any) => (
           <div key={x.id} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{x.who} · {x.check_in} → {x.check_out}</div>
+                {multi && <div style={{ ...small, color: C.gold }}>{x.house}</div>}
                 <div style={small}>{x.visibility === 'private' ? 'Private' : x.visibility === 'any' ? 'Open to any member (with approval)' : `Shared with ${x.share_with?.length || 0} chosen`} · {x.nights_cost} bank nights{x.extra_nights ? ` + ${x.extra_nights} extra (${money(x.extra_cents)})` : ''}</div>
                 {x.door_code && <div style={{ ...small, color: C.gold }}>Door code: {x.door_code}</div>}
               </div>
@@ -130,7 +149,7 @@ function Stays({ d, act, busy }: any) {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
                 <button disabled={busy} onClick={() => act({ action: 'cancel_stay', stayId: x.id, refund: true }, 'Cancelled, nights returned.')} style={btn(C.amber)}>CANCEL + RETURN NIGHTS</button>
                 <button disabled={busy} onClick={() => act({ action: 'cancel_stay', stayId: x.id, refund: false }, 'Cancelled.')} style={btn(C.red)}>CANCEL, KEEP NIGHTS</button>
-                {x.status === 'confirmed' && !x.door_code && <button disabled={busy || !d.doorReady || !d.settings.door_codes_enabled} onClick={() => act({ action: 'mint_code', stayId: x.id }, 'Door code made.')} style={btn(C.gold)}>MAKE DOOR CODE</button>}
+                {x.status === 'confirmed' && !x.door_code && <button disabled={busy || !houseOf(x.house_id)?.doorReady || !houseOf(x.house_id)?.doorCodesOn} onClick={() => act({ action: 'mint_code', stayId: x.id }, 'Door code made.')} style={btn(C.gold)}>MAKE DOOR CODE</button>}
               </div>
             )}
           </div>
@@ -141,7 +160,10 @@ function Stays({ d, act, busy }: any) {
 }
 
 function House({ d }: any) {
-  const h = d.house
+  const [houseId, setHouseId] = useState(d.houses?.[0]?.id || '')
+  const house = (d.houses || []).find((x: any) => x.id === houseId) || d.houses?.[0]
+  if (!house) return <div style={small}>No houses yet. Add one in the Houses tab.</div>
+  const h = house.week
   const List = ({ title, rows, render }: any) => (
     <div style={{ ...card, marginBottom: 12 }}>
       <div style={{ fontSize: 12, letterSpacing: '0.14em', fontWeight: 700, marginBottom: 8 }}>{title}</div>
@@ -150,12 +172,13 @@ function House({ d }: any) {
   )
   return (
     <>
-      <p style={{ ...small, marginBottom: 14 }}>The next 7 days at the house (Mexico City dates). This is the view to share with the resident manager.</p>
+      <HousePicker d={d} value={house.id} onChange={setHouseId} all={false} />
+      <p style={{ ...small, marginBottom: 14 }}>The next 7 days at {house.name} ({house.city} dates, today is {house.today}). This is the view to share with the resident manager.</p>
       <List title="IN THE HOUSE NOW" rows={h.inHouse} render={(x: any) => <div key={x.id} style={small}>{x.nomad_memberships?.name} · until {x.check_out}</div>} />
       <List title="ARRIVING" rows={h.arrivals} render={(x: any) => <div key={x.id} style={small}>{x.check_in} · {x.nomad_memberships?.name} · {x.check_in} → {x.check_out}</div>} />
       <List title="LEAVING (CLEANING DUE)" rows={h.departures} render={(x: any) => <div key={x.id} style={small}>{x.check_out} · {x.nomad_memberships?.name}</div>} />
       <List title="VISITORS REGISTERED" rows={h.visitors} render={(v: any) => <div key={v.id} style={small}>{v.day} · {v.name}{v.role ? ` (${v.role})` : ''}{v.phone ? ` · ${v.phone}` : ''} · guest of {v.host}</div>} />
-      <List title="STUDIO ROOM" rows={h.blocks} render={(b: any) => <div key={b.id} style={small}>{b.day} · {b.start_hour}:00–{b.start_hour + b.hours}:00 · {b.who}</div>} />
+      {house.has_studio && <List title="STUDIO ROOM" rows={h.blocks} render={(b: any) => <div key={b.id} style={small}>{b.day} · {b.start_hour}:00–{b.start_hour + b.hours}:00 · {b.who}</div>} />}
     </>
   )
 }
@@ -174,6 +197,8 @@ function Settings({ d, act, busy }: any) {
     act({ action: 'settings', settings: { ...s, busy_ranges } }, 'Settings saved.')
   }
   return (
+    <>
+    <p style={{ ...small, marginBottom: 14 }}>Program defaults. Membership money and the night bank apply everywhere. The stay, studio and visitor rules are the default for every house, and a house can set its own in the Houses tab.</p>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
       <div style={card}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Money and nights</div>
@@ -191,7 +216,7 @@ function Settings({ d, act, busy }: any) {
         {num('booking_window_days', 'Book this many days ahead')}
         {num('second_stay_lead_days', 'Next stay opens when the current one is within (days)')}
         {num('free_cancel_days', 'Free cancellation (days before)')}
-        {num('check_in_hour', 'Check-in hour (Mexico City, 24h)')}
+        {num('check_in_hour', 'Check-in hour (house time, 24h)')}
         {num('check_out_hour', 'Check-out hour')}
       </div>
       <div style={card}>
@@ -202,17 +227,124 @@ function Settings({ d, act, busy }: any) {
         {num('max_visitors_per_day', 'Visitors per day (whole house)')}
       </div>
       <div style={card}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>House</div>
-        <label style={{ display: 'block', marginBottom: 12 }}><div style={small}>Name</div><input value={s.house_name} onChange={e => setS((x: any) => ({ ...x, house_name: e.target.value }))} style={{ ...input, width: '100%' }} /></label>
-        <label style={{ display: 'block', marginBottom: 12 }}><div style={small}>Address (members only see it while active)</div><input value={s.house_address} onChange={e => setS((x: any) => ({ ...x, house_address: e.target.value }))} style={{ ...input, width: '100%' }} /></label>
-        <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-          <input type="checkbox" checked={!!s.door_codes_enabled} onChange={e => setS((x: any) => ({ ...x, door_codes_enabled: e.target.checked }))} /> Make door codes for confirmed stays
-        </label>
-        <div style={{ ...small, color: d.doorReady ? C.green : C.amber, marginBottom: 12 }}>{d.doorReady ? 'Lock paired (NOMAD_IGLOOHOME_DEVICE_ID set).' : 'No lock yet: add NOMAD_IGLOOHOME_DEVICE_ID in Vercel once the house lock is paired.'}</div>
-        <div style={small}>Busy dates: one per line, “start end label”, e.g. 2027-03-20 2027-03-27 Fashion week</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Busy dates (default)</div>
+        <div style={small}>One per line, “start end label”, e.g. 2027-03-20 2027-03-27 Fashion week. A house can list its own instead.</div>
         <textarea value={ranges} onChange={e => setRanges(e.target.value)} rows={4} style={{ ...input, width: '100%', fontSize: 14 }} />
       </div>
       <div><button disabled={busy} onClick={save} style={btn(C.gold, true)}>SAVE SETTINGS</button></div>
+    </div>
+    </>
+  )
+}
+
+// ── Houses ────────────────────────────────────────────────────────────────
+const OVERRIDE_LABELS: Record<string, [string, boolean?]> = {
+  extra_night_cents: ['Extra night price ($)', true], busy_multiplier: ['Busy-date multiplier'],
+  max_nights_per_stay: ['Max nights per stay'], max_members_at_once: ['Max members in the house'],
+  booking_window_days: ['Book this many days ahead'], free_cancel_days: ['Free cancellation (days before)'],
+  check_in_hour: ['Check-in hour (24h)'], check_out_hour: ['Check-out hour'],
+  studio_block_hours: ['Studio block length (hours)'], studio_open_hour: ['Studio opens (hour)'], studio_close_hour: ['Studio closes (hour)'],
+  max_visitors_per_day: ['Visitors per day'],
+}
+const rangesToText = (r: any[]) => (r || []).map((x: any) => `${x.start} ${x.end} ${x.label || ''}`.trim()).join('\n')
+const textToRanges = (txt: string) => txt.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [start, end, ...rest] = l.split(/\s+/); return { start, end, label: rest.join(' ') } })
+
+function Houses({ d, act, busy }: any) {
+  const [adding, setAdding] = useState(false)
+  const [n, setN] = useState({ name: '', city: '', slug: '', timezone: 'America/Los_Angeles' })
+  return (
+    <>
+      <p style={{ ...small, marginBottom: 14 }}>Each house runs on its own time zone and calendar. Members use one membership and one night bank at every open house. Leave a rule blank to use the program default from Settings. New houses start closed; open one when it’s ready to book.</p>
+      <div style={{ display: 'grid', gap: 14 }}>
+        {(d.houses || []).map((h: any) => <HouseCard key={h.id} h={h} d={d} act={act} busy={busy} />)}
+      </div>
+      <div style={{ marginTop: 18 }}>
+        {!adding && <button onClick={() => setAdding(true)} style={btn(C.gold)}>+ ADD A HOUSE</button>}
+        {adding && (
+          <div style={card}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>New house</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <label><div style={small}>Name</div><input value={n.name} onChange={e => setN(x => ({ ...x, name: e.target.value }))} placeholder="Nomad House, Los Angeles" style={{ ...input, width: 240 }} /></label>
+              <label><div style={small}>City</div><input value={n.city} onChange={e => setN(x => ({ ...x, city: e.target.value }))} placeholder="Los Angeles" style={{ ...input, width: 160 }} /></label>
+              <label><div style={small}>Short code (permanent)</div><input value={n.slug} onChange={e => setN(x => ({ ...x, slug: e.target.value }))} placeholder="la" style={{ ...input, width: 100 }} /></label>
+              <label><div style={small}>Time zone</div><TzSelect d={d} value={n.timezone} onChange={(v: string) => setN(x => ({ ...x, timezone: v }))} /></label>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button disabled={busy} onClick={() => act({ action: 'house_save', house: n }, 'House added (closed for now).').then(ok => { if (ok) { setAdding(false); setN({ name: '', city: '', slug: '', timezone: 'America/Los_Angeles' }) } })} style={btn(C.gold, true)}>ADD HOUSE</button>
+              <button onClick={() => setAdding(false)} style={btn(C.dim)}>CANCEL</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+function TzSelect({ d, value, onChange }: any) {
+  const list: string[] = Array.from(new Set([value, ...(d.timezones || [])].filter(Boolean)))
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} style={input}>
+      {list.map(z => <option key={z} value={z} style={{ background: C.card, color: C.text }}>{z.replace(/_/g, ' ')}</option>)}
+    </select>
+  )
+}
+
+function HouseCard({ h, d, act, busy }: any) {
+  const [f, setF] = useState<any>({ name: h.name, city: h.city, timezone: h.timezone, address: h.address || '', lock_device_id: h.lock_device_id || '', active: h.active, has_studio: h.has_studio, sort: h.sort })
+  // Door codes: start from what the house actually does, and always save an explicit yes/no.
+  const [o, setO] = useState<any>({ ...(h.overrides || {}), door_codes_enabled: h.doorCodesOn === true })
+  const [ranges, setRanges] = useState<string>(rangesToText(h.overrides?.busy_ranges))
+  const def = d.settings
+  const field = (k: string) => {
+    const [label, cents] = OVERRIDE_LABELS[k]
+    const v = o[k]
+    const shown = v === undefined || v === null || v === '' ? '' : cents ? Number(v) / 100 : v
+    const placeholder = String(cents ? Number(def[k]) / 100 : def[k])
+    return (
+      <label key={k} style={{ display: 'block', marginBottom: 10 }}>
+        <div style={small}>{label}</div>
+        <input type="number" value={shown} placeholder={placeholder} onChange={e => setO((x: any) => ({ ...x, [k]: e.target.value === '' ? '' : cents ? Math.round(Number(e.target.value) * 100) : Number(e.target.value) }))} style={{ ...input, width: 120 }} />
+      </label>
+    )
+  }
+  function save() {
+    const overrides: any = { ...o }
+    for (const k of Object.keys(overrides)) if (overrides[k] === '' || overrides[k] === null) delete overrides[k]
+    overrides.door_codes_enabled = o.door_codes_enabled === true
+    const r = textToRanges(ranges)
+    if (r.length) overrides.busy_ranges = r; else delete overrides.busy_ranges
+    act({ action: 'house_save', house: { id: h.id, ...f, overrides } }, `${f.name} saved.`)
+  }
+  const isFirst = h.slug === 'cdmx'
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{h.name}</div>
+          <div style={small}>Code “{h.slug}” · today there is {h.today}</div>
+        </div>
+        <span style={{ ...btn(h.active ? C.green : C.dim, true), cursor: 'default', padding: '3px 8px' }}>{h.active ? 'OPEN' : 'CLOSED'}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: 10 }}><div style={small}>Name</div><input value={f.name} onChange={e => setF((x: any) => ({ ...x, name: e.target.value }))} style={{ ...input, width: '100%' }} /></label>
+          <label style={{ display: 'block', marginBottom: 10 }}><div style={small}>City</div><input value={f.city} onChange={e => setF((x: any) => ({ ...x, city: e.target.value }))} style={{ ...input, width: '100%' }} /></label>
+          <label style={{ display: 'block', marginBottom: 10 }}><div style={small}>Time zone</div><TzSelect d={d} value={f.timezone} onChange={(v: string) => setF((x: any) => ({ ...x, timezone: v }))} /></label>
+          <label style={{ display: 'block', marginBottom: 10 }}><div style={small}>Address (members see it only while active)</div><input value={f.address} onChange={e => setF((x: any) => ({ ...x, address: e.target.value }))} style={{ ...input, width: '100%' }} /></label>
+          <label style={{ display: 'block', marginBottom: 10 }}><div style={small}>igloohome lock device ID{isFirst ? ' (blank = the NOMAD_IGLOOHOME_DEVICE_ID in Vercel)' : ''}</div><input value={f.lock_device_id} onChange={e => setF((x: any) => ({ ...x, lock_device_id: e.target.value }))} style={{ ...input, width: '100%' }} /></label>
+          <div style={{ ...small, color: h.doorReady ? C.green : C.amber, marginBottom: 10 }}>{h.doorReady ? 'Lock paired.' : 'No lock yet. Door codes start once a lock is added and turned on below.'}</div>
+          <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><input type="checkbox" checked={!!f.active} onChange={e => setF((x: any) => ({ ...x, active: e.target.checked }))} /> Open for booking</label>
+          <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><input type="checkbox" checked={f.has_studio !== false} onChange={e => setF((x: any) => ({ ...x, has_studio: e.target.checked }))} /> Has a studio room</label>
+          <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><input type="checkbox" checked={o.door_codes_enabled === true} onChange={e => setO((x: any) => ({ ...x, door_codes_enabled: e.target.checked }))} /> Make door codes for confirmed stays</label>
+        </div>
+        <div>
+          <div style={{ ...small, marginBottom: 8, color: C.text }}>House rules (blank = program default, shown faded)</div>
+          {Object.keys(OVERRIDE_LABELS).filter(k => h.has_studio !== false || !k.startsWith('studio_')).map(field)}
+          <div style={small}>Busy dates for this house (blank = program default)</div>
+          <textarea value={ranges} onChange={e => setRanges(e.target.value)} rows={3} placeholder={rangesToText(def.busy_ranges)} style={{ ...input, width: '100%', fontSize: 14 }} />
+        </div>
+      </div>
+      <button disabled={busy} onClick={save} style={{ ...btn(C.gold, true), marginTop: 12 }}>SAVE HOUSE</button>
     </div>
   )
 }

@@ -2211,13 +2211,20 @@ export default function AdminDashboard() {
           {navLink('/admin/poses', '◐', 'Pose Guide')}
           {navLink('/admin/portfolio', '🖼', 'Portfolio')}
           {navLink('/admin/open-calls', '◎', 'Open Calls')}
-          {navLink('/admin/nomad', '✈', 'Nomad')}
           {navLink('/admin/directory', '✦', 'Creative Directory')}
           {navLink('/admin/listings', '🏷', 'Service Listings')}
           {navLink('/admin/rosters', '☰', 'Company Rosters')}
           {navLink('/admin/partners', '⇄', 'Partners')}
           {navLink('/admin/community', '📈', 'Community')}
           {navLink('/admin/roles', '◆', 'Directory Roles')}
+
+          {navHdr('NOMAD')}
+          {navLink('/admin/nomad?tab=applications', '✈', 'Applications')}
+          {navLink('/admin/nomad?tab=members', '◉', 'Members')}
+          {navLink('/admin/nomad?tab=stays', '☾', 'Stays')}
+          {navLink('/admin/nomad?tab=house', '▤', 'This Week')}
+          {navLink('/admin/nomad?tab=houses', '⌂', 'Houses')}
+          {navLink('/admin/nomad?tab=settings', '⚙', 'Settings')}
 
           {navHdr('STUDIO')}
           {navView('revenue', '📈', 'Revenue')}

@@ -1,10 +1,16 @@
-// Nomad — the members' home base in Mexico City (2026-10-25). The ONE place the
-// program's rules live, so the member routes, the admin routes and the daily
-// cron can never disagree. Server-only (service role).
+// Nomad — the members' home bases (2026-10-25). The ONE place the program's
+// rules live, so the member routes, the admin routes and the daily cron can
+// never disagree. Server-only (service role).
 //
-// ⚠️ TIME ZONE: Mexico City dropped DST in 2022. It is NOT Central time half
-// the year. Stay dates are Mexico City calendar dates; instants are built with
-// mxInstant(), never lib/booking-times (which assumes Central).
+// HOUSES (migration 175): every stay belongs to a house (nomad_houses). One
+// membership and one night bank work at every house. Program-wide settings
+// live in studio_settings 'nomad_settings'; a house can override the
+// HOUSE_OVERRIDE_KEYS (its rules, hours, prices) in nomad_houses.overrides.
+// Always book/check against houseSettings(s, house), never the bare settings.
+//
+// ⚠️ TIME ZONE: each house has its own IANA zone. Stay dates are that house's
+// calendar dates; instants are built with localInstant(date, hour, tz), never
+// lib/booking-times (which assumes Central). Mexico City has no DST since 2022.
 //
 // ⚠️ MONEY: every charge uses the card the member picked and consented to
 // (membership.square_card_id). Idempotency keys are deterministic per
@@ -67,6 +73,103 @@ export const DEFAULT_SETTINGS: NomadSettings = {
   door_codes_enabled: false,
 }
 
+// ── Houses ────────────────────────────────────────────────────────────────
+// Settings a single house may set differently from the program default.
+// Membership money (dues, nights/month, bank cap, grace) stays program-wide.
+export const HOUSE_OVERRIDE_KEYS = [
+  'extra_night_cents', 'busy_multiplier', 'busy_ranges', 'max_nights_per_stay', 'max_members_at_once',
+  'booking_window_days', 'free_cancel_days', 'check_in_hour', 'check_out_hour', 'studio_block_hours',
+  'studio_open_hour', 'studio_close_hour', 'max_visitors_per_day', 'door_codes_enabled',
+] as const
+
+export const TIMEZONES = [
+  'America/Mexico_City', 'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York',
+  'America/Bogota', 'America/Lima', 'America/Sao_Paulo', 'America/Argentina/Buenos_Aires', 'Europe/London',
+  'Europe/Paris', 'Europe/Madrid', 'Europe/Lisbon', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Bangkok', 'Asia/Makassar',
+]
+
+/** Program settings + one house's overrides + the house's own facts. */
+export type HouseSettings = NomadSettings & {
+  house_id: string; house_slug: string; city: string; timezone: string
+  lock_device_id: string | null; has_studio: boolean; house_active: boolean
+}
+
+export function houseSettings(s: NomadSettings, house: any): HouseSettings {
+  const o: any = house?.overrides || {}
+  const merged: any = { ...s }
+  for (const k of HOUSE_OVERRIDE_KEYS) if (o[k] !== undefined && o[k] !== null && o[k] !== '') merged[k] = o[k]
+  // Door codes are a per-house switch only (never inherited): a new house with
+  // a lock must not start minting live codes until someone turns it on there.
+  merged.door_codes_enabled = o.door_codes_enabled === true
+  // The first house keeps working with the env-var lock it was built with.
+  const lock = house?.lock_device_id || (house?.slug === 'cdmx' ? process.env.NOMAD_IGLOOHOME_DEVICE_ID || null : null)
+  return {
+    ...merged,
+    house_name: house?.name || s.house_name, house_address: house?.address || '',
+    house_id: house?.id, house_slug: house?.slug, city: house?.city || '', timezone: house?.timezone || MX_TZ,
+    lock_device_id: lock, has_studio: house?.has_studio !== false, house_active: house?.active === true,
+  }
+}
+
+export async function getHouses(db: SupabaseClient, activeOnly = false): Promise<any[]> {
+  let q = db.from('nomad_houses').select('*').order('sort').order('created_at')
+  if (activeOnly) q = q.eq('active', true)
+  const { data, error } = await q
+  if (error) throw new Error(`houses read failed: ${error.message}`)
+  return data ?? []
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export async function getHouse(db: SupabaseClient, id: string): Promise<any | null> {
+  if (!id || !UUID_RE.test(id)) return null
+  const { data, error } = await db.from('nomad_houses').select('*').eq('id', id).maybeSingle()
+  if (error) throw new Error(`house read failed: ${error.message}`)
+  return data
+}
+
+/** Clean an admin's house edit. Returns only fields that are safe to write. */
+export function cleanHouse(input: any): { patch: any; error?: string } {
+  const patch: any = {}
+  if (input.name !== undefined) { const v = String(input.name || '').trim().slice(0, 120); if (!v) return { patch, error: 'Give the house a name.' }; patch.name = v }
+  if (input.city !== undefined) { const v = String(input.city || '').trim().slice(0, 80); if (!v) return { patch, error: 'Add the city.' }; patch.city = v }
+  if (input.timezone !== undefined) {
+    const tz = String(input.timezone || '')
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }) } catch { return { patch, error: 'That time zone isn’t valid.' } }
+    patch.timezone = tz
+  }
+  if (input.slug !== undefined) {
+    const v = String(input.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30)
+    if (!v) return { patch, error: 'Add a short code, like la.' }
+    patch.slug = v
+  }
+  if (input.address !== undefined) patch.address = String(input.address || '').slice(0, 300) || null
+  if (input.lock_device_id !== undefined) patch.lock_device_id = String(input.lock_device_id || '').trim().slice(0, 80) || null
+  if (input.active !== undefined) patch.active = input.active === true
+  if (input.has_studio !== undefined) patch.has_studio = input.has_studio !== false
+  if (input.sort !== undefined && Number.isFinite(Number(input.sort))) patch.sort = Math.round(Number(input.sort))
+  if (input.overrides !== undefined) {
+    const o: any = {}
+    const src = input.overrides || {}
+    for (const k of HOUSE_OVERRIDE_KEYS) {
+      const v = src[k]
+      if (v === undefined || v === null || v === '') continue
+      const d: any = (DEFAULT_SETTINGS as any)[k]
+      if (typeof d === 'number') { const n = Number(v); if (Number.isFinite(n) && n >= 0) o[k] = Math.round(n) }
+      else if (typeof d === 'boolean') o[k] = v === true
+      else if (k === 'busy_ranges' && Array.isArray(v)) {
+        o[k] = v.filter((r: any) => isDate(r?.start) && isDate(r?.end) && r.end >= r.start)
+          .map((r: any) => ({ start: r.start, end: r.end, label: String(r.label ?? '').slice(0, 60) }))
+      }
+    }
+    if (o.busy_multiplier !== undefined && o.busy_multiplier < 1) o.busy_multiplier = 1
+    if (o.max_members_at_once !== undefined && o.max_members_at_once < 1) o.max_members_at_once = 1
+    const hourErr = checkHours(o)
+    if (hourErr) return { patch, error: hourErr }
+    patch.overrides = o
+  }
+  return { patch }
+}
+
 export async function getNomadSettings(db: SupabaseClient): Promise<NomadSettings> {
   const { data, error } = await db.from('studio_settings').select('value').eq('key', 'nomad_settings').maybeSingle()
   if (error) throw new Error(`nomad settings read failed: ${error.message}`)
@@ -92,6 +195,8 @@ export async function saveNomadSettings(db: SupabaseClient, patch: Partial<Nomad
   }
   if (next.busy_multiplier < 1) next.busy_multiplier = 1
   if (next.max_members_at_once < 1) next.max_members_at_once = 1
+  const hourErr = checkHours(next)
+  if (hourErr) throw new Error(hourErr)
   // Update-then-insert, same as the other studio_settings writers (no upsert:
   // the key column is not guaranteed unique-constrained).
   const value = JSON.stringify(next)
@@ -101,11 +206,28 @@ export async function saveNomadSettings(db: SupabaseClient, patch: Partial<Nomad
   return next
 }
 
-// ── Mexico City dates ─────────────────────────────────────────────────────
+/** Hours must be real clock hours, or localInstant() can't build a time and
+ *  door codes silently stop. Checks whichever hour keys are present. */
+export function checkHours(o: any): string | null {
+  for (const k of ['check_in_hour', 'check_out_hour', 'studio_open_hour']) if (o[k] !== undefined && !(o[k] >= 0 && o[k] <= 23)) return 'Hours run 0 to 23.'
+  if (o.studio_close_hour !== undefined && !(o.studio_close_hour >= 1 && o.studio_close_hour <= 24)) return 'Studio closing hour runs 1 to 24.'
+  if (o.studio_open_hour !== undefined && o.studio_close_hour !== undefined && o.studio_open_hour >= o.studio_close_hour) return 'The studio has to open before it closes.'
+  return null
+}
+
+// ── House-local dates ─────────────────────────────────────────────────────
 export const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 
-export function mxToday(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: MX_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+/** Today's calendar date in a house's time zone. */
+export function localToday(tz: string = MX_TZ, now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz || MX_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+}
+/** Mexico City today (kept for program-wide things: billing seeds, logs). */
+export function mxToday(now: Date = new Date()): string { return localToday(MX_TZ, now) }
+/** The earliest "today" of any house — a safe lower bound for date queries. */
+export function earliestToday(houses: any[]): string {
+  const days = (houses.length ? houses : [{ timezone: MX_TZ }]).map(h => localToday(h.timezone))
+  return days.sort()[0]
 }
 export function addDays(date: string, n: number): string {
   const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10)
@@ -117,14 +239,22 @@ export function daysBetween(a: string, b: string): number {
 export function nightsOf(checkIn: string, checkOut: string): string[] {
   const out: string[] = []; for (let d = checkIn; d < checkOut; d = addDays(d, 1)) out.push(d); return out
 }
-/** "2026-11-03" at 15:00 Mexico City → an ISO instant with the right offset (DST-proof). */
-export function mxInstant(date: string, hour: number): string {
-  const guess = new Date(`${date}T${String(hour).padStart(2, '0')}:00:00Z`)
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: MX_TZ, timeZoneName: 'longOffset' }).formatToParts(guess)
-  const tz = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT-06:00'
-  const m = tz.match(/GMT([+-]\d{2}):?(\d{2})?/)
-  const off = m ? `${m[1]}:${m[2] || '00'}` : '-06:00'
-  return `${date}T${String(hour).padStart(2, '0')}:00:00${off}`
+/** "2026-11-03" at 15:00 in a house's zone → an ISO instant with the right offset.
+ *  The offset is read at that local moment, so DST zones (LA) get it right. */
+export function localInstant(date: string, hour: number, tz: string = MX_TZ): string {
+  // First guess the offset at noon UTC that day, then re-read it at the real moment.
+  const off1 = offsetAt(new Date(`${date}T12:00:00Z`), tz)
+  const local = `${date}T${String(hour).padStart(2, '0')}:00:00`
+  const off2 = offsetAt(new Date(`${local}${off1}`), tz)
+  return `${local}${off2}`
+}
+export const mxInstant = (date: string, hour: number) => localInstant(date, hour, MX_TZ)
+function offsetAt(instant: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz || MX_TZ, timeZoneName: 'longOffset' }).formatToParts(instant)
+  const name = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT-06:00'
+  if (name === 'GMT') return '+00:00'
+  const m = name.match(/GMT([+-]\d{2}):?(\d{2})?/)
+  return m ? `${m[1]}:${m[2] || '00'}` : '-06:00'
 }
 
 // ── Night bank ────────────────────────────────────────────────────────────
@@ -364,9 +494,10 @@ export async function applyPaidDues(db: SupabaseClient, charge: any, s: NomadSet
 // 'confirming' = an approval is mid-charge; it holds its place like the others.
 export const ACTIVE_STAY = ['confirmed', 'requested', 'confirming']
 
-/** Stays (any member) overlapping [checkIn, checkOut), excluding one id. */
-export async function overlappingStays(db: SupabaseClient, checkIn: string, checkOut: string, excludeId?: string) {
-  let q = db.from('nomad_stays').select('*').in('status', ACTIVE_STAY).lt('check_in', checkOut).gt('check_out', checkIn)
+/** Stays (any member) at ONE house overlapping [checkIn, checkOut), excluding one id. */
+export async function overlappingStays(db: SupabaseClient, houseId: string, checkIn: string, checkOut: string, excludeId?: string) {
+  if (!houseId) throw new Error('overlappingStays needs a house')
+  let q = db.from('nomad_stays').select('*').eq('house_id', houseId).in('status', ACTIVE_STAY).lt('check_in', checkOut).gt('check_out', checkIn)
   if (excludeId) q = q.neq('id', excludeId)
   const { data, error } = await q
   if (error) throw new Error(`stay lookup failed: ${error.message}`)
@@ -376,14 +507,17 @@ export async function overlappingStays(db: SupabaseClient, checkIn: string, chec
 // Flat shape (strict:false disables union narrowing — see rescheduleFailed()).
 export type StayCheck = { ok: boolean; error?: string; status?: 'confirmed' | 'requested'; hostStayIds?: string[]; nights?: string[]; cost?: number }
 
-/** Every booking rule in one place. Pure apart from the reads it is given. */
+/** Every booking rule in one place. Pure apart from the reads it is given.
+ *  `s` is houseSettings() for the house being booked; `overlapping` is that
+ *  house's stays; `myUpcoming` is the member's stays at EVERY house. */
 export function checkStay(opts: {
-  m: any; s: NomadSettings; checkIn: string; checkOut: string; visibility: string
+  m: any; s: NomadSettings | HouseSettings; checkIn: string; checkOut: string; visibility: string
   overlapping: any[]; myUpcoming: any[]; today?: string
 }): StayCheck {
   const { m, s, checkIn, checkOut, overlapping, myUpcoming } = opts
-  const today = opts.today ?? mxToday()
+  const today = opts.today ?? localToday((s as any).timezone || MX_TZ)
   if (m.status !== 'active') return { ok: false, error: 'Your membership needs to be active to book.' }
+  if ((s as any).house_id && !(s as any).house_active) return { ok: false, error: 'That house isn’t open for booking yet.' }
   if (!isDate(checkIn) || !isDate(checkOut) || checkOut <= checkIn) return { ok: false, error: 'Pick a check-in and a later check-out.' }
   if (checkIn < addDays(today, 1)) return { ok: false, error: 'Stays start tomorrow at the earliest.' }
   if (daysBetween(today, checkIn) > s.booking_window_days) return { ok: false, error: `Stays open ${s.booking_window_days} days ahead.` }
@@ -393,6 +527,8 @@ export function checkStay(opts: {
   const blocking = myUpcoming.filter(x => daysBetween(today, x.check_in) > s.second_stay_lead_days)
   if (blocking.length) return { ok: false, error: `You can book your next stay once your upcoming one is within ${s.second_stay_lead_days} days.` }
   if (overlapping.some(x => x.membership_id === m.id)) return { ok: false, error: 'You already have a stay on those dates.' }
+  // One member, one place: no overlapping stays across houses either.
+  if (myUpcoming.some(x => x.check_out && x.check_in < checkOut && x.check_out > checkIn)) return { ok: false, error: 'You already have a stay on those dates (at another house).' }
 
   const hostStayIds: string[] = []
   for (const x of overlapping) {
@@ -412,18 +548,20 @@ export function checkStay(opts: {
   return { ok: true, status: hostStayIds.length ? 'requested' : 'confirmed', hostStayIds, nights, cost: nightCost(nights, s) }
 }
 
-/** Mint the stay's door code — only once it's within 3 days of check-in
+/** Mint the stay's door code (lock = the stay's house) — only within 3 days of check-in
  *  (the daily cron catches the rest), because an algoPIN can NEVER be revoked:
  *  minting at booking time would leave a live code behind every cancellation.
  *  `force` is the admin's MAKE DOOR CODE button. No-op when not configured. */
-export async function issueStayDoorCode(db: SupabaseClient, stay: any, s: NomadSettings, who: string, force = false): Promise<string | null> {
+export async function issueStayDoorCode(db: SupabaseClient, stay: any, s: HouseSettings, who: string, force = false): Promise<string | null> {
   if (!s.door_codes_enabled || stay.door_code) return stay.door_code ?? null
   if (stay.status !== 'confirmed') return null
-  if (!force && daysBetween(mxToday(), stay.check_in) > 3) return null
+  if (!s.lock_device_id) return null
+  if (stay.house_id && s.house_id && stay.house_id !== s.house_id) { console.error('[nomad] door code: settings are for another house', stay.id); return null }
+  if (!force && daysBetween(localToday(s.timezone), stay.check_in) > 3) return null
   try {
-    const pin = await createPinForDevice(process.env.NOMAD_IGLOOHOME_DEVICE_ID, {
-      startISO: mxInstant(stay.check_in, s.check_in_hour),
-      endISO: mxInstant(stay.check_out, s.check_out_hour),
+    const pin = await createPinForDevice(s.lock_device_id, {
+      startISO: localInstant(stay.check_in, s.check_in_hour, s.timezone),
+      endISO: localInstant(stay.check_out, s.check_out_hour, s.timezone),
       accessName: `Nomad ${who}`.slice(0, 40),
     })
     if (!pin) return null
@@ -434,6 +572,44 @@ export async function issueStayDoorCode(db: SupabaseClient, stay: any, s: NomadS
     console.error('[nomad] door code failed', e)
     return null
   }
+}
+
+/** A membership ended: cancel its stays that haven't started yet, judged by
+ *  each house's own "today". Nights are not refunded (the membership is over). */
+export async function cancelFutureStays(db: SupabaseClient, membershipId: string): Promise<number> {
+  const houses = await getHouses(db)
+  const tz = new Map(houses.map(h => [h.id, h.timezone]))
+  // Not 'confirming': an approval is mid-charge on that one; it finishes first.
+  const { data, error } = await db.from('nomad_stays').select('id, house_id, check_in').eq('membership_id', membershipId).in('status', ['confirmed', 'requested']).gte('check_in', earliestToday(houses))
+  if (error) throw new Error(`future stays read failed: ${error.message}`)
+  const ids = (data ?? []).filter(x => x.check_in > localToday(tz.get(x.house_id))).map(x => x.id)
+  if (!ids.length) return 0
+  const { data: done, error: upErr } = await db.from('nomad_stays').update({ status: 'cancelled', cancelled_at: new Date().toISOString() }).in('id', ids).in('status', ['confirmed', 'requested']).select('id')
+  if (upErr) throw new Error(`future stays cancel failed: ${upErr.message}`)
+  const doneIds = (done ?? []).map(x => x.id)
+  if (!doneIds.length) return 0
+  await db.from('nomad_studio_blocks').update({ status: 'cancelled' }).in('stay_id', doneIds)
+  await db.from('nomad_visitors').update({ status: 'cancelled' }).in('stay_id', doneIds)
+  for (const id of doneIds) await releaseWaitingOn(db, id).catch(e => console.error('[nomad] release waiting failed', id, e))
+  return doneIds.length
+}
+
+/** A stay was cancelled: join requests that were waiting on its OK drop it.
+ *  If nobody is left to approve one, it's declined and its nights go back.
+ *  Returns the released requests (for pushes). */
+export async function releaseWaitingOn(db: SupabaseClient, stayId: string): Promise<any[]> {
+  const released: any[] = []
+  const { data: waiting } = await db.from('nomad_stays').select('id, host_stay_ids').eq('status', 'requested').contains('host_stay_ids', [stayId])
+  for (const w of waiting ?? []) {
+    const left = (w.host_stay_ids || []).filter((h: string) => h !== stayId)
+    if (left.length) { await db.from('nomad_stays').update({ host_stay_ids: left }).eq('id', w.id).eq('status', 'requested'); continue }
+    const { data: rel } = await db.from('nomad_stays').update({ status: 'declined', cancelled_at: new Date().toISOString(), host_stay_ids: [] }).eq('id', w.id).eq('status', 'requested').select('id, membership_id, nights_cost, check_in, check_out, nomad_memberships ( auth_user_id )')
+    const r0: any = rel?.[0]
+    if (!r0) continue
+    if (r0.nights_cost > 0) await db.from('nomad_nights').insert({ membership_id: r0.membership_id, delta: r0.nights_cost, reason: 'stay_refund', stay_id: r0.id, note: 'host cancelled' })
+    released.push(r0)
+  }
+  return released
 }
 
 export const firstName = (n: unknown) => String(n || '').trim().split(/\s+/)[0] || 'A member'

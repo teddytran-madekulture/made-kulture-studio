@@ -32,6 +32,25 @@ function Item({ href, icon, label, active, color, indent, badge }: { href: strin
   )
 }
 
+// The NOMAD section links straight to each tab of /admin/nomad (?tab=).
+// The active tab is read from the URL after mount (useSearchParams would need
+// a Suspense boundary on every admin page).
+const NOMAD_TABS: [string, string, string][] = [
+  ['applications', '✈', 'Applications'], ['members', '◉', 'Members'], ['stays', '☾', 'Stays'],
+  ['house', '▤', 'This Week'], ['houses', '⌂', 'Houses'], ['settings', '⚙', 'Settings'],
+]
+function NomadNav({ on }: { on: boolean }) {
+  const [tab, setTab] = useState('applications')
+  useEffect(() => {
+    if (!on) return
+    const read = () => { try { setTab(new URLSearchParams(window.location.search).get('tab') || 'applications') } catch {} }
+    read()
+    window.addEventListener('nomad-tab', read)
+    return () => window.removeEventListener('nomad-tab', read)
+  }, [on])
+  return <>{NOMAD_TABS.map(([k, icon, label]) => <Item key={k} href={`/admin/nomad?tab=${k}`} icon={icon} label={label} active={on && tab === k} />)}</>
+}
+
 function SidebarInner() {
   const pathname = usePathname() || ''
   const router = useRouter()
@@ -73,13 +92,15 @@ function SidebarInner() {
         <Item href="/admin/poses" icon="◐" label="Pose Guide" active={on('/admin/poses')} />
         <Item href="/admin/portfolio" icon="🖼" label="Portfolio" active={on('/admin/portfolio')} />
         <Item href="/admin/open-calls" icon="◎" label="Open Calls" active={on('/admin/open-calls')} />
-        <Item href="/admin/nomad" icon="✈" label="Nomad" active={on('/admin/nomad')} />
         <Item href="/admin/directory" icon="✦" label="Creative Directory" active={on('/admin/directory')} />
         <Item href="/admin/listings" icon="🏷" label="Service Listings" active={on('/admin/listings')} />
         <Item href="/admin/rosters" icon="☰" label="Company Rosters" active={on('/admin/rosters')} />
         <Item href="/admin/partners" icon="⇄" label="Partners" active={on('/admin/partners')} />
         <Item href="/admin/community" icon="📈" label="Community" active={on('/admin/community')} />
         <Item href="/admin/roles" icon="◆" label="Directory Roles" active={on('/admin/roles')} />
+
+        <div style={sectionHdr}>NOMAD</div>
+        <NomadNav on={on('/admin/nomad')} />
 
         <div style={sectionHdr}>STUDIO</div>
         <Item href={`${D}revenue`} icon="📈" label="Revenue" />

@@ -16,7 +16,8 @@ const btn = (color: string, filled = false): React.CSSProperties => ({
 })
 const STATUS_COLOR: Record<string, string> = { new: C.gold, approved: C.green, waitlisted: C.amber, declined: C.red }
 const TABS = ['new', 'approved', 'waitlisted', 'declined', 'all'] as const
-const SECTIONS = ['applications', 'members', 'stays', 'house', 'settings'] as const
+const SECTIONS = ['applications', 'members', 'stays', 'house', 'houses', 'settings'] as const
+const SECTION_LABEL: Record<string, string> = { applications: 'APPLICATIONS', members: 'MEMBERS', stays: 'STAYS', house: 'THIS WEEK', houses: 'HOUSES', settings: 'SETTINGS' }
 
 export default function NomadAdminPage() {
   const [d, setD] = useState<any>(null)
@@ -27,7 +28,18 @@ export default function NomadAdminPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [notify, setNotify] = useState(true)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
-  const [section, setSection] = useState<(typeof SECTIONS)[number]>('applications')
+  const [section, setSectionState] = useState<(typeof SECTIONS)[number]>('applications')
+  // ?tab= deep links (the sidebar's NOMAD section links straight to each tab).
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('tab')
+      if (q && (SECTIONS as readonly string[]).includes(q)) setSectionState(q as any)
+    } catch {}
+  }, [])
+  const setSection = (x: (typeof SECTIONS)[number]) => {
+    setSectionState(x)
+    try { const u = new URL(window.location.href); u.searchParams.set('tab', x); window.history.replaceState(null, '', u.toString()); window.dispatchEvent(new Event('nomad-tab')) } catch {}
+  }
 
   const load = useCallback(async () => {
     const r = await fetch('/api/admin/nomad', { cache: 'no-store' })
@@ -71,7 +83,7 @@ export default function NomadAdminPage() {
     <div style={{ padding: '32px 24px', maxWidth: 980, color: C.text }}>
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 12px' }}>NOMAD</h1>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        {SECTIONS.map(x => <button key={x} onClick={() => setSection(x)} style={btn(C.gold, section === x)}>{x.toUpperCase()}</button>)}
+        {SECTIONS.map(x => <button key={x} onClick={() => setSection(x)} style={btn(C.gold, section === x)}>{SECTION_LABEL[x]}</button>)}
       </div>
       {section !== 'applications' && <NomadOps section={section} />}
       {section === 'applications' && <>
