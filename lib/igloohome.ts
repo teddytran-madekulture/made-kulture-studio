@@ -152,6 +152,18 @@ export async function createBookingPin(opts: {
   return mintHourlyPin(deviceId, opts)
 }
 
+// 2026-10-25 — Nomad (Mexico City house): a PIN on ANY paired lock, by device
+// id. Returns null when API creds or the device id are missing (feature stays
+// dormant). Same hourly-algoPIN rules: 1-672 h window, cannot be revoked.
+export async function createPinForDevice(deviceId: string | null | undefined, opts: {
+  startISO: string
+  endISO: string
+  accessName: string
+}): Promise<BookingPin | null> {
+  if (!apiCreds() || !deviceId) return null
+  return mintHourlyPin(deviceId, opts)
+}
+
 // Back-door algoPIN for the same window. Returns null when no back-door lock is
 // configured (IGLOOHOME_DEVICE_ID_BACK unset), so the back-door feature stays
 // dormant until the second lock is paired and its device id is added to Vercel.

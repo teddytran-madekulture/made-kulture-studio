@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { addRewardForCharge } from '@/lib/rewards'
 import { sendOwnerPush } from '@/lib/push'
+import { applyPaidDues, getNomadSettings } from '@/lib/nomad'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -71,6 +72,31 @@ export async function POST(req: NextRequest) {
     const payment = event?.data?.object?.payment
     const orderId = payment?.order_id
     if (payment?.status === 'COMPLETED' && orderId) {
+      // 2026-10-25 — Nomad dues payment links. Same CLAIM pattern: a retried
+      // delivery claims zero rows. Non-fatal for the rest of this handler.
+      try {
+        const { data: nomadPaid } = await supabase.from('nomad_charges')
+          .update({ status: 'paid_link', square_payment_id: payment?.id ?? null })
+          .eq('square_order_id', orderId).eq('status', 'link_sent').select('*')
+        for (const ch of nomadPaid ?? []) {
+          if (ch.kind === 'dues') {
+            const m: any = await applyPaidDues(supabase as any, ch, await getNomadSettings(supabase as any))
+            await sendOwnerPush({ title: 'Nomad: dues paid by link', body: `${m?.name || m?.email || 'A member'} paid $${(Number(ch.amount_cents) / 100).toFixed(0)}${m?.covered ? ' (that month was already paid, so it bought the next one)' : ''}`, url: '/admin/nomad', tag: `paid-${orderId}` })
+          }
+        }
+        if (!nomadPaid?.length) {
+          // A Nomad link paid after it was voided or marked paid by hand = money
+          // with no month attached. Never let that pass silently.
+          const { data: dead } = await supabase.from('nomad_charges').select('id, status, square_payment_id, nomad_memberships ( name, email )').eq('square_order_id', orderId).in('status', ['void', 'paid_link']).limit(1)
+          const d0: any = dead?.[0]
+          if (d0 && d0.square_payment_id !== (payment?.id ?? null)) {
+            await sendOwnerPush({ title: '⚠️ Nomad: a closed payment link was paid', body: `${d0.nomad_memberships?.name || d0.nomad_memberships?.email || 'A member'} paid a link that was already ${d0.status === 'void' ? 'voided' : 'marked paid'}. Refund it or credit a month.`, url: '/admin/nomad', requireInteraction: true })
+          }
+        }
+      } catch (e) {
+        console.error('[Square webhook] nomad reconcile failed', e)
+      }
+
       // CLAIM the rows: `.eq('paid', false)` + `.select()` means a retried
       // delivery (Square retries for ~72h) claims zero rows and does nothing.
       // Without that guard the total below would be added twice.

@@ -4,6 +4,7 @@
 // waitlist (sends the waitlist email), decline, plus private notes.
 // Linked from BOTH admin sidebars.
 import { useCallback, useEffect, useState } from 'react'
+import NomadOps from './NomadOps'
 
 const C = { card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', gold: '#d4a843', green: '#4ade80', amber: '#fbbf24', red: '#f87171' }
 const card: React.CSSProperties = { background: C.card, border: `1px solid ${C.line}`, borderRadius: 8, padding: 16 }
@@ -15,6 +16,7 @@ const btn = (color: string, filled = false): React.CSSProperties => ({
 })
 const STATUS_COLOR: Record<string, string> = { new: C.gold, approved: C.green, waitlisted: C.amber, declined: C.red }
 const TABS = ['new', 'approved', 'waitlisted', 'declined', 'all'] as const
+const SECTIONS = ['applications', 'members', 'stays', 'house', 'settings'] as const
 
 export default function NomadAdminPage() {
   const [d, setD] = useState<any>(null)
@@ -25,6 +27,7 @@ export default function NomadAdminPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [notify, setNotify] = useState(true)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [section, setSection] = useState<(typeof SECTIONS)[number]>('applications')
 
   const load = useCallback(async () => {
     const r = await fetch('/api/admin/nomad', { cache: 'no-store' })
@@ -49,6 +52,15 @@ export default function NomadAdminPage() {
     } finally { setBusy(null) }
   }
 
+  async function createMembership(id: string) {
+    setBusy(id); setNotice(null)
+    try {
+      const r = await fetch('/api/admin/nomad/members', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'invite', applicationId: id }) })
+      const j = await r.json().catch(() => ({}))
+      setNotice(r.ok ? (j.emailed ? 'Membership created. They were emailed a link to start it.' : '⚠️ Membership created, but the email did not send.') : `⚠️ ${j.error || 'Failed.'}`)
+    } finally { setBusy(null) }
+  }
+
   if (unauth) return <div style={{ padding: 40, fontFamily: 'Inter' }}>Sign in to the admin first.</div>
   const apps: any[] = d?.applications ?? []
   const shown = apps
@@ -57,7 +69,12 @@ export default function NomadAdminPage() {
 
   return (
     <div style={{ padding: '32px 24px', maxWidth: 980, color: C.text }}>
-      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 6px' }}>NOMAD APPLICATIONS</h1>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '0 0 12px' }}>NOMAD</h1>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        {SECTIONS.map(x => <button key={x} onClick={() => setSection(x)} style={btn(C.gold, section === x)}>{x.toUpperCase()}</button>)}
+      </div>
+      {section !== 'applications' && <NomadOps section={section} />}
+      {section === 'applications' && <>
       <p style={{ ...small, margin: '0 0 20px' }}>
         People who applied on <a href="/nomad" target="_blank" rel="noreferrer" style={{ color: C.gold }}>/nomad</a>. Approving sends the founding-group invite. Waitlisting sends a short waitlist note. Declining sends nothing. Each email goes out once.
       </p>
@@ -132,6 +149,7 @@ export default function NomadAdminPage() {
                     {a.status !== 'declined' && <button disabled={busy === a.id} onClick={() => patch(a.id, { status: 'declined' })} style={btn(C.red)}>DECLINE</button>}
                     {a.status !== 'new' && <button disabled={busy === a.id} onClick={() => patch(a.id, { status: 'new' })} style={btn(C.dim)}>BACK TO NEW</button>}
                     {a.status === 'approved' && !a.invited_at && <button disabled={busy === a.id} onClick={() => patch(a.id, { notify: true })} style={btn(C.gold)}>SEND INVITE</button>}
+                    {a.status === 'approved' && <button disabled={busy === a.id} onClick={() => createMembership(a.id)} style={btn(C.green, true)}>CREATE MEMBERSHIP</button>}
                   </div>
                   <div style={{ ...small, marginTop: 8 }}>
                     {a.invited_at ? `Invite sent ${day(a.invited_at)}. ` : ''}{a.waitlist_notified_at ? `Waitlist note sent ${day(a.waitlist_notified_at)}.` : ''}
@@ -142,6 +160,7 @@ export default function NomadAdminPage() {
           </div>
         </>
       )}
+      </>}
     </div>
   )
 }
