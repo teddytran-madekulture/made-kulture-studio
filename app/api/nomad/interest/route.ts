@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   await sendOwnerPush({
     title: 'Nomad interest',
     body: `${name} · ${role}${row.based_in ? ` · ${row.based_in}` : ''}${row.instagram ? ` · @${row.instagram}` : ''}`,
-    url: '/admin/notifications',
+    url: '/admin/nomad',
     tag: `nomad-${data.id}`,
     meta: { kind: 'nomad_interest', id: data.id },
   }).catch(() => {})
