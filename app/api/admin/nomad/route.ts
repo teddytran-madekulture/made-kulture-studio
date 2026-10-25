@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { listAllAuthUsers } from '@/lib/auth-user'
+import { listAllAuthUsers, findAuthUserIdByEmail } from '@/lib/auth-user'
 import { sendSimpleEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
@@ -90,7 +90,9 @@ export async function PATCH(req: NextRequest) {
     const first = String(row.name || '').trim().split(/\s+/)[0] || 'there'
     try {
       if (finalStatus === 'approved' && !row.invited_at) {
-        const signup = `${APP_URL}/signup?${new URLSearchParams({ email: row.email, name: row.name || '' })}`
+        // Existing members just sign in; only people without a login are sent to sign up.
+        const hasLogin = !!(await findAuthUserIdByEmail(db, row.email).catch(() => null))
+        const signup = `${APP_URL}/signup?${new URLSearchParams({ email: row.email, name: row.name || '', next: '/account/nomad' })}`
         await send({
           to: row.email,
           label: 'nomad_invite',
@@ -98,11 +100,13 @@ export async function PATCH(req: NextRequest) {
           heading: `${first}, you're in the founding group`,
           paragraphs: [
             'Thanks for applying to Nomad, our members-only home base for creatives in Mexico City. We’d love to have you in the founding group.',
-            'Next step: make sure you have a Made Kulture member account. If you already have one, you’re set. We’ll be in touch personally with dates, pricing and the house details as the home comes together.',
-            'Nothing is charged yet.',
+            hasLogin
+              ? `You already have a Made Kulture account under <strong style="color:#fff;">${row.email}</strong>, so there’s nothing to set up. Sign in with it anytime and you’ll find Nomad in your account.`
+              : `Next step: create your free Made Kulture member account using <strong style="color:#fff;">${row.email}</strong>. That’s where your Nomad membership will live.`,
+            'We’ll be in touch personally with dates, pricing and the house details as the home comes together. Nothing is charged yet.',
           ],
-          ctaText: 'Set up your account',
-          ctaUrl: signup,
+          ctaText: hasLogin ? 'Open Nomad' : 'Create my account',
+          ctaUrl: hasLogin ? `${APP_URL}/account/nomad` : signup,
         })
         patch.invited_at = new Date().toISOString()
         emailed = 'invite'

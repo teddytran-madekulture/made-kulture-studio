@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
         heading: `${firstName(app.name)}, your spot is ready`,
         paragraphs: [
           `Your Nomad membership is set up and waiting for you to start it: <strong style="color:#fff;">$${dues.toFixed(0)} a month</strong>, with ${s.nights_per_month} nights a month in your night bank (up to ${s.night_cap}) and Made Kulture Plus included while you’re a member.`,
-          'Open Nomad in your account, read the house rules, pick a card and start. Nothing is charged until you press start.',
+          `Sign in with <strong style="color:#fff;">${row.email}</strong> (the account you already have), open Nomad, read the house rules, pick a card and start. Nothing is charged until you press start.`,
         ],
         ctaText: 'Start my membership', ctaUrl: `${APP_URL}/account/nomad`,
       }).catch((e: any) => { console.error('[admin/nomad] invite email failed', e); return null })
