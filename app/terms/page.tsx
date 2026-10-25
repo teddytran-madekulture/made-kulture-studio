@@ -132,6 +132,10 @@ export default function TermsPage() {
             <div style={subHead}>Saving an existing booking with Plus</div>
             <P>If you join Plus after booking, Plus benefits apply from the moment you join, including to bookings already inside the 48-hour window.</P>
 
+            {/* 2026-10-24: Plus is per person, and the member must be there. */}
+            <div id="plus-personal" style={{ ...subHead, scrollMarginTop: 120 }}>Plus is personal</div>
+            <P>{"A Plus membership belongs to the one account it was purchased on and cannot be shared, transferred or resold. Plus benefits (short-notice booking, rescheduling and cancellation credit) apply only to bookings made from the member's own account, and the member must be at the studio for the session. Their guests, clients and crew are welcome as part of the party. Sharing your login, or booking a session you won't be at so someone else can use your Plus benefits, is not permitted. If we see this, we may decline the booking or request, pause Plus benefits, or cancel the membership without a refund."}</P>
+
             <div id="plus-fair-use" style={{ ...subHead, scrollMarginTop: 120 }}>Fair use</div>
             <P>Plus benefits exist for genuine changes of plans, not for holding studio time you do not intend to use. We do not set a fixed limit on reschedules or cancellations, but we may act on patterns of misuse, such as:</P>
             <UL items={[
@@ -139,6 +143,7 @@ export default function TermsPage() {
               'Reserving popular times speculatively',
               'Moving the same session again and again',
               'Joining Plus mainly to recover a booking and then repeating the pattern',
+              'Using Plus to book sessions for other people that you will not be at',
             ]} />
             <P>In those cases we may decline a reschedule, request or cancellation credit; require approval for future bookings; pause Plus benefits; or record it under Account Standing. We will let you know if we do, and you can always contact us to talk it through. Paused benefits do not extend or refund the membership term.</P>
 
