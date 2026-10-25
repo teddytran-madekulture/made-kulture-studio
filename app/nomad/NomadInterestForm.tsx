@@ -10,7 +10,7 @@ import { useState } from 'react'
 const GOLD = '#c9b27e'
 const MONO = '"JetBrains Mono", ui-monospace, monospace'
 const ROLES = ['Photographer', 'Model', 'Makeup artist', 'Hair stylist', 'Wardrobe stylist', 'Videographer', 'Other']
-const TRIPS = ['1–2 a year', '3–4 a year', '5+ a year', 'Not sure yet']
+const TRIPS = ['Every month', 'Every 2–3 months', 'A few times a year', 'Not sure yet']
 
 const label: React.CSSProperties = {
   display: 'block', fontFamily: MONO, fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase',
@@ -87,7 +87,7 @@ export default function NomadInterestForm() {
         <F name="instagram" title="Instagram"><input id="nomad-instagram" name="instagram" placeholder="@yourhandle" style={field} /></F>
         <F name="phone" title="Phone"><input id="nomad-phone" name="phone" type="tel" autoComplete="tel" style={field} /></F>
         <F name="portfolio_url" title="Portfolio link"><input id="nomad-portfolio_url" name="portfolio_url" type="url" placeholder="https://" style={field} /></F>
-        <F name="trips_per_year" title="How often you'd come down">
+        <F name="trips_per_year" title="How often you'd stay at a Nomad house">
           <select id="nomad-trips_per_year" name="trips_per_year" defaultValue="" style={field}>
             <option value="" style={opt}>Choose one</option>
             {TRIPS.map(t => <option key={t} value={t} style={opt}>{t}</option>)}

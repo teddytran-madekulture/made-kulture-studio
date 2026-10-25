@@ -118,7 +118,7 @@ export default function NomadAdminPage() {
                     <div>
                       <div style={{ fontSize: 17, fontWeight: 700 }}>{a.name}</div>
                       <div style={small}>
-                        {a.role}{a.based_in ? ` · ${a.based_in}` : ''}{a.trips_per_year ? ` · comes down ${a.trips_per_year}` : ''} · applied {day(a.created_at)}
+                        {a.role}{a.based_in ? ` · ${a.based_in}` : ''}{a.trips_per_year ? ` · trips: ${a.trips_per_year}` : ''} · applied {day(a.created_at)}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>

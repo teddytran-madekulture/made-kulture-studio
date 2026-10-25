@@ -12,7 +12,7 @@ import { normEmail } from '@/lib/customer-email'
 export const dynamic = 'force-dynamic'
 
 const ROLES = new Set(['Photographer', 'Model', 'Makeup artist', 'Hair stylist', 'Wardrobe stylist', 'Videographer', 'Other'])
-const TRIPS = new Set(['1–2 a year', '3–4 a year', '5+ a year', 'Not sure yet'])
+const TRIPS = new Set(['Every month', 'Every 2–3 months', 'A few times a year', 'Not sure yet'])
 
 export async function POST(req: NextRequest) {
   // A public form: fail OPEN so a DB hiccup in the limiter never takes it down.
