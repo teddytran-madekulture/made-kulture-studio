@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
     if (action === 'flight_request') {
       if (m.status !== 'active') return bad('Your membership needs to be active.')
       const fb = await flightBalance(db, m.id)
-      if (!m.flights_enabled && fb <= 0) return bad('Add flights to your membership to have us book them.')
+      if (!(s.flights_offered && m.flights_enabled) && fb <= 0) return bad('Flight booking isn’t available right now.')
       const { data: stay } = await db.from('nomad_stays').select('id, house_id, check_in, check_out, status').eq('id', String(body.stayId || '')).eq('membership_id', m.id).maybeSingle()
       if (!stay || stay.status !== 'confirmed') return bad('Pick a confirmed stay.')
       const sh = await getHouse(db, stay.house_id)

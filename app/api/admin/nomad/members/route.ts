@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
         to: row.email, label: 'nomad_membership_ready', subject: 'Your Nomad membership is ready',
         heading: `${firstName(app.name)}, your spot is ready`,
         paragraphs: [
-          `Your Nomad membership is set up and waiting for you to start it: <strong style="color:#fff;">$${dues.toFixed(0)} a month</strong>, with ${isSimple(s) ? `${s.nights_per_month} nights each month at the house (they reset every month)` : `${s.nights_per_month} nights a month in your night bank (up to ${s.night_cap})`} and Made Kulture Plus included while you’re a member.`,
+          `Your Nomad membership is set up and waiting for you to start it: <strong style="color:#fff;">$${dues.toFixed(0)} a month</strong>, with ${isSimple(s) ? `one trip a month of up to ${s.nights_per_month} nights in a row, with the house to yourself` : `${s.nights_per_month} nights a month in your night bank (up to ${s.night_cap})`} and Made Kulture Plus included while you’re a member.`,
           `Sign in with <strong style="color:#fff;">${row.email}</strong> (the account you already have), open Nomad, read the house rules, pick a card and start. Nothing is charged until you press start.`,
         ],
         ctaText: 'Start my membership', ctaUrl: `${APP_URL}/account/nomad`,

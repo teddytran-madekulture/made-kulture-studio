@@ -265,7 +265,7 @@ function StayCard({ x, d, post, busy }: any) {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600 }}>{multiHouse(d) ? `${s.city} · ` : ''}{fmt(x.check_in)} → {fmt(x.check_out)}</div>
-          <div style={T.small}>Check-in from {hourLabel(s.check_in_hour)}, check-out by {hourLabel(s.check_out_hour)} ({s.city || 'house'} time) · {simple(d) ? `${x.nights_cost} night${x.nights_cost === 1 ? '' : 's'}` : <>{x.visibility === 'private' ? 'Private' : x.visibility === 'any' ? 'Open to any member' : 'Shared with people you chose'} · {x.nights_cost} bank nights{x.extra_nights ? ` + ${x.extra_nights} extra` : ''}</>}</div>
+          <div style={T.small}>Check-in from {hourLabel(s.check_in_hour)}, check-out by {hourLabel(s.check_out_hour)} ({s.city || 'house'} time) · {simple(d) ? (() => { const n = Math.round((Date.parse(`${x.check_out}T12:00:00Z`) - Date.parse(`${x.check_in}T12:00:00Z`)) / 86_400_000); return `${n} night${n === 1 ? '' : 's'} · this month’s trip` })() : <>{x.visibility === 'private' ? 'Private' : x.visibility === 'any' ? 'Open to any member' : 'Shared with people you chose'} · {x.nights_cost} bank nights{x.extra_nights ? ` + ${x.extra_nights} extra` : ''}</>}</div>
         </div>
         <span style={gold}>{x.status === 'requested' ? 'WAITING ON APPROVAL' : 'CONFIRMED'}</span>
       </div>
@@ -315,7 +315,7 @@ function StayCard({ x, d, post, busy }: any) {
       {x.check_in > today && (
         <button disabled={busy} onClick={() => post({ action: 'cancel_stay', stayId: x.id }, 'Stay cancelled.')} style={{ ...btn(), marginTop: 14 }}>Cancel this stay</button>
       )}
-      {x.check_in > today && <div style={{ ...T.small, marginTop: 6 }}>Cancel {s.free_cancel_days}+ days before check-in and your nights come back{simple(d) ? ' (up to this month’s allowance)' : ' to your bank'}. Later than that, they’re used.</div>}
+      {x.check_in > today && <div style={{ ...T.small, marginTop: 6 }}>{simple(d) ? <>Cancel {s.free_cancel_days}+ days before check-in and your trip comes back so you can rebook. Later than that, it counts as used.</> : <>Cancel {s.free_cancel_days}+ days before check-in and your nights come back to your bank. Later than that, they’re used.</>}</div>}
     </div>
   )
 }
@@ -403,7 +403,7 @@ function BookForm({ d, post, busy, prefill }: any) {
 // ── Flights (Nomad + Flights add-on, 2026-10-26) ─────────────────────────
 function FlightCredit({ d, post, busy }: any) {
   const s = d.settings, f = d.flight || {}
-  if (!s.flights_offered && !f.enabled && !(f.balance > 0)) return null
+  if (!s.flights_offered && !(f.balance > 0)) return null
   const willBeOn = f.next === null || f.next === undefined ? f.enabled : f.next
   return (
     <div style={{ ...T.card, display: 'flex', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -417,7 +417,7 @@ function FlightCredit({ d, post, busy }: any) {
           {f.next !== null && f.next !== undefined && <> {f.next ? 'Flights start' : 'Flights stop'} at your next renewal.</>}
         </div>
       </div>
-      {s.flights_offered || f.enabled ? (
+      {s.flights_offered ? (
         <button disabled={busy} onClick={() => post({ action: 'set_flights_next', on: !willBeOn }, !willBeOn ? 'Flights will start at your next renewal.' : 'Flights will stop at your next renewal.')} style={btn(!willBeOn)}>
           {f.next !== null && f.next !== undefined ? 'Undo' : f.enabled ? 'Drop flights at renewal' : `Add flights (+${money(s.flight_addon_cents)}/mo)`}
         </button>
@@ -431,7 +431,7 @@ function FlightAsk({ x, d, post, busy, today }: any) {
   const s = d.settings, f = d.flight || {}
   const [open, setOpen] = useState(false)
   const [p, setP] = useState<any>({ airport: 'either', out_time: 'any', back_time: 'any', bag: true, airline: '', ff_number: '', notes: '' })
-  if (x.status !== 'confirmed' || (!f.enabled && !(f.balance > 0))) return null
+  if (x.status !== 'confirmed' || (!(s.flights_offered && f.enabled) && !(f.balance > 0))) return null
   if ((d.flightRequests || []).some((r: any) => r.stay_id === x.id && r.status !== 'cancelled')) return null
   const lead = Number(s.flight_request_lead_days) || 21
   const daysOut = Math.round((Date.parse(`${x.check_in}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000)
