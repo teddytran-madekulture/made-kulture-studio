@@ -5,6 +5,7 @@
 // that house (d.houses[i], with its own `today`), never the program defaults.
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { CHECKOUT_ITEMS, CHECKOUT_MIN_PHOTOS, CHECKOUT_MAX_PHOTOS } from '@/lib/nomad-checkout'
 
 const muted = (a: number) => `rgba(var(--t-fg-rgb), calc(${a} * var(--t-a)))`
 const money = (c: number) => `$${(Number(c || 0) / 100).toFixed(Number(c) % 100 ? 2 : 0)}`
@@ -311,6 +312,7 @@ function StayCard({ x, d, post, busy }: any) {
         </>
       )}
 
+      <Checkout x={x} post={post} busy={busy} today={today} />
       <FlightAsk x={x} d={d} post={post} busy={busy} today={today} />
       {x.check_in > today && (
         <button disabled={busy} onClick={() => post({ action: 'cancel_stay', stayId: x.id }, 'Stay cancelled.')} style={{ ...btn(), marginTop: 14 }}>Cancel this stay</button>
@@ -514,5 +516,78 @@ function FlightRequests({ d, post, busy }: any) {
         )
       })}
     </>
+  )
+}
+
+// ── Check-out checklist + photos (2026-10-26) ─────────────────────────────
+/** Shrink a phone photo to ≤1600px JPEG so each upload stays well under the 4.5 MB request limit. */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file) })
+  const k = Math.min(1, 1600 / Math.max(img.width, img.height))
+  const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k)
+  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+  URL.revokeObjectURL(img.src)
+  return await new Promise<Blob>((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('Could not read that photo.')), 'image/jpeg', 0.82))
+}
+
+function Checkout({ x, post, busy, today }: any) {
+  const [open, setOpen] = useState(false)
+  const [ticks, setTicks] = useState<Record<string, boolean>>({})
+  const [photos, setPhotos] = useState<{ path: string; preview: string }[]>([])
+  const [notes, setNotes] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [err, setErr] = useState('')
+  if (x.status !== 'confirmed') return null
+  if (x.checked_out_at) return <div style={{ ...T.small, marginTop: 12, color: 'var(--t-gold)' }}>Checked out. Thanks for leaving the place ready.</div>
+  if (today < x.check_in || today > addDays(x.check_out, 1)) return null
+  if (!open) return (
+    <div style={{ marginTop: 14 }}>
+      <button onClick={() => setOpen(true)} style={btn(today >= x.check_out)}>Check out</button>
+      <span style={{ ...T.small, marginLeft: 10 }}>Before you leave: a quick checklist and a few photos.</span>
+    </div>
+  )
+  async function addPhotos(files: FileList | null) {
+    if (!files?.length) return
+    setErr(''); setUploading(true)
+    try {
+      for (const f of Array.from(files).slice(0, CHECKOUT_MAX_PHOTOS - photos.length)) {
+        const blob = await shrinkPhoto(f)
+        const fd = new FormData(); fd.append('stayId', x.id); fd.append('file', new File([blob], 'photo.jpg', { type: 'image/jpeg' }))
+        const r = await fetch('/api/account/nomad/checkout-photo', { method: 'POST', body: fd })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) { setErr(j.error || 'A photo didn’t upload.'); break }
+        setPhotos(p => [...p, { path: j.path, preview: URL.createObjectURL(blob) }])
+      }
+    } catch (e: any) { setErr(e?.message || 'A photo didn’t upload.') }
+    finally { setUploading(false) }
+  }
+  const allTicked = CHECKOUT_ITEMS.every(([k]) => ticks[k])
+  const ready = allTicked && photos.length >= CHECKOUT_MIN_PHOTOS && !uploading
+  return (
+    <div style={{ marginTop: 14, borderTop: `1px solid ${muted(0.1)}`, paddingTop: 12 }}>
+      <div style={T.label}>Check-out checklist</div>
+      {CHECKOUT_ITEMS.map(([k, label]) => (
+        <label key={k} style={{ ...T.p, display: 'flex', gap: 8, alignItems: 'flex-start', margin: '0 0 6px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={!!ticks[k]} onChange={e => setTicks(t => ({ ...t, [k]: e.target.checked }))} style={{ marginTop: 4 }} /> {label}
+        </label>
+      ))}
+      <div style={{ ...T.label, marginTop: 12 }}>Photos ({photos.length}/{CHECKOUT_MAX_PHOTOS}) · at least {CHECKOUT_MIN_PHOTOS}: the shooting space and the bedroom</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {photos.map((p, i) => <img key={i} src={p.preview} alt="" style={{ width: 84, height: 64, objectFit: 'cover', borderRadius: 6, border: `1px solid ${muted(0.15)}` }} />)}
+        {photos.length < CHECKOUT_MAX_PHOTOS && (
+          <label style={{ ...btn(), display: 'inline-block' }}>
+            {uploading ? 'Uploading…' : 'Add photos'}
+            <input type="file" accept="image/*" capture="environment" multiple disabled={uploading} onChange={e => { addPhotos(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+          </label>
+        )}
+      </div>
+      <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything we should know? (something broke, running low on…)" style={{ ...T.input, width: '100%', marginTop: 12 }} />
+      {err && <div style={{ ...T.small, color: 'var(--t-err)', marginTop: 6 }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button disabled={busy || !ready} onClick={() => post({ action: 'checkout', stayId: x.id, checklist: ticks, photos: photos.map(p => p.path), notes }, 'Checked out. Safe travels!')} style={{ ...btn(true), opacity: busy || !ready ? 0.5 : 1 }}>Complete check-out</button>
+        <button onClick={() => setOpen(false)} style={btn()}>Later</button>
+      </div>
+      {!ready && <div style={{ ...T.small, marginTop: 6 }}>{!allTicked ? 'Tick every item' : ''}{!allTicked && photos.length < CHECKOUT_MIN_PHOTOS ? ' and add ' : photos.length < CHECKOUT_MIN_PHOTOS ? 'Add ' : ''}{photos.length < CHECKOUT_MIN_PHOTOS ? `${CHECKOUT_MIN_PHOTOS - photos.length} more photo${CHECKOUT_MIN_PHOTOS - photos.length === 1 ? '' : 's'}` : ''} to finish.</div>}
+    </div>
   )
 }

@@ -151,6 +151,15 @@ function Stays({ d, act, busy }: any) {
               </div>
               <Pill s={x.status} />
             </div>
+            {x.checkout && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ ...small, color: C.green }}>Checked out {day(x.checkout.at)} · checklist complete{x.checkout.notes ? ` · “${x.checkout.notes}”` : ''}</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                  {x.checkout.photos.map((u: string, i: number) => <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt="" style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 4, border: `1px solid ${C.line}` }} /></a>)}
+                </div>
+              </div>
+            )}
+            {!x.checkout && x.status === 'confirmed' && x.check_out < d.today && <div style={{ ...small, color: C.amber, marginTop: 8 }}>No check-out submitted.</div>}
             {['confirmed', 'requested'].includes(x.status) && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
                 <button disabled={busy} onClick={() => act({ action: 'cancel_stay', stayId: x.id, refund: true }, 'Cancelled, nights returned.')} style={btn(C.amber)}>CANCEL + RETURN NIGHTS</button>

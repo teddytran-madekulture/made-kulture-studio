@@ -25,6 +25,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
+const clock = (h: number) => `${((h + 11) % 12) + 1}${h < 12 || h === 24 ? 'am' : 'pm'}`
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
 export async function GET(req: NextRequest) {
@@ -155,11 +156,30 @@ export async function GET(req: NextRequest) {
     if (mm?.email) await sendSimpleEmail({
       to: mm.email, label: 'nomad_pre_arrival', subject: `Your Nomad stay in ${hs.city} starts ${st.check_in}`, heading: `See you soon, ${firstName(mm.name)}`,
       paragraphs: [
-        `Your stay at ${hs.house_name} runs ${st.check_in} to ${st.check_out}. Check-in from ${hs.check_in_hour}:00, check-out by ${hs.check_out_hour}:00 (${hs.city} time).`,
+        `Your stay at ${hs.house_name} runs ${st.check_in} to ${st.check_out}. Check-in from ${clock(hs.check_in_hour)}, check-out by ${clock(hs.check_out_hour)} (${hs.city} time).`,
         'The address, your door code and the house rules are in your account. Register any models or collaborators by the day before.',
       ],
       ctaText: 'Open Nomad', ctaUrl: `${APP_URL}/account/nomad`,
     }).catch(() => {})
+  }
+
+  // 5b. Check-out day reminder (2026-10-26): the checklist + photos before they go.
+  {
+    const { data: leavingAll } = await db.from('nomad_stays').select('id, house_id, check_out, nomad_memberships ( email, name, auth_user_id )')
+      .eq('status', 'confirmed').is('checked_out_at', null).is('checkout_reminded_at', null).gte('check_out', addDays(lo, -1)).lte('check_out', addDays(lo, 1))
+    for (const st of (leavingAll ?? []).filter(x => x.check_out === todayAt(x.house_id))) {
+      const mm: any = (st as any).nomad_memberships
+      const hs = hsOf(st.house_id)
+      if (!hs) continue
+      const { data: claimed } = await db.from('nomad_stays').update({ checkout_reminded_at: new Date().toISOString() }).eq('id', st.id).is('checkout_reminded_at', null).select('id')
+      if (!claimed?.length) continue
+      if (mm?.auth_user_id) await sendMemberPush(mm.auth_user_id, { title: 'Nomad: check-out today', body: `Check-out by ${clock(hs.check_out_hour)}. Do the quick checklist and photos before you go.`, url: '/account/nomad' }).catch(() => 0)
+      if (mm?.email) await sendSimpleEmail({
+        to: mm.email, label: 'nomad_checkout_day', subject: `Check-out today by ${clock(hs.check_out_hour)}`, heading: `Safe travels, ${firstName(mm.name)}`,
+        paragraphs: [`Check-out is by ${clock(hs.check_out_hour)} (${hs.city} time). Before you go, open Nomad and complete the check-out: a short checklist and a couple of photos of the shooting space and bedroom.`],
+        ctaText: 'Check out', ctaUrl: `${APP_URL}/account/nomad`,
+      }).catch(() => {})
+    }
   }
 
   // 6. Door codes, minted only inside 3 days of check-in and only for an

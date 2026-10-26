@@ -67,6 +67,15 @@ export async function GET(req: NextRequest) {
       transfers: transfers ?? [],
     }
 
+    // Check-outs (2026-10-26): checklist + photos, signed URLs only (private bucket).
+    const stayIds = (stays ?? []).map((x: any) => x.id)
+    const { data: cos } = stayIds.length ? await db.from('nomad_checkouts').select('*').in('stay_id', stayIds) : { data: [] as any[] }
+    const checkoutByStay = new Map<string, any>()
+    for (const c of cos ?? []) {
+      const { data: signed } = c.photos?.length ? await db.storage.from('nomad-checkout').createSignedUrls(c.photos, 600) : { data: [] as any[] }
+      checkoutByStay.set(c.stay_id, { at: c.created_at, notes: c.notes, photos: (signed ?? []).map((x: any) => x.signedUrl).filter(Boolean) })
+    }
+
     const [{ data: visitors }, { data: blocks }] = await Promise.all([
       db.from('nomad_visitors').select('*, nomad_memberships ( name )').eq('status', 'registered').gte('day', today).lte('day', week).order('day'),
       db.from('nomad_studio_blocks').select('*, nomad_memberships ( name )').eq('status', 'booked').gte('day', today).lte('day', week).order('day'),
@@ -98,7 +107,7 @@ export async function GET(req: NextRequest) {
       }),
       flightRequests: (freqs ?? []).map((r: any) => ({ ...r, who: r.nomad_memberships?.name || r.nomad_memberships?.email, email: r.nomad_memberships?.email, flight_balance: fbal.get(r.membership_id) ?? 0, stay: r.nomad_stays || null })),
       moneyLog,
-      stays: (stays ?? []).map((x: any) => ({ ...x, who: x.nomad_memberships?.name || x.nomad_memberships?.email, house: houseName.get(x.house_id) || '?' })),
+      stays: (stays ?? []).map((x: any) => ({ ...x, who: x.nomad_memberships?.name || x.nomad_memberships?.email, house: houseName.get(x.house_id) || '?', checkout: checkoutByStay.get(x.id) || null })),
       charges: (charges ?? []).map((c: any) => ({ ...c, who: c.nomad_memberships?.name || c.nomad_memberships?.email })),
     })
   } catch (e: any) {

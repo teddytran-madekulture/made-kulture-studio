@@ -13,6 +13,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { sendOwnerPush } from '@/lib/push'
 import { sendMemberPush } from '@/lib/member-push'
 import { sendSimpleEmail } from '@/lib/email'
+import { CHECKOUT_ITEMS, CHECKOUT_MIN_PHOTOS, CHECKOUT_MAX_PHOTOS } from '@/lib/nomad-checkout'
 import {
   getNomadSettings, membershipForUser, nightBalance, chargeDuesPeriod, chargeMember,
   overlappingStays, checkStay, issueStayDoorCode, mxToday, addDays, daysBetween, isDate,
@@ -261,6 +262,28 @@ export async function POST(req: NextRequest) {
         .eq('id', String(body.requestId || '')).eq('membership_id', m.id).in('status', ['requested', 'options_sent', 'chosen']).select('id')
       if (error || !data?.length) return bad('That request can’t be cancelled here. If it’s booked, message the studio.', 409)
       await sendOwnerPush({ title: 'Nomad: flight request cancelled', body: `${who} cancelled a flight request.`, url: '/admin/nomad?tab=flights' }).catch(() => {})
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── Check-out checklist + photos (2026-10-26) ─────────────────────────────
+    if (action === 'checkout') {
+      const { data: stay } = await db.from('nomad_stays').select('id, house_id, check_in, check_out, status, checked_out_at').eq('id', String(body.stayId || '')).eq('membership_id', m.id).maybeSingle()
+      if (!stay || stay.status !== 'confirmed') return bad('Stay not found.', 404)
+      if (stay.checked_out_at) return bad('You’ve already checked out.', 409)
+      const sh = await getHouse(db, stay.house_id)
+      const t = localToday(sh?.timezone)
+      if (t < stay.check_in || t > addDays(stay.check_out, 1)) return bad('Check-out opens during your stay.')
+      const ticked = body.checklist || {}
+      const missing = CHECKOUT_ITEMS.filter(([k]) => ticked[k] !== true)
+      if (missing.length) return bad('Please tick every item on the checklist.')
+      // Only photos this member uploaded for THIS stay (paths are <stayId>/...).
+      const photos = (Array.isArray(body.photos) ? body.photos : []).map(String).filter((p: string) => p.startsWith(`${stay.id}/`) && !p.includes('..')).slice(0, CHECKOUT_MAX_PHOTOS)
+      if (photos.length < CHECKOUT_MIN_PHOTOS) return bad(`Please add at least ${CHECKOUT_MIN_PHOTOS} photos (the shooting space and the bedroom).`)
+      const checklist = Object.fromEntries(CHECKOUT_ITEMS.map(([k]) => [k, true]))
+      const { error: cErr } = await db.from('nomad_checkouts').insert({ stay_id: stay.id, membership_id: m.id, house_id: stay.house_id, checklist, photos, notes: String(body.notes || '').slice(0, 1000) || null })
+      if (cErr) return bad((cErr as any).code === '23505' ? 'You’ve already checked out.' : `Could not save: ${cErr.message}`, (cErr as any).code === '23505' ? 409 : 500)
+      await db.from('nomad_stays').update({ checked_out_at: new Date().toISOString() }).eq('id', stay.id)
+      await sendOwnerPush({ title: 'Nomad: checked out', body: `${who} · ${sh?.city || 'house'} · ${photos.length} photos${body.notes ? ' · left a note' : ''}`, url: '/admin/nomad?tab=stays' }).catch(() => {})
       return NextResponse.json({ ok: true })
     }
 
