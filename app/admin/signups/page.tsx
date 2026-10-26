@@ -133,6 +133,8 @@ export default function AdminSignupsPage() {
                 {s.inDirectory && pill('rgba(212,168,67,0.15)', '#e6c07a', 'DIRECTORY')}
                 {!s.onboarded && pill('rgba(255,150,60,0.15)', '#ffb066', 'NEEDS SETUP')}
                 {!s.confirmed && pill('rgba(255,90,90,0.12)', '#ff8080', 'UNCONFIRMED')}
+                {!s.confirmed && <UnconfirmedActions id={s.id} email={s.email}
+                  onConfirmed={() => setItems(list => list.map(x => x.id === s.id ? { ...x, confirmed: true } : x))} />}
                 <ChangeEmailButton authUserId={s.id} current={s.email}
                   onChanged={email => setItems(list => list.map(x => x.id === s.id ? { ...x, email, confirmed: true } : x))} />
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', minWidth: 64, textAlign: 'right' }}>{when(s.createdAt)}</span>
@@ -142,5 +144,30 @@ export default function AdminSignupsPage() {
         </div>
       )}
     </div></div>
+  )
+}
+
+
+// RESEND LINK / CONFIRM for members stuck unconfirmed (2026-10-26). Rows are
+// links, so every click stops the row from opening.
+function UnconfirmedActions({ id, email, onConfirmed }: { id: string; email: string | null; onConfirmed: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const call = async (e: React.MouseEvent, action: 'resend_link' | 'confirm') => {
+    e.preventDefault(); e.stopPropagation()
+    if (action === 'confirm' && !window.confirm(`Mark ${email || 'this account'} as confirmed? They can then sign in with their password.`)) return
+    setBusy(action)
+    const r = await fetch('/api/admin/signups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, id }) })
+    const d = await r.json().catch(() => ({}))
+    setBusy(null)
+    if (!r.ok) { window.alert(d.error || 'That didn’t work.'); return }
+    if (action === 'confirm') { onConfirmed(); window.alert('Confirmed. They can sign in now.') }
+    else window.alert(`Sent a fresh sign-in link to ${email}. Ask them to check spam too.`)
+  }
+  const b: React.CSSProperties = { background: 'transparent', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.7)', borderRadius: 6, padding: '5px 10px', fontSize: 11, letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap' }
+  return (
+    <>
+      <button type="button" disabled={!!busy} onClick={e => call(e, 'resend_link')} style={b}>{busy === 'resend_link' ? 'SENDING…' : 'RESEND LINK'}</button>
+      <button type="button" disabled={!!busy} onClick={e => call(e, 'confirm')} style={{ ...b, borderColor: 'rgba(74,222,128,0.5)', color: '#4ade80' }}>{busy === 'confirm' ? 'CONFIRMING…' : 'CONFIRM'}</button>
+    </>
   )
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listAllAuthUsers } from '@/lib/auth-user'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
+import { sendSimpleEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -104,4 +105,51 @@ export async function DELETE(req: NextRequest) {
     }
   }
   return NextResponse.json({ deleted, skipped })
+}
+
+
+// POST /api/admin/signups { action: 'resend_link' | 'confirm', id } — 2026-10-26.
+// For members stuck UNCONFIRMED (missed or spam-filtered the confirmation email):
+//  - resend_link: emails a fresh one-tap sign-in link FROM OUR OWN MAILER (Resend,
+//    not Supabase's), which signs them in and confirms the address
+//    (app/auth/callback handles token_hash links).
+//  - confirm: marks the address confirmed so they can sign in with their password.
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
+
+export async function POST(req: NextRequest) {
+  if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body = await req.json().catch(() => ({} as any))
+  const id = String(body.id || '')
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'Bad id.' }, { status: 400 })
+  const { data: u, error: uErr } = await supabase.auth.admin.getUserById(id)
+  if (uErr || !u?.user?.email) return NextResponse.json({ error: 'Account not found.' }, { status: 404 })
+  const user = u.user
+
+  if (body.action === 'confirm') {
+    const { error } = await supabase.auth.admin.updateUserById(id, { email_confirm: true })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (body.action === 'resend_link') {
+    if (user.email_confirmed_at) return NextResponse.json({ error: 'They’re already confirmed.' }, { status: 409 })
+    const { data: link, error } = await supabase.auth.admin.generateLink({ type: 'magiclink', email: user.email! })
+    const hash = (link as any)?.properties?.hashed_token
+    if (error || !hash) return NextResponse.json({ error: `Couldn’t make a link: ${error?.message || 'no token'}. Use CONFIRM instead.` }, { status: 500 })
+    const url = `${APP_URL}/auth/callback?token_hash=${encodeURIComponent(hash)}&type=magiclink&next=${encodeURIComponent('/account')}`
+    const first = String((user.user_metadata as any)?.full_name || '').trim().split(/\s+/)[0] || 'there'
+    const sent = await sendSimpleEmail({
+      to: user.email!, label: 'account_confirm_link', subject: 'Finish setting up your Made Kulture account',
+      heading: `Hi ${first}, one tap to finish`,
+      paragraphs: [
+        'It looks like your confirmation email didn’t reach you. Tap the button below to confirm your email and sign in to your Made Kulture account.',
+        'This link works once and expires soon. After that, sign in with the email and password you chose.',
+      ],
+      ctaText: 'Confirm and sign in', ctaUrl: url,
+    })
+    if (!sent) return NextResponse.json({ error: 'The email didn’t send (mail service not set up or refused). Use CONFIRM instead.' }, { status: 502 })
+    return NextResponse.json({ ok: true })
+  }
+
+  return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
 }

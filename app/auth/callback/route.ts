@@ -17,6 +17,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=auth&msg=${msg}`)
   }
 
+  // 2026-10-26: a sign-in link the admin sent with RESEND LINK (Recent Signups).
+  // It carries a token_hash, not a code. Verifying it signs them in AND marks the
+  // email confirmed. Only these link types are accepted here.
+  const tokenHash = searchParams.get('token_hash')
+  const otpType = searchParams.get('type')
+  if (tokenHash && (otpType === 'magiclink' || otpType === 'email' || otpType === 'signup')) {
+    const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/account'
+    const redirectResponse = NextResponse.redirect(`${origin}${safeNext}`)
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return safeAuthCookies(request.cookies.getAll()).cookies },
+          setAll(cookiesToSet) { cookiesToSet.forEach(({ name, value, options }) => redirectResponse.cookies.set(name, value, options)) },
+        },
+      }
+    )
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType as any })
+    if (!error) return redirectResponse
+    return NextResponse.redirect(`${origin}/login?error=link_expired`)
+  }
+
   if (code) {
     // Create the redirect response first so we can attach cookies to it
     const redirectResponse = NextResponse.redirect(`${origin}${next}`)

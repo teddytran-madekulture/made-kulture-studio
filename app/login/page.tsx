@@ -14,6 +14,9 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [showPw, setShowPw]     = useState(false)
+  // 2026-10-26: "Email not confirmed" used to be shown raw with no way forward.
+  const [unconfirmed, setUnconfirmed] = useState(false)
+  const [resendMsg, setResendMsg]     = useState('')
   const supabase = createClient()
   const bot = useTurnstile()
 
@@ -21,6 +24,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search)
     const n = params.get('next') ?? '/account'
     setNextUrl(n)
+    if (params.get('error') === 'link_expired') setError('That link has expired or was already used. Sign in below with your email and password.')
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) router.replace(n)
     })
@@ -31,8 +35,24 @@ export default function LoginPage() {
     setLoading(true); setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: bot.token } })
     bot.reset()   // tokens are single-use
-    if (error) { setError(error.message); setLoading(false) }
+    if (error) {
+      const notConfirmed = (error as any).code === 'email_not_confirmed' || /not confirmed/i.test(error.message)
+      setUnconfirmed(notConfirmed); setResendMsg('')
+      setError(notConfirmed ? 'Please confirm your email first. Check your inbox (and spam folder) for the link we sent when you signed up.' : error.message)
+      setLoading(false)
+    }
     else router.push(nextUrl)
+  }
+
+  const resendConfirmation = async () => {
+    if (!email) { setResendMsg('Enter your email above first.'); return }
+    setResendMsg('Sending…')
+    const { error } = await supabase.auth.resend({
+      type: 'signup', email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`, captchaToken: bot.token },
+    })
+    bot.reset()   // tokens are single-use
+    setResendMsg(error ? (/rate|seconds|limit/i.test(error.message) ? 'Please wait a minute before asking again.' : error.message) : `Sent a new confirmation link to ${email}. Check spam if it isn’t there in a few minutes.`)
   }
 
   // Sign in with Apple (2026-10-07). Apple requires it in the iPhone app
@@ -130,6 +150,15 @@ export default function LoginPage() {
           {error && (
             <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 4, padding: '12px 16px', fontFamily: 'Inter', fontSize: 13, color: '#ff6b6b' }}>
               {error}
+              {unconfirmed && (
+                <div style={{ marginTop: 10 }}>
+                  <button type="button" onClick={resendConfirmation} disabled={bot.waiting}
+                    style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 4, padding: '8px 12px', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Resend confirmation email
+                  </button>
+                  {resendMsg && <div style={{ marginTop: 8, color: 'rgba(255,255,255,0.7)' }}>{resendMsg}</div>}
+                </div>
+              )}
             </div>
           )}
           <input type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} required style={inputStyle} />

@@ -124,6 +124,17 @@ export default function SignupPage() {
     outline: 'none', boxSizing: 'border-box',
   }
 
+  const [resendMsg, setResendMsg] = useState('')
+  const resendConfirmation = async () => {
+    setResendMsg('Sending…')
+    const { error } = await supabase.auth.resend({
+      type: 'signup', email: form.email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`, captchaToken: bot.token },
+    })
+    bot.reset()   // tokens are single-use
+    setResendMsg(error ? (/rate|seconds|limit/i.test(error.message) ? 'Please wait a minute before asking again.' : error.message) : 'Sent again. Check spam if it isn’t there in a few minutes.')
+  }
+
   if (success) return (
     <div style={{ background: '#080808', minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, textAlign: 'center' }}>
       <div style={{ fontSize: 40, marginBottom: 16 }}>✓</div>
@@ -131,6 +142,15 @@ export default function SignupPage() {
       <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.5)', maxWidth: 360 }}>
         We sent a confirmation link to <strong>{form.email}</strong>. Click it to activate your account.
       </p>
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.4)', maxWidth: 360, marginTop: 18 }}>
+        Didn’t get it? Check your spam or promotions folder, or send it again.
+      </p>
+      <div style={{ marginTop: 10 }}>{bot.widget}</div>
+      <button type="button" onClick={resendConfirmation} disabled={bot.waiting}
+        style={{ marginTop: 10, background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', borderRadius: 4, padding: '10px 16px', fontFamily: 'Inter', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', cursor: 'pointer' }}>
+        RESEND CONFIRMATION EMAIL
+      </button>
+      {resendMsg && <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 10 }}>{resendMsg}</p>}
     </div>
   )
 
