@@ -53,6 +53,16 @@ export interface NomadSettings {
   house_name: string
   house_address: string
   door_codes_enabled: boolean
+  // 2026-10-26 additions
+  stay_min_lead_days: number          // stays start at least this many days out
+  unused_to_studio_credit: boolean    // simple: a paid month with no trip → part of its dues back as studio credit
+  unused_credit_percent: number       // …this % of the member's dues (rest stays with Nomad), rounded to the dollar
+  studio_credit_expiry_days: number   // Nomad-sourced studio credit expires after N days (0 = never)
+  flights_offered: boolean            // offer the Nomad + Flights add-on
+  flight_addon_cents: number          // added to the monthly charge
+  flight_credit_cents: number         // of which this much becomes flight credit
+  flight_credit_cap_cents: number     // credit tops out here; the add-on pauses while full
+  flight_request_lead_days: number    // request flights at least this many days before check-in
 }
 
 export const DEFAULT_SETTINGS: NomadSettings = {
@@ -78,6 +88,17 @@ export const DEFAULT_SETTINGS: NomadSettings = {
   house_name: 'Nomad House, Mexico City',
   house_address: '',
   door_codes_enabled: false,
+  stay_min_lead_days: 3,
+  unused_to_studio_credit: true,
+  unused_credit_percent: 80,
+  studio_credit_expiry_days: 0,
+  // PARKED 2026-10-26: real IAH↔MEX round trips run ~$300–400 (more at holidays),
+  // so a small monthly add-on can't cover a flight. Code stays; switch on in Settings.
+  flights_offered: false,
+  flight_addon_cents: 8500,
+  flight_credit_cents: 7500,
+  flight_credit_cap_cents: 30000,
+  flight_request_lead_days: 21,
 }
 
 // ── Program model ─────────────────────────────────────────────────────────
@@ -223,6 +244,7 @@ export async function saveNomadSettings(db: SupabaseClient, patch: Partial<Nomad
   }
   if (next.busy_multiplier < 1) next.busy_multiplier = 1
   if (next.max_members_at_once < 1) next.max_members_at_once = 1
+  next.unused_credit_percent = Math.min(100, Math.max(0, Number(next.unused_credit_percent) || 0))
   const hourErr = checkHours(next)
   if (hourErr) throw new Error(hourErr)
   // Update-then-insert, same as the other studio_settings writers (no upsert:
@@ -301,18 +323,141 @@ export async function nightBalance(db: SupabaseClient, membershipId: string): Pr
  *  bank: top up by nights_per_month, never past night_cap.
  *  simple: RESET to exactly nights_per_month — last month's leftovers expire
  *  (the delta can be negative), so nothing ever rolls over. */
-export async function accrueNights(db: SupabaseClient, membershipId: string, s: NomadSettings, periodKey: string): Promise<number> {
+export async function accrueNights(db: SupabaseClient, membershipId: string, s: NomadSettings, periodKey: string, m?: any): Promise<number> {
   const bal = await nightBalance(db, membershipId)
   const simple = isSimple(s)
   const add = simple ? s.nights_per_month - bal : Math.max(0, Math.min(s.nights_per_month, s.night_cap - bal))
-  if (add === 0 || (!simple && add < 0)) return 0
-  const note = simple && bal > 0 ? `new month: ${bal} unused night${bal === 1 ? '' : 's'} expired` : null
+  // Simple: the whole allowance still unbooked = the member didn't take a trip
+  // last month → that month's dues come back as studio credit (below).
+  const unusedMonth = simple && s.unused_to_studio_credit && bal >= s.nights_per_month && s.nights_per_month > 0
+  if (add === 0 && !unusedMonth) return 0
+  if (!simple && add < 0) return 0
+  const note = unusedMonth ? 'new month: last month’s trip unused, dues returned as studio credit'
+    : simple && bal > 0 ? `new month: ${bal} unused night${bal === 1 ? '' : 's'} expired` : null
+  // The accrual row is the CLAIM for this period (unique period_key), so the
+  // studio credit below can never be issued twice for one month.
   const { error } = await db.from('nomad_nights').insert({ membership_id: membershipId, delta: add, reason: 'accrual', period_key: periodKey, note })
   if (error) {
     if ((error as any).code === '23505') return 0 // already accrued this period
     throw new Error(`night accrual failed: ${error.message}`)
   }
+  if (unusedMonth && m?.auth_user_id) {
+    const cents = unusedCreditCents(m, s)
+    const ok = cents <= 0 ? true : await issueNomadStudioCredit(db, m.auth_user_id, cents, 'nomad_unused', 'Nomad: unused month returned as studio credit', s)
+    if (!ok) console.error('[nomad] CRITICAL: unused month claimed but studio credit NOT issued', membershipId, periodKey, cents)
+  }
   return Math.max(0, add)
+}
+/** What an unused month returns as studio credit: unused_credit_percent of the
+ *  member's dues (their locked rate if they have one), rounded to the dollar. */
+export function unusedCreditCents(m: any, s: NomadSettings): number {
+  const dues = Number(m?.dues_cents) > 0 ? Number(m.dues_cents) : s.dues_cents
+  const pct = Math.min(100, Math.max(0, Number(s.unused_credit_percent ?? 80)))
+  return Math.round((dues * pct) / 100 / 100) * 100
+}
+// ── Studio credit that comes from Nomad ───────────────────────────────────
+// Kinds starting 'nomad_' in credit_ledger. That money sits in the NOMAD
+// account; when it's spent on a Houston booking it is owed to the studio —
+// see nomadCreditUsage() and nomad_studio_transfers.
+export const NOMAD_CREDIT_KINDS = ['nomad_unused', 'nomad_flight']
+export async function issueNomadStudioCredit(db: SupabaseClient, authUserId: string, cents: number, kind: string, reason: string, s: NomadSettings): Promise<boolean> {
+  if (!authUserId || !(cents > 0)) return false
+  const days = Number(s.studio_credit_expiry_days) || 0
+  const expires = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null
+  const { error } = await db.from('credit_ledger').insert({
+    auth_user_id: authUserId, amount_cents: Math.round(cents), kind, reason, created_by: 'system', expires_at: expires,
+  })
+  if (error) { console.error('[nomad] studio credit insert failed', error); return false }
+  return true
+}
+
+/** How much Nomad-sourced studio credit has been SPENT at the studio, by month
+ *  (Central). Nomad credit is treated as spent FIRST when a member also has
+ *  other studio credit. Expired Nomad credit is never "spent" (it stays in the
+ *  Nomad account). Computed from the ledger every time, so it can't drift. */
+export async function nomadCreditUsage(db: SupabaseClient): Promise<{ months: { month: string; used_cents: number }[]; issued_cents: number; used_cents: number; unspent_cents: number }> {
+  const { data: src, error } = await db.from('credit_ledger').select('auth_user_id').in('kind', NOMAD_CREDIT_KINDS)
+  if (error) throw new Error(`credit usage read failed: ${error.message}`)
+  const users = Array.from(new Set((src ?? []).map((r: any) => r.auth_user_id)))
+  const byMonth = new Map<string, number>()
+  let issued = 0, used = 0, unspent = 0
+  const monthOf = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit' }).format(new Date(iso)).slice(0, 7)
+  const now = Date.now()
+  for (let i = 0; i < users.length; i += 50) {
+    const { data: rows, error: rErr } = await db.from('credit_ledger').select('auth_user_id, amount_cents, kind, created_at, expires_at').in('auth_user_id', users.slice(i, i + 50)).order('created_at')
+    if (rErr) throw new Error(`credit usage read failed: ${rErr.message}`)
+    const per = new Map<string, any[]>()
+    for (const r of rows ?? []) { const a = per.get(r.auth_user_id) || []; a.push(r); per.set(r.auth_user_id, a) }
+    for (const list of Array.from(per.values())) {
+      const lots: { left: number; exp: number | null }[] = []   // Nomad lots, oldest first
+      let other = 0
+      for (const r of list) {
+        const amt = Number(r.amount_cents || 0)
+        const at = Date.parse(r.created_at)
+        if (amt > 0) {
+          if (NOMAD_CREDIT_KINDS.includes(r.kind)) { lots.push({ left: amt, exp: r.expires_at ? Date.parse(r.expires_at) : null }); issued += amt }
+          else other += amt
+          continue
+        }
+        let need = -amt
+        let fromNomad = 0
+        for (const lot of lots) {
+          if (need <= 0) break
+          if (lot.left <= 0 || (lot.exp !== null && lot.exp < at)) continue
+          const take = Math.min(lot.left, need); lot.left -= take; need -= take; fromNomad += take
+        }
+        other -= Math.min(other, need)
+        if (r.kind === 'redeemed' && fromNomad > 0) { used += fromNomad; const k = monthOf(r.created_at); byMonth.set(k, (byMonth.get(k) || 0) + fromNomad) }
+      }
+      for (const lot of lots) if (lot.left > 0 && (lot.exp === null || lot.exp >= now)) unspent += lot.left
+    }
+  }
+  const months = Array.from(byMonth.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([month, used_cents]) => ({ month, used_cents }))
+  return { months, issued_cents: issued, used_cents: used, unspent_cents: unspent }
+}
+
+// ── Flight credit (Nomad + Flights add-on) ────────────────────────────────
+export async function flightBalance(db: SupabaseClient, membershipId: string): Promise<number> {
+  const { data, error } = await db.from('nomad_flight_credit').select('delta_cents').eq('membership_id', membershipId)
+  if (error) throw new Error(`flight credit read failed: ${error.message}`)
+  return (data ?? []).reduce((n, r: any) => n + Number(r.delta_cents || 0), 0)
+}
+/** This month's flight add-on. Paused (not charged, no credit) while there
+ *  isn't room under the cap for a full month's credit. */
+export function flightPlan(m: any, s: NomadSettings, balance: number) {
+  const on = s.flights_offered && m?.flights_enabled === true
+  const paused = on && balance + s.flight_credit_cents > s.flight_credit_cap_cents
+  const live = on && !paused
+  return { on, paused, chargeCents: live ? s.flight_addon_cents : 0, creditCents: live ? Math.min(s.flight_credit_cents, s.flight_addon_cents) : 0 }
+}
+
+/** A membership ended: last month's unused trip → studio credit (simple), and
+ *  leftover flight credit → studio credit (up to the cap). Each step CLAIMS
+ *  with a unique period_key row first, so a retry can't pay out twice. */
+export async function settleOnEnd(db: SupabaseClient, m: any, s: NomadSettings): Promise<{ unusedCents: number; flightCents: number }> {
+  const out = { unusedCents: 0, flightCents: 0 }
+  const key = `end${String(m.ended_at || m.paid_through || new Date().toISOString()).slice(0, 10).replace(/-/g, '')}`
+  if (isSimple(s)) {
+    const bal = await nightBalance(db, m.id)
+    if (bal !== 0) {
+      const { error } = await db.from('nomad_nights').insert({ membership_id: m.id, delta: -bal, reason: 'ended', period_key: key, note: 'membership ended' })
+      if (!error && s.unused_to_studio_credit && bal >= s.nights_per_month && s.nights_per_month > 0 && m.auth_user_id && unusedCreditCents(m, s) > 0) {
+        const cents = unusedCreditCents(m, s)
+        if (await issueNomadStudioCredit(db, m.auth_user_id, cents, 'nomad_unused', 'Nomad: last month unused, returned as studio credit', s)) out.unusedCents = cents
+        else console.error('[nomad] CRITICAL: end-of-membership unused credit NOT issued', m.id)
+      }
+    }
+  }
+  const fb = await flightBalance(db, m.id)
+  if (fb > 0) {
+    const toStudio = Math.min(fb, s.flight_credit_cap_cents)
+    const { error } = await db.from('nomad_flight_credit').insert({ membership_id: m.id, delta_cents: -fb, reason: 'to_studio_credit', period_key: key, note: `moved $${(toStudio / 100).toFixed(2)} to studio credit` })
+    if (!error && m.auth_user_id) {
+      if (await issueNomadStudioCredit(db, m.auth_user_id, toStudio, 'nomad_flight', 'Nomad: leftover flight credit', s)) out.flightCents = toStudio
+      else console.error('[nomad] CRITICAL: flight credit cleared but studio credit NOT issued', m.id, toStudio)
+    }
+  }
+  return out
 }
 
 /** How many of `n` cancelled nights go back. Simple: never past this month's
@@ -478,7 +623,9 @@ export async function voidOpenLinks(db: SupabaseClient, membershipId: string, no
  *  cron — can't both charge it. A paused member restarts from NOW: they are
  *  never billed for months they couldn't use. */
 export async function chargeDuesPeriod(db: SupabaseClient, m: any, s: NomadSettings, periodStart: string, retrySeed = '') {
-  const cents = Number(m.dues_cents) > 0 ? Number(m.dues_cents) : s.dues_cents
+  const baseCents = Number(m.dues_cents) > 0 ? Number(m.dues_cents) : s.dues_cents
+  let cents = baseCents
+  let flightCents = 0, flightCredit = 0, flightPaused = false
   const nowIso = new Date().toISOString()
   const start = (m.status === 'paused' || !periodStart || Date.parse(periodStart) > Date.now()) ? nowIso : periodStart
   const periodEnd = addMonth(start)
@@ -491,13 +638,23 @@ export async function chargeDuesPeriod(db: SupabaseClient, m: any, s: NomadSetti
   if (claimErr || !claimed?.length) return { ok: false as const, error: claimErr?.message || 'This month is already being charged or was just paid. Refresh.', cents, periodEnd, skipped: true }
 
   const release = () => db.from('nomad_memberships').update({ charging_at: null }).eq('id', m.id)
-  const res = await chargeMember(db, m, cents, 'Made Kulture Nomad membership', `d${key}${retrySeed}`)
-  if (!res.ok) {
-    await db.from('nomad_charges').insert({ membership_id: m.id, kind: 'dues', amount_cents: cents, period_start: start, period_end: periodEnd, status: 'failed', error: res.error })
-    await release()
-    return { ok: false as const, error: res.error, cents, periodEnd, skipped: false }
+  // A flights add/drop the member chose takes effect at the start of a period.
+  if (m.flights_next === true || m.flights_next === false) {
+    const { data: fl } = await db.from('nomad_memberships').update({ flights_enabled: m.flights_next, flights_next: null }).eq('id', m.id).select('flights_enabled')
+    if (fl?.length) m = { ...m, flights_enabled: fl[0].flights_enabled, flights_next: null }
   }
-  const { error: chErr } = await db.from('nomad_charges').insert({ membership_id: m.id, kind: 'dues', amount_cents: cents, period_start: start, period_end: periodEnd, status: 'charged', square_payment_id: res.paymentId })
+  try {
+    const plan = flightPlan(m, s, await flightBalance(db, m.id))
+    flightCents = plan.chargeCents; flightCredit = plan.creditCents; flightPaused = plan.paused
+  } catch (e) { console.error('[nomad] flight plan failed; charging dues only', e) }
+  cents = baseCents + flightCents
+  const res = await chargeMember(db, m, cents, flightCents ? 'Made Kulture Nomad membership + flights' : 'Made Kulture Nomad membership', `d${key}${flightCents ? 'f' : ''}${retrySeed}`)
+  if (!res.ok) {
+    await db.from('nomad_charges').insert({ membership_id: m.id, kind: 'dues', amount_cents: cents, flight_cents: flightCents, period_start: start, period_end: periodEnd, status: 'failed', error: res.error })
+    await release()
+    return { ok: false as const, error: res.error, cents, flightCents, periodEnd, skipped: false }
+  }
+  const { error: chErr } = await db.from('nomad_charges').insert({ membership_id: m.id, kind: 'dues', amount_cents: cents, flight_cents: flightCents, period_start: start, period_end: periodEnd, status: 'charged', square_payment_id: res.paymentId })
   if (chErr) console.error('[nomad] CRITICAL: dues charged but charge row not saved', m.id, chErr)
   const { data: upd, error: upErr } = await db.from('nomad_memberships')
     .update({ status: 'active', paid_through: periodEnd, past_due_since: null, charging_at: null, started_at: m.started_at || nowIso })
@@ -505,10 +662,14 @@ export async function chargeDuesPeriod(db: SupabaseClient, m: any, s: NomadSetti
   if (upErr || !upd?.length) console.error('[nomad] CRITICAL: dues charged but membership not extended', m.id, upErr)
   const fresh = upd?.[0] ?? { ...m, status: 'active', paid_through: periodEnd }
   await voidOpenLinks(db, m.id, 'paid by card').catch(e => console.error('[nomad] void links failed', e))
+  if (flightCredit > 0) {
+    const { error: fcErr } = await db.from('nomad_flight_credit').insert({ membership_id: m.id, delta_cents: flightCredit, reason: 'addon', period_key: key })
+    if (fcErr && (fcErr as any).code !== '23505') console.error('[nomad] CRITICAL: flight add-on charged but credit not added', m.id, fcErr)
+  }
   let accrued = 0
-  try { accrued = await accrueNights(db, m.id, s, key) } catch (e) { console.error('[nomad] accrual failed', e) }
+  try { accrued = await accrueNights(db, m.id, s, key, fresh) } catch (e) { console.error('[nomad] accrual failed', e) }
   try { await syncPlus(db, fresh) } catch (e) { console.error('[nomad] plus sync failed', e) }
-  return { ok: true as const, cents, periodEnd, accrued, paymentId: res.paymentId, membership: fresh, skipped: false }
+  return { ok: true as const, cents, flightCents, flightPaused, periodEnd, accrued, paymentId: res.paymentId, membership: fresh, skipped: false }
 }
 
 /** A paid dues link (or cash marked paid): give the member one month for it.
@@ -526,7 +687,12 @@ export async function applyPaidDues(db: SupabaseClient, charge: any, s: NomadSet
     .update({ status: 'active', paid_through: newEnd, past_due_since: null }).eq('id', m.id).select('*')
   if (error || !upd?.length) { console.error('[nomad] CRITICAL: link paid but membership not extended', m.id, error); return null }
   const key = String(base).slice(0, 10).replace(/-/g, '')
-  try { await accrueNights(db, m.id, s, key) } catch (e) { console.error('[nomad] accrual failed', e) }
+  if (Number(charge.flight_cents) > 0) {
+    const credit = Math.min(s.flight_credit_cents, Number(charge.flight_cents))
+    const { error: fcErr } = await db.from('nomad_flight_credit').insert({ membership_id: m.id, delta_cents: credit, reason: 'addon', period_key: key })
+    if (fcErr && (fcErr as any).code !== '23505') console.error('[nomad] CRITICAL: paid flight add-on but credit not added', m.id, fcErr)
+  }
+  try { await accrueNights(db, m.id, s, key, upd[0]) } catch (e) { console.error('[nomad] accrual failed', e) }
   try { await syncPlus(db, upd[0]) } catch (e) { console.error('[nomad] plus sync failed', e) }
   await voidOpenLinks(db, m.id, 'superseded by a paid link').catch(() => {})
   return { ...upd[0], covered }
@@ -561,7 +727,8 @@ export function checkStay(opts: {
   if (m.status !== 'active') return { ok: false, error: 'Your membership needs to be active to book.' }
   if ((s as any).house_id && !(s as any).house_active) return { ok: false, error: 'That house isn’t open for booking yet.' }
   if (!isDate(checkIn) || !isDate(checkOut) || checkOut <= checkIn) return { ok: false, error: 'Pick a check-in and a later check-out.' }
-  if (checkIn < addDays(today, 1)) return { ok: false, error: 'Stays start tomorrow at the earliest.' }
+  const lead = Math.max(1, Number((s as any).stay_min_lead_days) || 1)
+  if (checkIn < addDays(today, lead)) return { ok: false, error: lead === 1 ? 'Stays start tomorrow at the earliest.' : `Stays need at least ${lead} days’ notice.` }
   if (daysBetween(today, checkIn) > s.booking_window_days) return { ok: false, error: `Stays open ${s.booking_window_days} days ahead.` }
   const nights = nightsOf(checkIn, checkOut)
   if (nights.length > s.max_nights_per_stay) return { ok: false, error: `Stays are up to ${s.max_nights_per_stay} nights.` }

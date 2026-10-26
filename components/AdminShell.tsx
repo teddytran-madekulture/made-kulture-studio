@@ -37,6 +37,7 @@ function Item({ href, icon, label, active, color, indent, badge }: { href: strin
 // a Suspense boundary on every admin page).
 const NOMAD_TABS: [string, string, string][] = [
   ['applications', '✈', 'Applications'], ['members', '◉', 'Members'], ['stays', '☾', 'Stays'],
+  ['flights', '↗', 'Flights'], ['credit', '$', 'Studio Credit'],
   ['house', '▤', 'This Week'], ['houses', '⌂', 'Houses'], ['settings', '⚙', 'Settings'],
 ]
 function NomadNav({ on }: { on: boolean }) {

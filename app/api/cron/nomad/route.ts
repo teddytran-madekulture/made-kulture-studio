@@ -18,7 +18,7 @@ import { sendMemberPush } from '@/lib/member-push'
 import { sendSimpleEmail } from '@/lib/email'
 import {
   getNomadSettings, chargeDuesPeriod, paymentLink, syncPlus, mxToday, addDays, firstName, LIVE_STATUSES, issueStayDoorCode,
-  getHouses, houseSettings, localToday, earliestToday, cancelFutureStays, isSimple,
+  getHouses, houseSettings, localToday, earliestToday, cancelFutureStays, isSimple, settleOnEnd,
 } from '@/lib/nomad'
 
 export const dynamic = 'force-dynamic'
@@ -62,6 +62,8 @@ export async function GET(req: NextRequest) {
           await syncPlus(db, claimed[0]).catch(e => out.errors.push(`plus ${m.id}: ${e.message}`))
           // Future stays end with the membership (nights are not refunded as cash).
           await cancelFutureStays(db, m.id).catch(e => out.errors.push(`stays ${m.id}: ${e.message}`))
+          // Unused last month + leftover flight credit → studio credit.
+          await settleOnEnd(db, claimed[0], s).catch(e => out.errors.push(`settle ${m.id}: ${e.message}`))
           await sendOwnerPush({ title: 'Nomad: membership ended', body: `${who} (cancelled, paid month ran out).`, url: '/admin/nomad' }).catch(() => {})
         }
         continue
@@ -74,7 +76,7 @@ export async function GET(req: NextRequest) {
           out.charged++
           if (m.email) await sendSimpleEmail({
             to: m.email, label: 'nomad_dues_receipt', subject: 'Your Nomad membership renewed', heading: 'Membership renewed',
-            paragraphs: [`Your Nomad membership renewed for <strong style="color:#fff;">$${(res.cents / 100).toFixed(2)}</strong>.${isSimple(s) ? ` Your ${s.nights_per_month} nights for this month are ready.` : res.accrued ? ` ${res.accrued} nights were added to your bank.` : ''}`],
+            paragraphs: [`Your Nomad membership renewed for <strong style="color:#fff;">$${(res.cents / 100).toFixed(2)}</strong>${(res as any).flightCents ? ` (includes the flight add-on, $${(s.flight_credit_cents / 100).toFixed(0)} added to your flight credit)` : ''}.${isSimple(s) ? ` Your trip for this month is ready to book (up to ${s.nights_per_month} nights in a row).` : res.accrued ? ` ${res.accrued} nights were added to your bank.` : ''}${(res as any).flightPaused ? ' Your flight credit is full, so the flight add-on was paused this month.' : ''}`],
             ctaText: 'Open Nomad', ctaUrl: `${APP_URL}/account/nomad`,
           }).catch(() => {})
           continue
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
         if (!existing?.length) {
           const link = await paymentLink(res.cents, 'Made Kulture Nomad membership')
           if (link) {
-            await db.from('nomad_charges').insert({ membership_id: m.id, kind: 'dues', amount_cents: res.cents, period_start: m.paid_through, period_end: res.periodEnd, status: 'link_sent', square_order_id: link.orderId, payment_link_id: link.linkId, payment_link_url: link.url })
+            await db.from('nomad_charges').insert({ membership_id: m.id, kind: 'dues', amount_cents: res.cents, flight_cents: (res as any).flightCents || 0, period_start: m.paid_through, period_end: res.periodEnd, status: 'link_sent', square_order_id: link.orderId, payment_link_id: link.linkId, payment_link_url: link.url })
             out.links++
             if (m.email) await sendSimpleEmail({
               to: m.email, label: 'nomad_dues_link', subject: 'Action needed: your Nomad membership', heading: 'Your renewal didn’t go through',

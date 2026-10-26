@@ -2222,6 +2222,8 @@ export default function AdminDashboard() {
           {navLink('/admin/nomad?tab=applications', '✈', 'Applications')}
           {navLink('/admin/nomad?tab=members', '◉', 'Members')}
           {navLink('/admin/nomad?tab=stays', '☾', 'Stays')}
+          {navLink('/admin/nomad?tab=flights', '↗', 'Flights')}
+          {navLink('/admin/nomad?tab=credit', '$', 'Studio Credit')}
           {navLink('/admin/nomad?tab=house', '▤', 'This Week')}
           {navLink('/admin/nomad?tab=houses', '⌂', 'Houses')}
           {navLink('/admin/nomad?tab=settings', '⚙', 'Settings')}

@@ -2,15 +2,17 @@
 //   GET  → members (+ night balance, last charge), stays, the house week,
 //          recent charges, settings.
 //   POST → { action, ... } — invite | set_status | update_member | adjust_nights |
-//          retry_charge | mark_paid | cancel_stay | mint_code | settings | house_save
+//          retry_charge | mark_paid | cancel_stay | mint_code | settings | house_save |
+//          set_flights | flight_options | flight_booked | flight_cancel | flight_adjust | transfer_mark
 // Linked from BOTH admin sidebars via /admin/nomad.
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { sendSimpleEmail } from '@/lib/email'
+import { sendMemberPush } from '@/lib/member-push'
 import {
-  getNomadSettings, readRawSettings, isSimple, nightsToReturn, saveNomadSettings, nightBalance, chargeDuesPeriod, applyPaidDues, syncPlus,
+  getNomadSettings, readRawSettings, isSimple, nightsToReturn, flightBalance, flightPlan, settleOnEnd, nomadCreditUsage, chargeMember, saveNomadSettings, nightBalance, chargeDuesPeriod, applyPaidDues, syncPlus,
   issueStayDoorCode, mxToday, addDays, firstName, ACTIVE_STAY, square,
   getHouses, getHouse, houseSettings, localToday, earliestToday, cleanHouse, cancelFutureStays, releaseWaitingOn, HOUSE_OVERRIDE_KEYS, TIMEZONES,
 } from '@/lib/nomad'
@@ -44,6 +46,27 @@ export async function GET(req: NextRequest) {
     const lastCharge = new Map<string, any>()
     for (const c of charges ?? []) if (!lastCharge.has(c.membership_id)) lastCharge.set(c.membership_id, c)
 
+    // Flights + the Nomad → studio money log.
+    const [{ data: fcRows, error: fcErr }, { data: freqs, error: frErr }, { data: transfers, error: tErr }] = await Promise.all([
+      db.from('nomad_flight_credit').select('membership_id, delta_cents'),
+      db.from('nomad_flight_requests').select('*, nomad_memberships ( name, email ), nomad_stays ( check_in, check_out, house_id )')
+        .or(`status.in.(requested,options_sent,chosen),created_at.gte.${new Date(Date.now() - 45 * 86_400_000).toISOString()}`).order('created_at', { ascending: false }),
+      db.from('nomad_studio_transfers').select('*').order('created_at', { ascending: false }).limit(100),
+    ])
+    const fErr = fcErr || frErr || tErr
+    if (fErr) return bad(`${fErr.message} (has migration 176 run?)`, 500)
+    const fbal = new Map<string, number>()
+    for (const r of fcRows ?? []) fbal.set(r.membership_id, (fbal.get(r.membership_id) ?? 0) + Number(r.delta_cents || 0))
+    const usage = await nomadCreditUsage(db)
+    const sent = new Map<string, number>()
+    for (const t of transfers ?? []) sent.set(t.month, (sent.get(t.month) ?? 0) + Number(t.amount_cents || 0))
+    const moneyLog = {
+      issued_cents: usage.issued_cents, used_cents: usage.used_cents, unspent_cents: usage.unspent_cents,
+      transferred_cents: (transfers ?? []).reduce((n, t: any) => n + Number(t.amount_cents || 0), 0),
+      months: usage.months.map(x => ({ ...x, transferred_cents: sent.get(x.month) ?? 0, owed_cents: Math.max(0, x.used_cents - (sent.get(x.month) ?? 0)) })),
+      transfers: transfers ?? [],
+    }
+
     const [{ data: visitors }, { data: blocks }] = await Promise.all([
       db.from('nomad_visitors').select('*, nomad_memberships ( name )').eq('status', 'registered').gte('day', today).lte('day', week).order('day'),
       db.from('nomad_studio_blocks').select('*, nomad_memberships ( name )').eq('status', 'booked').gte('day', today).lte('day', week).order('day'),
@@ -69,7 +92,12 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json({
       today, settings: s, rawSettings: await readRawSettings(db), houses, timezones: TIMEZONES, overrideKeys: HOUSE_OVERRIDE_KEYS,
-      members: (members ?? []).map(m => ({ ...m, balance: bal.get(m.id) ?? 0, last_charge: lastCharge.get(m.id) ?? null })),
+      members: (members ?? []).map(m => {
+        const fb = fbal.get(m.id) ?? 0
+        return { ...m, balance: bal.get(m.id) ?? 0, last_charge: lastCharge.get(m.id) ?? null, flight_balance: fb, flight_paused: flightPlan(m, s, fb).paused }
+      }),
+      flightRequests: (freqs ?? []).map((r: any) => ({ ...r, who: r.nomad_memberships?.name || r.nomad_memberships?.email, email: r.nomad_memberships?.email, flight_balance: fbal.get(r.membership_id) ?? 0, stay: r.nomad_stays || null })),
+      moneyLog,
       stays: (stays ?? []).map((x: any) => ({ ...x, who: x.nomad_memberships?.name || x.nomad_memberships?.email, house: houseName.get(x.house_id) || '?' })),
       charges: (charges ?? []).map((c: any) => ({ ...c, who: c.nomad_memberships?.name || c.nomad_memberships?.email })),
     })
@@ -160,11 +188,116 @@ export async function POST(req: NextRequest) {
       const { data, error } = await db.from('nomad_memberships').update(patch).eq('id', m.id).select('*')
       if (error || !data?.length) return bad(error?.message || 'Not saved.', 500)
       const plus = await syncPlus(db, data[0])
+      let settled: any = null
       if (status === 'ended') {
-        // Same as the cron: future stays (at every house) end with the membership.
+        // Same as the cron: future stays (at every house) end with the membership,
+        // then the unused month + leftover flight credit become studio credit.
         await cancelFutureStays(db, m.id)
+        settled = await settleOnEnd(db, data[0], s).catch(e => { console.error('[admin/nomad] settle failed', e); return null })
       }
-      return NextResponse.json({ ok: true, plus })
+      return NextResponse.json({ ok: true, plus, settled })
+    }
+
+    // ── Flights ──────────────────────────────────────────────────────────
+    if (action === 'set_flights') {
+      const m = await member(); if (!m) return bad('Member not found.', 404)
+      const { data, error } = await db.from('nomad_memberships').update({ flights_enabled: body.on === true, flights_next: null }).eq('id', m.id).select('id')
+      if (error || !data?.length) return bad(error?.message || 'Not saved.', 500)
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'flight_adjust') {
+      const m = await member(); if (!m) return bad('Member not found.', 404)
+      const delta = Math.round(Number(body.deltaCents))
+      if (!delta || Math.abs(delta) > 100000) return bad('Enter an amount.')
+      const { error } = await db.from('nomad_flight_credit').insert({ membership_id: m.id, delta_cents: delta, reason: 'admin', note: String(body.note || '').slice(0, 200) || null })
+      if (error) return bad(error.message, 500)
+      return NextResponse.json({ ok: true, balance: await flightBalance(db, m.id) })
+    }
+
+    const flightRequest = async () => {
+      const { data } = await db.from('nomad_flight_requests').select('*, nomad_memberships ( * )').eq('id', String(body.requestId || '')).maybeSingle()
+      return data
+    }
+
+    if (action === 'flight_options') {
+      const rq = await flightRequest(); if (!rq) return bad('Request not found.', 404)
+      if (!['requested', 'options_sent', 'chosen'].includes(rq.status)) return bad(`That request is ${rq.status}.`)
+      const options = (Array.isArray(body.options) ? body.options : [])
+        .map((o: any) => ({ label: String(o?.label || '').trim().slice(0, 300), price_cents: Math.round(Number(o?.price_cents)) }))
+        .filter((o: any) => o.label && o.price_cents > 0).slice(0, 4)
+      if (!options.length) return bad('Add at least one option with a price.')
+      const { data, error } = await db.from('nomad_flight_requests').update({ options, status: 'options_sent', chosen_index: null, chosen_at: null, options_sent_at: new Date().toISOString(), admin_note: String(body.note || '').slice(0, 500) || null })
+        .eq('id', rq.id).in('status', ['requested', 'options_sent', 'chosen']).select('id')
+      if (error || !data?.length) return bad(error?.message || 'Not saved.', 500)
+      const mm = rq.nomad_memberships
+      if (mm?.auth_user_id) await sendMemberPush(mm.auth_user_id, { title: 'Nomad: your flight options are ready', body: `${options.length} option${options.length === 1 ? '' : 's'} to pick from.`, url: '/account/nomad' }).catch(() => 0)
+      if (mm?.email) await sendSimpleEmail({
+        to: mm.email, label: 'nomad_flight_options', subject: 'Your Nomad flight options', heading: 'Pick your flights',
+        paragraphs: [`We found ${options.length} option${options.length === 1 ? '' : 's'} for your trip. Open Nomad and tap the one you want. Nothing is booked until you choose.`],
+        ctaText: 'Choose my flights', ctaUrl: `${APP_URL}/account/nomad`,
+      }).catch(() => {})
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'flight_booked') {
+      const rq = await flightRequest(); if (!rq) return bad('Request not found.', 404)
+      const cost = Math.round(Number(body.costCents))
+      const confirmation = String(body.confirmation || '').trim().slice(0, 120)
+      if (!(cost > 0)) return bad('Enter what the flights cost.')
+      if (!confirmation) return bad('Enter the confirmation number.')
+      // CLAIM before any money moves, so a double tap can't deduct twice.
+      const { data: claimed, error: cErr } = await db.from('nomad_flight_requests')
+        .update({ status: 'booked', booked_at: new Date().toISOString(), cost_cents: cost, confirmation })
+        .eq('id', rq.id).in('status', ['requested', 'options_sent', 'chosen']).select('id')
+      if (cErr || !claimed?.length) return bad(cErr?.message || 'Already booked or cancelled.', 409)
+      const mm = rq.nomad_memberships
+      const balNow = await flightBalance(db, rq.membership_id)
+      const use = Math.min(Math.max(balNow, 0), cost)
+      const diff = cost - use
+      if (use > 0) {
+        const { error } = await db.from('nomad_flight_credit').insert({ membership_id: rq.membership_id, delta_cents: -use, reason: 'flight', request_id: rq.id, note: confirmation })
+        if (error) console.error('[admin/nomad] CRITICAL: flight booked but credit not deducted', rq.id, error)
+      }
+      let charged = 0, chargeError: string | null = null
+      if (diff > 0) {
+        const pay = await chargeMember(db, mm, diff, `Nomad flights (difference over credit) ${confirmation}`, `fl${String(rq.id).replace(/-/g, '').slice(0, 16)}`)
+        await db.from('nomad_charges').insert({ membership_id: rq.membership_id, kind: 'flight_difference', amount_cents: diff, status: pay.ok ? 'charged' : 'failed', square_payment_id: pay.paymentId ?? null, error: pay.ok ? null : pay.error })
+        if (pay.ok) charged = diff; else chargeError = pay.error || 'declined'
+      }
+      await db.from('nomad_flight_requests').update({ credit_used_cents: use, charged_cents: charged }).eq('id', rq.id)
+      if (mm?.auth_user_id) await sendMemberPush(mm.auth_user_id, { title: 'Nomad: your flights are booked', body: `Confirmation ${confirmation}. The airline will email you too.`, url: '/account/nomad' }).catch(() => 0)
+      if (mm?.email) await sendSimpleEmail({
+        to: mm.email, label: 'nomad_flight_booked', subject: 'Your Nomad flights are booked', heading: 'You’re booked',
+        paragraphs: [
+          `Your flights are booked. Confirmation: <strong style="color:#fff;">${confirmation}</strong>. The airline will email you the itinerary and check-in reminders.`,
+          `Total $${(cost / 100).toFixed(2)}: $${(use / 100).toFixed(2)} from your flight credit${diff > 0 ? (charged ? `, $${(diff / 100).toFixed(2)} charged to your Nomad card` : `, and $${(diff / 100).toFixed(2)} still to settle (we’ll be in touch)`) : ''}.`,
+          'Add your passport details at online check-in. Changes follow the airline’s rules; any fare difference comes from your flight credit first.',
+        ],
+        ctaText: 'Open Nomad', ctaUrl: `${APP_URL}/account/nomad`,
+      }).catch(() => {})
+      return NextResponse.json({ ok: true, creditUsed: use, charged, chargeError, owed: diff - charged })
+    }
+
+    if (action === 'flight_cancel') {
+      const rq = await flightRequest(); if (!rq) return bad('Request not found.', 404)
+      if (rq.status === 'cancelled') return bad('Already cancelled.', 409)
+      const refund = Math.max(0, Math.round(Number(body.refundCents) || 0))
+      const { data, error } = await db.from('nomad_flight_requests').update({ status: 'cancelled', cancelled_at: new Date().toISOString(), admin_note: String(body.note || rq.admin_note || '').slice(0, 500) || null })
+        .eq('id', rq.id).neq('status', 'cancelled').select('id')
+      if (error || !data?.length) return bad(error?.message || 'Not saved.', 500)
+      if (refund > 0) await db.from('nomad_flight_credit').insert({ membership_id: rq.membership_id, delta_cents: refund, reason: 'flight_refund', request_id: rq.id, note: 'airline refund back to credit' })
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'transfer_mark') {
+      const month = String(body.month || '')
+      const amount = Math.round(Number(body.amountCents))
+      if (!/^\d{4}-\d{2}$/.test(month)) return bad('Pick a month.')
+      if (!(amount > 0)) return bad('Enter the amount you moved.')
+      const { error } = await db.from('nomad_studio_transfers').insert({ month, amount_cents: amount, note: String(body.note || '').slice(0, 200) || null })
+      if (error) return bad(error.message, 500)
+      return NextResponse.json({ ok: true })
     }
 
     if (action === 'update_member') {

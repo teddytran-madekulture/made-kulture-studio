@@ -18,7 +18,7 @@ const day = (iso: string | null) => iso ? new Intl.DateTimeFormat('en-US', { tim
 const STATUS_COLOR: Record<string, string> = { pending: C.gold, starting: C.gold, active: C.green, past_due: C.amber, paused: C.red, ended: C.dim, confirmed: C.green, requested: C.amber, cancelled: C.dim, declined: C.dim }
 const Pill = ({ s }: { s: string }) => <span style={{ ...btn(STATUS_COLOR[s] || C.text, true), cursor: 'default', padding: '3px 8px' }}>{s.replace('_', ' ').toUpperCase()}</span>
 
-export default function NomadOps({ section }: { section: 'members' | 'stays' | 'house' | 'houses' | 'settings' }) {
+export default function NomadOps({ section }: { section: 'members' | 'stays' | 'house' | 'houses' | 'settings' | 'flights' | 'credit' }) {
   const [d, setD] = useState<any>(null)
   const [err, setErr] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -54,6 +54,8 @@ export default function NomadOps({ section }: { section: 'members' | 'stays' | '
       {section === 'house' && <House d={d} />}
       {section === 'houses' && <Houses d={d} act={act} busy={busy} />}
       {section === 'settings' && <Settings d={d} act={act} busy={busy} />}
+      {section === 'flights' && <Flights d={d} act={act} busy={busy} />}
+      {section === 'credit' && <CreditLog d={d} act={act} busy={busy} />}
     </div>
   )
 }
@@ -79,7 +81,8 @@ function Members({ d, act, busy }: any) {
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{m.name || m.email} {m.founding && <span style={{ color: C.gold, fontSize: 11 }}>FOUNDING</span>}</div>
                 <div style={small}>{m.email} · {money(m.dues_cents || d.settings.dues_cents)}/mo{m.dues_cents ? ' (locked rate)' : ''} · paid through {day(m.paid_through)}{m.cancel_at_period_end ? ' · cancelling' : ''}</div>
-                <div style={small}>Night bank: <strong style={{ color: C.text }}>{m.balance}</strong> · last charge: {m.last_charge ? `${money(m.last_charge.amount_cents)} ${m.last_charge.status} ${day(m.last_charge.created_at)}` : 'none'}</div>
+                <div style={small}>Flights: <strong style={{ color: C.text }}>{m.flights_enabled ? 'ON' : 'off'}</strong>{m.flights_next !== null && m.flights_next !== undefined ? ` (turns ${m.flights_next ? 'on' : 'off'} at renewal)` : ''} · flight credit <strong style={{ color: C.text }}>{money(m.flight_balance)}</strong>{m.flight_paused ? ' · add-on paused (credit full)' : ''}</div>
+                <div style={small}>{d.settings.model !== 'bank' ? 'This month’s trip' : 'Night bank'}: <strong style={{ color: C.text }}>{d.settings.model !== 'bank' ? (m.balance >= d.settings.nights_per_month ? 'not booked' : 'booked') : m.balance}</strong> · last charge: {m.last_charge ? `${money(m.last_charge.amount_cents)} ${m.last_charge.status} ${day(m.last_charge.created_at)}` : 'none'}</div>
               </div>
               <Pill s={m.status} />
             </div>
@@ -90,6 +93,9 @@ function Members({ d, act, busy }: any) {
               {m.status === 'starting' && <button disabled={busy} onClick={() => act({ action: 'set_status', id: m.id, status: 'pending' }, 'Reset. Check Recent charges before they try again.')} style={btn(C.amber)}>RESET STUCK START</button>}
               {m.status !== 'ended' && <button disabled={busy} onClick={() => { if (confirmEnd()) act({ action: 'set_status', id: m.id, status: 'ended' }) }} style={btn(C.red)}>END NOW</button>}
               <button disabled={busy} onClick={() => act({ action: 'update_member', id: m.id, founding: !m.founding })} style={btn(C.gold)}>{m.founding ? 'UNMARK FOUNDING' : 'MARK FOUNDING'}</button>
+              <button disabled={busy} onClick={() => act({ action: 'set_flights', id: m.id, on: !m.flights_enabled }, m.flights_enabled ? 'Flights off (from now).' : 'Flights on (from now).')} style={btn(C.text)}>{m.flights_enabled ? 'FLIGHTS OFF NOW' : 'FLIGHTS ON NOW'}</button>
+              <input placeholder="± flight $" value={adj['f' + m.id] ?? ''} onChange={e => setAdj(x => ({ ...x, ['f' + m.id]: e.target.value }))} style={{ ...input, width: 100, padding: '5px 8px' }} />
+              <button disabled={busy || !adj['f' + m.id]} onClick={() => act({ action: 'flight_adjust', id: m.id, deltaCents: Math.round(Number(adj['f' + m.id]) * 100), note: 'admin adjustment' }, 'Flight credit adjusted.').then(ok => ok && setAdj(x => ({ ...x, ['f' + m.id]: '' })))} style={btn(C.text)}>ADJUST FLIGHT CREDIT</button>
               <input placeholder="± nights" value={adj[m.id] ?? ''} onChange={e => setAdj(x => ({ ...x, [m.id]: e.target.value }))} style={{ ...input, width: 90, padding: '5px 8px' }} />
               <button disabled={busy || !adj[m.id]} onClick={() => act({ action: 'adjust_nights', id: m.id, delta: Number(adj[m.id]), note: 'admin adjustment' }, 'Nights adjusted.').then(ok => ok && setAdj(x => ({ ...x, [m.id]: '' })))} style={btn(C.text)}>ADJUST NIGHTS</button>
             </div>
@@ -102,7 +108,7 @@ function Members({ d, act, busy }: any) {
         {d.charges.length === 0 && <div style={small}>None yet.</div>}
         {d.charges.map((c: any) => (
           <div key={c.id} style={{ ...small, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', color: 'rgba(255,255,255,0.75)' }}>
-            <span>{day(c.created_at)}</span><span>{c.who}</span><span>{c.kind === 'dues' ? 'Dues' : 'Extra nights'}</span><span>{money(c.amount_cents)}</span><Pill s={c.status === 'charged' || c.status === 'paid_link' ? 'confirmed' : c.status === 'link_sent' ? 'requested' : 'cancelled'} /><span>{c.status.replace('_', ' ')}{c.error ? ` · ${c.error}` : ''}</span>
+            <span>{day(c.created_at)}</span><span>{c.who}</span><span>{c.kind === 'dues' ? (c.flight_cents ? 'Dues + flights' : 'Dues') : c.kind === 'flight_difference' ? 'Flight difference' : 'Extra nights'}</span><span>{money(c.amount_cents)}</span><Pill s={c.status === 'charged' || c.status === 'paid_link' ? 'confirmed' : c.status === 'link_sent' ? 'requested' : 'cancelled'} /><span>{c.status.replace('_', ' ')}{c.error ? ` · ${c.error}` : ''}</span>
             {['link_sent', 'failed'].includes(c.status) && c.kind === 'dues' && <button disabled={busy} onClick={() => act({ action: 'mark_paid', chargeId: c.id }, 'Marked paid.')} style={btn(C.green)}>MARK PAID</button>}
           </div>
         ))}
@@ -110,7 +116,7 @@ function Members({ d, act, busy }: any) {
     </>
   )
 }
-const confirmEnd = () => typeof window !== 'undefined' && window.confirm('End this membership now? Plus is removed and their future stays are cancelled (nights are not returned).')
+const confirmEnd = () => typeof window !== 'undefined' && window.confirm('End this membership now? Plus is removed and their future stays are cancelled. An unused month and any leftover flight credit become studio credit.')
 
 function HousePicker({ d, value, onChange, all = true }: any) {
   if ((d.houses || []).length < 2) return null
@@ -178,7 +184,7 @@ function House({ d }: any) {
       <List title="ARRIVING" rows={h.arrivals} render={(x: any) => <div key={x.id} style={small}>{x.check_in} · {x.nomad_memberships?.name} · {x.check_in} → {x.check_out}</div>} />
       <List title="LEAVING (CLEANING DUE)" rows={h.departures} render={(x: any) => <div key={x.id} style={small}>{x.check_out} · {x.nomad_memberships?.name}</div>} />
       <List title="VISITORS REGISTERED" rows={h.visitors} render={(v: any) => <div key={v.id} style={small}>{v.day} · {v.name}{v.role ? ` (${v.role})` : ''}{v.phone ? ` · ${v.phone}` : ''} · guest of {v.host}</div>} />
-      {house.has_studio && <List title="STUDIO ROOM" rows={h.blocks} render={(b: any) => <div key={b.id} style={small}>{b.day} · {b.start_hour}:00–{b.start_hour + b.hours}:00 · {b.who}</div>} />}
+      {house.has_studio && d.settings.model === 'bank' && <List title="STUDIO ROOM" rows={h.blocks} render={(b: any) => <div key={b.id} style={small}>{b.day} · {b.start_hour}:00–{b.start_hour + b.hours}:00 · {b.who}</div>} />}
     </>
   )
 }
@@ -235,6 +241,21 @@ function Settings({ d, act, busy }: any) {
         {num('free_cancel_days', 'Free cancellation (days before)')}
         {num('check_in_hour', 'Check-in hour (house time, 24h)')}
         {num('check_out_hour', 'Check-out hour')}
+      </div>
+      <div style={card}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Flights add-on</div>
+        <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}><input type="checkbox" checked={s.flights_offered !== false} onChange={e => setS((x: any) => ({ ...x, flights_offered: e.target.checked }))} /> Offer Nomad + Flights</label>
+        {num('flight_addon_cents', 'Add-on price per month ($)', undefined, true)}
+        {num('flight_credit_cents', 'Of which goes to flight credit ($)', 'the rest is the handling fee', true)}
+        {num('flight_credit_cap_cents', 'Flight credit cap ($)', 'add-on pauses while full', true)}
+        {num('flight_request_lead_days', 'Flight requests close (days before check-in)')}
+      </div>
+      <div style={card}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Studio credit from Nomad</div>
+        <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 12 }}><input type="checkbox" checked={s.unused_to_studio_credit !== false} onChange={e => setS((x: any) => ({ ...x, unused_to_studio_credit: e.target.checked }))} style={{ marginTop: 3 }} /> A paid month with no trip comes back as studio credit. Simple model only.</label>
+        {num('unused_credit_percent', 'Unused month: % returned as studio credit', 'the rest stays with Nomad')}
+        {num('studio_credit_expiry_days', 'Nomad studio credit expires after (days)', '0 = never')}
+        {num('stay_min_lead_days', 'Stays need at least (days’ notice)')}
       </div>
       <div style={card}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Studio and visitors</div>
@@ -365,5 +386,133 @@ function HouseCard({ h, d, act, busy }: any) {
       </div>
       <button disabled={busy} onClick={save} style={{ ...btn(C.gold, true), marginTop: 12 }}>SAVE HOUSE</button>
     </div>
+  )
+}
+
+// ── Flights queue (2026-10-26) ───────────────────────────────────────────
+const PREF_LABEL: Record<string, string> = { either: 'IAH or Hobby', IAH: 'IAH', HOU: 'Hobby', any: 'any time', morning: 'morning', afternoon: 'afternoon', evening: 'evening' }
+function Flights({ d, act, busy }: any) {
+  const reqs: any[] = d.flightRequests || []
+  const open = reqs.filter(r => ['requested', 'options_sent', 'chosen'].includes(r.status))
+  const done = reqs.filter(r => !['requested', 'options_sent', 'chosen'].includes(r.status))
+  return (
+    <>
+      <p style={{ ...small, marginBottom: 14 }}>Members on Nomad + Flights request flights for a confirmed stay. Send 1 to 4 options, they pick one, you book it (main cabin, their name exactly as on their passport, their email on the booking) and mark it booked. The fare comes off their flight credit and anything above it is charged to their Nomad card.</p>
+      {open.length === 0 && <div style={small}>No open flight requests.</div>}
+      <div style={{ display: 'grid', gap: 12 }}>{open.map(r => <FlightCard key={r.id} r={r} act={act} busy={busy} city={(d.houses || []).find((h: any) => h.id === r.stay?.house_id)?.city || 'Mexico City'} />)}</div>
+      {done.length > 0 && <>
+        <h3 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, margin: '26px 0 10px' }}>RECENT</h3>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {done.map(r => (
+            <div key={r.id} style={{ ...small, color: 'rgba(255,255,255,0.75)' }}>
+              {day(r.created_at)} · {r.who} · {r.stay ? `${r.stay.check_in} → ${r.stay.check_out}` : ''} · <strong>{r.status}</strong>
+              {r.status === 'booked' && ` · ${r.confirmation} · ${money(r.cost_cents)} (${money(r.credit_used_cents)} credit${r.charged_cents ? `, ${money(r.charged_cents)} card` : ''}${r.cost_cents - r.credit_used_cents - r.charged_cents > 0 ? `, ${money(r.cost_cents - r.credit_used_cents - r.charged_cents)} NOT COLLECTED` : ''})`}
+            </div>
+          ))}
+        </div>
+      </>}
+    </>
+  )
+}
+
+/** Google Flights, pre-filled: Houston airport(s) → the house's city, the stay's dates, round trip. */
+function googleFlightsUrl(r: any, city: string) {
+  const p = r.prefs || {}
+  const from = p.airport === 'IAH' ? 'IAH' : p.airport === 'HOU' ? 'HOU' : 'Houston'
+  const q = `Flights from ${from} to ${city} on ${r.stay?.check_in} through ${r.stay?.check_out}`
+  return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`
+}
+
+function FlightCard({ r, act, busy, city }: any) {
+  const p = r.prefs || {}
+  const [opts, setOpts] = useState<{ label: string; price: string }[]>(
+    (r.options || []).length ? r.options.map((o: any) => ({ label: o.label, price: String(o.price_cents / 100) })) : [{ label: '', price: '' }, { label: '', price: '' }])
+  const [note, setNote] = useState(r.admin_note || '')
+  const [cost, setCost] = useState(r.status === 'chosen' && r.options?.[r.chosen_index] ? String(r.options[r.chosen_index].price_cents / 100) : '')
+  const [conf, setConf] = useState('')
+  const chosen = r.status === 'chosen' ? r.options?.[r.chosen_index] : null
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>{r.who} · {r.stay ? `${r.stay.check_in} → ${r.stay.check_out}` : 'stay removed'}</div>
+          <div style={small}>{r.email} · flight credit <strong style={{ color: C.text }}>{money(r.flight_balance)}</strong></div>
+          <div style={small}>Wants: {PREF_LABEL[p.airport] || p.airport} · out {PREF_LABEL[p.out_time] || 'any'} · back {PREF_LABEL[p.back_time] || 'any'} · {p.bag ? 'checked bag' : 'no bag'}{p.airline ? ` · prefers ${p.airline}` : ''}{p.ff_number ? ` · FF# ${p.ff_number}` : ''}</div>
+          {p.notes && <div style={small}>“{p.notes}”</div>}
+          {r.stay && r.status !== 'chosen' && (
+            <a href={googleFlightsUrl(r, city)} target="_blank" rel="noopener noreferrer" style={{ ...btn(C.gold), display: 'inline-block', marginTop: 10, textDecoration: 'none' }}>SEARCH GOOGLE FLIGHTS ↗</a>
+          )}
+        </div>
+        <Pill s={r.status === 'chosen' ? 'confirmed' : r.status === 'options_sent' ? 'requested' : 'pending'} />
+      </div>
+
+      {chosen ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...small, color: C.green }}>They picked: {chosen.label} · {money(chosen.price_cents)}. Book it, then mark it booked.</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+            <input placeholder="Final cost $" value={cost} onChange={e => setCost(e.target.value)} style={{ ...input, width: 120 }} />
+            <input placeholder="Confirmation #" value={conf} onChange={e => setConf(e.target.value)} style={{ ...input, width: 160 }} />
+            <button disabled={busy || !cost || !conf} onClick={() => act({ action: 'flight_booked', requestId: r.id, costCents: Math.round(Number(cost) * 100), confirmation: conf }, 'Booked. Credit deducted and the member was emailed.')} style={btn(C.green, true)}>MARK BOOKED</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...small, marginBottom: 6 }}>{r.status === 'options_sent' ? 'Options sent. Waiting for them to pick (you can edit and resend).' : 'Options to send'}</div>
+          {opts.map((o, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <input placeholder="e.g. United 1234 IAH 7:05am → MEX · back UA 1235 6:40pm · bag incl." value={o.label} onChange={e => setOpts(x => x.map((y, j) => j === i ? { ...y, label: e.target.value } : y))} style={{ ...input, flex: '1 1 320px' }} />
+              <input placeholder="$" value={o.price} onChange={e => setOpts(x => x.map((y, j) => j === i ? { ...y, price: e.target.value } : y))} style={{ ...input, width: 90 }} />
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {opts.length < 4 && <button onClick={() => setOpts(x => [...x, { label: '', price: '' }])} style={btn(C.text)}>+ OPTION</button>}
+            <input placeholder="Note to member (optional)" value={note} onChange={e => setNote(e.target.value)} style={{ ...input, flex: '1 1 220px' }} />
+            <button disabled={busy} onClick={() => act({ action: 'flight_options', requestId: r.id, note, options: opts.map(o => ({ label: o.label, price_cents: Math.round(Number(o.price) * 100) })) }, 'Options sent to the member.')} style={btn(C.gold, true)}>SEND OPTIONS</button>
+          </div>
+        </div>
+      )}
+      <div style={{ marginTop: 10 }}>
+        <button disabled={busy} onClick={() => { if (window.confirm('Cancel this flight request?')) act({ action: 'flight_cancel', requestId: r.id }, 'Request cancelled.') }} style={btn(C.red)}>CANCEL REQUEST</button>
+      </div>
+    </div>
+  )
+}
+
+// ── Nomad → studio money log (2026-10-26) ────────────────────────────────
+function CreditLog({ d, act, busy }: any) {
+  const L = d.moneyLog || { months: [], transfers: [] }
+  const owed = (L.months || []).reduce((n: number, m: any) => n + m.owed_cents, 0)
+  const [amt, setAmt] = useState<Record<string, string>>({})
+  return (
+    <>
+      <p style={{ ...small, marginBottom: 14 }}>Studio credit that came from Nomad (unused months and leftover flight credit) is paid for by the Nomad account. When a member spends it on a Houston booking, that amount belongs to the studio. Move it from the Nomad bank account to the studio account, then mark it here so it isn’t counted twice. Nomad credit is counted as spent first when a member also has other studio credit.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
+        {[['Owed to studio now', money(owed)], ['Spent at the studio (all time)', money(L.used_cents)], ['Transferred (all time)', money(L.transferred_cents)], ['Issued, not spent yet', money(L.unspent_cents)]].map(([k, v]) => (
+          <div key={k} style={card}><div style={small}>{k}</div><div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26 }}>{v}</div></div>
+        ))}
+      </div>
+      <h3 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, margin: '6px 0 10px' }}>BY MONTH</h3>
+      {(L.months || []).length === 0 && <div style={small}>No Nomad credit has been spent at the studio yet.</div>}
+      <div style={{ display: 'grid', gap: 8 }}>
+        {(L.months || []).map((m: any) => (
+          <div key={m.month} style={{ ...card, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>{m.month}</div>
+              <div style={small}>Spent at studio {money(m.used_cents)} · transferred {money(m.transferred_cents)} · <strong style={{ color: m.owed_cents ? C.amber : C.green }}>{m.owed_cents ? `owed ${money(m.owed_cents)}` : 'settled'}</strong></div>
+            </div>
+            {m.owed_cents > 0 && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input placeholder={String(m.owed_cents / 100)} value={amt[m.month] ?? ''} onChange={e => setAmt(x => ({ ...x, [m.month]: e.target.value }))} style={{ ...input, width: 100 }} />
+                <button disabled={busy} onClick={() => act({ action: 'transfer_mark', month: m.month, amountCents: Math.round(Number(amt[m.month] || m.owed_cents / 100) * 100) }, 'Transfer recorded.').then(ok => ok && setAmt(x => ({ ...x, [m.month]: '' })))} style={btn(C.green, true)}>MARK TRANSFERRED</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {(L.transfers || []).length > 0 && <>
+        <h3 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 22, margin: '26px 0 10px' }}>TRANSFERS</h3>
+        {(L.transfers || []).map((t: any) => <div key={t.id} style={small}>{day(t.created_at)} · {t.month} · {money(t.amount_cents)}{t.note ? ` · ${t.note}` : ''}</div>)}
+      </>}
+    </>
   )
 }

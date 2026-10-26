@@ -17,7 +17,7 @@ import {
   getNomadSettings, membershipForUser, nightBalance, chargeDuesPeriod, chargeMember,
   overlappingStays, checkStay, issueStayDoorCode, mxToday, addDays, daysBetween, isDate,
   firstName, RULES_VERSION, LIVE_STATUSES, ACTIVE_STAY, squareCustomerFor, square, withLock, isLocked,
-  getHouses, getHouse, houseSettings, localToday, earliestToday, releaseWaitingOn, isSimple, nightsToReturn,
+  getHouses, getHouse, houseSettings, localToday, earliestToday, releaseWaitingOn, isSimple, nightsToReturn, flightBalance, flightPlan, unusedCreditCents,
 } from '@/lib/nomad'
 
 // What a member may see of one house's settings.
@@ -63,6 +63,9 @@ export async function GET() {
       booking_window_days: s.booking_window_days, free_cancel_days: s.free_cancel_days,
       check_in_hour: s.check_in_hour, check_out_hour: s.check_out_hour, studio_block_hours: s.studio_block_hours,
       studio_open_hour: s.studio_open_hour, studio_close_hour: s.studio_close_hour, max_visitors_per_day: s.max_visitors_per_day,
+      stay_min_lead_days: s.stay_min_lead_days, unused_to_studio_credit: s.unused_to_studio_credit, unused_credit_percent: s.unused_credit_percent, unused_credit_cents: unusedCreditCents(m, s), studio_credit_expiry_days: s.studio_credit_expiry_days,
+      flights_offered: s.flights_offered, flight_addon_cents: s.flight_addon_cents, flight_credit_cents: s.flight_credit_cents,
+      flight_credit_cap_cents: s.flight_credit_cap_cents, flight_request_lead_days: s.flight_request_lead_days,
     }
     // Open houses, plus any closed one the member still has a stay at.
     const pubHouses = (list: any[]) => list.map(h => publicHouse(h, s, live))
@@ -106,12 +109,21 @@ export async function GET() {
       : { data: [] as any[] }
     const studio = (blocks ?? []).map(b => ({ ...b, mine: b.membership_id === m.id }))
 
+    // Flights: credit balance, this month's plan, and the member's requests.
+    const fBal = await flightBalance(db, m.id)
+    const fPlan = flightPlan(m, s, fBal)
+    const { data: fReqs, error: frErr } = await db.from('nomad_flight_requests').select('id, stay_id, status, prefs, options, chosen_index, cost_cents, credit_used_cents, charged_cents, confirmation, admin_note, created_at')
+      .eq('membership_id', m.id).gte('created_at', new Date(Date.now() - 120 * 86_400_000).toISOString()).order('created_at', { ascending: false })
+    if (frErr) throw new Error(frErr.message)
+    const flight = { enabled: m.flights_enabled === true, next: m.flights_next ?? null, balance: fBal, paused: fPlan.paused }
+
     return NextResponse.json({
       membership: {
         id: m.id, status: m.status, founding: m.founding, dues_cents: m.dues_cents || s.dues_cents, paid_through: m.paid_through,
         started_at: m.started_at, cancel_at_period_end: m.cancel_at_period_end, square_card_id: m.square_card_id, consented_at: m.consented_at,
       },
       application, settings: pub, houses, balance, myStays, calendar, joinRequests, members, studio, visitors: visitors ?? [], today,
+      flight, flightRequests: fReqs ?? [],
     })
   } catch (e: any) {
     console.error('[account/nomad] GET failed', e)
@@ -153,7 +165,7 @@ export async function POST(req: NextRequest) {
       if (cardErr) return bad(cardErr)
       // CLAIM: flip pending/ended → 'starting' first, so a double tap can't charge twice.
       const { data: claimed, error: cErr } = await db.from('nomad_memberships')
-        .update({ status: 'starting', square_card_id: cardId, consented_at: new Date().toISOString(), rules_version: RULES_VERSION, cancel_at_period_end: false, ended_at: null })
+        .update({ status: 'starting', square_card_id: cardId, consented_at: new Date().toISOString(), rules_version: RULES_VERSION, cancel_at_period_end: false, ended_at: null, flights_enabled: s.flights_offered && body.flights === true, flights_next: null })
         .eq('id', m.id).in('status', ['pending', 'ended']).select('*')
       if (cErr || !claimed?.length) return bad('Could not start the membership. Refresh and try again.', 409)
       const res = await chargeDuesPeriod(db, claimed[0], s, new Date().toISOString(), today.replace(/-/g, ''))
@@ -187,6 +199,68 @@ export async function POST(req: NextRequest) {
       const { data, error } = await db.from('nomad_memberships').update({ cancel_at_period_end: on }).eq('id', m.id).in('status', LIVE_STATUSES).select('id')
       if (error || !data?.length) return bad('Nothing to change.', 409)
       if (on) await sendOwnerPush({ title: 'Nomad: member cancelling', body: `${m.name || user.email} cancelled. It ends when the paid month runs out.`, url: '/admin/nomad', tag: `nomad-cancel-${m.id}` }).catch(() => {})
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── Flights ────────────────────────────────────────────────────────────
+    if (action === 'set_flights_next') {
+      if (!LIVE_STATUSES.includes(m.status)) return bad('Your membership needs to be active.')
+      const on = body.on === true
+      if (on && !s.flights_offered) return bad('Flights aren’t offered right now.')
+      const next = on === (m.flights_enabled === true) ? null : on
+      const { data, error } = await db.from('nomad_memberships').update({ flights_next: next }).eq('id', m.id).select('id')
+      if (error || !data?.length) return bad('Not saved.', 500)
+      if (next !== null) await sendOwnerPush({ title: `Nomad: flights ${on ? 'added' : 'dropped'}`, body: `${who} ${on ? 'adds' : 'drops'} the flight add-on from their next renewal.`, url: '/admin/nomad?tab=members' }).catch(() => {})
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'flight_request') {
+      if (m.status !== 'active') return bad('Your membership needs to be active.')
+      const fb = await flightBalance(db, m.id)
+      if (!m.flights_enabled && fb <= 0) return bad('Add flights to your membership to have us book them.')
+      const { data: stay } = await db.from('nomad_stays').select('id, house_id, check_in, check_out, status').eq('id', String(body.stayId || '')).eq('membership_id', m.id).maybeSingle()
+      if (!stay || stay.status !== 'confirmed') return bad('Pick a confirmed stay.')
+      const sh = await getHouse(db, stay.house_id)
+      const t = localToday(sh?.timezone)
+      if (daysBetween(t, stay.check_in) < s.flight_request_lead_days) return bad(`Flight requests need at least ${s.flight_request_lead_days} days before check-in. Message the studio and we’ll see what we can do.`)
+      const { data: open } = await db.from('nomad_flight_requests').select('id').eq('stay_id', stay.id).neq('status', 'cancelled').limit(1)
+      if (open?.length) return bad('You already have a flight request for this stay.', 409)
+      const p = body.prefs || {}
+      const pick = (v: any, ok: string[], d: string) => ok.includes(String(v)) ? String(v) : d
+      const prefs = {
+        airline: String(p.airline || '').slice(0, 80),
+        airport: pick(p.airport, ['either', 'IAH', 'HOU'], 'either'),
+        out_time: pick(p.out_time, ['any', 'morning', 'afternoon', 'evening'], 'any'),
+        back_time: pick(p.back_time, ['any', 'morning', 'afternoon', 'evening'], 'any'),
+        bag: p.bag === true,
+        ff_number: String(p.ff_number || '').slice(0, 40),
+        notes: String(p.notes || '').slice(0, 500),
+      }
+      const { error } = await db.from('nomad_flight_requests').insert({ membership_id: m.id, stay_id: stay.id, prefs })
+      if (error) return bad(`Could not save the request: ${error.message}`, 500)
+      await sendOwnerPush({ title: 'Nomad: flight request', body: `${who} · ${stay.check_in} to ${stay.check_out}`, url: '/admin/nomad?tab=flights' }).catch(() => {})
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'flight_choose') {
+      const { data: rq } = await db.from('nomad_flight_requests').select('*').eq('id', String(body.requestId || '')).eq('membership_id', m.id).maybeSingle()
+      if (!rq || rq.status !== 'options_sent') return bad('Those options aren’t open anymore. Refresh.', 409)
+      const idx = Math.round(Number(body.index))
+      const opt = (rq.options || [])[idx]
+      if (!opt) return bad('Pick one of the options.')
+      const fb = await flightBalance(db, m.id)
+      if (opt.price_cents > fb && body.agree !== true) return bad('Please confirm the difference can go on your Nomad card.')
+      const { data, error } = await db.from('nomad_flight_requests').update({ status: 'chosen', chosen_index: idx, chosen_at: new Date().toISOString() }).eq('id', rq.id).eq('status', 'options_sent').select('id')
+      if (error || !data?.length) return bad('Could not save your pick. Refresh and try again.', 409)
+      await sendOwnerPush({ title: 'Nomad: flights picked, ready to book', body: `${who} chose: ${String(opt.label).slice(0, 80)} ($${(opt.price_cents / 100).toFixed(0)})`, url: '/admin/nomad?tab=flights' }).catch(() => {})
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'flight_cancel') {
+      const { data, error } = await db.from('nomad_flight_requests').update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+        .eq('id', String(body.requestId || '')).eq('membership_id', m.id).in('status', ['requested', 'options_sent', 'chosen']).select('id')
+      if (error || !data?.length) return bad('That request can’t be cancelled here. If it’s booked, message the studio.', 409)
+      await sendOwnerPush({ title: 'Nomad: flight request cancelled', body: `${who} cancelled a flight request.`, url: '/admin/nomad?tab=flights' }).catch(() => {})
       return NextResponse.json({ ok: true })
     }
 
@@ -229,8 +303,15 @@ export async function POST(req: NextRequest) {
       }
 
       const balance = await nightBalance(db, m.id)
-      const fromBank = Math.min(Math.max(balance, 0), chk.cost)
-      const extra = chk.cost - fromBank
+      // Simple: ONE trip per paid month, up to nights_per_month nights in a row.
+      // Booking it uses the month's whole allowance (that's what makes "no trip
+      // this month" unambiguous at renewal).
+      if (isSimple(hs)) {
+        if (chk.cost > s.nights_per_month) return bad(`Your monthly trip is up to ${s.nights_per_month} nights in a row.`)
+        if (balance < s.nights_per_month) return bad('You’ve already booked this month’s trip. Your next one opens when your membership renews.')
+      }
+      const fromBank = isSimple(hs) ? Math.max(balance, 0) : Math.min(Math.max(balance, 0), chk.cost)
+      const extra = Math.max(0, chk.cost - fromBank)
       const extraCents = extra * hs.extra_night_cents
       // Simple model: flat price, no paid extra nights.
       if (extra > 0 && isSimple(hs)) {
@@ -375,6 +456,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'studio_block') {
+      // Simple model: one member at a time, so the space is theirs all stay. No blocks.
+      if (isSimple(s)) return bad('The shooting space is yours for your whole stay. No need to book it.')
       const stay = await ownStay()
       if (!stay) return bad('Pick one of your confirmed stays.')
       const sh = stay.hs

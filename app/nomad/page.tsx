@@ -49,8 +49,10 @@ const WHO = ['Photographers', 'Models', 'Makeup artists', 'Hair stylists', 'Ward
 
 const RULES = [
   'Stays open 60 days ahead. One upcoming stay at a time until your next one is 14 days out.',
-  '3 nights a month are included. Unused nights don’t roll over, and there are no extra nights to buy. One member in the house at a time.',
-  'The studio books in 4-hour blocks. Shoots run 10 am to 9 pm.',
+  'One trip a month, up to 3 nights in a row, with the house to yourself. Book at least 3 days ahead; change or cancel 14+ days out and the trip comes back.',
+  // 80% mirrors Admin → Nomad → Settings (unused_credit_percent). Change both together.
+  'No trip that month? 80% of your membership comes back as Made Kulture studio credit, so a skipped month is never wasted.',
+  'The shooting space is yours for your whole stay. Visitors (models, crew) between 8 am and 10 pm; keep it quiet after 10.',
   'Every model or collaborator is registered with the host the day before. Up to 4 visitors at a time, and no overnight guests.',
   'Reset the studio when your block ends. The cleaning between stays is included.',
 ]
@@ -167,6 +169,7 @@ export default function NomadPage() {
               <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED, letterSpacing: '0.12em' }}>/ MONTH</span>
             </div>
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: MUTED, marginBottom: 18 }}>included, with studio time. The house is yours while you’re there.</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.8)', lineHeight: 1.6, marginBottom: 18 }}>Didn’t make it down? 80% of your month comes back as Made Kulture studio credit.</div>
             <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: '0.14em', color: GOLD, textTransform: 'uppercase', marginBottom: 26 }}>Includes Made Kulture Plus</div>
             <p style={{ fontFamily: 'Inter', fontSize: 12.5, color: 'rgba(255,255,255,0.42)', lineHeight: 1.6, margin: 0, borderTop: LINE, paddingTop: 18 }}>
               Planned pilot pricing for the founding group. Final pricing is set before the first stay. Nothing is charged to apply.

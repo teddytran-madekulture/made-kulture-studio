@@ -16,8 +16,8 @@ const btn = (color: string, filled = false): React.CSSProperties => ({
 })
 const STATUS_COLOR: Record<string, string> = { new: C.gold, approved: C.green, waitlisted: C.amber, declined: C.red }
 const TABS = ['new', 'approved', 'waitlisted', 'declined', 'all'] as const
-const SECTIONS = ['applications', 'members', 'stays', 'house', 'houses', 'settings'] as const
-const SECTION_LABEL: Record<string, string> = { applications: 'APPLICATIONS', members: 'MEMBERS', stays: 'STAYS', house: 'THIS WEEK', houses: 'HOUSES', settings: 'SETTINGS' }
+const SECTIONS = ['applications', 'members', 'stays', 'flights', 'credit', 'house', 'houses', 'settings'] as const
+const SECTION_LABEL: Record<string, string> = { applications: 'APPLICATIONS', members: 'MEMBERS', stays: 'STAYS', flights: 'FLIGHTS', credit: 'STUDIO CREDIT', house: 'THIS WEEK', houses: 'HOUSES', settings: 'SETTINGS' }
 
 export default function NomadAdminPage() {
   const [d, setD] = useState<any>(null)
