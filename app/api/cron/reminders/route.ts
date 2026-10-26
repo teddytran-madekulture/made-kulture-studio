@@ -115,6 +115,7 @@ export async function GET(req: NextRequest) {
         endTime:       formatTimeLabel(endHour),
         totalAmount:   booking.total_amount ?? 0,
         bookingId:     booking.id,
+        checkInToken:  (booking as any).check_in_token,
       })
       sent++
     } catch (err) {

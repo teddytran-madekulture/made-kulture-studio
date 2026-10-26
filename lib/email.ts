@@ -486,13 +486,17 @@ interface BookingReminderData {
   endTime: string     // e.g. "5pm"
   totalAmount: number
   bookingId: string
+  checkInToken?: string | null   // 2026-10-26: the check-in button, same as the confirmation email
 }
 
 export async function sendBookingReminder(data: BookingReminderData) {
   const { enabled, subject: customSubject } = await getTemplateSettings('booking_reminder')
   if (!enabled) return null
 
-  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId } = data
+  const { customerName, customerEmail, setName, date, startTime, endTime, totalAmount, bookingId, checkInToken } = data
+  // The day-of email people search for. Same rule as the confirmation: the code
+  // itself is never printed, only the check-in page that reveals it.
+  const checkIn = checkInToken ? checkInUrl(checkInToken) : null
 
   const body = `
     <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#fff;letter-spacing:0.05em;">Your Shoot is Tomorrow</h1>
@@ -524,6 +528,18 @@ export async function sendBookingReminder(data: BookingReminderData) {
         </td>
       </tr>
     </table>
+
+    ${checkIn ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid ${ACCENT_COLOR};border-radius:6px;padding:20px 24px;margin-bottom:28px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Door Code</p>
+          <p style="margin:0 0 14px;font-size:14px;color:#ccc;line-height:1.6;">When you arrive, open your check-in page and tap <strong style="color:#fff;">Check in</strong>. Your front-door and back-door codes appear right there. Check-in opens ${CODE_REVEAL_MINUTES} minutes before your session.</p>
+          <a href="${checkIn}" style="display:inline-block;background:${ACCENT_COLOR};color:#0b0b0d;font-size:13px;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:4px;letter-spacing:0.06em;text-transform:uppercase;">Check in &amp; get my code</a>
+          <p style="margin:12px 0 0;font-size:12px;color:#888;">No signal at the door? Reply <strong style="color:#ccc;">CODE</strong> to our text and we&rsquo;ll text it back.</p>
+        </td>
+      </tr>
+    </table>` : ''}
 
     <!-- Directions CTA -->
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
