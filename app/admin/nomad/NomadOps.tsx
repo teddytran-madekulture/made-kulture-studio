@@ -183,9 +183,15 @@ function House({ d }: any) {
   )
 }
 
+// Locked by the simple model (mirror of SIMPLE_LOCKED_KEYS in lib/nomad.ts).
+const SIMPLE_LOCKED = ['night_cap', 'extra_night_cents', 'busy_multiplier', 'busy_ranges', 'max_members_at_once']
+
 function Settings({ d, act, busy }: any) {
-  const [s, setS] = useState<any>(d.settings)
-  const [ranges, setRanges] = useState<string>((d.settings.busy_ranges || []).map((r: any) => `${r.start} ${r.end} ${r.label || ''}`.trim()).join('\n'))
+  // Edit the SAVED values, so the bank-model numbers survive while simple is on.
+  const raw = d.rawSettings || d.settings
+  const [s, setS] = useState<any>({ ...raw, model: raw.model === 'bank' ? 'bank' : 'simple' })
+  const simple = s.model !== 'bank'
+  const [ranges, setRanges] = useState<string>((raw.busy_ranges || []).map((r: any) => `${r.start} ${r.end} ${r.label || ''}`.trim()).join('\n'))
   const num = (k: string, label: string, hint?: string, cents = false) => (
     <label key={k} style={{ display: 'block', marginBottom: 12 }}>
       <div style={small}>{label}{hint ? ` · ${hint}` : ''}</div>
@@ -198,21 +204,32 @@ function Settings({ d, act, busy }: any) {
   }
   return (
     <>
+    <div style={{ ...card, marginBottom: 16 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>Program model</div>
+      <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6, cursor: 'pointer' }}>
+        <input type="radio" name="nomad-model" checked={simple} onChange={() => setS((x: any) => ({ ...x, model: 'simple' }))} style={{ marginTop: 3 }} />
+        <span><strong style={{ color: C.text }}>Simple</strong> · one member in the house at a time, flat monthly price, the nights below every month with no rollover, no extra nights, every night counts as one.</span>
+      </label>
+      <label style={{ ...small, display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
+        <input type="radio" name="nomad-model" checked={!simple} onChange={() => setS((x: any) => ({ ...x, model: 'bank' }))} style={{ marginTop: 3 }} />
+        <span><strong style={{ color: C.text }}>Night bank</strong> · the original: nights roll over up to a cap, paid extra nights, busy dates, members can share stays.</span>
+      </label>
+    </div>
     <p style={{ ...small, marginBottom: 14 }}>Program defaults. Membership money and the night bank apply everywhere. The stay, studio and visitor rules are the default for every house, and a house can set its own in the Houses tab.</p>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
       <div style={card}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Money and nights</div>
         {num('dues_cents', 'Monthly dues ($)', 'locked rates override this', true)}
-        {num('nights_per_month', 'Nights added each month')}
-        {num('night_cap', 'Most nights a bank can hold')}
-        {num('extra_night_cents', 'Extra night price ($)', 'past the bank', true)}
-        {num('busy_multiplier', 'Busy-date multiplier', '2 = a busy night costs 2')}
+        {num('nights_per_month', simple ? 'Nights included each month' : 'Nights added each month', simple ? 'reset every renewal' : undefined)}
+        {!simple && num('night_cap', 'Most nights a bank can hold')}
+        {!simple && num('extra_night_cents', 'Extra night price ($)', 'past the bank', true)}
+        {!simple && num('busy_multiplier', 'Busy-date multiplier', '2 = a busy night costs 2')}
         {num('past_due_grace_days', 'Days unpaid before pausing')}
       </div>
       <div style={card}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Stays</div>
         {num('max_nights_per_stay', 'Max nights per stay')}
-        {num('max_members_at_once', 'Max members in the house')}
+        {!simple && num('max_members_at_once', 'Max members in the house')}
         {num('booking_window_days', 'Book this many days ahead')}
         {num('second_stay_lead_days', 'Next stay opens when the current one is within (days)')}
         {num('free_cancel_days', 'Free cancellation (days before)')}
@@ -226,11 +243,11 @@ function Settings({ d, act, busy }: any) {
         {num('studio_close_hour', 'Studio closes (hour)')}
         {num('max_visitors_per_day', 'Visitors per day (whole house)')}
       </div>
-      <div style={card}>
+      {!simple && <div style={card}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Busy dates (default)</div>
         <div style={small}>One per line, “start end label”, e.g. 2027-03-20 2027-03-27 Fashion week. A house can list its own instead.</div>
         <textarea value={ranges} onChange={e => setRanges(e.target.value)} rows={4} style={{ ...input, width: '100%', fontSize: 14 }} />
-      </div>
+      </div>}
       <div><button disabled={busy} onClick={save} style={btn(C.gold, true)}>SAVE SETTINGS</button></div>
     </div>
     </>
@@ -339,9 +356,11 @@ function HouseCard({ h, d, act, busy }: any) {
         </div>
         <div>
           <div style={{ ...small, marginBottom: 8, color: C.text }}>House rules (blank = program default, shown faded)</div>
-          {Object.keys(OVERRIDE_LABELS).filter(k => h.has_studio !== false || !k.startsWith('studio_')).map(field)}
+          {Object.keys(OVERRIDE_LABELS).filter(k => (h.has_studio !== false || !k.startsWith('studio_')) && (def.model === 'bank' || !SIMPLE_LOCKED.includes(k))).map(field)}
+          {def.model === 'bank' && <>
           <div style={small}>Busy dates for this house (blank = program default)</div>
           <textarea value={ranges} onChange={e => setRanges(e.target.value)} rows={3} placeholder={rangesToText(def.busy_ranges)} style={{ ...input, width: '100%', fontSize: 14 }} />
+          </>}
         </div>
       </div>
       <button disabled={busy} onClick={save} style={{ ...btn(C.gold, true), marginTop: 12 }}>SAVE HOUSE</button>

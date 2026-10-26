@@ -18,7 +18,7 @@ import { sendMemberPush } from '@/lib/member-push'
 import { sendSimpleEmail } from '@/lib/email'
 import {
   getNomadSettings, chargeDuesPeriod, paymentLink, syncPlus, mxToday, addDays, firstName, LIVE_STATUSES, issueStayDoorCode,
-  getHouses, houseSettings, localToday, earliestToday, cancelFutureStays,
+  getHouses, houseSettings, localToday, earliestToday, cancelFutureStays, isSimple,
 } from '@/lib/nomad'
 
 export const dynamic = 'force-dynamic'
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
           out.charged++
           if (m.email) await sendSimpleEmail({
             to: m.email, label: 'nomad_dues_receipt', subject: 'Your Nomad membership renewed', heading: 'Membership renewed',
-            paragraphs: [`Your Nomad membership renewed for <strong style="color:#fff;">$${(res.cents / 100).toFixed(2)}</strong>.${res.accrued ? ` ${res.accrued} nights were added to your bank.` : ''}`],
+            paragraphs: [`Your Nomad membership renewed for <strong style="color:#fff;">$${(res.cents / 100).toFixed(2)}</strong>.${isSimple(s) ? ` Your ${s.nights_per_month} nights for this month are ready.` : res.accrued ? ` ${res.accrued} nights were added to your bank.` : ''}`],
             ctaText: 'Open Nomad', ctaUrl: `${APP_URL}/account/nomad`,
           }).catch(() => {})
           continue

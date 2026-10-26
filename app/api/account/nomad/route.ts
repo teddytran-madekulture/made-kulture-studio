@@ -17,7 +17,7 @@ import {
   getNomadSettings, membershipForUser, nightBalance, chargeDuesPeriod, chargeMember,
   overlappingStays, checkStay, issueStayDoorCode, mxToday, addDays, daysBetween, isDate,
   firstName, RULES_VERSION, LIVE_STATUSES, ACTIVE_STAY, squareCustomerFor, square, withLock, isLocked,
-  getHouses, getHouse, houseSettings, localToday, earliestToday, releaseWaitingOn,
+  getHouses, getHouse, houseSettings, localToday, earliestToday, releaseWaitingOn, isSimple, nightsToReturn,
 } from '@/lib/nomad'
 
 // What a member may see of one house's settings.
@@ -25,7 +25,7 @@ function publicHouse(h: any, s: any, live: boolean) {
   const hs = houseSettings(s, h)
   return {
     id: h.id, slug: h.slug, name: h.name, city: h.city, timezone: h.timezone, active: h.active, has_studio: hs.has_studio,
-    address: live ? (h.address || '') : '', today: localToday(h.timezone),
+    address: live ? (h.address || '') : '', today: localToday(h.timezone), model: isSimple(hs) ? 'simple' : 'bank',
     extra_night_cents: hs.extra_night_cents, busy_multiplier: hs.busy_multiplier, busy_ranges: hs.busy_ranges,
     max_nights_per_stay: hs.max_nights_per_stay, max_members_at_once: hs.max_members_at_once,
     booking_window_days: hs.booking_window_days, free_cancel_days: hs.free_cancel_days,
@@ -56,6 +56,7 @@ export async function GET() {
     const { data: apps } = await db.from('nomad_interest').select('status, created_at').eq('email', user.email.toLowerCase()).order('created_at', { ascending: false }).limit(1)
     const application = apps?.[0] ?? null
     const pub = {
+      model: isSimple(s) ? 'simple' : 'bank',
       dues_cents: m?.dues_cents || s.dues_cents, nights_per_month: s.nights_per_month, night_cap: s.night_cap,
       extra_night_cents: s.extra_night_cents, busy_multiplier: s.busy_multiplier, busy_ranges: s.busy_ranges,
       max_nights_per_stay: s.max_nights_per_stay, max_members_at_once: s.max_members_at_once,
@@ -211,7 +212,8 @@ export async function POST(req: NextRequest) {
     if (action === 'book') {
       if (!m.consented_at) return bad('Start your membership first.')
       const checkIn = String(body.checkIn || ''), checkOut = String(body.checkOut || '')
-      const visibility = String(body.visibility || 'chosen')
+      // Simple model: one member at a time, so every stay is private.
+      const visibility = isSimple(hs) ? 'private' : String(body.visibility || 'chosen')
       const overlapping = await overlappingStays(db, house.id, checkIn, checkOut)
       // The member's stays at EVERY house: one upcoming stay at a time, never two places at once.
       const { data: mine, error: mErr } = await db.from('nomad_stays').select('id, house_id, check_in, check_out').eq('membership_id', m.id).in('status', ACTIVE_STAY).gte('check_out', addDays(hToday, -1))
@@ -220,7 +222,7 @@ export async function POST(req: NextRequest) {
       if (!chk.ok) return bad(chk.error)
 
       // Share list: only other LIVE members' ids survive.
-      let shareWith: string[] = Array.isArray(body.shareWith) ? body.shareWith.map(String) : []
+      let shareWith: string[] = !isSimple(hs) && Array.isArray(body.shareWith) ? body.shareWith.map(String) : []
       if (shareWith.length) {
         const { data: live } = await db.from('nomad_memberships').select('id').in('id', shareWith).in('status', LIVE_STATUSES)
         shareWith = (live ?? []).map(x => x.id).filter(id => id !== m.id)
@@ -230,6 +232,12 @@ export async function POST(req: NextRequest) {
       const fromBank = Math.min(Math.max(balance, 0), chk.cost)
       const extra = chk.cost - fromBank
       const extraCents = extra * hs.extra_night_cents
+      // Simple model: flat price, no paid extra nights.
+      if (extra > 0 && isSimple(hs)) {
+        return bad(fromBank > 0
+          ? `That stay is ${chk.cost} nights and you have ${fromBank} left this month. Pick a shorter stay.`
+          : 'You’ve used your nights for this month. They reset when your membership renews.')
+      }
       // Extra nights need an explicit yes. Instant bookings are charged now;
       // a request that needs a host's OK is charged when it's approved.
       if (extra > 0 && body.acceptExtra !== true) {
@@ -337,7 +345,7 @@ export async function POST(req: NextRequest) {
       const early = daysBetween(hToday, stay.check_in) >= hs.free_cancel_days || stay.status === 'requested'
       // Early: every night comes back. Paid extra nights come back as bank
       // nights (requests were never charged, so only their bank nights return).
-      const back = early ? stay.nights_cost + (stay.status === 'confirmed' ? stay.extra_nights : 0) : 0
+      const back = early ? await nightsToReturn(db, m.id, stay.nights_cost + (stay.status === 'confirmed' ? stay.extra_nights : 0), s) : 0
       if (back > 0) await db.from('nomad_nights').insert({ membership_id: m.id, delta: back, reason: 'stay_refund', stay_id: stay.id })
       await db.from('nomad_studio_blocks').update({ status: 'cancelled' }).eq('stay_id', stay.id)
       await db.from('nomad_visitors').update({ status: 'cancelled' }).eq('stay_id', stay.id)

@@ -10,7 +10,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { findAuthUserIdByEmail } from '@/lib/auth-user'
 import { sendSimpleEmail } from '@/lib/email'
 import {
-  getNomadSettings, saveNomadSettings, nightBalance, chargeDuesPeriod, applyPaidDues, syncPlus,
+  getNomadSettings, readRawSettings, isSimple, nightsToReturn, saveNomadSettings, nightBalance, chargeDuesPeriod, applyPaidDues, syncPlus,
   issueStayDoorCode, mxToday, addDays, firstName, ACTIVE_STAY, square,
   getHouses, getHouse, houseSettings, localToday, earliestToday, cleanHouse, cancelFutureStays, releaseWaitingOn, HOUSE_OVERRIDE_KEYS, TIMEZONES,
 } from '@/lib/nomad'
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       }
     })
     return NextResponse.json({
-      today, settings: s, houses, timezones: TIMEZONES, overrideKeys: HOUSE_OVERRIDE_KEYS,
+      today, settings: s, rawSettings: await readRawSettings(db), houses, timezones: TIMEZONES, overrideKeys: HOUSE_OVERRIDE_KEYS,
       members: (members ?? []).map(m => ({ ...m, balance: bal.get(m.id) ?? 0, last_charge: lastCharge.get(m.id) ?? null })),
       stays: (stays ?? []).map((x: any) => ({ ...x, who: x.nomad_memberships?.name || x.nomad_memberships?.email, house: houseName.get(x.house_id) || '?' })),
       charges: (charges ?? []).map((c: any) => ({ ...c, who: c.nomad_memberships?.name || c.nomad_memberships?.email })),
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
         to: row.email, label: 'nomad_membership_ready', subject: 'Your Nomad membership is ready',
         heading: `${firstName(app.name)}, your spot is ready`,
         paragraphs: [
-          `Your Nomad membership is set up and waiting for you to start it: <strong style="color:#fff;">$${dues.toFixed(0)} a month</strong>, with ${s.nights_per_month} nights a month in your night bank (up to ${s.night_cap}) and Made Kulture Plus included while you’re a member.`,
+          `Your Nomad membership is set up and waiting for you to start it: <strong style="color:#fff;">$${dues.toFixed(0)} a month</strong>, with ${isSimple(s) ? `${s.nights_per_month} nights each month at the house (they reset every month)` : `${s.nights_per_month} nights a month in your night bank (up to ${s.night_cap})`} and Made Kulture Plus included while you’re a member.`,
           `Sign in with <strong style="color:#fff;">${row.email}</strong> (the account you already have), open Nomad, read the house rules, pick a card and start. Nothing is charged until you press start.`,
         ],
         ctaText: 'Start my membership', ctaUrl: `${APP_URL}/account/nomad`,
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
       if (!stay) return bad('Stay not found (or it’s being confirmed right now; try again in a minute).', 404)
       const { data: claimed } = await db.from('nomad_stays').update({ status: 'cancelled', cancelled_at: new Date().toISOString() }).eq('id', stay.id).in('status', ['confirmed', 'requested']).select('id')
       if (!claimed?.length) return bad('Already cancelled.', 409)
-      const back = body.refund === true ? stay.nights_cost + (stay.status === 'confirmed' ? stay.extra_nights : 0) : 0
+      const back = body.refund === true ? await nightsToReturn(db, stay.membership_id, stay.nights_cost + (stay.status === 'confirmed' ? stay.extra_nights : 0), s) : 0
       if (back > 0) await db.from('nomad_nights').insert({ membership_id: stay.membership_id, delta: back, reason: 'stay_refund', stay_id: stay.id, note: 'cancelled by studio' })
       await db.from('nomad_studio_blocks').update({ status: 'cancelled' }).eq('stay_id', stay.id)
       await db.from('nomad_visitors').update({ status: 'cancelled' }).eq('stay_id', stay.id)

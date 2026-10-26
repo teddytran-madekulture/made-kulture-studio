@@ -31,7 +31,7 @@ const btn = (primary = false): React.CSSProperties => ({
 })
 const gold: React.CSSProperties = { fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 4, background: 'rgba(var(--t-gold-rgb), 0.15)', color: 'var(--t-gold)' }
 
-const RULES = [
+const RULES_BANK = [
   'Stays open up to the booking window ahead. Hold one upcoming stay at a time until it’s close.',
   'Two members in the house at once, one per room. A third only on the couch, by agreement.',
   'The studio room books in blocks. When two members are in, each gets one block a day before anyone takes a second.',
@@ -40,6 +40,15 @@ const RULES = [
   'Quiet hours 10 pm to 8 am. Shoots run inside studio hours.',
   'Swimwear, lingerie or implied nudity: closed set, with notice to housemates the day before.',
 ]
+// Simple model (2026-10-26): one member at a time, flat price, nights reset monthly.
+const RULES_SIMPLE = [
+  'Stays open up to the booking window ahead. Hold one upcoming stay at a time until it’s close.',
+  'One member in the house at a time. Your monthly nights reset when your membership renews; unused nights don’t roll over.',
+  'Register every model or collaborator by the day before. No overnight guests who aren’t members.',
+  'Reset the shooting space when you’re done. Leave the place ready for the cleaner.',
+  'Quiet hours 10 pm to 8 am. Shoots run inside studio hours.',
+]
+const simple = (d: any) => d?.settings?.model !== 'bank'
 
 export default function NomadAccountPage() {
   const [d, setD] = useState<any>(null)
@@ -127,18 +136,22 @@ function Start({ d, post, busy }: any) {
   return (
     <div style={T.card}>
       <h2 style={T.h2}>Start your membership</h2>
+      {simple(d) ? (
+        <p style={T.p}><strong style={{ color: 'var(--t-fg)' }}>{money(s.dues_cents)} a month, flat.</strong> That includes {s.nights_per_month} nights at the house every month, with the place to yourself. Nights reset each month (no rollover) and there are no extra nights to buy. Made Kulture Plus is included while you’re a member.</p>
+      ) : (
       <p style={T.p}><strong style={{ color: 'var(--t-fg)' }}>{money(s.dues_cents)} a month.</strong> Each paid month adds {s.nights_per_month} nights to your night bank (it holds up to {s.night_cap}). {h1
         ? <>Stays up to {h1.max_nights_per_stay} nights. Extra nights past your bank are {money(h1.extra_night_cents)} each{h1.busy_multiplier > 1 ? `, and busy dates count ${h1.busy_multiplier}× nights` : ''}.</>
         : <>Stay lengths and extra-night prices are set by each house ({open.map((h: any) => h.city).join(', ')}). You’ll see them, and confirm any extra charge, before you book.</>} Made Kulture Plus is included while you’re a member.</p>
+      )}
       <div style={{ ...T.label, marginTop: 14 }}>House rules</div>
-      <ol style={{ ...T.p, paddingLeft: 18 }}>{RULES.map(r => <li key={r} style={{ marginBottom: 4 }}>{r}</li>)}</ol>
+      <ol style={{ ...T.p, paddingLeft: 18 }}>{(simple(d) ? RULES_SIMPLE : RULES_BANK).map(r => <li key={r} style={{ marginBottom: 4 }}>{r}</li>)}</ol>
       <div style={{ ...T.label, marginTop: 14 }}>Card for Nomad</div>
       <CardPicker value={card} onChange={setCard} />
       <label style={{ ...T.p, display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 14, cursor: 'pointer' }}>
         <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} style={{ marginTop: 4 }} />
         <span>I agree to the house rules, and I authorize Made Kulture to charge {money(s.dues_cents)} to this card today and every month until I cancel. I can cancel anytime; it ends when the paid month runs out.</span>
       </label>
-      <button disabled={busy || !agree || !card} onClick={() => post({ action: 'start', cardId: card, agree: true }, 'Welcome to Nomad. Your first nights are in your bank.')} style={{ ...btn(true), opacity: busy || !agree || !card ? 0.5 : 1 }}>
+      <button disabled={busy || !agree || !card} onClick={() => post({ action: 'start', cardId: card, agree: true }, simple(d) ? 'Welcome to Nomad. Your nights for this month are ready.' : 'Welcome to Nomad. Your first nights are in your bank.')} style={{ ...btn(true), opacity: busy || !agree || !card ? 0.5 : 1 }}>
         {busy ? 'Starting…' : `Start for ${money(s.dues_cents)}`}
       </button>
     </div>
@@ -162,7 +175,7 @@ function Member({ d, post, busy }: any) {
       )}
 
       <div style={{ ...T.card, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
-        <div><div style={T.label}>Night bank</div><div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34 }}>{d.balance}</div><div style={T.small}>+{s.nights_per_month} each month, up to {s.night_cap}</div></div>
+        <div><div style={T.label}>{simple(d) ? 'Nights left this month' : 'Night bank'}</div><div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34 }}>{d.balance}</div><div style={T.small}>{simple(d) ? `Resets to ${s.nights_per_month} when you renew` : `+${s.nights_per_month} each month, up to ${s.night_cap}`}</div></div>
         <div><div style={T.label}>Membership</div><div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600 }}>{money(m.dues_cents)}/mo {m.founding && <span style={gold}>FOUNDING</span>}</div><div style={T.small}>{m.cancel_at_period_end ? `Ends ${fmtIso(m.paid_through)}` : `Renews ${fmtIso(m.paid_through)}`}</div></div>
         <div><div style={T.label}>Included</div><div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600 }}>Made Kulture Plus</div><div style={T.small}><Link href="/account/plus" style={{ color: 'var(--t-gold)' }}>See Plus perks</Link></div></div>
       </div>
@@ -201,17 +214,17 @@ function Member({ d, post, busy }: any) {
 
       {m.status === 'active' && <BookForm d={d} post={post} busy={busy} prefill={prefill} />}
 
-      <h2 style={{ ...T.h2, marginTop: 22 }}>Who’s going when</h2>
+      <h2 style={{ ...T.h2, marginTop: 22 }}>{simple(d) ? 'Booked dates' : 'Who’s going when'}</h2>
       {(d.calendar || []).length === 0 && <p style={T.p}>Nobody else is booked yet.</p>}
       {(d.calendar || []).map((c: any) => (
         <div key={c.id} style={{ ...T.card, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontFamily: 'Inter', fontSize: 14 }}><strong>{c.who}</strong> · {multiHouse(d) ? `${houseOf(d, c.house_id).city} · ` : ''}{fmt(c.check_in)} to {fmt(c.check_out)} {c.status === 'requested' && <span style={gold}>PENDING</span>}</span>
-          {m.status === 'active' && c.join !== 'no' && c.status === 'confirmed' && (d.houses || []).some((h: any) => h.id === c.house_id && h.active) && (
+          {!simple(d) && m.status === 'active' && c.join !== 'no' && c.status === 'confirmed' && (d.houses || []).some((h: any) => h.id === c.house_id && h.active) && (
             <button onClick={() => { setPrefill({ checkIn: c.check_in, checkOut: c.check_out, houseId: c.house_id }); if (typeof window !== 'undefined') document.getElementById('nomad-book')?.scrollIntoView({ behavior: 'smooth' }) }} style={btn()}>
               {c.join === 'instant' ? 'Join' : 'Ask to join'}
             </button>
           )}
-          {c.join === 'no' && <span style={T.small}>{c.status === 'confirmed' ? 'Not open to join' : ''}</span>}
+          {simple(d) ? <span style={T.small}>House taken</span> : c.join === 'no' && <span style={T.small}>{c.status === 'confirmed' ? 'Not open to join' : ''}</span>}
         </div>
       ))}
     </>
@@ -234,7 +247,7 @@ function StayCard({ x, d, post, busy }: any) {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600 }}>{multiHouse(d) ? `${s.city} · ` : ''}{fmt(x.check_in)} → {fmt(x.check_out)}</div>
-          <div style={T.small}>Check-in from {hourLabel(s.check_in_hour)}, check-out by {hourLabel(s.check_out_hour)} ({s.city || 'house'} time) · {x.visibility === 'private' ? 'Private' : x.visibility === 'any' ? 'Open to any member' : 'Shared with people you chose'} · {x.nights_cost} bank nights{x.extra_nights ? ` + ${x.extra_nights} extra` : ''}</div>
+          <div style={T.small}>Check-in from {hourLabel(s.check_in_hour)}, check-out by {hourLabel(s.check_out_hour)} ({s.city || 'house'} time) · {simple(d) ? `${x.nights_cost} night${x.nights_cost === 1 ? '' : 's'}` : <>{x.visibility === 'private' ? 'Private' : x.visibility === 'any' ? 'Open to any member' : 'Shared with people you chose'} · {x.nights_cost} bank nights{x.extra_nights ? ` + ${x.extra_nights} extra` : ''}</>}</div>
         </div>
         <span style={gold}>{x.status === 'requested' ? 'WAITING ON APPROVAL' : 'CONFIRMED'}</span>
       </div>
@@ -280,7 +293,7 @@ function StayCard({ x, d, post, busy }: any) {
       {x.check_in > today && (
         <button disabled={busy} onClick={() => post({ action: 'cancel_stay', stayId: x.id }, 'Stay cancelled.')} style={{ ...btn(), marginTop: 14 }}>Cancel this stay</button>
       )}
-      {x.check_in > today && <div style={{ ...T.small, marginTop: 6 }}>Cancel {s.free_cancel_days}+ days before check-in and your nights come back to your bank. Later than that, they’re used.</div>}
+      {x.check_in > today && <div style={{ ...T.small, marginTop: 6 }}>Cancel {s.free_cancel_days}+ days before check-in and your nights come back{simple(d) ? ' (up to this month’s allowance)' : ' to your bank'}. Later than that, they’re used.</div>}
     </div>
   )
 }
@@ -291,7 +304,8 @@ function BookForm({ d, post, busy, prefill }: any) {
   const s = houseOf(d, houseId)
   const today = s.today || d.today
   const [checkIn, setCheckIn] = useState(addDays(today, 14))
-  const [checkOut, setCheckOut] = useState(addDays(today, 18))
+  const maxNights = simple(d) ? Math.min(s.max_nights_per_stay, d.settings.nights_per_month) : s.max_nights_per_stay
+  const [checkOut, setCheckOut] = useState(addDays(today, 14 + Math.min(4, maxNights)))
   const [visibility, setVisibility] = useState('chosen')
   const [shareWith, setShareWith] = useState<string[]>([])
   const [notes, setNotes] = useState('')
@@ -317,8 +331,9 @@ function BookForm({ d, post, busy, prefill }: any) {
       )}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <label><span style={T.label}>Check-in</span><input type="date" value={checkIn} min={addDays(today, 1)} max={addDays(today, s.booking_window_days)} onChange={e => { setCheckIn(e.target.value); setExtra(null) }} style={T.input} /></label>
-        <label><span style={T.label}>Check-out</span><input type="date" value={checkOut} min={addDays(checkIn, 1)} max={addDays(checkIn, s.max_nights_per_stay)} onChange={e => { setCheckOut(e.target.value); setExtra(null) }} style={T.input} /></label>
+        <label><span style={T.label}>Check-out</span><input type="date" value={checkOut} min={addDays(checkIn, 1)} max={addDays(checkIn, maxNights)} onChange={e => { setCheckOut(e.target.value); setExtra(null) }} style={T.input} /></label>
       </div>
+      {!simple(d) && <>
       <div style={{ ...T.label, marginTop: 14 }}>Who can stay at the same time</div>
       {[['private', 'Private: the house to myself'], ['chosen', 'Members I pick can join'], ['any', 'Any member can ask to join']].map(([k, l]) => (
         <label key={k} style={{ ...T.p, display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 6px', cursor: 'pointer' }}>
@@ -337,6 +352,7 @@ function BookForm({ d, post, busy, prefill }: any) {
           </div>
         </div>
       )}
+      </>}
       <label style={{ display: 'block', marginTop: 12 }}><span style={T.label}>Notes for the host (optional)</span><input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Flight time, what you’re shooting…" style={{ ...T.input, width: '100%' }} /></label>
 
       {extra ? (
@@ -350,7 +366,7 @@ function BookForm({ d, post, busy, prefill }: any) {
       ) : (
         <button disabled={busy} onClick={() => book(false)} style={{ ...btn(true), marginTop: 14 }}>{busy ? 'Booking…' : 'Book stay'}</button>
       )}
-      <div style={{ ...T.small, marginTop: 8 }}>Up to {s.max_nights_per_stay} nights, up to {s.booking_window_days} days ahead.{s.busy_ranges?.length ? ` Busy dates count ${s.busy_multiplier}× nights.` : ''}</div>
+      <div style={{ ...T.small, marginTop: 8 }}>{simple(d) ? `You have ${d.balance} night${d.balance === 1 ? '' : 's'} left this month. ` : ''}Up to {maxNights} nights, up to {s.booking_window_days} days ahead.{s.busy_ranges?.length ? ` Busy dates count ${s.busy_multiplier}× nights.` : ''}</div>
     </div>
   )
 }

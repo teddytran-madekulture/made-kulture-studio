@@ -26,6 +26,12 @@ export const RULES_VERSION = '2026-10-25'
 
 // ── Settings ──────────────────────────────────────────────────────────────
 export interface NomadSettings {
+  // 'simple' (2026-10-26, the default): one member in the house at a time, a
+  // flat monthly price, nights_per_month nights each paid month that do NOT
+  // roll over, no paid extra nights, every night counts as one. 'bank' is the
+  // original model (rollover up to night_cap, extra nights, busy dates,
+  // sharing). See applyModel() for what simple locks.
+  model: 'simple' | 'bank'
   dues_cents: number
   nights_per_month: number
   night_cap: number
@@ -50,6 +56,7 @@ export interface NomadSettings {
 }
 
 export const DEFAULT_SETTINGS: NomadSettings = {
+  model: 'simple',
   dues_cents: 23000,
   nights_per_month: 4,
   night_cap: 12,
@@ -71,6 +78,17 @@ export const DEFAULT_SETTINGS: NomadSettings = {
   house_name: 'Nomad House, Mexico City',
   house_address: '',
   door_codes_enabled: false,
+}
+
+// ── Program model ─────────────────────────────────────────────────────────
+// The keys the simple model decides for itself. Their saved values are left
+// untouched (so switching back to 'bank' restores them) but are overridden on
+// every read, at program AND house level.
+export const SIMPLE_LOCKED_KEYS = ['night_cap', 'extra_night_cents', 'busy_multiplier', 'busy_ranges', 'max_members_at_once'] as const
+export const isSimple = (s: any) => (s?.model ?? DEFAULT_SETTINGS.model) !== 'bank'
+export function applyModel<T extends NomadSettings>(s: T): T {
+  if (!isSimple(s)) return s
+  return { ...s, model: 'simple', night_cap: s.nights_per_month, extra_night_cents: 0, busy_multiplier: 1, busy_ranges: [], max_members_at_once: 1 }
 }
 
 // ── Houses ────────────────────────────────────────────────────────────────
@@ -104,7 +122,7 @@ export function houseSettings(s: NomadSettings, house: any): HouseSettings {
   // The first house keeps working with the env-var lock it was built with.
   const lock = house?.lock_device_id || (house?.slug === 'cdmx' ? process.env.NOMAD_IGLOOHOME_DEVICE_ID || null : null)
   return {
-    ...merged,
+    ...applyModel(merged),
     house_name: house?.name || s.house_name, house_address: house?.address || '',
     house_id: house?.id, house_slug: house?.slug, city: house?.city || '', timezone: house?.timezone || MX_TZ,
     lock_device_id: lock, has_studio: house?.has_studio !== false, house_active: house?.active === true,
@@ -170,7 +188,13 @@ export function cleanHouse(input: any): { patch: any; error?: string } {
   return { patch }
 }
 
+/** The settings everything runs on: saved values with the model applied. */
 export async function getNomadSettings(db: SupabaseClient): Promise<NomadSettings> {
+  return applyModel(await readRawSettings(db))
+}
+
+/** Saved values only (no model applied) — what the admin form edits. */
+export async function readRawSettings(db: SupabaseClient): Promise<NomadSettings> {
   const { data, error } = await db.from('studio_settings').select('value').eq('key', 'nomad_settings').maybeSingle()
   if (error) throw new Error(`nomad settings read failed: ${error.message}`)
   let saved: any = {}
@@ -179,10 +203,14 @@ export async function getNomadSettings(db: SupabaseClient): Promise<NomadSetting
 }
 
 export async function saveNomadSettings(db: SupabaseClient, patch: Partial<NomadSettings>): Promise<NomadSettings> {
-  const cur = await getNomadSettings(db)
+  const cur = await readRawSettings(db)
   const next: any = { ...cur }
+  if ('model' in patch) next.model = (patch as any).model === 'bank' ? 'bank' : 'simple'
   for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof NomadSettings)[]) {
-    if (!(k in patch)) continue
+    if (!(k in patch) || k === 'model') continue
+    // Simple mode shows these locked; never let the form's locked display
+    // values overwrite the saved bank-model numbers.
+    if (next.model !== 'bank' && (SIMPLE_LOCKED_KEYS as readonly string[]).includes(k)) continue
     const v: any = (patch as any)[k]
     const d: any = DEFAULT_SETTINGS[k]
     if (typeof d === 'number') { const n = Number(v); if (Number.isFinite(n) && n >= 0) next[k] = Math.round(n) }
@@ -203,7 +231,7 @@ export async function saveNomadSettings(db: SupabaseClient, patch: Partial<Nomad
   let { data, error } = await db.from('studio_settings').update({ value }).eq('key', 'nomad_settings').select('key')
   if (!error && !data?.length) ({ data, error } = await db.from('studio_settings').insert({ key: 'nomad_settings', value }).select('key'))
   if (error || !data?.length) throw new Error(`nomad settings save failed: ${error?.message || 'nothing saved'}`)
-  return next
+  return applyModel(next)
 }
 
 /** Hours must be real clock hours, or localInstant() can't build a time and
@@ -269,17 +297,31 @@ export async function nightBalance(db: SupabaseClient, membershipId: string): Pr
   if (error) throw new Error(`night balance read failed: ${error.message}`)
   return (data ?? []).reduce((n, r: any) => n + Number(r.delta || 0), 0)
 }
-/** Add this period's nights, topping up to the cap. De-duped by period_key. */
+/** Add this period's nights. De-duped by period_key.
+ *  bank: top up by nights_per_month, never past night_cap.
+ *  simple: RESET to exactly nights_per_month — last month's leftovers expire
+ *  (the delta can be negative), so nothing ever rolls over. */
 export async function accrueNights(db: SupabaseClient, membershipId: string, s: NomadSettings, periodKey: string): Promise<number> {
   const bal = await nightBalance(db, membershipId)
-  const add = Math.max(0, Math.min(s.nights_per_month, s.night_cap - bal))
-  if (add <= 0) return 0
-  const { error } = await db.from('nomad_nights').insert({ membership_id: membershipId, delta: add, reason: 'accrual', period_key: periodKey })
+  const simple = isSimple(s)
+  const add = simple ? s.nights_per_month - bal : Math.max(0, Math.min(s.nights_per_month, s.night_cap - bal))
+  if (add === 0 || (!simple && add < 0)) return 0
+  const note = simple && bal > 0 ? `new month: ${bal} unused night${bal === 1 ? '' : 's'} expired` : null
+  const { error } = await db.from('nomad_nights').insert({ membership_id: membershipId, delta: add, reason: 'accrual', period_key: periodKey, note })
   if (error) {
     if ((error as any).code === '23505') return 0 // already accrued this period
     throw new Error(`night accrual failed: ${error.message}`)
   }
-  return add
+  return Math.max(0, add)
+}
+
+/** How many of `n` cancelled nights go back. Simple: never past this month's
+ *  allowance (a stay paid with LAST month's nights can't double them up). */
+export async function nightsToReturn(db: SupabaseClient, membershipId: string, n: number, s: NomadSettings): Promise<number> {
+  if (n <= 0) return 0
+  if (!isSimple(s)) return n
+  const bal = await nightBalance(db, membershipId)
+  return Math.max(0, Math.min(n, s.nights_per_month - bal))
 }
 
 // ── Memberships ───────────────────────────────────────────────────────────
@@ -527,6 +569,8 @@ export function checkStay(opts: {
   const blocking = myUpcoming.filter(x => daysBetween(today, x.check_in) > s.second_stay_lead_days)
   if (blocking.length) return { ok: false, error: `You can book your next stay once your upcoming one is within ${s.second_stay_lead_days} days.` }
   if (overlapping.some(x => x.membership_id === m.id)) return { ok: false, error: 'You already have a stay on those dates.' }
+  // Simple: one member at a time, so any other stay on those dates means no.
+  if (isSimple(s) && overlapping.length) return { ok: false, error: 'Another member has the house on some of those dates.' }
   // One member, one place: no overlapping stays across houses either.
   if (myUpcoming.some(x => x.check_out && x.check_in < checkOut && x.check_out > checkIn)) return { ok: false, error: 'You already have a stay on those dates (at another house).' }
 

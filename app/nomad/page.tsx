@@ -32,16 +32,15 @@ const GALLERY = [
 
 const STEPS = [
   ['Apply', 'Tell us what you shoot or create. Spots are limited and we review every application. When the group is full, you go on the waitlist and we reach out when a spot opens.'],
-  ['Join the group', 'Members pay a monthly membership that keeps the house running, whether you travel that month or not.'],
-  ['Book a stay', 'Pick your dates on the shared calendar. Stays run up to 10 nights, with at most two members in the house at a time.'],
+  ['Join the group', 'One flat monthly membership keeps the house running and includes 3 nights there every month.'],
+  ['Book a stay', 'Pick your dates on the member calendar. One member at a time, so when you’re there, the house is yours.'],
   ['Shoot and connect', 'The studio room is set up and ready. Our host in the city helps you get settled, find your way around, and meet local creatives.'],
 ]
 
 const INCLUDED = [
-  ['A private room', 'Your own bedroom in a shared home, in a neighborhood picked for safety and easy access.'],
-  ['An in-house studio', 'A dedicated shooting room with a seamless backdrop setup that stays up. No moving beds to shoot.'],
+  ['The whole place, to yourself', 'One member at a time, in a neighborhood picked for safety and easy access.'],
+  ['An in-house studio', 'A big open living space set up to shoot in, with a seamless backdrop that stays up. No moving beds to shoot.'],
   ['A host on the ground', 'Someone who lives there, handles check-in and the house, and knows the city.'],
-  ['Travel with friends', 'Reserve a stay and choose who can see it. The members you pick can join you, so you split the ride, share the house and shoot together.'],
   ['Secure gear storage', 'A locked space for cameras and kit, and a building chosen with gear in mind.'],
   ['Made Kulture Plus, included', 'Plus perks at the Houston studio for as long as you’re a Nomad member: short-notice booking and cancellation protection.'],
 ]
@@ -50,7 +49,7 @@ const WHO = ['Photographers', 'Models', 'Makeup artists', 'Hair stylists', 'Ward
 
 const RULES = [
   'Stays open 60 days ahead. One upcoming stay at a time until your next one is 14 days out.',
-  'Up to 10 nights per stay, and at most 2 members in the house at once, one per room. Keep a stay private, or let members you choose join you.',
+  '3 nights a month are included. Unused nights don’t roll over, and there are no extra nights to buy. One member in the house at a time.',
   'The studio books in 4-hour blocks. Shoots run 10 am to 9 pm.',
   'Every model or collaborator is registered with the host the day before. Up to 4 visitors at a time, and no overnight guests.',
   'Reset the studio when your block ends. The cleaning between stays is included.',
@@ -87,7 +86,7 @@ export default function NomadPage() {
             A home base<br />to shoot in<br />Mexico City.
           </h1>
           <p style={{ fontFamily: 'Inter', fontSize: 'clamp(15px, 1.4vw, 17px)', color: MUTED, lineHeight: 1.7, maxWidth: 620, margin: '0 0 32px' }}>
-            A small, vetted group of creatives sharing one live-and-shoot home. Come down for a week, stay in your own room, shoot in the studio downstairs, and build a network in a city full of fashion, architecture and light. <strong style={{ color: GOLD }}>Spots are limited. The founding group is forming now.</strong>
+            A small, vetted group of creatives taking turns at one live-and-shoot home. Come down for a few nights, have the place to yourself, shoot in the studio space, and build a network in a city full of fashion, architecture and light. <strong style={{ color: GOLD }}>Spots are limited. The founding group is forming now.</strong>
           </p>
           <a href="#apply" style={{ display: 'inline-block', background: GOLD, color: '#080808', padding: '15px 24px', textDecoration: 'none', fontFamily: MONO, fontSize: 12, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase' }}>
             Apply for a spot →
@@ -151,23 +150,23 @@ export default function NomadPage() {
           <div>
             <Eyebrow>Planned pricing</Eyebrow>
             <h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(36px, 5vw, 60px)', textTransform: 'uppercase', lineHeight: 0.95, margin: '0 0 20px' }}>
-              Pay for the house.<br />Pay for your nights.
+              One flat price.<br />Three nights a month.
             </h2>
             <p style={{ fontFamily: 'Inter', fontSize: 15, color: MUTED, lineHeight: 1.7, margin: 0, maxWidth: 480 }}>
-              A monthly membership covers the home, the studio and the host. A nightly rate when you stay keeps it fair between members who travel often and members who come down a few times a year.
+              One monthly membership covers the home, the studio and the host, and includes 3 nights at the house every month. No nightly rates, no add-ons.
             </p>
           </div>
           <div style={{ ...card, padding: 32, borderColor: 'rgba(201,178,126,0.35)' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
-              <span style={{ fontFamily: DISPLAY, fontSize: 64, lineHeight: 1 }}>$150</span>
+              <span style={{ fontFamily: DISPLAY, fontSize: 64, lineHeight: 1 }}>$230</span>
               <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED, letterSpacing: '0.12em' }}>/ MONTH</span>
             </div>
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: MUTED, marginBottom: 22 }}>membership</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
-              <span style={{ fontFamily: DISPLAY, fontSize: 44, lineHeight: 1 }}>+ $35</span>
-              <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED, letterSpacing: '0.12em' }}>/ NIGHT</span>
+              <span style={{ fontFamily: DISPLAY, fontSize: 44, lineHeight: 1 }}>3 nights</span>
+              <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED, letterSpacing: '0.12em' }}>/ MONTH</span>
             </div>
-            <div style={{ fontFamily: 'Inter', fontSize: 14, color: MUTED, marginBottom: 18 }}>when you stay, including studio time</div>
+            <div style={{ fontFamily: 'Inter', fontSize: 14, color: MUTED, marginBottom: 18 }}>included, with studio time. The house is yours while you’re there.</div>
             <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: '0.14em', color: GOLD, textTransform: 'uppercase', marginBottom: 26 }}>Includes Made Kulture Plus</div>
             <p style={{ fontFamily: 'Inter', fontSize: 12.5, color: 'rgba(255,255,255,0.42)', lineHeight: 1.6, margin: 0, borderTop: LINE, paddingTop: 18 }}>
               Planned pilot pricing for the founding group. Final pricing is set before the first stay. Nothing is charged to apply.
