@@ -51,6 +51,8 @@ const AD_TAGS: [string, string[]][] = [
   ['Props', ['Prop Rental']],
   ['Wardrobe', ['Wardrobe Rental']],
   ['Gear', ['Equipment Rental']],
+  ['Studios', ['Studio Rental']],
+  ['Locations', ['Location Rental']],
   ['Catering', ['Catering']],
   ['Educators', ['Educator']],
   ['Film labs', ['Film Lab']],
