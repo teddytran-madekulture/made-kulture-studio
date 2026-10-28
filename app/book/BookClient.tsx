@@ -11,6 +11,7 @@ import { shortNoticeActive, plusActive, todayDateStr, chiTodayStr, chiNowDecimal
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 import { bookingHourToISO } from '@/lib/booking-times'
 import { AppPromoCard } from '@/components/AppLinks'
+import { AGREEMENT_VERSION, digitsOnly } from '@/lib/checkout-consent'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -303,6 +304,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
   const [submitted,        setSubmitted]        = useState(false)
   const [loggedIn,         setLoggedIn]         = useState(false)
   const [pricingOverrides, setPricingOverrides] = useState<any>(null)
+  // What this member already agreed to (migration 181) — see lib/checkout-consent.
+  const [savedConsent, setSavedConsent] = useState<{ smsPhone: string | null; agreementVersion: string | null }>({ smsPhone: null, agreementVersion: null })
 
   // Pre-fill contact info + fetch custom pricing from logged-in profile
   useEffect(() => {
@@ -311,6 +314,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
       .then(d => {
         if (d?.profile) {
           setLoggedIn(true)
+          setSavedConsent({ smsPhone: d.profile.sms_consent_phone ?? null, agreementVersion: d.profile.agreement_version ?? null })
           setBooking(b => ({
             ...b,
             name:  d.profile.full_name  || b.name,
@@ -596,6 +600,21 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
 
   const grandTotal   = spaceTotal + discountedEquipTotal + guestFee + guestSurcharge
 
+  // ── Streamlined agreements for members (2026-10-28) ──
+  // Text consent lasts until STOP: skip the box when this member already gave it
+  // for THIS number. Agreement & waiver + guest policy: a member who accepted the
+  // current version gets ONE combined box (still ticked every booking).
+  const smsRemembered = loggedIn && !!savedConsent.smsPhone && digitsOnly(booking.phone) === savedConsent.smsPhone
+  const returningAgree = loggedIn && savedConsent.agreementVersion === AGREEMENT_VERSION
+  const recordConsent = () => {
+    if (!loggedIn) return
+    fetch('/api/account/checkout-consent', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sms: booking.smsConsent || smsRemembered, phone: booking.phone, agreement: booking.agreementAck }),
+    }).catch(() => {})
+  }
+  const onBooked = () => { recordConsent(); setSubmitted(true) }
+
   // Comp customers flagged "no card required" skip the card form when total is $0.
   const compNoCard   = !!pricingOverrides?.comp_no_card
 
@@ -808,7 +827,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
        ? (booking.startHour !== null && booking.endHour !== null && (booking.endHour - booking.startHour) >= minHours)
        : ((currentComplete || setCart.length > 0) && enoughSets && !lockedConflict),
     5: true, // equipment optional
-    6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && booking.smsConsent
+    6: booking.name !== '' && booking.email !== '' && booking.phone !== '' && (booking.smsConsent || smsRemembered)
        && booking.agreementAck
        && (booking.type === 'studio' || (booking.guests != null && booking.guestAck)),
   }
@@ -1690,8 +1709,8 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 />
               </div>
 
-              {/* SMS Consent */}
-              <label
+              {/* SMS Consent — hidden once this member consented for this number */}
+              {!smsRemembered && <label
                 style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
               >
                 {/* 2026-10-14 a11y: a REAL checkbox (visually hidden) so keyboard and
@@ -1712,10 +1731,37 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   {' '}·{' '}
                   <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
                 </p>
-              </label>
+              </label>}
 
-              {/* Rental agreement & waiver — required */}
-              <label
+              {/* Returning member: ONE box covering the agreement + guest policy */}
+              {returningAgree && (() => {
+                const on = booking.agreementAck && (booking.type === 'studio' || booking.guestAck)
+                return (
+                  <label style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 16 }}>
+                    <input type="checkbox" className="mk-check" checked={on}
+                      onChange={() => setBooking(b => ({ ...b, agreementAck: !on, guestAck: !on }))} />
+                    <div aria-hidden="true" className="mk-check-box" style={{
+                      width: 18, height: 18, flexShrink: 0, marginTop: 2,
+                      border: `1px solid ${on ? '#fff' : 'rgba(255,255,255,0.3)'}`,
+                      background: on ? '#fff' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {on && <span style={{ color: '#080808', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, margin: 0 }}>
+                      I agree to the{' '}
+                      <a href={`/rental-agreement?type=${booking.type === 'studio' ? 'studio' : 'set'}`} target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'underline' }} onClick={e => e.stopPropagation()}>
+                        Rental Agreement &amp; Waiver
+                      </a>
+                      {booking.type !== 'studio' && <> and the guest policy ({guestPricing.capacityPerSet}-person limit, ${guestPricing.perPersonFee}/person per hour over it, ${guestPricing.penaltyPerHead}/undeclared guest)</>}
+                      {' '}for this booking, on behalf of everyone in my party.
+                    </p>
+                  </label>
+                )
+              })()}
+
+              {/* Rental agreement & waiver — required (first time / new version) */}
+              {!returningAgree && <label
                 style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 16 }}
               >
                 {/* 2026-10-14 a11y: a REAL checkbox (visually hidden) so keyboard and
@@ -1736,7 +1782,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                     {booking.type === 'studio' ? 'Full Warehouse Rental Agreement' : 'Individual Set Rental Agreement'} &amp; Waiver
                   </a>, on behalf of myself and everyone in my party.
                 </p>
-              </label>
+              </label>}
 
               {/* Soft cleaning-fee disclosure — full warehouse only */}
               {booking.type === 'studio' && (
@@ -1761,8 +1807,9 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 </div>
               )}
 
-              {/* Guest-limit acknowledgment — sets only (buyouts have no head count) */}
-              {booking.type !== 'studio' && <label
+              {/* Guest-limit acknowledgment — sets only (buyouts have no head count).
+                  Folded into the combined box above for returning members. */}
+              {booking.type !== 'studio' && !returningAgree && <label
                 style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', marginTop: 8 }}
               >
                 {/* 2026-10-14 a11y: a REAL checkbox (visually hidden) so keyboard and
@@ -1859,7 +1906,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   booking={booking}
                   setCart={setCart}
                   onBack={back}
-                  onSuccess={() => setSubmitted(true)}
+                  onSuccess={onBooked}
                 />
               ) : (
                 <SquarePaymentPanel
@@ -1871,7 +1918,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                   hourCount={hourCount}
                   setRate={setRate}
                   onBack={back}
-                  onSuccess={() => setSubmitted(true)}
+                  onSuccess={onBooked}
                 />
               )}
             </div>
