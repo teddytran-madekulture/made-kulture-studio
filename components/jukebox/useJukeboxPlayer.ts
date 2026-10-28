@@ -127,6 +127,10 @@ export function useJukeboxPlayer(opts: {
   const spHouseTuned = useRef(false)
 
   const pausedLocal = useRef(false)
+  // Last shared-volume stamp applied (zone.volume_at, migration 178).
+  const volStamp = useRef<string | null>(null)
+  // apply() is defined above setVolume, so it reaches it through a ref.
+  const setVolumeRef = useRef<(v: number) => void>(() => {})
 
   // Keep-the-vibe state (YouTube only).
   const vibeSeed = useRef<string | null>(null)     // seed the loaded Mix was built from
@@ -340,7 +344,8 @@ export function useJukeboxPlayer(opts: {
       sp.current = new w.Spotify.Player({
         name: `Made Kulture — ${zoneRef.current}`,
         getOAuthToken: (cb: (t: string) => void) => { spotifyToken().then(t => { if (t) cb(t) }) },
-        volume: 0.8,
+        // Start at the saved level (shared volume lands here via setVolume).
+        volume: (() => { try { const s = localStorage.getItem(VOL_KEY); const v = Number(s); if (s !== null && v >= 0 && v <= 100) return v / 100 } catch {} return 0.8 })(),
       })
       sp.current.addListener('ready', ({ device_id }: any) => { spDevice.current = device_id; spReady.current = true; try { sp.current.activateElement() } catch {}; if (lastState.current) apply(lastState.current) })
       sp.current.addListener('not_ready', () => { spReady.current = false })
@@ -549,6 +554,13 @@ export function useJukeboxPlayer(opts: {
   const apply = useCallback(async (s: any) => {
     if (!s?.zone) return
     setZoneName(s.zone.name || ''); setUpNext(s.up_next?.length ?? 0); setSnapshot(s)
+    // Shared volume (2026-10-27): apply only when the stamp MOVES, so whoever
+    // changed it last (admin or the kiosk panel) wins and an untouched row never
+    // overrides a level set on the tablet. Runs before the engine-ready returns.
+    if (s.zone.volume_at && typeof s.zone.volume === 'number' && s.zone.volume_at !== volStamp.current) {
+      volStamp.current = s.zone.volume_at
+      setVolumeRef.current(s.zone.volume)
+    }
     const wantsSpotify = s.zone.source === 'spotify' || s.now_playing?.source === 'spotify'
 
     if (wantsSpotify && !isDesktop()) { modeRef.current = 'blocked'; setDisplay({ title: 'Open this zone on the laptop', artist: 'Spotify playback needs a desktop browser', source: 'blocked' }); return }
@@ -653,6 +665,7 @@ export function useJukeboxPlayer(opts: {
     try { yt.current?.setVolume?.(n) } catch {}
     try { sp.current?.setVolume?.(n / 100) } catch {}
   }, [])
+  setVolumeRef.current = setVolume
   const getVolume = useCallback((): number => {
     try { const v = yt.current?.getVolume?.(); if (typeof v === 'number') return v } catch {}
     try { const s = localStorage.getItem(VOL_KEY); if (s !== null) return Number(s) } catch {}

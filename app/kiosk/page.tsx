@@ -266,6 +266,13 @@ export default function KioskPage() {
   const [musicErr, setMusicErr] = useState('')
   const [musicBusy, setMusicBusy] = useState(false)
   const [musicVol, setMusicVol] = useState(100)
+  // Shared volume (2026-10-27): a change made in Admin → Jukebox shows here too.
+  const sharedVolAt = music.snapshot?.zone?.volume_at ?? null
+  const sharedVol = music.snapshot?.zone?.volume
+  useEffect(() => {
+    if (sharedVolAt && typeof sharedVol === 'number') setMusicVol(sharedVol)
+  }, [sharedVolAt, sharedVol])
+  const volSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const resetToHome = useCallback(() => {
     // ⚠️ Never yank the screen away from someone waiting on a human. The 90s
@@ -1551,6 +1558,20 @@ export default function KioskPage() {
     setBusy(false)
   }
 
+  // Volume taps change the speakers instantly; the shared level is saved once
+  // the taps settle, so five quick + taps are one write, not five.
+  const changeVolume = (v: number) => {
+    setMusicVol(v); music.setVolume(v)
+    if (volSaveTimer.current) clearTimeout(volSaveTimer.current)
+    volSaveTimer.current = setTimeout(() => {
+      if (!setSlug || !musicZone || !musicPin) return
+      fetch('/api/kiosk/jukebox', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ set: setSlug, zone: musicZone, key: kioskKey, pin: musicPin, action: 'volume', value: v }),
+      }).then(async r => { if (!r.ok) { const d = await r.json().catch(() => ({})); setMusicErr(d.error || 'Volume changed here but did not sync.') } }).catch(() => {})
+    }, 700)
+  }
+
   const musicAction = async (action: 'verify' | 'pause' | 'play' | 'next') => {
     if (musicBusy || !setSlug || !musicZone || musicPin.length < 4) return
     setMusicBusy(true); setMusicErr('')
@@ -1626,9 +1647,9 @@ export default function KioskPage() {
                 <button disabled={musicBusy || paused} onClick={() => musicAction('next')} style={{ ...ctrl, opacity: paused ? 0.4 : 1 }}>SKIP</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 22 }}>
-                <button onClick={() => { const v = Math.max(0, musicVol - 10); setMusicVol(v); music.setVolume(v) }} style={{ ...ctrl, minWidth: 72, padding: 0, fontSize: 26 }}>&minus;</button>
+                <button onClick={() => changeVolume(Math.max(0, musicVol - 10))} style={{ ...ctrl, minWidth: 72, padding: 0, fontSize: 26 }}>&minus;</button>
                 <div style={{ minWidth: 120, fontSize: 15, letterSpacing: '0.16em', color: 'rgba(255,255,255,0.6)' }}>VOLUME {musicVol}</div>
-                <button onClick={() => { const v = Math.min(100, musicVol + 10); setMusicVol(v); music.setVolume(v) }} style={{ ...ctrl, minWidth: 72, padding: 0, fontSize: 26 }}>+</button>
+                <button onClick={() => changeVolume(Math.min(100, musicVol + 10))} style={{ ...ctrl, minWidth: 72, padding: 0, fontSize: 26 }}>+</button>
               </div>
               {(snap?.up_next?.length ?? 0) > 0 && (
                 <div style={{ marginTop: 26, width: '100%', maxWidth: 520, textAlign: 'left' }}>
@@ -1640,7 +1661,7 @@ export default function KioskPage() {
                   ))}
                 </div>
               )}
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginTop: 22, maxWidth: 460, lineHeight: 1.5 }}>Guest requests are approved in Admin &rarr; Jukebox. Volume here is this tablet only.</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginTop: 22, maxWidth: 460, lineHeight: 1.5 }}>Guest requests are approved in Admin &rarr; Jukebox. Volume stays in sync with Admin &rarr; Jukebox.</div>
               <button onClick={resetToHome} style={{ ...champBtn, marginTop: 20 }}>DONE</button>
             </>
           )}

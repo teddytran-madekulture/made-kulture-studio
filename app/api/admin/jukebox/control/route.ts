@@ -8,6 +8,8 @@
 //   reload_players — stamp a marker every player device polls (/api/version), so
 //                    the tablets take a new build on demand instead of waiting
 //                    for a quiet moment. Studio-wide, so it needs no zone.
+//   volume   — { value: 0-100 } set the zone's volume; the player tablet follows
+//              on its next poll (2026-10-27, lib/jukebox-volume).
 //   end_vibe — stop the "keep the vibe going" Mix now; the player goes back to
 //              the house playlist on its next poll.
 
@@ -15,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { PLAYER_RELOAD_KEY } from '@/lib/player-rev'
+import { setZoneVolume } from '@/lib/jukebox-volume'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -52,6 +55,12 @@ export async function POST(req: NextRequest) {
   if (action === 'play') {
     await db.from('jukebox_zones').update({ paused: false }).eq('id', zone.id)
     return NextResponse.json({ success: true })
+  }
+
+  if (action === 'volume') {
+    const r = await setZoneVolume(db, zone.id, b?.value)
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
+    return NextResponse.json({ success: true, volume: r.volume })
   }
 
   if (action === 'end_vibe') {

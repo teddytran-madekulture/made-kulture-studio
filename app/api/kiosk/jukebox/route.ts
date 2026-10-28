@@ -6,10 +6,12 @@
 //   pause | play — freeze / resume the zone (the player reacts on its next poll)
 //   next   — skip the GUEST REQUEST that's playing. Skipping within the house
 //            playlist happens on the tablet itself (the server doesn't own it).
-// Mirrors /api/admin/jukebox/control for these three actions.
+//   volume — { value } shared zone volume, synced with Admin → Jukebox (2026-10-27)
+// Mirrors /api/admin/jukebox/control for these actions.
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { checkKioskStaffPin, kioskKeyOk, pinFailed } from '@/lib/kiosk-staff-pin'
+import { setZoneVolume } from '@/lib/jukebox-volume'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
   const zoneSlug = String(b?.zone ?? '').trim()
   const action = String(b?.action ?? '')
   if (!set || !zoneSlug) return NextResponse.json({ error: 'Missing set or zone.' }, { status: 400 })
-  if (!['verify', 'pause', 'play', 'next'].includes(action)) return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
+  if (!['verify', 'pause', 'play', 'next', 'volume'].includes(action)) return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
 
   const db = supabaseAdmin()
   const pin = await checkKioskStaffPin(db, b?.pin, set)
@@ -32,6 +34,12 @@ export async function POST(req: NextRequest) {
   if (!zone) return NextResponse.json({ error: 'Unknown music zone.' }, { status: 404 })
 
   if (action === 'verify') return NextResponse.json({ ok: true, staff: (pin as any).staffName })
+
+  if (action === 'volume') {
+    const r = await setZoneVolume(db, zone.id, b?.value)
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
+    return NextResponse.json({ ok: true, volume: r.volume })
+  }
 
   if (action === 'pause' || action === 'play') {
     const { data, error } = await db.from('jukebox_zones').update({ paused: action === 'pause' }).eq('id', zone.id).select('id')

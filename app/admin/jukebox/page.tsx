@@ -11,7 +11,7 @@ import ArrowUpRight from '@/components/ArrowUpRight'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 
-interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; paused: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null; house_now_title?: string | null; house_now_artist?: string | null; house_now_at?: string | null; vibe_enabled?: boolean; vibe_seed_id?: string | null; vibe_seed_title?: string | null; vibe_until?: string | null }
+interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; paused: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null; house_now_title?: string | null; house_now_artist?: string | null; house_now_at?: string | null; vibe_enabled?: boolean; vibe_seed_id?: string | null; vibe_seed_title?: string | null; vibe_until?: string | null; volume?: number | null; volume_at?: string | null }
 interface Req { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name: string | null; status: string }
 
 function fmtDur(s: number | null): string { if (s == null) return ''; const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}` }
@@ -31,6 +31,11 @@ export default function AdminJukeboxPage() {
   const [playlist, setPlaylist] = useState('')
   const [savedMsg, setSavedMsg] = useState('')
   const slugRef = useRef('')
+  // Volume slider (2026-10-27). volDraft is what the slider shows while you drag
+  // or until the save lands, so the 5s refresh can't snap it back mid-move.
+  const [volDraft, setVolDraft] = useState<number | null>(null)
+  const [volMsg, setVolMsg] = useState('')
+  const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async (s?: string) => {
     const target = s ?? slugRef.current
@@ -58,6 +63,17 @@ export default function AdminJukeboxPage() {
   const control = async (action: string) => {
     await fetch('/api/admin/jukebox/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: slugRef.current, action }) })
     load()
+  }
+  const changeVolume = (v: number) => {
+    setVolDraft(v)
+    if (volTimer.current) clearTimeout(volTimer.current)
+    volTimer.current = setTimeout(async () => {
+      const r = await fetch('/api/admin/jukebox/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: slugRef.current, action: 'volume', value: v }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) setVolMsg(d.error || 'Could not save the volume')
+      else { setVolMsg('Saved · the player follows within a few seconds'); await load(); setVolDraft(null) }
+      setTimeout(() => setVolMsg(''), 4000)
+    }, 500)
   }
   // Push a new build to the tablets on demand. They normally wait for a gap
   // between songs; this cuts in deliberately, so it's a button, not automatic.
@@ -105,7 +121,7 @@ export default function AdminJukeboxPage() {
           <>
             {/* Zone tabs */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
-              {zones.map(z => <button key={z.slug} style={tab(z.slug === slug)} onClick={() => { setSlug(z.slug); slugRef.current = z.slug; load(z.slug) }}>{z.name}{!z.is_open ? ' · paused' : ''}</button>)}
+              {zones.map(z => <button key={z.slug} style={tab(z.slug === slug)} onClick={() => { setSlug(z.slug); slugRef.current = z.slug; setVolDraft(null); load(z.slug) }}>{z.name}{!z.is_open ? ' · paused' : ''}</button>)}
             </div>
 
             {zone && (
@@ -205,6 +221,21 @@ export default function AdminJukeboxPage() {
                       </div>
                     )
                     return <div style={{ color: C.dim, fontSize: 13 }}>{zone.house_playlist_url ? 'House playlist' : 'Nothing playing'}</div>
+                  })()}
+                  {/* Volume — shared with the kiosk MUSIC panel (migration 178) */}
+                  {(() => {
+                    const shown = volDraft ?? (typeof zone.volume === 'number' ? zone.volume : null)
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, letterSpacing: '0.14em', color: C.dim, minWidth: 64 }}>VOLUME</span>
+                        <input type="range" min={0} max={100} step={5} value={shown ?? 100}
+                          onChange={e => changeVolume(Number(e.target.value))}
+                          style={{ flex: '1 1 200px', maxWidth: 320, accentColor: C.accent }} />
+                        <span style={{ fontSize: 13, color: C.text, minWidth: 34 }}>{shown ?? '—'}</span>
+                        {shown == null && <span style={{ fontSize: 11, color: C.dim }}>not set yet · the player uses its own level</span>}
+                        {volMsg && <span style={{ fontSize: 11, color: volMsg.startsWith('Saved') ? '#6ee7a8' : '#ff9a9a' }}>{volMsg}</span>}
+                      </div>
+                    )
                   })()}
                   {/* Transport controls */}
                   <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>

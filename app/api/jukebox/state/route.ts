@@ -48,10 +48,17 @@ export async function GET(req: NextRequest) {
   if (!slug) return NextResponse.json({ error: 'Missing zone.' }, { status: 400 })
 
   const db = sharedDb()
-  const { data: zone } = await db
+  const BASE_COLS = 'id, slug, name, is_open, paused, source, house_playlist_url, now_playing_id, house_now_title, house_now_artist, house_now_at, vibe_enabled, vibe_seed_id, vibe_seed_title, vibe_until'
+  let { data: zone, error: zoneErr } = await db
     .from('jukebox_zones')
-    .select('id, slug, name, is_open, paused, source, house_playlist_url, now_playing_id, house_now_title, house_now_artist, house_now_at, vibe_enabled, vibe_seed_id, vibe_seed_title, vibe_until')
+    .select(`${BASE_COLS}, volume, volume_at`)
     .eq('slug', slug).single()
+  // ⚠️ 2026-10-27: volume/volume_at come from migration 178. If this deploys
+  // before the migration runs, the select above fails and EVERY player would get
+  // a 404 and stop the music — so fall back to the old column list instead.
+  if (zoneErr && /volume/.test(zoneErr.message || '')) {
+    ({ data: zone } = await db.from('jukebox_zones').select(BASE_COLS).eq('slug', slug).single() as any)
+  }
   if (!zone) return NextResponse.json({ error: 'Unknown zone.' }, { status: 404 })
 
   // The three follow-up reads only depend on the zone, never on each other, so
@@ -101,6 +108,8 @@ export async function GET(req: NextRequest) {
     zone: {
       slug: zone.slug, name: zone.name, is_open: zone.is_open, paused: zone.paused,
       source: zone.source, house_playlist_url: zone.house_playlist_url,
+      // Shared volume (admin + kiosk). Players apply it only when volume_at moves.
+      volume: (zone as any).volume ?? null, volume_at: (zone as any).volume_at ?? null,
     },
     now_playing,
     house_now,

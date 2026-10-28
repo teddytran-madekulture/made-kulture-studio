@@ -16,10 +16,15 @@ export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const db = supabaseAdmin()
 
-  const { data: zones } = await db
+  const ZONE_COLS = 'id, slug, name, source, is_open, paused, explicit_filter, auto_approve, house_playlist_url, now_playing_id, sort, house_now_title, house_now_artist, house_now_at, vibe_enabled, vibe_seed_id, vibe_seed_title, vibe_until'
+  let { data: zones, error: zonesErr } = await db
     .from('jukebox_zones')
-    .select('id, slug, name, source, is_open, paused, explicit_filter, auto_approve, house_playlist_url, now_playing_id, sort, house_now_title, house_now_artist, house_now_at, vibe_enabled, vibe_seed_id, vibe_seed_title, vibe_until')
+    .select(`${ZONE_COLS}, volume, volume_at`)
     .order('sort', { ascending: true })
+  // Before migration 178 runs, fall back so the page still loads (no volume shown).
+  if (zonesErr && /volume/.test(zonesErr.message || '')) {
+    ({ data: zones } = await db.from('jukebox_zones').select(ZONE_COLS).order('sort', { ascending: true }) as any)
+  }
 
   const { connected: spotifyConnected, email: spotifyEmail } = await isConnected()
   const spotify = { configured: spotifyConfigured(), connected: spotifyConnected, email: spotifyEmail }
