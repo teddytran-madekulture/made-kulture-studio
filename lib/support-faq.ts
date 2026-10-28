@@ -197,7 +197,7 @@ export const CATEGORIES: Category[] = [
           'Type the code on the keypad, then press the UNLOCK button.',
           'When you leave, tap CHECK OUT — I’M LEAVING.',
         ],
-        notes: ['Your code is not in the confirmation — only on the check-in page.', 'Check-in opens 30 minutes before your start, but codes only work from your start time.', 'No signal at the door? Reply CODE to your confirmation text and it’s texted back.', 'Lost the link? Go to [Check in](/checkin) and enter your phone number to have it texted to you.'] },
+        notes: ['Your code is not in the confirmation — only on the check-in page.', 'Check in at your booked start time. Codes only work from then.', 'No signal at the door? Reply CODE to your confirmation text and it’s texted back.', 'Lost the link? Go to [Check in](/checkin) and enter your phone number to have it texted to you.'] },
       { slug: 'code-not-working', q: 'My door code isn’t working', tags: 'code not working locked out keypad unlock', popular: true,
         a: 'Almost every time, it’s the unlock button: type the code, THEN press UNLOCK. The code alone does nothing.',
         notes: ['Codes only work during your booked time — not before your start.', 'Extended or rescheduled? You got a new code. Reopen your check-in link for the current one.', 'The front and back doors have different codes.'] },

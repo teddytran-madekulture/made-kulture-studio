@@ -200,8 +200,8 @@ export const checkInUrl = (token: string) =>
   `${(process.env.NEXT_PUBLIC_APP_URL || 'https://madekulture.com').replace(/\/$/, '')}/checkin/${token}`
 /** The one sentence for texts (GSM-7 safe: no emoji, no typographic dashes). */
 export const doorCodeLinkLine = (checkInToken?: string | null) => checkInToken
-  ? `Door code: when you arrive, tap CHECK IN here and your code appears (opens ${CODE_REVEAL_MINUTES} min before your session): ${checkInUrl(checkInToken)}\nNo signal? Reply CODE to this text.`
-  : `Door code: it appears on your check-in page when you arrive, ${CODE_REVEAL_MINUTES} min before your session.`
+  ? `Door code: when you arrive, tap CHECK IN here and your code appears: ${checkInUrl(checkInToken)}\nNo signal? Reply CODE to this text.`
+  : `Door code: it appears on your check-in page when you arrive.`
 
 export function doorCodesEnabled(): boolean {
   return apiCreds() !== null && frontDeviceId() !== null

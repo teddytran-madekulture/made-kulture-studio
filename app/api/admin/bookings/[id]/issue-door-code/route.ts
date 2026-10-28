@@ -17,7 +17,7 @@ import { isAdminAuthed } from '@/lib/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMSResult } from '@/lib/sms'
 import { sendSimpleEmail, formatDateLabel, formatTimeLabel } from '@/lib/email'
-import { issueDoorCodes, doorCodesEnabled, doorCodeLinkLine, checkInUrl, CODE_REVEAL_MINUTES } from '@/lib/igloohome'
+import { issueDoorCodes, doorCodesEnabled, doorCodeLinkLine, checkInUrl } from '@/lib/igloohome'
 import { centralDateStr, centralHourDecimal } from '@/lib/booking-times'
 
 export const dynamic = 'force-dynamic'
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         paragraphs: [
           `<strong style="color:#fff;">${setName}</strong> · ${when}`,
           'Your booking now comes with its own door code, so you can let yourself in at your start time.',
-          `When you arrive, open your check-in page and tap <strong style="color:#fff;">CHECK IN</strong>. Your code appears there, starting ${CODE_REVEAL_MINUTES} minutes before your session, and it works from your booked start time.`,
+          `When you arrive, open your check-in page and tap <strong style="color:#fff;">CHECK IN</strong>. Your code appears there and works from your booked start time.`,
         ],
         ctaText: 'Open my check-in page',
         ctaUrl: row.check_in_token ? checkInUrl(row.check_in_token) : undefined,

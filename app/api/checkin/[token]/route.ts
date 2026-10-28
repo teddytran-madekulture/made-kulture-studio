@@ -134,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // car — this is now how the guest gets their door code) through 60 min
       // after end.
       if (now < start - REVEAL_BEFORE_MS) {
-        return NextResponse.json({ error: `Check-in opens at ${fmtTime(new Date(start - REVEAL_BEFORE_MS).toISOString())}.` }, { status: 400 })
+        return NextResponse.json({ error: `Check in at your booked start time, ${fmtTime(b.start_time)}.` }, { status: 400 })
       }
       if (now > end + 60 * 60 * 1000) {
         return NextResponse.json({ error: 'This booking has ended. Text (832) 408-1631 for help.' }, { status: 400 })

@@ -220,7 +220,7 @@ export default function BookingsPage() {
             )}
             {isUpcoming && !isCancelled && b.check_in_token && (
               <a href={`/checkin/${b.check_in_token}`}
-                title="Your door code appears here when you check in at the studio (opens 30 min before your session)"
+                title="Your door code appears when you check in at the studio, at your booked start time"
                 style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'var(--t-gold)', textDecoration: 'none', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', borderRadius: 4, padding: '6px 12px', whiteSpace: 'nowrap' }}>
                 CHECK IN · DOOR CODE
               </a>

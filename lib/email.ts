@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
-import { CODE_REVEAL_MINUTES, checkInUrl } from '@/lib/igloohome'
+import { checkInUrl } from '@/lib/igloohome'
 import { createClient } from '@supabase/supabase-js'
 
 // Lazy-initialize so the build doesn't fail when env var isn't available at compile time
@@ -237,7 +237,7 @@ export async function sendBookingConfirmation(data: BookingConfirmationData) {
       <tr>
         <td align="center">
           <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Door Code</p>
-          <p style="margin:0 0 14px;font-size:14px;color:#ccc;line-height:1.6;">When you arrive, open your check-in page and tap <strong style="color:#fff;">Check in</strong>. Your front-door and back-door codes appear right there. Check-in opens ${CODE_REVEAL_MINUTES} minutes before your session.</p>
+          <p style="margin:0 0 14px;font-size:14px;color:#ccc;line-height:1.6;">When you arrive, open your check-in page and tap <strong style="color:#fff;">Check in</strong>. Your front-door and back-door codes appear right there. It works from your booked start time.</p>
           <a href="${checkIn}" style="display:inline-block;background:${ACCENT_COLOR};color:#0b0b0d;font-size:13px;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:4px;letter-spacing:0.06em;text-transform:uppercase;">Check in &amp; get my code</a>
           <p style="margin:12px 0 0;font-size:12px;color:#888;">Save this email — this link is your key. No signal at the door? Reply <strong style="color:#ccc;">CODE</strong> to your confirmation text and we&rsquo;ll text it back.</p>
         </td>
@@ -534,7 +534,7 @@ export async function sendBookingReminder(data: BookingReminderData) {
       <tr>
         <td>
           <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${ACCENT_COLOR};text-transform:uppercase;letter-spacing:0.1em;">Your Door Code</p>
-          <p style="margin:0 0 14px;font-size:14px;color:#ccc;line-height:1.6;">When you arrive, open your check-in page and tap <strong style="color:#fff;">Check in</strong>. Your front-door and back-door codes appear right there. Check-in opens ${CODE_REVEAL_MINUTES} minutes before your session.</p>
+          <p style="margin:0 0 14px;font-size:14px;color:#ccc;line-height:1.6;">When you arrive, open your check-in page and tap <strong style="color:#fff;">Check in</strong>. Your front-door and back-door codes appear right there. It works from your booked start time.</p>
           <a href="${checkIn}" style="display:inline-block;background:${ACCENT_COLOR};color:#0b0b0d;font-size:13px;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:4px;letter-spacing:0.06em;text-transform:uppercase;">Check in &amp; get my code</a>
           <p style="margin:12px 0 0;font-size:12px;color:#888;">No signal at the door? Reply <strong style="color:#ccc;">CODE</strong> to our text and we&rsquo;ll text it back.</p>
         </td>

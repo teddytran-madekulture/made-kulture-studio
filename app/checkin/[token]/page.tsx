@@ -258,14 +258,13 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
       <div style={{ border: '1px solid rgba(201,178,126,0.45)', padding: '14px 16px', marginBottom: 24, textAlign: 'left' }}>
         <div style={{ ...label, color: '#c9b27e', marginBottom: 6 }}>YOUR DOOR CODE</div>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0, lineHeight: 1.55 }}>
-          {data.codeOpensAt && new Date(data.codeOpensAt).getTime() > Date.now()
-            ? <>Appears here when you check in. Check-in opens at <strong style={{ color: '#fff' }}>{fmt(data.codeOpensAt)}</strong>, once you’re at the studio.</>
-            : <>Tap <strong style={{ color: '#fff' }}>CHECK IN</strong> once you’re at the studio and your code appears here.</>}
-          {/* 2026-10-02: the algoPIN is not live before the booking starts, so an early check-in
-              used to hand out a code that silently failed at the keypad. Say so up front. */}
-          {new Date(data.startTime).getTime() > Date.now() && <>
-            {' '}<strong style={{ color: '#c9b27e' }}>Your code works from {fmt(data.startTime)}</strong>, your booked start time.
-          </>}
+          {/* 2026-10-28 (Teddy): ONE time only — the booked start. Check-in still
+              quietly opens CODE_REVEAL_MINUTES early (a weak signal at the door
+              shouldn't strand anyone), but customers are never told about it:
+              two times in one sentence read as "come at 6:30". */}
+          {new Date(data.startTime).getTime() > Date.now()
+            ? <>Appears here when you check in. Check in at <strong style={{ color: '#fff' }}>{fmt(data.startTime)}</strong>, your booked start time.</>
+            : <>Tap <strong style={{ color: '#fff' }}>CHECK IN</strong> and your code appears here.</>}
         </p>
       </div>
     )}

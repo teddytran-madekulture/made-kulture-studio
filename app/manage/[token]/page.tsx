@@ -106,7 +106,7 @@ export default function ManageBookingPage() {
           <>
             <div style={label}>Door code</div>
             <div style={{ ...value, fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }}>
-              Appears when you check in at the studio (check-in opens 30 minutes before your session).
+              Appears when you check in at the studio, at your booked start time.
               <br />
               <a href={`/checkin/${b.checkInToken}`} style={{ display: 'inline-block', marginTop: 10, padding: '11px 18px', background: CHAMP, color: INK, textDecoration: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', borderRadius: 4 }}>
                 Check in &amp; get my code
