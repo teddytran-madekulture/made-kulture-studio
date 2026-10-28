@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (!slug) return NextResponse.json({ error: 'Missing zone.' }, { status: 400 })
 
   const db = supabaseAdmin()
-  const { data: zone } = await db.from('jukebox_zones').select('id, now_playing_id, paused').eq('slug', slug).single()
+  const { data: zone } = await db.from('jukebox_zones').select('id, slug, now_playing_id, paused').eq('slug', slug).single()
   if (!zone) return NextResponse.json({ error: 'Unknown zone.' }, { status: 404 })
 
   const now = new Date().toISOString()
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'volume') {
-    const r = await setZoneVolume(db, zone.id, b?.value)
+    const r = await setZoneVolume(db, { id: zone.id, slug: zone.slug }, b?.value)
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
     return NextResponse.json({ success: true, volume: r.volume })
   }

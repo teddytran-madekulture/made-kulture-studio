@@ -8,10 +8,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { readVibe, VIBE_MINUTES } from '@/lib/jukebox'
 import ArrowUpRight from '@/components/ArrowUpRight'
+import { supabase } from '@/lib/supabase'
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#d4a843' }
 
 interface Zone { id: string; slug: string; name: string; source: string; is_open: boolean; paused: boolean; explicit_filter: boolean; auto_approve: boolean; house_playlist_url: string | null; house_now_title?: string | null; house_now_artist?: string | null; house_now_at?: string | null; vibe_enabled?: boolean; vibe_seed_id?: string | null; vibe_seed_title?: string | null; vibe_until?: string | null; volume?: number | null; volume_at?: string | null }
+interface Live { slug: string; volume: number | null; volume_at: string | null; reported_volume: number | null; reported_at: string | null }
 interface Req { id: string; external_id: string; title: string; artist: string | null; thumbnail_url: string | null; duration_sec: number | null; requester_name: string | null; status: string }
 
 function fmtDur(s: number | null): string { if (s == null) return ''; const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}` }
@@ -36,6 +38,19 @@ export default function AdminJukeboxPage() {
   const [volDraft, setVolDraft] = useState<number | null>(null)
   const [volMsg, setVolMsg] = useState('')
   const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The player's confirmation (migration 179). Arrives over Realtime the moment
+  // the player reports back; the 5s refresh is the backup.
+  const [live, setLive] = useState<Live | null>(null)
+  const [, setTick] = useState(0)
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 2000); return () => clearInterval(iv) }, [])
+  useEffect(() => {
+    if (!slug) return
+    const ch = supabase.channel(`admin-jukebox-live-${slug}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jukebox_live', filter: `slug=eq.${slug}` },
+        (p: any) => { if (p?.new) setLive(p.new as Live) })
+      .subscribe()
+    return () => { try { supabase.removeChannel(ch) } catch {} }
+  }, [slug])
 
   const load = useCallback(async (s?: string) => {
     const target = s ?? slugRef.current
@@ -47,6 +62,13 @@ export default function AdminJukeboxPage() {
       setZone(d.zone); slugRef.current = d.zone.slug; setSlug(d.zone.slug)
       setPlaylist(prev => (document.activeElement?.id === 'house-input' ? prev : (d.zone.house_playlist_url ?? '')))
     }
+    setLive(prev => {
+      const n: Live | null = d.live ?? null
+      // Keep whichever copy is newer — a Realtime update may beat the refresh.
+      if (!prev || !n || prev.slug !== n.slug) return n
+      const at = (x: Live) => Math.max(Date.parse(x.volume_at || '') || 0, Date.parse(x.reported_at || '') || 0)
+      return at(n) >= at(prev) ? n : prev
+    })
     setPending(d.pending ?? []); setUpNext(d.up_next ?? []); setNowPlaying(d.now_playing ?? null); setPlayed(d.played ?? [])
     setSpotify(d.spotify ?? { configured: false, connected: false })
     setLoading(false)
@@ -70,10 +92,9 @@ export default function AdminJukeboxPage() {
     volTimer.current = setTimeout(async () => {
       const r = await fetch('/api/admin/jukebox/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zone: slugRef.current, action: 'volume', value: v }) })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok) setVolMsg(d.error || 'Could not save the volume')
-      else { setVolMsg('Saved · the player follows within a few seconds'); await load(); setVolDraft(null) }
-      setTimeout(() => setVolMsg(''), 4000)
-    }, 500)
+      if (!r.ok) { setVolMsg(d.error || 'Could not save the volume'); setTimeout(() => setVolMsg(''), 5000) }
+      else { await load(); setVolDraft(null) }
+    }, 300)
   }
   // Push a new build to the tablets on demand. They normally wait for a gap
   // between songs; this cuts in deliberately, so it's a button, not automatic.
@@ -224,7 +245,21 @@ export default function AdminJukeboxPage() {
                   })()}
                   {/* Volume — shared with the kiosk MUSIC panel (migration 178) */}
                   {(() => {
-                    const shown = volDraft ?? (typeof zone.volume === 'number' ? zone.volume : null)
+                    const shown = volDraft ?? (typeof live?.volume === 'number' ? live.volume : typeof zone.volume === 'number' ? zone.volume : null)
+                    // Confirmation from the player itself — never just "we sent it".
+                    const askedAt = Date.parse(live?.volume_at || '') || 0
+                    const repAt = Date.parse(live?.reported_at || '') || 0
+                    let status: { text: string; color: string } | null = null
+                    if (volDraft != null) status = { text: 'Sending…', color: C.dim }
+                    else if (askedAt && repAt >= askedAt && typeof live?.reported_volume === 'number') {
+                      status = live.reported_volume === live.volume
+                        ? { text: `Player at ${live.reported_volume} ✓`, color: '#6ee7a8' }
+                        : { text: `Player at ${live.reported_volume} (asked for ${live.volume})`, color: '#ffd27a' }
+                    } else if (askedAt) {
+                      status = Date.now() - askedAt < 8000
+                        ? { text: 'Waiting for the player…', color: C.dim }
+                        : { text: 'No reply from the player. It may be offline or on an old version. Try Update players now.', color: '#ff9a9a' }
+                    }
                     return (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 11, letterSpacing: '0.14em', color: C.dim, minWidth: 64 }}>VOLUME</span>
@@ -233,7 +268,8 @@ export default function AdminJukeboxPage() {
                           style={{ flex: '1 1 200px', maxWidth: 320, accentColor: C.accent }} />
                         <span style={{ fontSize: 13, color: C.text, minWidth: 34 }}>{shown ?? '—'}</span>
                         {shown == null && <span style={{ fontSize: 11, color: C.dim }}>not set yet · the player uses its own level</span>}
-                        {volMsg && <span style={{ fontSize: 11, color: volMsg.startsWith('Saved') ? '#6ee7a8' : '#ff9a9a' }}>{volMsg}</span>}
+                        {volMsg ? <span style={{ fontSize: 11, color: '#ff9a9a' }}>{volMsg}</span>
+                          : status && <span style={{ fontSize: 12, color: status.color }}>{status.text}</span>}
                       </div>
                     )
                   })()}

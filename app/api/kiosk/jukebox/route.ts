@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (action === 'verify') return NextResponse.json({ ok: true, staff: (pin as any).staffName })
 
   if (action === 'volume') {
-    const r = await setZoneVolume(db, zone.id, b?.value)
+    const r = await setZoneVolume(db, { id: zone.id, slug: zoneSlug }, b?.value)
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 })
     return NextResponse.json({ ok: true, volume: r.volume })
   }

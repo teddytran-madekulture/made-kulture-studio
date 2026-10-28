@@ -33,6 +33,7 @@
 // devices only reload when JUKEBOX_PLAYER_REV changes.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MAX_REQUEST_SECONDS } from '@/lib/jukebox'
+import { supabase } from '@/lib/supabase'
 
 export type JukeboxSource = 'request' | 'house' | 'vibe' | 'idle' | 'paused' | 'blocked'
 export type JukeboxDisplay = { title: string; artist: string; source: JukeboxSource }
@@ -127,10 +128,37 @@ export function useJukeboxPlayer(opts: {
   const spHouseTuned = useRef(false)
 
   const pausedLocal = useRef(false)
-  // Last shared-volume stamp applied (zone.volume_at, migration 178).
-  const volStamp = useRef<string | null>(null)
+  // Shared volume (2026-10-27). Two routes deliver it: Realtime on jukebox_live
+  // (instant, migration 179) and the regular state poll (backup). volStamp is
+  // the newest change applied, as epoch ms — compared as a NUMBER because the two
+  // routes may format the same timestamp differently, and "newer only" stops a
+  // late poll from undoing a change Realtime already delivered.
+  const volStamp = useRef<number>(0)
   // apply() is defined above setVolume, so it reaches it through a ref.
   const setVolumeRef = useRef<(v: number) => void>(() => {})
+  const applySharedVolume = useCallback((volume: unknown, at: unknown) => {
+    const t = typeof at === 'string' ? Date.parse(at) : NaN
+    if (typeof volume !== 'number' || !Number.isFinite(t) || t <= volStamp.current) return
+    volStamp.current = t
+    setVolumeRef.current(volume)
+    // Tell admin what we are ACTUALLY playing at — the confirmation. Read back
+    // from the engine after it settles rather than echoing the number we were
+    // sent, so a player that ignored it can't report success.
+    setTimeout(async () => {
+      let actual: number | null = null
+      try {
+        if (currentSource.current === 'spotify' && sp.current?.getVolume) actual = Math.round((await sp.current.getVolume()) * 100)
+        else { const v = yt.current?.getVolume?.(); if (typeof v === 'number') actual = Math.round(v) }
+      } catch {}
+      if (actual == null) { try { const st = localStorage.getItem(VOL_KEY); if (st !== null) actual = Number(st) } catch {} }
+      if (actual == null || !keyRef.current) return
+      fetch('/api/jukebox/volume-ack', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zone: zoneRef.current, key: keyRef.current, volume: actual }),
+      }).catch(() => {})
+    }, 600)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Keep-the-vibe state (YouTube only).
   const vibeSeed = useRef<string | null>(null)     // seed the loaded Mix was built from
@@ -557,10 +585,7 @@ export function useJukeboxPlayer(opts: {
     // Shared volume (2026-10-27): apply only when the stamp MOVES, so whoever
     // changed it last (admin or the kiosk panel) wins and an untouched row never
     // overrides a level set on the tablet. Runs before the engine-ready returns.
-    if (s.zone.volume_at && typeof s.zone.volume === 'number' && s.zone.volume_at !== volStamp.current) {
-      volStamp.current = s.zone.volume_at
-      setVolumeRef.current(s.zone.volume)
-    }
+    applySharedVolume(s.zone.volume, s.zone.volume_at)
     const wantsSpotify = s.zone.source === 'spotify' || s.now_playing?.source === 'spotify'
 
     if (wantsSpotify && !isDesktop()) { modeRef.current = 'blocked'; setDisplay({ title: 'Open this zone on the laptop', artist: 'Spotify playback needs a desktop browser', source: 'blocked' }); return }
@@ -607,6 +632,21 @@ export function useJukeboxPlayer(opts: {
     if (modeRef.current !== 'house' || houseKey.current !== (s.zone.house_playlist_url || null)) goHouse(s.zone)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advance])
+
+  // Realtime volume (2026-10-27): the player LISTENS on its zone's jukebox_live
+  // row, so a change from admin or the kiosk lands in under a second. Read-only
+  // for the public; only the server can write (see migration 179). supabase-js
+  // reconnects on its own after Wi-Fi drops, and the poll below still carries
+  // the volume if this channel is down — slower, never lost.
+  useEffect(() => {
+    if (!started || !zone) return
+    const ch = supabase
+      .channel(`jukebox-live-${zone}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jukebox_live', filter: `slug=eq.${zone}` },
+        (payload: any) => { const r = payload?.new; if (r) applySharedVolume(r.volume, r.volume_at) })
+      .subscribe()
+    return () => { try { supabase.removeChannel(ch) } catch {} }
+  }, [started, zone, applySharedVolume])
 
   // poll — self-rescheduling at a rate that matches the room.
   const pollNow = useRef<() => void>(() => {})

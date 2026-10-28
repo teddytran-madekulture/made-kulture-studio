@@ -45,5 +45,9 @@ export async function GET(req: NextRequest) {
     if (data && data.status === 'playing') now_playing = data
   }
 
-  return NextResponse.json({ zones: zones ?? [], zone, pending: pending ?? [], up_next: up_next ?? [], now_playing, played: played ?? [], spotify })
+  // The zone's live volume row (migration 179): what was asked for and what the
+  // player last REPORTED. A missing table just means no confirmation yet.
+  const { data: live } = await db.from('jukebox_live').select('slug, volume, volume_at, reported_volume, reported_at').eq('slug', zone.slug).maybeSingle()
+
+  return NextResponse.json({ zones: zones ?? [], zone, live: live ?? null, pending: pending ?? [], up_next: up_next ?? [], now_playing, played: played ?? [], spotify })
 }
