@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface CheckinData {
+  // 2026-10-28: 'guest' = the shared group link (code + check in only).
+  role?: 'owner' | 'guest'
+  shareUrl?: string | null
   name: string | null
   setName: string
   isBuyout: boolean
@@ -44,6 +47,7 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   const [justActed, setJustActed]   = useState(false)
   const [kiosk, setKiosk]           = useState(false)
   const [codes, setCodes] = useState<{ front: string | null; back: string | null } | null>(null)
+  const [shareMsg, setShareMsg] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -143,6 +147,31 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
     <button onClick={() => router.push('/checkin?kiosk=1')} style={{ ...bigBtn('transparent', '#fff'), border: '1px solid rgba(255,255,255,0.3)', marginTop: 20 }}>DONE — NEXT GUEST</button>
   ) : null
 
+  const isGuest = data?.role === 'guest'
+  const first = data?.name ? data.name.split(' ')[0] : ''
+
+  // SHARE DOOR CODE — the booker sends the group link from their OWN phone
+  // (share sheet or copy). We text nothing; no SMS cost.
+  const share = async () => {
+    const url = data?.shareUrl; if (!url) return
+    const text = `Door code for our Made Kulture session. Tap CHECK IN when you arrive:`
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Made Kulture check-in', text, url }); return }
+    } catch (e: any) { if (e?.name === 'AbortError') return }
+    try { await navigator.clipboard.writeText(url); setShareMsg('Link copied. Paste it to your group.') }
+    catch { setShareMsg(url) }
+    setTimeout(() => setShareMsg(''), 6000)
+  }
+  const shareBlock = data?.shareUrl && !kiosk ? (
+    <div style={{ border: '1px solid rgba(255,255,255,0.12)', padding: '14px 16px', margin: '0 0 24px', textAlign: 'left' }}>
+      <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: '0 0 12px', lineHeight: 1.5 }}>
+        Anyone else in your group can get the door code with their own link. They check in when they arrive.
+      </p>
+      <button onClick={share} style={{ ...bigBtn('transparent', '#fff'), border: '1px solid rgba(255,255,255,0.3)' }}>SHARE DOOR CODE</button>
+      {shareMsg && <p style={{ fontFamily: 'Inter', fontSize: 12, color: '#c9b27e', margin: '10px 0 0', wordBreak: 'break-all' }}>{shareMsg}</p>}
+    </div>
+  ) : null
+
   if (notFound) return wrap(<p style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'Inter' }}>We couldn’t find that booking. Text us at (832) 408-1631.</p>)
 
   // The door-code panel — the whole reason the guest opened this page.
@@ -197,9 +226,15 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
   // ── Checked in → enjoy session, then check out at the end ──
   if (checkedIn) return wrap(<>
     <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>YOU’RE IN.</h1>
+    {isGuest ? <>
+      <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.55)', marginBottom: 28 }}>Enjoy the session.{first ? ` ${first} checks out at the end.` : ''}</p>
+      {codePanel}
+      {summary}
+    </> : <>
     <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.55)', marginBottom: 28 }}>{data.name ? `Enjoy your session, ${data.name.split(' ')[0]}. ` : 'Enjoy your session. '}When you’re done and packed up, check out below.</p>
     {codePanel}
     {summary}
+    {shareBlock}
     <div style={{ ...label, marginBottom: 10, textAlign: 'left' }}>BEFORE YOU CHECK OUT</div>
     <ul style={{ textAlign: 'left', fontFamily: 'Inter', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.8, margin: '0 0 28px', paddingLeft: 18 }}>
       <li>Return all props to where you found them</li>
@@ -210,12 +245,15 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
     <button onClick={() => act('check_out')} disabled={busy} style={{ ...bigBtn('transparent', '#fff'), border: '1px solid rgba(255,255,255,0.3)' }}>
       {busy ? 'SAVING…' : 'CHECK OUT — I’M LEAVING'}
     </button>
+    </>}
   </>)
 
   // ── Not yet checked in ──
   return wrap(<>
-    <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>WELCOME{data.name ? `,\n${data.name.split(' ')[0].toUpperCase()}` : ''}</h1>
+    <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 44, lineHeight: 0.95, marginBottom: 16 }}>WELCOME{!isGuest && data.name ? `,\n${data.name.split(' ')[0].toUpperCase()}` : ''}</h1>
+    {isGuest && first && <p style={{ fontFamily: 'Inter', fontSize: 14, color: 'rgba(255,255,255,0.55)', margin: '-6px 0 18px' }}>You’re with {first}’s booking.</p>}
     {summary}
+    {shareBlock}
     {data.hasDoorCode && !kiosk && (
       <div style={{ border: '1px solid rgba(201,178,126,0.45)', padding: '14px 16px', marginBottom: 24, textAlign: 'left' }}>
         <div style={{ ...label, color: '#c9b27e', marginBottom: 6 }}>YOUR DOOR CODE</div>
@@ -231,7 +269,7 @@ export default function CheckinPage({ params }: { params: { token: string } }) {
         </p>
       </div>
     )}
-    {!data.isBuyout && <>
+    {!data.isBuyout && !isGuest && <>
       <div style={{ ...label, marginBottom: 6, textAlign: 'left' }}>CONFIRM THE GUESTS IN YOUR PARTY</div>
       <p style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'left', margin: '0 0 14px' }}>Your total party size for this booking — not everyone has to be here yet.</p>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 8 }}>

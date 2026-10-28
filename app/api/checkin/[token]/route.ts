@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendOwnerSMS } from '@/lib/sms'
 import { recordArrival } from '@/lib/arrival'
-import { CODE_REVEAL_MINUTES, DOOR_CODE_HOWTO } from '@/lib/igloohome'
+import { CODE_REVEAL_MINUTES, DOOR_CODE_HOWTO, checkInUrl } from '@/lib/igloohome'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,12 +64,39 @@ function codePayload(b: any, now = Date.now()) {
   }
 }
 
+// ── Two links per booking (2026-10-28, migration 180) ───────────────────────
+//   check_in_token — the BOOKER's link (reminder text, emails): everything.
+//   guest_token    — the GROUP link the booker shares from their own phone:
+//                    door code + check in only. No CHECK OUT (which would end
+//                    the session) and no party-size count.
+// Looked up in that order. guest_token is never selected in BOOKING_SELECT, so
+// the booker's link keeps working even before migration 180 runs.
+type Role = 'owner' | 'guest'
+async function findBooking(token: string): Promise<{ b: any; role: Role } | null> {
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(token)) return null
+  const own = await supabase.from('bookings').select(BOOKING_SELECT).eq('check_in_token', token).maybeSingle()
+  if (own.data) return { b: own.data, role: 'owner' }
+  const grp = await supabase.from('bookings').select(BOOKING_SELECT).eq('guest_token', token).maybeSingle()
+  if (grp.error) { if (!/guest_token/.test(grp.error.message || '')) console.error('[checkin] guest lookup failed', grp.error); return null }
+  return grp.data ? { b: grp.data, role: 'guest' } : null
+}
+
 // GET /api/checkin/[token] — booking details for the check-in screen.
 export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
-  const { data: b } = await supabase.from('bookings').select(BOOKING_SELECT).eq('check_in_token', params.token).maybeSingle()
-  if (!b) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  const found = await findBooking(params.token)
+  if (!found) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  const { b, role } = found
+
+  // The booker gets the group link to share. Separate, error-tolerant read.
+  let shareUrl: string | null = null
+  if (role === 'owner') {
+    const { data: g } = await supabase.from('bookings').select('guest_token').eq('id', b.id).maybeSingle()
+    if ((g as any)?.guest_token) shareUrl = checkInUrl((g as any).guest_token)
+  }
 
   return NextResponse.json({
+    role,
+    shareUrl,
     name:           (b.customers as any)?.name ?? null,
     setName:        setNameOf(b),
     isBuyout:       !(b.sets as any),
@@ -91,8 +118,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   try {
     const { action, guests, lat, lng, kiosk } = await req.json()
     const kioskMode = kiosk === true
-    const { data: b } = await supabase.from('bookings').select(BOOKING_SELECT).eq('check_in_token', params.token).maybeSingle()
-    if (!b) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 })
+    const found = await findBooking(params.token)
+    if (!found) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 })
+    const { b, role } = found
     if (b.status === 'cancelled') return NextResponse.json({ error: 'This booking was cancelled.' }, { status: 400 })
 
     const now = Date.now()
@@ -124,7 +152,8 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         locNote = dist <= ONSITE_RADIUS_M ? '✅ on-site' : `📌 ~${Math.round(dist)}m away`
       }
 
-      const arrived = Math.floor(Number(guests) || 0) || null
+      // The group link never sets the party size — only the booker knows it.
+      const arrived = role === 'guest' ? null : (Math.floor(Number(guests) || 0) || null)
       // Reveal the code and check in — silently from a phone, with the one
       // arrival push if this is the shared tablet. lib/arrival.ts.
       const revealedAt = b.code_revealed_at ?? new Date().toISOString()
@@ -151,6 +180,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     }
 
     if (action === 'check_out') {
+      if (role === 'guest') return NextResponse.json({ error: 'Only the person who booked can check out.' }, { status: 403 })
       if (!b.checked_in_at && !b.code_revealed_at) return NextResponse.json({ error: 'Please check in first.' }, { status: 400 })
       // 2026-10-06: claim the first check-out so a token holder can't text the
       // owner on every tap.

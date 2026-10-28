@@ -24,6 +24,10 @@ export function reminderText(opts: {
     `${opts.setName || 'Full Studio Takeover'} - ${formatDateLabel(day)}, ${formatTimeLabel(centralHourDecimal(opts.startISO))}-${formatTimeLabel(centralHourDecimal(opts.endISO))}`,
     ``,
     doorCodeLinkLine(opts.checkInToken),
+    // 2026-10-28: the link above has a SHARE DOOR CODE button that sends the
+    // group link (door code + check in only) so others can let themselves in.
+    // Kept short ON PURPOSE: a typical reminder stays at 3 segments with it.
+    ...(opts.checkInToken ? ['To share the door code, open the link, tap SHARE.'] : []),
     ``,
     `No early arrivals. 4825 Gulf Freeway, Houston TX 77023`,
     `Reply STOP to opt out.`,
