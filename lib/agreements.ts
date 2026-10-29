@@ -68,9 +68,9 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Bookings outside these hours may be avail
 - Leave the set clean and as you found it — furniture returned to place, and all lights, sound systems, and equipment turned off. Modeling lights and receivers must be turned off when not in use. A cleaning fee may apply based on the condition of the set — typically starting around $100, with a higher fee where a set is left in a condition requiring deep cleaning.
 - You are responsible for any equipment, furniture, fixtures, props, or other property that is mishandled, broken, damaged, ruined, or stolen during your rental. You agree to replace such items (with equivalent or better) or pay all repair/replacement costs within 48 hours, charged to the card on file if not otherwise paid.
 
-## Smoke-Free Facility
+## Smoke-Free & Drug-Free Facility
 
-Made Kulture is a smoke-free facility. Smoking and vaping are not permitted anywhere on the premises. Violations are subject to applicable state and local law and will result in cleaning and airing-out charges — including the set's hourly rate for any time it cannot be used while airing out, plus a cleaning fee based on the cleanup required.
+Made Kulture is a smoke-free and drug-free facility. Smoking and vaping are not permitted anywhere on the premises. Violations are subject to applicable state and local law and will result in cleaning and airing-out charges — including the set's hourly rate for any time it cannot be used while airing out, plus a cleaning fee based on the cleanup required. Illegal drugs are not allowed on the premises either, and that includes vaping THC or CBD. Unlit cigars and similar items are fine as props. Alcohol such as champagne or wine is fine in moderation for guests 21 and over. If we see anything that breaks these rules, we will ask you to stop.
 
 ## Cancellations
 
@@ -147,9 +147,9 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Outside-hours bookings are available by r
 - Leave the space clean and as you found it — furniture returned to place, props returned to their original locations, and all lights, sound systems, and equipment turned off. Modeling lights and receivers must be turned off when not in use. A cleaning fee may apply based on the condition of the space — typically starting around $150, with a higher fee where the space is left in a condition requiring deep cleaning.
 - You are responsible for any equipment, furniture, fixtures, props, or other property that is mishandled, broken, damaged, ruined, or stolen during your rental. You agree to replace such items (with equivalent or better) or pay all repair/replacement costs within 48 hours, charged to the card on file if not otherwise paid.
 
-## Smoke-Free Facility
+## Smoke-Free & Drug-Free Facility
 
-Made Kulture is a smoke-free facility. Smoking and vaping are not permitted anywhere on the premises. Violations are subject to applicable state and local law and will result in cleaning and airing-out charges — including the hourly rate for any time the space cannot be used while airing out, plus a cleaning fee based on the cleanup required.
+Made Kulture is a smoke-free and drug-free facility. Smoking and vaping are not permitted anywhere on the premises. Violations are subject to applicable state and local law and will result in cleaning and airing-out charges — including the hourly rate for any time the space cannot be used while airing out, plus a cleaning fee based on the cleanup required. Illegal drugs are not allowed on the premises either, and that includes vaping THC or CBD. Unlit cigars and similar items are fine as props. Alcohol such as champagne or wine is fine in moderation for guests 21 and over. If we see anything that breaks these rules, we will ask you to stop.
 
 ## Cancellations
 
