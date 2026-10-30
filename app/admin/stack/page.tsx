@@ -51,10 +51,10 @@ const SERVICES: Svc[] = [
 
   // ── Retiring (2026-10-08) ─────────────────────────────────────────────
   // madekulture.com now serves the new site (DNS on GoDaddy) and Acuity was
-  // switched off 2026-10-02. Both stay paid only until the last Acuity booking
-  // has run, then cancel the Squarespace subscription (Acuity rides on it).
-  { group: 'Retiring', name: 'Squarespace', role: 'RETIRED. Was the old madekulture.com site. Still billed only because Acuity rides on it; cancel after the last Acuity booking.', url: 'https://squarespace.com', cost: 'Subscription (cancel after the last Acuity booking)', creds: 'Bitwarden: Squarespace' },
-  { group: 'Retiring', name: 'Acuity Scheduling', role: 'RETIRED. Old booking calendar, switched off Oct 2, 2026. A few already-made Acuity bookings still run; the website keeps their door codes and blocks.', url: 'https://acuityscheduling.com', cost: 'Via Squarespace (ends with it)', creds: 'Bitwarden: Acuity' },
+  // switched off 2026-10-02. All Squarespace subscriptions were CANCELLED
+  // 2026-10-30: Acuity ends Nov 26, Website Nov 27, Email Campaigns cancelled.
+  { group: 'Retiring', name: 'Squarespace', role: 'RETIRED. Was the old madekulture.com site. Cancelled Oct 30, 2026; access ends Nov 27, 2026. Email Campaigns also cancelled. Domain was never registered here (DNS on GoDaddy).', url: 'https://squarespace.com', cost: 'Cancelled (no further charges)', creds: 'Bitwarden: Squarespace' },
+  { group: 'Retiring', name: 'Acuity Scheduling', role: 'RETIRED. Old booking calendar, switched off Oct 2, 2026. A few already-made Acuity bookings still run; the website keeps their door codes and blocks.', url: 'https://acuityscheduling.com', cost: 'Cancelled Oct 30, 2026 (ends Nov 26)', creds: 'Bitwarden: Acuity' },
 ]
 
 export default function AdminStackPage() {
