@@ -82,6 +82,12 @@ function SidebarInner() {
         <Item href="/admin/texts" icon="✆" label="Texts" active={on('/admin/texts')} />
         <Item href="/admin/notifications" icon="!" label="Notifications" active={on('/admin/notifications')} />
 
+        <div style={sectionHdr}>INSIGHTS</div>
+        <Item href="/admin/traffic" icon="◔" label="Traffic" active={on('/admin/traffic')} />
+        <Item href={`${D}revenue`} icon="📈" label="Revenue" />
+        <Item href="/admin/community" icon="◉" label="Community" active={on('/admin/community')} />
+        <Item href="/admin/partners" icon="⇄" label="Partners" active={on('/admin/partners')} />
+
         <div style={sectionHdr}>CUSTOMERS</div>
         <Item href={`${D}customers`} icon="👤" label="Client List" />
         <Item href="/admin/standing" icon="★" label="Account Standing" active={on('/admin/standing')} />
@@ -96,15 +102,12 @@ function SidebarInner() {
         <Item href="/admin/directory" icon="✦" label="Creative Directory" active={on('/admin/directory')} />
         <Item href="/admin/listings" icon="🏷" label="Service Listings" active={on('/admin/listings')} />
         <Item href="/admin/rosters" icon="☰" label="Company Rosters" active={on('/admin/rosters')} />
-        <Item href="/admin/partners" icon="⇄" label="Partners" active={on('/admin/partners')} />
-        <Item href="/admin/community" icon="📈" label="Community" active={on('/admin/community')} />
         <Item href="/admin/roles" icon="◆" label="Directory Roles" active={on('/admin/roles')} />
 
         <div style={sectionHdr}>NOMAD</div>
         <NomadNav on={on('/admin/nomad')} />
 
         <div style={sectionHdr}>STUDIO</div>
-        <Item href={`${D}revenue`} icon="📈" label="Revenue" />
         <Item href={`${D}sets`} icon="▦" label="Products & Pricing" />
         <Item href="/admin/drops" icon="◇" label="Set Drops" active={on('/admin/drops')} />
         <Item href="/admin/minis" icon="◷" label="Mini Sessions" active={on('/admin/minis')} />

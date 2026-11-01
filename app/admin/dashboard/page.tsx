@@ -2200,6 +2200,12 @@ export default function AdminDashboard() {
           {navLink('/admin/texts', '✆', 'Texts')}
           {navLink('/admin/notifications', '!', 'Notifications')}
 
+          {navHdr('INSIGHTS')}
+          {navLink('/admin/traffic', '◔', 'Traffic')}
+          {navView('revenue', '📈', 'Revenue')}
+          {navLink('/admin/community', '◉', 'Community')}
+          {navLink('/admin/partners', '⇄', 'Partners')}
+
           {navHdr('CUSTOMERS')}
           {navView('customers', '👤', 'Client List')}
           {navLink('/admin/standing', '★', 'Account Standing')}
@@ -2214,8 +2220,6 @@ export default function AdminDashboard() {
           {navLink('/admin/directory', '✦', 'Creative Directory')}
           {navLink('/admin/listings', '🏷', 'Service Listings')}
           {navLink('/admin/rosters', '☰', 'Company Rosters')}
-          {navLink('/admin/partners', '⇄', 'Partners')}
-          {navLink('/admin/community', '📈', 'Community')}
           {navLink('/admin/roles', '◆', 'Directory Roles')}
 
           {navHdr('NOMAD')}
@@ -2229,7 +2233,6 @@ export default function AdminDashboard() {
           {navLink('/admin/nomad?tab=settings', '⚙', 'Settings')}
 
           {navHdr('STUDIO')}
-          {navView('revenue', '📈', 'Revenue')}
           {navView('sets', '▦', 'Products & Pricing')}
           {navLink('/admin/drops', '◇', 'Set Drops')}
           {navLink('/admin/minis', '◷', 'Mini Sessions')}

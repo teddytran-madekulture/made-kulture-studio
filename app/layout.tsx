@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import JuneChatWidget from '@/components/JuneChatWidget'
+import PageViewTracker from '@/components/PageViewTracker'
 import { MarketingOverlays } from '@/components/MarketingTools'
 import { InstallCatcher } from '@/components/MemberApp'
 import { PUSH_TAP_BOOT_SCRIPT } from '@/lib/native-push'
@@ -101,6 +102,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <JuneChatWidget />
         <MarketingOverlays />
         <InstallCatcher />
+        <PageViewTracker />
       </body>
     </html>
   )

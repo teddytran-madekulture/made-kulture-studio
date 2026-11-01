@@ -12,6 +12,7 @@ import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 import { bookingHourToISO } from '@/lib/booking-times'
 import { AppPromoCard } from '@/components/AppLinks'
 import { AGREEMENT_VERSION, digitsOnly } from '@/lib/checkout-consent'
+import { trackBooked } from '@/lib/pageviews'
 
 // ─── Square SDK loader ────────────────────────────────────────────────────────
 
@@ -613,7 +614,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
       body: JSON.stringify({ sms: booking.smsConsent || smsRemembered, phone: booking.phone, agreement: booking.agreementAck }),
     }).catch(() => {})
   }
-  const onBooked = () => { recordConsent(); setSubmitted(true) }
+  const onBooked = () => { recordConsent(); trackBooked(); setSubmitted(true) }
 
   // Comp customers flagged "no card required" skip the card form when total is $0.
   const compNoCard   = !!pricingOverrides?.comp_no_card
