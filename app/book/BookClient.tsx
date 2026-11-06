@@ -1017,7 +1017,12 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
                 // enforced by never offering the choice. The server rejects a
                 // multi-date order too — see the guard in app/api/bookings/route.ts.
                 if (setCart.length > 0) {
-                  setBooking(b => ({ ...b, date: setCart[0].date, startHour: null, endHour: null }))
+                  // 2026-11-06: a group set (party needs 2+ sets) is LOCKED to the
+                  // window pickSet just copied in, and the locked screen has no time
+                  // grid — clearing the hours here stranded every 6+ party on a grey
+                  // Continue. Keep the window; only a free add-on set starts blank.
+                  const w = mustFillWindow && incompleteWindow ? incompleteWindow : null
+                  setBooking(b => ({ ...b, date: setCart[0].date, startHour: w ? w.startHour : null, endHour: w ? w.endHour : null }))
                   setBookedSlots([]); setClosedSlots([])
                   setStep(4)
                   return
