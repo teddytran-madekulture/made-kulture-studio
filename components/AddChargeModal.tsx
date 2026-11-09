@@ -210,7 +210,9 @@ export default function AddChargeModal({
   // bookkeeps and one doesn't is exactly the kind of thing nobody remembers.
   // Reconciling paid links belongs with the Square webhook work.
   const sendPayLink = useCallback(async () => {
-    if (busy || total <= 0) return
+    // One link per open of this window — a second tap used to text a SECOND
+    // live link for the same charge (2026-11-08).
+    if (busy || total <= 0 || payLink) return
     setBusy(true); setError(null)
     try {
       const res = await fetch(`/api/admin/bookings/${booking.id}/payment-link`, {
@@ -234,7 +236,7 @@ export default function AddChargeModal({
     } finally {
       setBusy(false)
     }
-  }, [busy, total, lines, sendSms, payer, payerPhone, payerName, booking.id])
+  }, [busy, total, lines, sendSms, payer, payerPhone, payerName, booking.id, payLink])
 
   // Charge the OTHER payer's saved card (only after the consent tick).
   const chargePayerSaved = useCallback(async () => {
@@ -562,9 +564,9 @@ export default function AddChargeModal({
               </div>
             ) : (
               <>
-                <button onClick={sendPayLink} disabled={busy || total <= 0}
-                  style={{ width: '100%', marginTop: 18, padding: 14, background: !busy && total > 0 ? '#4ade80' : 'rgba(74,222,128,0.4)', border: 'none', color: '#080808', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', cursor: !busy && total > 0 ? 'pointer' : 'default' }}>
-                  {busy ? 'WORKING…' : sendSms ? `TEXT ${first(payerName).toUpperCase()} A $${total.toFixed(2)} PAYMENT LINK` : `CREATE A $${total.toFixed(2)} PAYMENT LINK`}
+                <button onClick={sendPayLink} disabled={busy || total <= 0 || !!payLink}
+                  style={{ width: '100%', marginTop: 18, padding: 14, background: payLink ? 'transparent' : !busy && total > 0 ? '#4ade80' : 'rgba(74,222,128,0.4)', border: payLink ? '1px solid rgba(74,222,128,0.5)' : 'none', color: payLink ? '#4ade80' : '#080808', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', cursor: !busy && total > 0 && !payLink ? 'pointer' : 'default' }}>
+                  {payLink ? (sendSms ? `\u2713 LINK SENT TO ${first(payerName).toUpperCase()}` : '\u2713 LINK CREATED') : busy ? 'WORKING…' : sendSms ? `TEXT ${first(payerName).toUpperCase()} A $${total.toFixed(2)} PAYMENT LINK` : `CREATE A $${total.toFixed(2)} PAYMENT LINK`}
                 </button>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 6, lineHeight: 1.6 }}>
                   Recommended — they pay from their own phone. It lands on Balances under their name until paid.
@@ -639,9 +641,9 @@ export default function AddChargeModal({
 
             {/* Outside the branch on purpose: a booking with NO card on file is
                 the case that needs this most, and the first version hid it there. */}
-            {!otherPays && <button onClick={sendPayLink} disabled={busy || total <= 0 || useCredit} title={useCredit ? 'A payment link can’t use studio credit — untick credit first' : undefined}
+            {!otherPays && <button onClick={sendPayLink} disabled={busy || total <= 0 || useCredit || !!payLink} title={useCredit ? 'A payment link can’t use studio credit — untick credit first' : undefined}
               style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.14em', cursor: busy || total <= 0 ? 'default' : 'pointer' }}>
-              {busy ? 'WORKING…' : `SEND THEM A PAYMENT LINK${sendSms ? ' (TEXT)' : ''}`}
+              {payLink ? (sendSms ? '\u2713 LINK SENT' : '\u2713 LINK CREATED') : busy ? 'WORKING…' : `SEND THEM A PAYMENT LINK${sendSms ? ' (TEXT)' : ''}`}
             </button>}
 
             {payLink && (

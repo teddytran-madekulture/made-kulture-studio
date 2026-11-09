@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(Date.now() - 180 * 864e5).toISOString()
   const rows: any[] = []
   for (let from = 0; from < 10000; from += 1000) {
-    const { data, error } = await db.from('sms_messages').select('phone, direction, body, read_at, created_at')
+    const { data, error } = await db.from('sms_messages').select('phone, direction, body, read_at, created_at, sent_by')
       .gte('created_at', since).order('created_at', { ascending: false }).range(from, from + 999)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     rows.push(...(data ?? []))
@@ -44,8 +44,11 @@ export async function GET(req: NextRequest) {
   const threads = new Map<string, any>()
   for (const r of rows) {
     let t = threads.get(r.phone)
-    if (!t) { t = { phone: r.phone, last: r.body, lastDirection: r.direction, lastAt: r.created_at, unread: 0, hasInbound: false }; threads.set(r.phone, t) }
+    if (!t) { t = { phone: r.phone, last: r.body, lastDirection: r.direction, lastAt: r.created_at, unread: 0, hasInbound: false, hasAdmin: false }; threads.set(r.phone, t) }
     if (r.direction === 'in') { t.hasInbound = true; if (!r.read_at) t.unread++ }
+    // 2026-11-08: a text YOU caused (reply, payment link, receipt) makes it a real
+    // thread too — a payment link you just sent shouldn't hide behind the filter.
+    if (r.direction === 'out' && r.sent_by === 'admin') t.hasAdmin = true
   }
   const names = await customerNamesByPhone(db)
   const list = Array.from(threads.values()).map(t => ({ ...t, name: names.get(last10(t.phone)) ?? null }))

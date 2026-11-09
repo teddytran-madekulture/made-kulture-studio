@@ -94,7 +94,8 @@ export default function TextsPage() {
   if (unauth) return <div style={{ padding: 40, fontFamily: 'Inter' }}>Sign in to the admin first.</div>
 
   // Replies-only by default: a thread that's just automatic texts isn't a conversation.
-  const visible = (threads ?? []).filter(t => showAll || t.hasInbound)
+  // A text you triggered (reply, payment link, receipt) counts as one (2026-11-08).
+  const visible = (threads ?? []).filter(t => showAll || t.hasInbound || t.hasAdmin)
   const name = thread?.customers?.[0]?.name
   const showList = !mobile || !sel
   const showThread = !mobile || !!sel

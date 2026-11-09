@@ -117,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         ``,
         `Questions? Text (832) 408-1631`,
       ].join('\n')
-      const r = await sendSMSResult(payer.phone, msg)
+      const r = await sendSMSResult(payer.phone, msg, { sentBy: 'admin' })
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     } else if (sendSms && phone) {
       const msg = [
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         `Questions? Text (832) 408-1631`,
       ].join('\n')
 
-      const r = await sendSMSResult(phone, msg)
+      const r = await sendSMSResult(phone, msg, { sentBy: 'admin' })
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 

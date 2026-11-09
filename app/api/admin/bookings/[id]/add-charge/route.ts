@@ -306,13 +306,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let smsError: string | null = null
     const toPhone = payer ? payer.phone : (phone || customer?.phone)
     if (sendSms && toPhone && payer) {
-      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${firstName(payer.name)}, we've charged $${total.toFixed(2)} to your card for ${summary}. Questions? Text (832) 408-1631.`)
+      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${firstName(payer.name)}, we've charged $${total.toFixed(2)} to your card for ${summary}. Questions? Text (832) 408-1631.`, { sentBy: 'admin' })
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     } else if (sendSms && toPhone) {
       const paid = creditCents
         ? `$${(creditCents / 100).toFixed(2)} from your studio credit${cardCents ? ` and $${(cardCents / 100).toFixed(2)} charged to your card` : ''}`
         : `we've charged $${total.toFixed(2)}`
-      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${customer?.name || customerName || 'there'}, ${creditCents ? `we've used ${paid}` : paid} for ${summary}. Questions? Text (832) 408-1631.`)
+      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${customer?.name || customerName || 'there'}, ${creditCents ? `we've used ${paid}` : paid} for ${summary}. Questions? Text (832) 408-1631.`, { sentBy: 'admin' })
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
