@@ -15,7 +15,7 @@ interface Row {
   id: string; bookingId: string; label: string; amount: number; hasLink: boolean
   linkSentAt: string | null; reminderSentAt: string | null
   bookingStart: string | null; bookingEnd: string | null; bookingStatus: string | null
-  setName: string; customerName: string; customerPhone: string; customerEmail: string
+  setName: string; customerName: string; customerPhone: string; customerEmail: string; bookerName?: string | null
 }
 
 const C = { bg: '#0b0b0d', card: '#141416', line: 'rgba(255,255,255,0.1)', text: '#f4f4f5', dim: 'rgba(255,255,255,0.45)', accent: '#c9b27e', gold: '#d4a843', red: '#e57373' }
@@ -85,6 +85,7 @@ export default function BalancesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>{r.customerName || 'Unknown customer'}</div>
+          {r.bookerName && <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>Paying for gear on {r.bookerName}’s booking</div>}
           <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>
             {r.label} · {r.setName} · {bookingWhen(r.bookingStart)}
           </div>

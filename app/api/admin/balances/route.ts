@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     .from('booking_add_ons')
     .select(`
       id, booking_id, rate, quantity, label, square_payment_link_id, square_order_id,
-      link_sent_at, reminder_sent_at,
+      link_sent_at, reminder_sent_at, payer_name, payer_phone, payer_email,
       equipment ( name ),
       bookings ( id, start_time, end_time, status, sets ( name ), customers ( name, phone, email ) )
     `)
@@ -70,9 +70,11 @@ export async function GET(req: NextRequest) {
       bookingEnd: b.end_time ?? null,
       bookingStatus: b.status ?? null,
       setName: b.sets?.name ?? 'Full Studio Takeover',
-      customerName: c.name ?? '',
-      customerPhone: c.phone ?? '',
-      customerEmail: c.email ?? '',
+      // Migration 183: when someone else is paying, THEY are who owes it.
+      customerName: (r.payer_name ?? c.name) ?? '',
+      customerPhone: (r.payer_phone ?? c.phone) ?? '',
+      customerEmail: (r.payer_phone ? r.payer_email : c.email) ?? '',
+      bookerName: r.payer_name ? (c.name ?? '') : null,
     }
   }).sort((a, b) => String(a.linkSentAt ?? a.bookingStart ?? '').localeCompare(String(b.linkSentAt ?? b.bookingStart ?? '')))
 
@@ -93,14 +95,16 @@ export async function POST(req: NextRequest) {
 
   const { data: row, error: readErr } = await supabase
     .from('booking_add_ons')
-    .select('id, booking_id, paid, rate, quantity, label, square_payment_link_id, square_order_id, equipment ( name ), bookings ( status, customers ( name, phone ) )')
+    .select('id, booking_id, paid, rate, quantity, label, square_payment_link_id, square_order_id, payer_name, payer_phone, equipment ( name ), bookings ( status, customers ( name, phone ) )')
     .eq('id', addOnId).maybeSingle()
   if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 })
   if (!row) return NextResponse.json({ error: 'That charge no longer exists.' }, { status: 404 })
   if (row.paid) return NextResponse.json({ error: 'That charge is already paid.' }, { status: 409 })
   const amount = amountOf(row)
   const label = labelOf(row)
-  const cust: any = (row as any).bookings?.customers ?? {}
+  const cust: any = (row as any).payer_phone
+    ? { name: (row as any).payer_name, phone: (row as any).payer_phone }
+    : ((row as any).bookings?.customers ?? {})
 
   if (action === 'resend') {
     if (!row.square_payment_link_id) {

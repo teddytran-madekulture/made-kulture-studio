@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   const { data: rows, error } = await supabase
     .from('booking_add_ons')
     .select(`
-      id, rate, quantity, label, square_payment_link_id, link_sent_at,
+      id, rate, quantity, label, square_payment_link_id, link_sent_at, payer_name, payer_phone,
       bookings ( id, status, start_time, customers ( name, phone ) )
     `)
     .eq('paid', false)
@@ -70,7 +70,11 @@ export async function GET(req: NextRequest) {
 
   for (const r of rows ?? []) {
     const booking  = (r as any).bookings
-    const customer = booking?.customers
+    // Migration 183: a line paid by someone other than the booker is chased at
+    // THEIR number — the booker never agreed to pay it.
+    const customer = (r as any).payer_phone
+      ? { name: (r as any).payer_name, phone: (r as any).payer_phone }
+      : booking?.customers
     const amount   = Number(r.rate ?? 0) * Number(r.quantity ?? 1)
 
     if (!booking || booking.status === 'cancelled') { skipped.push(`${r.id}: booking cancelled`); continue }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { addRewardForCharge } from '@/lib/rewards'
+import { addRewardForCharge, addRewardForPayer } from '@/lib/rewards'
 import { sendOwnerPush } from '@/lib/push'
 import { applyPaidDues, getNomadSettings } from '@/lib/nomad'
 
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
         .update({ paid: true })
         .eq('square_order_id', orderId)
         .eq('paid', false)
-        .select('id, booking_id, rate, quantity')
+        .select('id, booking_id, rate, quantity, payer_customer_id, payer_name, payer_email')
 
       if (error) {
         console.error('[Square webhook] update error:', error)
@@ -117,9 +117,22 @@ export async function POST(req: NextRequest) {
         // Bump each affected booking's total so a link paid by the customer
         // lands on the record the same way the admin Charge button does.
         const byBooking = new Map<string, number>()
+        // Migration 183: lines paid by someone OTHER than the booker earn THEIR
+        // rewards and name THEM in the push. Booker-paid amount kept separately.
+        const payerPart = new Map<string, { payer: { customerId: string | null; email: string | null; name: string }; cents: number }[]>()
+        const bookerCents = new Map<string, number>()
         for (const r of claimed as any[]) {
           const amt = Number(r.rate || 0) * Number(r.quantity || 1)
           byBooking.set(r.booking_id, (byBooking.get(r.booking_id) ?? 0) + amt)
+          if (r.payer_name) {
+            const list = payerPart.get(r.booking_id) ?? []
+            const hit = list.find(x => x.payer.name === r.payer_name && x.payer.email === (r.payer_email ?? null))
+            if (hit) hit.cents += Math.round(amt * 100)
+            else list.push({ payer: { customerId: r.payer_customer_id ?? null, email: r.payer_email ?? null, name: r.payer_name }, cents: Math.round(amt * 100) })
+            payerPart.set(r.booking_id, list)
+          } else {
+            bookerCents.set(r.booking_id, (bookerCents.get(r.booking_id) ?? 0) + Math.round(amt * 100))
+          }
         }
         for (const [bookingId, addAmount] of byBooking) {
           if (!bookingId || addAmount <= 0) continue
@@ -134,7 +147,11 @@ export async function POST(req: NextRequest) {
           // 2026-10-15 — money paid through a link (extra time, added gear) earns
           // rewards like a card charge. Claim-guarded above, so a retried
           // delivery never gets here twice. Non-fatal.
-          await addRewardForCharge(supabase, bookingId, Math.round(addAmount * 100), 'paid link')
+          const bc = bookerCents.get(bookingId) ?? 0
+          if (bc > 0) await addRewardForCharge(supabase, bookingId, bc, 'paid link')
+          for (const pp of payerPart.get(bookingId) ?? []) {
+            await addRewardForPayer(supabase, pp.payer, bookingId, pp.cents, 'paid link')
+          }
 
           // 2026-10-21 — tell Teddy the link got paid, so he never wonders whether
           // to follow up. Claim-guarded above (a retried delivery never gets here),
@@ -142,7 +159,9 @@ export async function POST(req: NextRequest) {
           try {
             const { data: who } = await supabase
               .from('bookings').select('customers ( name )').eq('id', bookingId).single()
-            const name = (who as any)?.customers?.name || 'A customer'
+            const payers = payerPart.get(bookingId) ?? []
+            const bookerName = (who as any)?.customers?.name || 'A customer'
+            const name = payers.length && !bc ? `${payers[0].payer.name} (on ${bookerName}’s booking)` : bookerName
             const { count: left } = await supabase
               .from('booking_add_ons').select('id', { count: 'exact', head: true })
               .eq('booking_id', bookingId).eq('paid', false)

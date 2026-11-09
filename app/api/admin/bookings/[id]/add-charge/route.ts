@@ -7,7 +7,8 @@ import { sendOwnerPush } from '@/lib/push'
 import { randomUUID } from 'crypto'
 import { findOrCreateSquareCustomer } from '@/lib/square-customer'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
-import { authUserIdForEmail, rewardFor, addRewardForCharge } from '@/lib/rewards'
+import { authUserIdForEmail, rewardFor, addRewardForCharge, addRewardForPayer } from '@/lib/rewards'
+import { resolvePayer, payerColumns, firstName } from '@/lib/payer'
 
 // POST /api/admin/bookings/[id]/add-charge
 // Charge a customer for equipment they used and/or any one-off fee — AFTER THE
@@ -57,6 +58,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       customerName,
       sendSms,
       useCredit,         // spend the customer's studio credit first (migration 112)
+      payer: rawPayer,   // someone OTHER than the booker pays (migration 183) — { customerId } or { name, phone, email }
+      payerConsent,      // required to charge a payer's SAVED card: "he asked me to charge this card"
     } = await req.json()
 
     // ── Validate + normalize the line items ──────────────────────────────────
@@ -93,6 +96,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const customer = booking.customers as any
     const totalCents = Math.round(total * 100)
 
+    // ── Who's paying (migration 183) ─────────────────────────────────────────
+    // null = the booker, exactly as before. A payer changes WHOSE card, receipt,
+    // text and rewards — never which booking the line sits on.
+    const { payer, error: payerErr } = await resolvePayer(supabase, rawPayer)
+    if (payerErr) return NextResponse.json({ error: payerErr }, { status: 400 })
+    if (payer && useCredit) {
+      return NextResponse.json({ error: 'Studio credit can’t be used when someone else is paying — untick credit.' }, { status: 400 })
+    }
+    // ⚠️ Charging someone's SAVED card without their say-so is how chargebacks
+    // happen. The booker implicitly authorised their own card at checkout; a
+    // third party has not, so the admin must confirm he asked. Enforced here,
+    // not just as a disabled button.
+    if (payer && squareCardId && !sourceId && payerConsent !== true) {
+      return NextResponse.json({ error: `Confirm ${payer.name} asked you to charge this card.` }, { status: 400 })
+    }
+
     // ── Studio credit (rewards spent first — lib/rewards splitPots) ──────────
     //     Worked out BEFORE the card so the card is charged only the remainder.
     //     The ledger row is written only AFTER the card succeeds, so a decline
@@ -116,7 +135,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (sourceId) {
       // Keyed-in card. Optionally save it on file first (single-use nonce →
       // stored card), then charge the stored card so it's reusable next time.
-      const custRowId = customerId || booking.customer_id
+      // ⚠️ With a payer, save ONLY onto the payer's own record (or not at all for
+      // "someone new"). Falling back to booking.customer_id would put his card on
+      // the BOOKER's profile, where the booker could later be charged on it.
+      const custRowId = payer ? payer.customerId : (customerId || booking.customer_id)
       if (saveCard && custRowId) {
         const { data: cust } = await supabase
           .from('customers')
@@ -144,7 +166,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               chargeSource     = savedCardId
               chargeCustomerId = sqCustId
               await supabase.from('customers').update({ square_card_id: savedCardId }).eq('id', cust.id)
-              await supabase.from('bookings').update({ square_card_on_file_id: savedCardId }).eq('id', booking.id)
+              // The booking's card on file stays the BOOKER's — never swap in the payer's.
+              if (!payer) await supabase.from('bookings').update({ square_card_on_file_id: savedCardId }).eq('id', booking.id)
             }
           }
         }
@@ -153,13 +176,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     } else if (squareCardId && squareCustomerId) {
       chargeSource = squareCardId
       chargeCustomerId = squareCustomerId
-    } else if (booking.square_card_on_file_id && customer?.square_customer_id) {
+    } else if (!payer && booking.square_card_on_file_id && customer?.square_customer_id) {
       chargeSource = booking.square_card_on_file_id
       chargeCustomerId = customer.square_customer_id
     }
 
     if (!chargeSource && cardCents > 0) {
-      return NextResponse.json({ error: 'No card on file for this booking — key a card in.' }, { status: 400 })
+      return NextResponse.json({ error: payer ? `Pick one of ${payer.name}’s cards, key one in, or text them a link.` : 'No card on file for this booking — key a card in.' }, { status: 400 })
     }
 
     // ── Charge (only the part credit doesn't cover) ─────────────────────────
@@ -172,8 +195,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         amountMoney:       { amount: BigInt(cardCents), currency: 'USD' },
         ...(chargeCustomerId ? { customerId: chargeCustomerId } : {}),
         locationId:        process.env.SQUARE_LOCATION_ID!,
-        note:              `Made Kulture — ${summary}${creditCents ? ` (+$${(creditCents / 100).toFixed(2)} studio credit)` : ''}`.slice(0, 500),
-        buyerEmailAddress: (customer?.email || email) || undefined,
+        note:              `Made Kulture — ${summary}${payer ? ` (paid by ${payer.name})` : ''}${creditCents ? ` (+$${(creditCents / 100).toFixed(2)} studio credit)` : ''}`.slice(0, 500),
+        // The Square receipt goes to whoever PAID.
+        buyerEmailAddress: (payer ? payer.email : (customer?.email || email)) || undefined,
       })
       squarePaymentId = result.payment!.id!
     }
@@ -218,6 +242,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // payment it came from — so the desk's "remove" can undo each part.
       credit_cents:    lineCredit[clean.indexOf(l)],
       square_order_id: squarePaymentId,
+      ...payerColumns(payer),
     }))
     // ⚠️ try/catch was DEAD CODE here — supabase-js resolves with an `error`
     // property rather than throwing, so a rejected insert vanished silently after
@@ -230,7 +255,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // after it, a top-up is posted (lib/rewards addRewardForCharge).
     {
       const earnCardCents = clean.reduce((s, l, i) => s + ((l.equipmentId || l.earns) ? lineCents[i] - lineCredit[i] : 0), 0)
-      if (earnCardCents > 0) await addRewardForCharge(supabase, booking.id, earnCardCents, 'added charge')
+      if (earnCardCents > 0) {
+        if (payer) await addRewardForPayer(supabase, payer, booking.id, earnCardCents, 'added charge')
+        else await addRewardForCharge(supabase, booking.id, earnCardCents, 'added charge')
+      }
     }
 
     // ── Reflect the charge on the booking total ─────────────────────────────
@@ -262,14 +290,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await supabase.from('customer_notes').insert({
         customer_id: booking.customer_id,
         tag:         'note',
-        note:        `${creditCents ? `$${(creditCents / 100).toFixed(2)} from studio credit${cardCents ? ` + $${(cardCents / 100).toFixed(2)} charged` : ''}` : `Charged $${total.toFixed(2)}`} for ${summary} on the ${dateLabel} booking${savedCardId ? ' (keyed card, saved on file)' : ''}.`,
+        note:        `${creditCents ? `$${(creditCents / 100).toFixed(2)} from studio credit${cardCents ? ` + $${(cardCents / 100).toFixed(2)} charged` : ''}` : `Charged $${total.toFixed(2)}`} for ${summary} on the ${dateLabel} booking${payer ? ` (paid by ${payer.name})` : ''}${savedCardId ? ' (keyed card, saved on file)' : ''}.`,
+      })
+    }
+    if (payer?.customerId && payer.customerId !== booking.customer_id) {
+      const dateLabel = new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      await supabase.from('customer_notes').insert({
+        customer_id: payer.customerId,
+        tag:         'note',
+        note:        `Paid $${total.toFixed(2)} for ${summary} on ${customer?.name || 'another customer'}’s ${dateLabel} booking${savedCardId ? ' (keyed card, saved on file)' : ''}.`,
       })
     }
 
     // ── Optional confirmation SMS ────────────────────────────────────────────
     let smsError: string | null = null
-    const toPhone = phone || customer?.phone
-    if (sendSms && toPhone) {
+    const toPhone = payer ? payer.phone : (phone || customer?.phone)
+    if (sendSms && toPhone && payer) {
+      const r = await sendSMSResult(toPhone, `Made Kulture: Hi ${firstName(payer.name)}, we've charged $${total.toFixed(2)} to your card for ${summary}. Questions? Text (832) 408-1631.`)
+      if (!r.ok) smsError = r.error ?? 'SMS failed to send'
+    } else if (sendSms && toPhone) {
       const paid = creditCents
         ? `$${(creditCents / 100).toFixed(2)} from your studio credit${cardCents ? ` and $${(cardCents / 100).toFixed(2)} charged to your card` : ''}`
         : `we've charged $${total.toFixed(2)}`

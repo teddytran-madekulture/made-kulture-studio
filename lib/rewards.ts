@@ -211,6 +211,34 @@ export async function addRewardForCharge(db: any, bookingId: string | null | und
   } catch (e) { console.error('[rewards] addRewardForCharge error (non-fatal)', e); return none }
 }
 
+// ── Someone OTHER than the booker paid (migration 183, 2026-11-08) ──────────
+// A regular pays for gear on a friend's booking: the reward is HIS, not the
+// booker's. Posted straight to his ledger at his own rate (member vs Plus) —
+// there is no booking-level basis to grow, because the booking isn't his.
+// No account / program off / standing paused ⇒ nothing. Never throws.
+export async function addRewardForPayer(db: any, payer: { customerId: string | null; email: string | null }, bookingId: string, cardCents: number, label: string): Promise<number> {
+  try {
+    if (!(cardCents > 0) || !payer.email) return 0
+    const rate = await rewardRateForEmail(db, payer.email)
+    if (rate == null) return 0
+    if (payer.customerId) {
+      const st = (await standingForCustomerIds(db, [payer.customerId])).get(payer.customerId)
+      if (st && !canEarnRewards(st)) return 0
+    }
+    const authId = await authUserIdForEmail(db, payer.email)
+    if (!authId) return 0
+    const reward = rewardFor(Math.round(cardCents), rate)
+    if (reward <= 0) return 0
+    const { error } = await db.from('credit_ledger').insert({
+      auth_user_id: authId, amount_cents: reward, kind: 'reward',
+      reason: `Reward · ${label} · ${rate}% back`,
+      booking_id: bookingId, created_by: 'system', expires_at: null,
+    })
+    if (error) { console.error('[rewards] payer reward insert failed', bookingId, error); return 0 }
+    return reward
+  } catch (e) { console.error('[rewards] addRewardForPayer error (non-fatal)', e); return 0 }
+}
+
 // ── Money went back → take the matching reward back ─────────────────────────
 // Call from EVERY refund / credit-back path with the cents returned on this row.
 // Before payout it shrinks the basis; after payout it posts a negative ledger row.

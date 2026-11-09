@@ -102,6 +102,8 @@ interface Booking {
     // Before migration 094 there was no such column and those lines rendered as
     // the literal word "Item" — see addOnName().
     label?: string | null
+    // Migration 183: set when someone OTHER than the booker paid for this line.
+    payer_name?: string | null
     square_order_id?: string | null
     square_payment_link_id?: string | null
     equipment: { name: string } | null
@@ -113,6 +115,26 @@ interface Booking {
 // migration 094 (which are exactly the ones nobody could identify).
 function addOnName(a: { label?: string | null; equipment: { name: string } | null }): string {
   return a.equipment?.name || (a.label ?? '').trim() || 'Item'
+}
+
+// ── Booking Detail action buttons (regrouped 2026-11-08) ─────────────────────
+// Colour has a MEANING, not a per-button tint: white = the main action, gold =
+// moves money, plain outline = everything else, red = destructive. Cancel and
+// No-show live at the very bottom after a gap so they're hard to hit by accident.
+type ActTone = 'primary' | 'money' | 'plain' | 'danger'
+function actStyle(tone: ActTone, span2 = false): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: '11px 8px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10.5,
+    letterSpacing: '0.13em', textAlign: 'center', lineHeight: 1.35, gridColumn: span2 ? '1 / -1' : undefined,
+  }
+  if (tone === 'primary') return { ...base, background: '#fff', border: 'none', color: '#080808', fontWeight: 600, fontSize: 11, padding: '12px' }
+  if (tone === 'money')   return { ...base, background: 'rgba(212,168,67,0.10)', border: '1px solid rgba(212,168,67,0.4)', color: '#e6c07a' }
+  if (tone === 'danger')  return { ...base, background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff7b7b' }
+  return { ...base, background: 'transparent', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }
+}
+const actGroup: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }
+function ActLabel({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.35)', margin: '22px 0 8px' }}>{children}</div>
 }
 
 // One line of "what to pull off the shelf". Empty string when there's nothing.
@@ -2729,7 +2751,7 @@ export default function AdminDashboard() {
                             <Detail label="SOURCE" value={b.source || '—'} />
                             {b.notes && <Detail label="NOTES" value={b.notes} />}
                             {(b.booking_add_ons?.length ?? 0) > 0 && (
-                              <Detail label="GEAR TO PREP" value={b.booking_add_ons!.map(a => `${addOnName(a)}${a.quantity > 1 ? ` ×${a.quantity}` : ''}${a.paid === false ? ' (UNPAID)' : ''}`).join(', ')} />
+                              <Detail label="GEAR TO PREP" value={b.booking_add_ons!.map(a => `${addOnName(a)}${a.quantity > 1 ? ` ×${a.quantity}` : ''}${a.payer_name ? (a.paid === false ? ` (UNPAID, ${a.payer_name.split(' ')[0]} paying)` : ` (paid by ${a.payer_name.split(' ')[0]})`) : a.paid === false ? ' (UNPAID)' : ''}`).join(', ')} />
                             )}
                             {/* An UNPAID line means a payment link is still live and payable —
                                 Square links never expire. Give it a way to die. */}
@@ -4991,106 +5013,110 @@ export default function AdminDashboard() {
                 {detailCodeErr && <div style={{ fontSize: 11, marginTop: 6, color: '#fbbf24' }}>{detailCodeErr}</div>}
               </div>
             )}
-            {detailBooking.customer_id && <StandingPanel customerId={detailBooking.customer_id} bookingId={detailBooking.id} />}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 32 }}>
-            {detailBooking.status !== 'cancelled' && (
-              <button onClick={() => openEdit(detailBooking)}
-                style={{ background: '#fff', border: 'none', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#080808', fontWeight: 600 }}>
-                EDIT BOOKING
-              </button>
-            )}
-            {detailBooking.status !== 'cancelled' && (
-              <button onClick={() => setAddSetFor(detailBooking)}
-                style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#4ade80' }}>
-                + ADD ANOTHER SET
-              </button>
-            )}
-            {detailBooking.status !== 'cancelled' && (
-              <button onClick={() => setAddChargeFor(detailBooking)}
-                style={{ background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.35)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#e6c07a' }}>
-                + ADD CHARGE (EQUIPMENT / FEES)
-              </button>
-            )}
-            {/* PARTY SIZE — deliberately NOT folded into EDIT BOOKING. Keeping
-                it separate is the same call as ADD CHARGE and CHARGE OVERTIME:
-                "change the time" must never gain the power to move money on its
-                own (see the 2026-08-09 $32.50 bug). This one owns guest_count,
-                guest_fee_amount and the refund/credit/charge that follows. */}
-            {detailBooking.status !== 'cancelled' && (
-              <button onClick={() => setGuestsFor(detailBooking)}
-                style={{ background: 'rgba(129,178,255,0.12)', border: '1px solid rgba(129,178,255,0.35)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#9cc0ff' }}>
-                {detailBooking.guest_count != null
-                  ? `CHANGE PARTY SIZE \u00b7 ${detailBooking.guest_count} ${detailBooking.guest_count === 1 ? 'PERSON' : 'PEOPLE'}`
-                  : 'SET PARTY SIZE'}
-              </button>
-            )}
-            {/* 2026-10-14: sell Plus to the person on this booking (walk-ins
-                who want to move/extend inside 48h). Opens their customer card
-                with the SELL panel already open. */}
-            {detailBooking.customer_id && !detailBooking.plus && (
-              <button onClick={() => { const id = detailBooking.customer_id!; setDetailBooking(null); setView('customers'); setPendingSellFor(id); fetchCustomerDetail(id) }}
-                style={{ background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.45)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#e6c07a' }}>
-                ★ SELL PLUS MEMBERSHIP
-              </button>
-            )}
-            {detailBooking.status !== 'cancelled' && detailBooking.sets?.name && (
-              <button onClick={() => setOvertimeFor(detailBooking)}
-                style={{ background: 'rgba(255,176,102,0.12)', border: '1px solid rgba(255,176,102,0.45)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ffb066' }}>
-                {overrunMinutes(detailBooking) > 0
-                  ? `CHARGE OVERTIME · RAN ${overrunMinutes(detailBooking)} MIN OVER`
-                  : 'CHARGE OVERTIME'}
-              </button>
-            )}
-            {/* RESEND CONFIRMATION — sends one email and nothing else. It does
-                NOT re-mint a door code or re-alert the owner (see the route).
-                The reason it exists: the confirmation now carries the
-                /manage/<token> link, which is how a guest with no account
-                changes their own booking, and every booking made before that
-                shipped has a token its customer never received. */}
-            {detailBooking.status !== 'cancelled' && detailBooking.customers?.email && (
-              <button onClick={() => handleResendConfirmation(detailBooking.id)} disabled={resending === detailBooking.id}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
-                {resending === detailBooking.id ? 'SENDING...' : 'RESEND CONFIRMATION EMAIL'}
-              </button>
-            )}
-            {detailBooking.status !== 'cancelled' && detailBooking.customers?.phone && new Date(detailBooking.end_time).getTime() > Date.now() && (
-              <button onClick={() => handleTextCheckin(detailBooking.id)} disabled={resending === detailBooking.id}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
-                {resending === detailBooking.id ? 'SENDING...' : 'TEXT CHECK-IN LINK'}
-              </button>
-            )}
-            {resendMsg?.id === detailBooking.id && (
-              <div style={{ fontSize: 11, lineHeight: 1.6, padding: '2px 2px 0', color: resendMsg.ok ? '#4ade80' : '#fbbf24' }}>
-                {resendMsg.text}
+          {/* ACTIONS — grouped by what you're doing (2026-11-08). Same buttons,
+              same handlers as before; only order, grouping and colour changed.
+              PARTY SIZE stays its own button, NOT part of EDIT BOOKING: "change
+              the time" must never gain the power to move money (2026-08-09 $32.50
+              bug). RESEND CONFIRMATION sends one email only — no door code re-mint. */}
+          {(() => {
+            const b = detailBooking
+            const live = b.status !== 'cancelled'
+            const showCheckin = live && !!b.customers?.phone && new Date(b.end_time).getTime() > Date.now()
+            const showResend = live && !!b.customers?.email
+            const over = live && b.sets?.name ? overrunMinutes(b) : 0
+            const showOvertime = live && !!b.sets?.name
+            const showPlus = !!b.customer_id && !b.plus
+            return (
+              <div style={{ marginTop: 28 }}>
+                {live && (
+                  <>
+                    <ActLabel>BOOKING</ActLabel>
+                    <div style={actGroup}>
+                      <button onClick={() => openEdit(b)} style={actStyle('primary', true)}>EDIT BOOKING</button>
+                      <button onClick={() => setAddSetFor(b)} style={actStyle('plain')}>+ ADD A SET</button>
+                      <button onClick={() => setGuestsFor(b)} style={actStyle('plain')}>
+                        {b.guest_count != null ? `PARTY SIZE \u00b7 ${b.guest_count}` : 'SET PARTY SIZE'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {(live || showPlus) && (
+                  <>
+                    <ActLabel>MONEY</ActLabel>
+                    <div style={actGroup}>
+                      {live && <button onClick={() => setAddChargeFor(b)} style={actStyle('money', true)}>+ ADD CHARGE (GEAR / FEES)</button>}
+                      {showOvertime && (
+                        <button onClick={() => setOvertimeFor(b)} style={actStyle('money', !showPlus || over > 0)}>
+                          {over > 0 ? `CHARGE OVERTIME \u00b7 RAN ${over} MIN OVER` : 'CHARGE OVERTIME'}
+                        </button>
+                      )}
+                      {/* 2026-10-14: sell Plus to the person on this booking — opens
+                          their customer card with the SELL panel already open. */}
+                      {showPlus && (
+                        <button onClick={() => { const id = b.customer_id!; setDetailBooking(null); setView('customers'); setPendingSellFor(id); fetchCustomerDetail(id) }}
+                          style={actStyle('money', !showOvertime || over > 0)}>
+                          {'\u2605 SELL PLUS'}
+                        </button>
+                      )}
+                      {b.status === 'no_show' && (
+                        <button onClick={() => approveNoShowCredit(b.id)} disabled={noShowBusy === b.id} style={{ ...actStyle('money', true), fontWeight: 600 }}>
+                          {noShowBusy === b.id ? 'ADDING CREDIT\u2026' : 'APPROVE PLUS CREDIT'}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {(b.customers?.phone || showResend) && (
+                  <>
+                    <ActLabel>CONTACT</ActLabel>
+                    <div style={actGroup}>
+                      {b.customers?.phone && (
+                        <button onClick={() => window.open(`sms:${b.customers?.phone}`, '_blank')} style={actStyle('plain', !showCheckin)}>TEXT CUSTOMER</button>
+                      )}
+                      {showCheckin && (
+                        <button onClick={() => handleTextCheckin(b.id)} disabled={resending === b.id} style={actStyle('plain')}>
+                          {resending === b.id ? 'SENDING\u2026' : 'CHECK-IN LINK'}
+                        </button>
+                      )}
+                      {showResend && (
+                        <button onClick={() => handleResendConfirmation(b.id)} disabled={resending === b.id} style={actStyle('plain', true)}>
+                          {resending === b.id ? 'SENDING\u2026' : 'RESEND CONFIRMATION EMAIL'}
+                        </button>
+                      )}
+                    </div>
+                    {resendMsg?.id === b.id && (
+                      <div style={{ fontSize: 11, lineHeight: 1.6, padding: '8px 2px 0', color: resendMsg.ok ? '#4ade80' : '#fbbf24' }}>
+                        {resendMsg.text}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {b.customer_id && (
+                  <div style={{ marginTop: 22 }}>
+                    <StandingPanel customerId={b.customer_id} bookingId={b.id} />
+                  </div>
+                )}
+
+                {live && (
+                  <div style={{ ...actGroup, marginTop: 36, paddingTop: 18, borderTop: '1px solid rgba(255,100,100,0.15)' }}>
+                    {b.status !== 'no_show' && (
+                      <button onClick={() => markNoShow(b.id)} disabled={noShowBusy === b.id} style={actStyle('danger')}>
+                        {noShowBusy === b.id ? '\u2026' : 'MARK NO-SHOW'}
+                      </button>
+                    )}
+                    <button onClick={() => handleCancel(b.id)} disabled={cancelling === b.id} style={actStyle('danger', b.status === 'no_show')}>
+                      {cancelling === b.id ? 'CANCELLING\u2026' : 'CANCEL BOOKING'}
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-            {detailBooking.customers?.phone && (
-              <button onClick={() => window.open(`sms:${detailBooking.customers?.phone}`, '_blank')}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#fff' }}>
-                TEXT CUSTOMER
-              </button>
-            )}
-            {detailBooking.status !== 'cancelled' && (
-              <button onClick={() => handleCancel(detailBooking.id)} disabled={cancelling === detailBooking.id}
-                style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.3)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ff6b6b' }}>
-                {cancelling === detailBooking.id ? 'CANCELLING...' : 'CANCEL BOOKING'}
-              </button>
-            )}
-            {detailBooking.status !== 'cancelled' && detailBooking.status !== 'no_show' && (
-              <button onClick={() => markNoShow(detailBooking.id)} disabled={noShowBusy === detailBooking.id}
-                style={{ background: 'transparent', border: '1px solid rgba(255,176,102,0.35)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#ffb066' }}>
-                {noShowBusy === detailBooking.id ? '…' : 'MARK NO-SHOW'}
-              </button>
-            )}
-            {detailBooking.status === 'no_show' && (
-              <button onClick={() => approveNoShowCredit(detailBooking.id)} disabled={noShowBusy === detailBooking.id}
-                style={{ background: 'rgba(212,168,67,0.14)', border: '1px solid rgba(212,168,67,0.4)', padding: '12px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.15em', color: '#e6c07a', fontWeight: 600 }}>
-                {noShowBusy === detailBooking.id ? 'ADDING CREDIT…' : 'APPROVE PLUS CREDIT'}
-              </button>
-            )}
-          </div>
+            )
+          })()}
         </div>
       )}
 

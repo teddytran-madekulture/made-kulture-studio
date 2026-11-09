@@ -4,6 +4,7 @@ import { Client, Environment } from 'square'
 import { createClient } from '@supabase/supabase-js'
 import { sendSMSResult } from '@/lib/sms'
 import { randomUUID } from 'crypto'
+import { resolvePayer, payerColumns, firstName } from '@/lib/payer'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,10 +30,18 @@ const square = new Client({
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { amount, description, phone, customerName, sendSms, lines } = await req.json()
+  const { amount, description, phone, customerName, sendSms, lines, payer: rawPayer } = await req.json()
 
   if (!amount || amount <= 0) {
     return NextResponse.json({ error: 'Amount must be greater than 0' }, { status: 400 })
+  }
+  // Someone other than the booker pays (migration 183): the link is TEXTED TO
+  // THEM and the rows remember their number, so reminders and Balances reach
+  // the person who actually owes it rather than the booker.
+  const { payer, error: payerErr } = await resolvePayer(supabase, rawPayer)
+  if (payerErr) return NextResponse.json({ error: payerErr }, { status: 400 })
+  if (payer && sendSms && !payer.phone) {
+    return NextResponse.json({ error: `${payer.name} has no phone number on file — untick the text and copy the link instead.` }, { status: 400 })
   }
 
   try {
@@ -84,6 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         // Store what the line IS. An equipment line reads its name through
         // equipment_id; a free-form line had nothing and rendered as "Item".
         label:                  (l.label ?? '').trim() || null,
+        ...payerColumns(payer),
       }))
       const { data: inserted, error: insErr } = await supabase
         .from('booking_add_ons').insert(rows).select('id')
@@ -98,7 +108,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     let smsError: string | null = null
-    if (sendSms && phone) {
+    if (sendSms && payer?.phone) {
+      const msg = [
+        `Hi ${firstName(payer.name)}! Here's your Made Kulture payment link for ${description || 'your add-on'}.`,
+        ``,
+        `Amount: $${Number(amount).toFixed(2)}`,
+        url,
+        ``,
+        `Questions? Text (832) 408-1631`,
+      ].join('\n')
+      const r = await sendSMSResult(payer.phone, msg)
+      if (!r.ok) smsError = r.error ?? 'SMS failed to send'
+    } else if (sendSms && phone) {
       const msg = [
         `Hi ${customerName}! Your Made Kulture booking has been updated.`,
         ``,
@@ -112,7 +133,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (!r.ok) smsError = r.error ?? 'SMS failed to send'
     }
 
-    return NextResponse.json({ success: true, url, smsError })
+    return NextResponse.json({ success: true, url, smsError, sentTo: sendSms ? (payer ? payer.phone : phone) : null })
   } catch (err: any) {
     console.error('Payment link error:', err)
     const msg = err?.errors?.[0]?.detail || err.message || 'Failed to create payment link'

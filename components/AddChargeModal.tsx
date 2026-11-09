@@ -9,6 +9,12 @@
 //     profile) — charged straight through /add-charge, no card entry needed
 //   • a keyed-in card — reuses <AdminCardCharge> pointed at the same endpoint,
 //     with the line items passed through as extra payload
+//
+// WHO'S PAYING (2026-11-08, migration 183): the booker by default, or another
+// client / someone new. A payer gets the link, the receipt, the texts and the
+// rewards; the line still sits on THIS booking so gear prep sees it. Charging a
+// payer's SAVED card needs an explicit "he asked me to" tick (enforced server-side
+// too). Studio credit is booker-only, so it's hidden when someone else pays.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminCardCharge from '@/components/AdminCardCharge'
@@ -42,6 +48,11 @@ export interface AddChargeBooking {
 
 interface CustomLine { label: string; amount: string }
 
+interface ClientHit { id: string; name: string | null; email: string | null; phone: string | null }
+type PayMode = 'booker' | 'client' | 'new'
+const digits = (v: string) => v.replace(/\D/g, '')
+const first = (n: string | null | undefined) => (String(n ?? '').trim().split(/\s+/)[0] || 'them')
+
 const CATEGORY_LABELS: Record<string, string> = {
   lighting:        'Lighting',
   modifier:        'Modifiers',
@@ -71,6 +82,67 @@ export default function AddChargeModal({
   // asks. Rewards are spent first, same as checkout.
   const [credit, setCredit]       = useState<{ balanceCents: number; rewardCents: number } | null>(null)
   const [useCredit, setUseCredit] = useState(false)
+
+  // ── Who's paying ──
+  const [payMode, setPayMode]       = useState<PayMode>('booker')
+  const [query, setQuery]           = useState('')
+  const [hits, setHits]             = useState<ClientHit[]>([])
+  const [searching, setSearching]   = useState(false)
+  const [client, setClient]         = useState<ClientHit | null>(null)
+  const [newName, setNewName]       = useState('')
+  const [newPhone, setNewPhone]     = useState('')
+  const [newEmail, setNewEmail]     = useState('')
+  const [payerCards, setPayerCards] = useState<SavedCard[]>([])
+  const [payerCardsLoading, setPayerCardsLoading] = useState(false)
+  const [payerCardId, setPayerCardId] = useState<string | null>(null)
+  const [consent, setConsent]       = useState(false)
+
+  // Search the Client List as the admin types (debounced).
+  useEffect(() => {
+    if (payMode !== 'client' || client) return
+    const q = query.trim()
+    if (q.length < 2) { setHits([]); return }
+    let alive = true
+    setSearching(true)
+    const t = setTimeout(() => {
+      fetch(`/api/admin/customers?q=${encodeURIComponent(q)}&limit=8`, { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : { customers: [] })
+        .then(d => { if (alive) setHits(((d.customers ?? []) as ClientHit[]).filter(c => c.id !== booking.customer_id)) })
+        .catch(() => { if (alive) setHits([]) })
+        .finally(() => { if (alive) setSearching(false) })
+    }, 250)
+    return () => { alive = false; clearTimeout(t) }
+  }, [query, payMode, client, booking.customer_id])
+
+  // The picked client's own saved cards.
+  useEffect(() => {
+    setPayerCards([]); setPayerCardId(null); setConsent(false)
+    if (!client?.email) return
+    let alive = true
+    setPayerCardsLoading(true)
+    fetch(`/api/admin/booking-cards?email=${encodeURIComponent(client.email)}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { cards: [] })
+      .then(d => { if (!alive) return; const list: SavedCard[] = d.cards ?? []; setPayerCards(list); setPayerCardId(list[0]?.id ?? null) })
+      .catch(() => {})
+      .finally(() => { if (alive) setPayerCardsLoading(false) })
+    return () => { alive = false }
+  }, [client])
+
+  const switchMode = (m: PayMode) => {
+    setPayMode(m); setError(null); setPayLink(null)
+    if (m !== 'booker') setUseCredit(false)
+    if (m !== 'client') { setClient(null); setQuery(''); setHits([]) }
+  }
+
+  // What the server is told. null = the booker (unchanged behaviour).
+  const payer = payMode === 'client' ? (client ? { customerId: client.id } : null)
+    : payMode === 'new' ? { name: newName.trim(), phone: newPhone, email: newEmail.trim() || null }
+    : null
+  const payerName = payMode === 'client' ? (client?.name || 'this client') : payMode === 'new' ? (newName.trim() || 'them') : (booking.customers?.name || 'the customer')
+  const payerPhone = payMode === 'client' ? (client?.phone || '') : payMode === 'new' ? newPhone : (booking.customers?.phone || '')
+  const payerReady = payMode === 'booker' || (payMode === 'client' && !!client) || (payMode === 'new' && !!newName.trim() && digits(newPhone).length >= 10)
+  const otherPays = payMode !== 'booker'
+  const chosenPayerCard = payerCards.find(c => c.id === payerCardId) || null
   useEffect(() => {
     let alive = true
     fetch(`/api/admin/bookings/${booking.id}/credit`, { cache: 'no-store' })
@@ -147,9 +219,10 @@ export default function AddChargeModal({
           amount: total,
           lines,   // recorded as unpaid add-ons so the Square webhook can reconcile the payment
           description: lines.map(l => l.label).join(', ').slice(0, 120) || 'Made Kulture — Additional Charges',
-          phone: booking.customers?.phone || '',
-          customerName: booking.customers?.name || 'there',
+          phone: payerPhone,
+          customerName: payerName,
           sendSms,
+          payer,
         }),
       })
       const data = await res.json()
@@ -161,7 +234,28 @@ export default function AddChargeModal({
     } finally {
       setBusy(false)
     }
-  }, [busy, total, lines, booking, sendSms])
+  }, [busy, total, lines, sendSms, payer, payerPhone, payerName, booking.id])
+
+  // Charge the OTHER payer's saved card (only after the consent tick).
+  const chargePayerSaved = useCallback(async () => {
+    if (busy || total <= 0 || !chosenPayerCard || !consent || !payer) return
+    setBusy(true); setError(null)
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/add-charge`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lines, sendSms, payer, payerConsent: true,
+          squareCardId:     chosenPayerCard.id,
+          squareCustomerId: chosenPayerCard.squareCustomerId,
+        }),
+      })
+      const d = await res.json()
+      if (res.ok && d.success) onSuccess()
+      else { setError(d.error || 'Charge failed — try again.'); setBusy(false) }
+    } catch {
+      setError('Something went wrong. Please try again.'); setBusy(false)
+    }
+  }, [busy, total, chosenPayerCard, consent, payer, booking.id, lines, sendSms, onSuccess])
 
   // Charge a saved card straight through — no card entry needed.
   const chargeSaved = useCallback(async () => {
@@ -240,13 +334,15 @@ export default function AddChargeModal({
         title="KEY IN A CARD"
         description={`Made Kulture — ${summary}`}
         bookingId={booking.id}
-        customerId={booking.customer_id}
-        customerEmail={booking.customers?.email}
-        customerPhone={booking.customers?.phone}
-        customerName={booking.customers?.name}
+        // A payer's keyed card is saved onto THEIR record only (or not at all
+        // for someone new — no record, so AdminCardCharge hides "save on file").
+        customerId={otherPays ? (client?.id ?? null) : booking.customer_id}
+        customerEmail={otherPays ? (payMode === 'client' ? client?.email : newEmail.trim() || null) : booking.customers?.email}
+        customerPhone={otherPays ? payerPhone : booking.customers?.phone}
+        customerName={otherPays ? payerName : booking.customers?.name}
         sendSmsDefault={sendSms}
         endpoint={`/api/admin/bookings/${booking.id}/add-charge`}
-        extraPayload={{ lines, useCredit: creditCents > 0 }}
+        extraPayload={{ lines, useCredit: !otherPays && creditCents > 0, payer }}
         onClose={() => setKeying(false)}
         onSuccess={onSuccess}
       />
@@ -332,8 +428,66 @@ export default function AddChargeModal({
               <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 32, color: '#4ade80', letterSpacing: '0.03em' }}>${total.toFixed(2)}</span>
             </div>
 
-            {/* STUDIO CREDIT (migration 112) — off unless the customer asks */}
-            {credit && (
+            {/* WHO'S PAYING (migration 183) */}
+            <div style={{ ...label, marginTop: 20, marginBottom: 8 }}>WHO&apos;S PAYING?</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+              {([['booker', 'THE BOOKER'], ['client', 'ANOTHER CLIENT'], ['new', 'SOMEONE NEW']] as [PayMode, string][]).map(([m, t]) => (
+                <button key={m} onClick={() => switchMode(m)} disabled={busy}
+                  style={{ padding: '9px 4px', background: payMode === m ? 'rgba(212,168,67,0.16)' : 'transparent', border: `1px solid ${payMode === m ? 'rgba(212,168,67,0.6)' : 'rgba(255,255,255,0.16)'}`, color: payMode === m ? '#e6c07a' : 'rgba(255,255,255,0.65)', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', cursor: busy ? 'default' : 'pointer' }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            {payMode === 'booker' && (
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 8 }}>{booking.customers?.name || 'The customer on this booking'}</div>
+            )}
+            {payMode === 'client' && (
+              <div style={{ marginTop: 10 }}>
+                {client ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', border: '1px solid rgba(212,168,67,0.45)' }}>
+                    <div style={{ flex: 1, minWidth: 0, fontFamily: 'Inter, sans-serif' }}>
+                      <div style={{ fontSize: 13, color: '#fff' }}>{client.name || 'Unnamed client'}</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[client.phone, client.email].filter(Boolean).join(' · ') || 'No contact details'}</div>
+                    </div>
+                    <button onClick={() => { setClient(null); setQuery('') }} disabled={busy}
+                      style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>CHANGE</button>
+                  </div>
+                ) : (
+                  <>
+                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name, phone or email" autoFocus
+                      style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', padding: '10px', fontFamily: 'Inter, sans-serif', fontSize: 16, boxSizing: 'border-box' }} />
+                    {(searching || hits.length > 0 || query.trim().length >= 2) && (
+                      <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderTop: 'none', maxHeight: 200, overflowY: 'auto' }}>
+                        {searching && <div style={{ padding: 10, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Searching…</div>}
+                        {!searching && hits.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>No match — use SOMEONE NEW.</div>}
+                        {!searching && hits.map(h => (
+                          <button key={h.id} onClick={() => setClient(h)}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '9px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                            <div style={{ fontSize: 13, color: '#fff' }}>{h.name || 'Unnamed client'}</div>
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{[h.phone, h.email].filter(Boolean).join(' · ')}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+            {payMode === 'new' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                {[
+                  { v: newName,  set: setNewName,  ph: 'Name',             mode: 'text' as const },
+                  { v: newPhone, set: setNewPhone, ph: 'Mobile number',    mode: 'tel' as const },
+                  { v: newEmail, set: setNewEmail, ph: 'Email (optional, for the receipt)', mode: 'email' as const },
+                ].map(f => (
+                  <input key={f.ph} value={f.v} onChange={e => f.set(e.target.value)} placeholder={f.ph} inputMode={f.mode}
+                    style={{ width: '100%', background: '#0d0d0d', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', padding: '10px', fontFamily: 'Inter, sans-serif', fontSize: 16, boxSizing: 'border-box' }} />
+                ))}
+              </div>
+            )}
+
+            {/* STUDIO CREDIT (migration 112) — off unless the customer asks. Booker-only. */}
+            {credit && !otherPays && (
               <div style={{ marginTop: 14, padding: '10px 12px', border: `1px solid ${useCredit ? 'rgba(212,168,67,0.55)' : 'rgba(255,255,255,0.14)'}` }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                   <input type="checkbox" checked={useCredit} onChange={e => setUseCredit(e.target.checked)} />
@@ -351,7 +505,7 @@ export default function AddChargeModal({
             )}
 
             {/* SAVED CARDS */}
-            {cards.length > 0 && !creditOnly && (
+            {cards.length > 0 && !creditOnly && !otherPays && (
               <div style={{ marginTop: 18 }}>
                 <div style={{ ...label, marginBottom: 8 }}>CHARGE CARD ON FILE</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -396,13 +550,71 @@ export default function AddChargeModal({
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, cursor: 'pointer' }}>
               <input type="checkbox" checked={sendSms} onChange={e => setSendSms(e.target.checked)} />
-              <span style={label}>TEXT THE CUSTOMER A RECEIPT</span>
+              <span style={label}>{otherPays ? `TEXT ${first(payerName).toUpperCase()} (THE LINK OR A RECEIPT)` : 'TEXT THE CUSTOMER A RECEIPT'}</span>
             </label>
 
             {error && <div style={{ color: '#ff6b6b', fontSize: 13, marginTop: 14, lineHeight: 1.5 }}>{error}</div>}
 
-            {/* ACTIONS */}
-            {creditOnly ? (
+            {/* ACTIONS — someone else paying */}
+            {otherPays && (!payerReady ? (
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 18, lineHeight: 1.6 }}>
+                {payMode === 'client' ? 'Pick the client who is paying.' : 'Add their name and a 10-digit mobile number.'}
+              </div>
+            ) : (
+              <>
+                <button onClick={sendPayLink} disabled={busy || total <= 0}
+                  style={{ width: '100%', marginTop: 18, padding: 14, background: !busy && total > 0 ? '#4ade80' : 'rgba(74,222,128,0.4)', border: 'none', color: '#080808', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', cursor: !busy && total > 0 ? 'pointer' : 'default' }}>
+                  {busy ? 'WORKING…' : sendSms ? `TEXT ${first(payerName).toUpperCase()} A $${total.toFixed(2)} PAYMENT LINK` : `CREATE A $${total.toFixed(2)} PAYMENT LINK`}
+                </button>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 6, lineHeight: 1.6 }}>
+                  Recommended — they pay from their own phone. It lands on Balances under their name until paid.
+                </div>
+
+                {payMode === 'client' && (
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ ...label, marginBottom: 8 }}>OR CHARGE {first(payerName).toUpperCase()}&apos;S CARD ON FILE</div>
+                    {payerCardsLoading ? (
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Loading their cards…</div>
+                    ) : payerCards.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{client?.email ? 'No saved cards for this client.' : 'This client has no email on file, so their saved cards can’t be looked up.'}</div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {payerCards.map(c => (
+                            <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', border: `1px solid ${c.id === payerCardId ? 'rgba(74,222,128,0.5)' : 'rgba(255,255,255,0.14)'}` }}>
+                              <input type="radio" name="mkpayercard" checked={c.id === payerCardId} onChange={() => setPayerCardId(c.id)} />
+                              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#fff' }}>
+                                {(c.brand || 'Card').replace('_', ' ')} ····{c.last4}
+                                {c.prepaidType === 'PREPAID' && <span style={{ color: '#f5a623', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8, border: '1px solid rgba(245,166,35,0.4)', padding: '1px 5px' }}>PREPAID</span>}
+                                {c.alert && <span style={{ color: '#ff6b6b', fontSize: 10, letterSpacing: '0.1em', marginLeft: 8, border: '1px solid rgba(255,107,107,0.45)', padding: '1px 5px' }}>{c.alert.type === 'card.disabled' ? 'DISABLED BY ISSUER' : 'ISSUER UPDATED'}</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} style={{ marginTop: 2 }} />
+                          <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#fff', lineHeight: 1.5 }}>
+                            {first(payerName)} asked me to charge this card
+                          </span>
+                        </label>
+                        <button onClick={chargePayerSaved} disabled={busy || total <= 0 || !chosenPayerCard || !consent}
+                          style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: `1px solid ${consent ? 'rgba(74,222,128,0.6)' : 'rgba(255,255,255,0.15)'}`, color: consent ? '#4ade80' : 'rgba(255,255,255,0.3)', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.14em', cursor: busy || !consent ? 'default' : 'pointer' }}>
+                          {busy ? 'CHARGING…' : `CHARGE $${total.toFixed(2)}${chosenPayerCard ? ` TO ····${chosenPayerCard.last4}` : ''}`}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <button onClick={() => setKeying(true)} disabled={busy || total <= 0}
+                  style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.14em', cursor: busy || total <= 0 ? 'default' : 'pointer' }}>
+                  KEY IN {first(payerName).toUpperCase()}&apos;S CARD
+                </button>
+              </>
+            ))}
+
+            {/* ACTIONS — the booker (unchanged) */}
+            {otherPays ? null : creditOnly ? (
               <button onClick={payWithCredit} disabled={busy}
                 style={{ width: '100%', marginTop: 18, padding: 14, background: !busy ? '#d4a843' : 'rgba(212,168,67,0.4)', border: 'none', color: '#080808', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', cursor: !busy ? 'pointer' : 'default' }}>
                 {busy ? 'APPLYING…' : `USE $${(creditCents / 100).toFixed(2)} STUDIO CREDIT`}
@@ -427,15 +639,15 @@ export default function AddChargeModal({
 
             {/* Outside the branch on purpose: a booking with NO card on file is
                 the case that needs this most, and the first version hid it there. */}
-            <button onClick={sendPayLink} disabled={busy || total <= 0 || useCredit} title={useCredit ? 'A payment link can’t use studio credit — untick credit first' : undefined}
+            {!otherPays && <button onClick={sendPayLink} disabled={busy || total <= 0 || useCredit} title={useCredit ? 'A payment link can’t use studio credit — untick credit first' : undefined}
               style={{ width: '100%', marginTop: 10, padding: 12, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.14em', cursor: busy || total <= 0 ? 'default' : 'pointer' }}>
               {busy ? 'WORKING…' : `SEND THEM A PAYMENT LINK${sendSms ? ' (TEXT)' : ''}`}
-            </button>
+            </button>}
 
             {payLink && (
               <div style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.25)', padding: '12px 14px', marginTop: 14 }}>
                 <div style={{ fontSize: 10, color: '#e6c07a', letterSpacing: '0.1em', marginBottom: 8 }}>
-                  PAYMENT LINK CREATED{sendSms ? ' — TEXTED TO THEM' : ''}
+                  PAYMENT LINK CREATED{sendSms ? ` — TEXTED TO ${otherPays ? first(payerName).toUpperCase() : 'THEM'}` : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: '#fff', wordBreak: 'break-all', flex: 1 }}>{payLink}</span>
@@ -445,14 +657,15 @@ export default function AddChargeModal({
                   </button>
                 </div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 8, lineHeight: 1.6 }}>
-                  They pay in Square. This does NOT add to the booking total or log a note — check Square to confirm it was paid.
+                  It shows on Balances until it&apos;s paid. When they pay, the booking total updates on its own and you get a notification.
                 </div>
               </div>
             )}
 
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 12, lineHeight: 1.6 }}>
-              The two card buttons charge via Square, add to the booking total and log a note.
-              A payment link does none of that &mdash; it just gets you paid.
+              {otherPays
+                ? `The charge stays on this booking (gear prep sees it). ${first(payerName)} gets the receipt, the texts and any rewards.`
+                : 'Card charges post right away. A payment link posts to the booking when they pay.'}
             </div>
           </>
         )}
