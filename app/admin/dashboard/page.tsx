@@ -2256,6 +2256,7 @@ export default function AdminDashboard() {
 
           {navHdr('STUDIO')}
           {navView('sets', '▦', 'Products & Pricing')}
+          {navLink('/admin/set-care', '✎', 'Set Care')}
           {navLink('/admin/drops', '◇', 'Set Drops')}
           {navLink('/admin/minis', '◷', 'Mini Sessions')}
           {navLink('/admin/promos', '🏷', 'Promo Codes')}
