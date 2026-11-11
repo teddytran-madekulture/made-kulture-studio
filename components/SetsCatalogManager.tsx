@@ -42,12 +42,16 @@ type Draft = {
   booking_prompt: string
 }
 
+// The full warehouse has no `sets` row — its copy is site_content fields, passed
+// in (with defaults) by app/admin/website/sets/page.tsx. 2026-11-10.
+export type StudioField = { page: string; key: string; label: string; type: 'text' | 'multiline'; default: string; hint?: string }
+
 const card: React.CSSProperties = { background: '#141416', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }
 const labelStyle: React.CSSProperties = { display: 'block', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.4)', marginBottom: 6, textTransform: 'uppercase' }
 const inputStyle: React.CSSProperties = { width: '100%', background: '#0b0b0d', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, color: '#f4f4f5', fontFamily: 'Inter, sans-serif', fontSize: 13, padding: '9px 11px', boxSizing: 'border-box' }
 const btn = (primary = false): React.CSSProperties => ({ fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', padding: '9px 16px', borderRadius: 6, cursor: 'pointer', border: primary ? 'none' : '1px solid rgba(255,255,255,0.18)', background: primary ? '#fff' : 'transparent', color: primary ? '#080808' : 'rgba(255,255,255,0.75)' })
 
-export default function SetsCatalogManager() {
+export default function SetsCatalogManager({ studioFields = [] }: { studioFields?: StudioField[] }) {
   const [sets, setSets] = useState<SetRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -68,7 +72,53 @@ export default function SetsCatalogManager() {
   }
   useEffect(() => { load() }, [])
 
+  // ── Full studio (buyout) card ─────────────────────────────────────────────
+  const [studioOpen, setStudioOpen] = useState(false)
+  const [studioCur, setStudioCur] = useState<Record<string, string>>({})     // value as saved now
+  const [studioDraft, setStudioDraft] = useState<Record<string, string>>({})
+  const [studioBusy, setStudioBusy] = useState(false)
+  const [studioMsg, setStudioMsg] = useState('')
+  const fkey = (f: StudioField) => `${f.page}.${f.key}`
+
+  async function openStudio() {
+    setEditId(null); setDraft(null); setStudioMsg(''); setError('')
+    setStudioBusy(true); setStudioOpen(true)
+    try {
+      const pages = Array.from(new Set(studioFields.map(f => f.page)))
+      const over: Record<string, Record<string, string>> = {}
+      for (const pg of pages) {
+        const r = await fetch(`/api/admin/site-content?page=${pg}`, { cache: 'no-store' })
+        const d = await r.json().catch(() => ({}))
+        // A failed read must never show the defaults as if they were saved.
+        if (!r.ok) throw new Error(d.error || 'Could not load the full studio copy')
+        over[pg] = d.overrides || {}
+      }
+      const cur: Record<string, string> = {}
+      for (const f of studioFields) cur[fkey(f)] = over[f.page]?.[f.key] ?? f.default
+      setStudioCur(cur); setStudioDraft(cur)
+    } catch (e: any) { setError(e.message); setStudioOpen(false) } finally { setStudioBusy(false) }
+  }
+
+  async function saveStudio() {
+    setStudioBusy(true); setStudioMsg(''); setError('')
+    try {
+      for (const f of studioFields) {
+        const k = fkey(f)
+        if ((studioDraft[k] ?? '') === (studioCur[k] ?? '')) continue
+        const r = await fetch('/api/admin/site-content', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ page: f.page, key: f.key, value: studioDraft[k] ?? '' }),
+        })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(`${f.label}: ${d.error || 'save failed'}`)
+        setStudioCur(c => ({ ...c, [k]: studioDraft[k] ?? '' }))
+      }
+      setStudioMsg('✓ Saved')
+    } catch (e: any) { setError(e.message) } finally { setStudioBusy(false) }
+  }
+
   function startEdit(s: SetRow) {
+    setStudioOpen(false)
     setEditId(s.id)
     setSavedId(null)
     const gallery = s.gallery && s.gallery.length ? [...s.gallery] : (s.photo_url ? [s.photo_url] : [])
@@ -191,7 +241,67 @@ export default function SetsCatalogManager() {
             </div>
           )
         })}
+        {studioFields.length > 0 && (
+          <div style={{ ...card, overflow: 'hidden' }}>
+            {/* Placeholder thumbnail — swap for a real photo later. */}
+            <div style={{ aspectRatio: '4 / 3', background: 'linear-gradient(135deg,#1a1a1c,#2a2620)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="96" height="72" viewBox="0 0 96 72" fill="none" stroke="rgba(212,168,67,0.7)" strokeWidth="2" aria-hidden="true">
+                <path d="M6 66V26L48 6l42 20v40" />
+                <path d="M6 66h84" />
+                <rect x="34" y="38" width="28" height="28" />
+                <path d="M34 46h28M34 54h28" />
+                <rect x="14" y="34" width="12" height="10" />
+                <rect x="70" y="34" width="12" height="10" />
+              </svg>
+              <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#d4a843', fontFamily: 'Inter, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', padding: '3px 7px', borderRadius: 20 }}>BUYOUT</div>
+            </div>
+            <div style={{ padding: '12px 14px' }}>
+              <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 18, letterSpacing: '0.02em' }}>FULL STUDIO</div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>Whole warehouse · rate in Products &amp; Pricing</div>
+              <button onClick={openStudio} style={{ ...btn(false), marginTop: 12, width: '100%' }}>EDIT COPY &amp; PREP QUESTION</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {studioOpen && (
+        <div style={{ ...card, marginTop: 26, padding: '22px 22px 26px' }}>
+          <h2 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, margin: '0 0 4px' }}>FULL STUDIO</h2>
+          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 20 }}>
+            The full-warehouse buyout. Rate and minimum hours live in Products &amp; Pricing.
+          </div>
+          {studioBusy && !Object.keys(studioDraft).length ? (
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 16 }}>
+              {studioFields.map(f => {
+                const k = fkey(f)
+                const isPrompt = f.key === 'studioBookingPrompt'
+                return (
+                  <div key={k}>
+                    <label style={labelStyle}>{isPrompt ? 'Prep question at checkout' : f.label}</label>
+                    {f.type === 'multiline'
+                      ? <textarea value={studioDraft[k] ?? ''} onChange={e => setStudioDraft(d => ({ ...d, [k]: e.target.value }))} rows={isPrompt ? 2 : 4} placeholder={isPrompt ? 'e.g. Will you need The Watering Hole?' : undefined} style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }} />
+                      : <input value={studioDraft[k] ?? ''} onChange={e => setStudioDraft(d => ({ ...d, [k]: e.target.value }))} style={inputStyle} />}
+                    {(isPrompt || f.hint) && (
+                      <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 6, lineHeight: 1.6 }}>
+                        {isPrompt
+                          ? 'Shown above the notes box when someone books the full warehouse. Leave blank for the plain notes label. It is optional for the customer, so treat answers as a bonus, not a guarantee.'
+                          : f.hint}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, marginTop: 22, alignItems: 'center' }}>
+            <button onClick={saveStudio} disabled={studioBusy} style={{ ...btn(true), opacity: studioBusy ? 0.6 : 1 }}>{studioBusy ? 'SAVING…' : 'SAVE'}</button>
+            <button onClick={() => setStudioOpen(false)} disabled={studioBusy} style={btn(false)}>CLOSE</button>
+            {studioMsg && <span style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, color: '#7fd18f' }}>{studioMsg}</span>}
+          </div>
+        </div>
+      )}
 
       {editing && draft && (
         <div style={{ ...card, marginTop: 26, padding: '22px 22px 26px' }}>
