@@ -221,7 +221,7 @@ const BOOK_FIELDS: ContentField[] = [
   // 2026-11-10: the per-set booking_prompt (sets.booking_prompt) can't cover a
   // buyout — a buyout is not a sets row. This is the buyout's own prep question,
   // shown in the same gold panel above the notes box. Blank = hidden.
-  { key: 'studioBookingPrompt', label: 'Full studio \u2014 prep question', type: 'multiline', group: 'Full studio checkout', default: 'Will you need The Watering Hole? It\u2019s included with the full warehouse, but it has to be requested ahead so we can get it ready.', hint: 'Shown above the notes box when someone books the full warehouse. Their answer lands in the booking notes. Leave blank to hide it.' },
+  { key: 'studioBookingPrompt', label: 'Full studio \u2014 prep question', type: 'multiline', group: 'Full studio checkout', default: '', hint: 'Your own question, shown above the notes box when someone books the full warehouse (same as the per-set prep question). Their answer lands in the booking notes. Leave blank for the plain notes label.' },
 ]
 
 // ── Tour page fields ──────────────────────────────────────────────────────────
