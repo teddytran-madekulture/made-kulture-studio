@@ -218,6 +218,10 @@ const BOOK_FIELDS: ContentField[] = [
   { key: 'studioCardTitle', label: 'Full studio \u2014 title',      type: 'text', group: 'Booking type cards', default: 'FULL STUDIO TAKEOVER' },
   { key: 'studioCardSub',   label: 'Full studio \u2014 subline',    type: 'text', group: 'Booking type cards', default: 'Entire warehouse \u2014 all sets, private.' },
   { key: 'studioCardLimit', label: 'Full studio \u2014 limit line', type: 'text', group: 'Booking type cards', default: 'Up to 30 people' },
+  // 2026-11-10: the per-set booking_prompt (sets.booking_prompt) can't cover a
+  // buyout — a buyout is not a sets row. This is the buyout's own prep question,
+  // shown in the same gold panel above the notes box. Blank = hidden.
+  { key: 'studioBookingPrompt', label: 'Full studio \u2014 prep question', type: 'multiline', group: 'Full studio checkout', default: 'Will you need The Watering Hole? It\u2019s included with the full warehouse, but it has to be requested ahead so we can get it ready.', hint: 'Shown above the notes box when someone books the full warehouse. Their answer lands in the booking notes. Leave blank to hide it.' },
 ]
 
 // ── Tour page fields ──────────────────────────────────────────────────────────

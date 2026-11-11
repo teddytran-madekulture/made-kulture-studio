@@ -522,6 +522,12 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
       : (selectedSet ? [selectedSet] : [])
     const seen = new Set<string>()
     const out: { name: string; prompt: string }[] = []
+    // A buyout is not a sets row, so it carries its own prep question from the
+    // Book flow copy (lib/site-content.ts studioBookingPrompt). Blank = none.
+    if (booking.type === 'studio') {
+      const q = (c.studioBookingPrompt ?? '').trim()
+      return q ? [{ name: 'Full Studio Takeover', prompt: q }] : []
+    }
     for (const st of chosen) {
       const q = (st.bookingPrompt ?? '').trim()
       if (!q || seen.has(st.id)) continue
@@ -1681,7 +1687,7 @@ function BookingWizard({ content = {} }: { content?: PageContent }) {
               ))}
               <div>
                 <label htmlFor="book-notes" style={{ display: 'block', fontFamily: 'Inter', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.35)', marginBottom: 8 }}>
-                  {prepPrompts.length ? 'SET PREP + NOTES (OPTIONAL)' : 'NOTES (OPTIONAL)'}
+                  {prepPrompts.length ? (booking.type === 'studio' ? 'PREP + NOTES (OPTIONAL)' : 'SET PREP + NOTES (OPTIONAL)') : 'NOTES (OPTIONAL)'}
                 </label>
                 {/* ⚠️ Reuses the notes field on purpose — no extra step, no extra
                     click, and it cannot block checkout. Answers land as free
