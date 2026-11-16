@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
-const MODEL = 'gpt-image-1'
+const MODEL = 'gpt-image-2' // gpt-image-1 retired by OpenAI 2026-10-23 (2026-11-16)
 const DEFAULT_PROMPT = 'Place this exact object on a seamless, evenly lit, pure white studio background, with a soft, natural shadow on the floor beneath it. The background must be solid white, not transparent. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
 
 // POST /api/admin/props/clean-image — JSON { imageUrl, prompt? }

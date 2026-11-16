@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
-const MODEL = 'gpt-image-1'
+const MODEL = 'gpt-image-2' // gpt-image-1 retired by OpenAI 2026-10-23 (2026-11-16)
 const DEFAULT_PROMPT = 'Remove the background and place this exact object on a clean, evenly lit, pure white studio background. Keep the object itself unchanged, centered, photorealistic. Do not add any new objects, text, or props.'
 
 // POST /api/admin/props/edit-image — multipart 'file'.
