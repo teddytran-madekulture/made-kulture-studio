@@ -3255,18 +3255,51 @@ export default function AdminDashboard() {
                   .filter(t => localDateStr(t.start_time) >= calDate)
                   .map(t => ({ start: t.start_time, tour: t })),
               ].sort((x, y) => new Date(x.start).getTime() - new Date(y.start).getTime())
-              if (!items.length) return <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Nothing on or after this date.</div>
-              let lastDate = ''
+              // EVERY day gets a header, empty or not. Without this a day with no bookings
+              // simply vanished, so the first header on screen read as "today" when it was
+              // really tomorrow. Empty days get a dim "No bookings" row; 3+ empty days in a
+              // row collapse into one range line so a quiet week doesn't bury the list.
+              const today = todayStr()
+              const dayTag = (d: string) => d === today ? 'TODAY' : d === addDays(today, 1) ? 'TOMORROW' : ''
+              const byDay: Record<string, typeof items> = {}
+              for (const it of items) { const d = it.cdate || localDateStr(it.start); (byDay[d] ||= []).push(it) }
+              const lastDay = items.length ? Object.keys(byDay).sort().slice(-1)[0] : calDate
+              type Block = { kind: 'day'; d: string } | { kind: 'empty'; from: string; to: string }
+              const blocks: Block[] = []
+              for (let d = calDate; d <= lastDay; d = addDays(d, 1)) {
+                if (byDay[d]) { blocks.push({ kind: 'day', d }); continue }
+                let to = d
+                while (addDays(to, 1) <= lastDay && !byDay[addDays(to, 1)]) to = addDays(to, 1)
+                if (to === d || addDays(d, 1) === to) {
+                  // 1 or 2 empty days: show each on its own
+                  blocks.push({ kind: 'empty', from: d, to: d })
+                  if (to !== d) blocks.push({ kind: 'empty', from: to, to })
+                } else blocks.push({ kind: 'empty', from: d, to })
+                d = to
+              }
+              const headerStyle = { fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' } as const
+              const tagEl = (d: string) => dayTag(d) ? <span style={{ marginLeft: 8, color: '#e6c07a' }}>· {dayTag(d)}</span> : null
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {items.map(item => {
-                    const d = localDateStr(item.start); const showHeader = d !== lastDate; lastDate = d
+                  {blocks.map(bl => bl.kind === 'empty' ? (
+                    <div key={`empty-${bl.from}`}>
+                      <div style={headerStyle}>
+                        {bl.from === bl.to ? shortDayLabel(bl.from).toUpperCase() : `${shortDayLabel(bl.from).toUpperCase()} – ${shortDayLabel(bl.to).toUpperCase()}`}
+                        {bl.from === bl.to && tagEl(bl.from)}
+                      </div>
+                      <div style={{ border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+                        No bookings{!items.length ? ' on or after this date' : ''}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={`day-${bl.d}`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={headerStyle}>{shortDayLabel(bl.d).toUpperCase()}{tagEl(bl.d)}</div>
+                  {byDay[bl.d].map(item => {
                     const t = item.tour
                     const b = item.booking
                     const c = item.closure
                     return (
                       <div key={c ? `cl-${c.id}-${item.cdate}` : t ? `tour-${t.id}` : `bk-${b!.id}`}>
-                        {showHeader && <div style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', margin: '10px 0 6px' }}>{shortDayLabel(d).toUpperCase()}</div>}
                         {c ? (
                           <div onClick={() => setOpenClosure(c)} style={{ background: CLOSED_BG, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer' }}>
                             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>CLOSED · {closureTitle(c)}</div>
@@ -3305,6 +3338,8 @@ export default function AdminDashboard() {
                       </div>
                     )
                   })}
+                    </div>
+                  ))}
                 </div>
               )
             })()}
