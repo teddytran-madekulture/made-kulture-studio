@@ -18,6 +18,8 @@ const ITEMS: Item[] = [
   // Shoots = My Bookings + Castings + Mini Sessions (tabs: components/ShootsTabs).
   { href: '/account/bookings', label: 'Shoots', icon: 'cal' },
   { href: '/account/directory', label: 'Directory', icon: 'search' },
+  // 2026-11-21: paid work for the community (migration 185).
+  { href: '/account/gigs', label: 'Gigs', icon: 'cast' },
   { href: '/account/messages', label: 'Messages', icon: 'msg' },
   { href: '/account/me', label: 'Profile', icon: 'user' },
 ]

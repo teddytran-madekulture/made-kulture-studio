@@ -150,6 +150,7 @@ export async function PUT(req: NextRequest) {
   if (['customer', 'creative', 'vendor', 'brand'].includes(body.account_type)) patch.account_type = body.account_type
   if (typeof body.notify_email === 'boolean') patch.notify_email = body.notify_email
   if (typeof body.notify_sms === 'boolean') patch.notify_sms = body.notify_sms
+  if (typeof body.notify_gigs === 'boolean') patch.notify_gigs = body.notify_gigs
   // Credits + CV (migration 123).
   if (Array.isArray(body.credits)) patch.credits = cleanCredits(body.credits)
   if (typeof body.cv_url === 'string') {

@@ -36,6 +36,7 @@ interface Profile {
   show_phone: boolean
   notify_email: boolean
   notify_sms: boolean
+  notify_gigs: boolean
   profile_color: string | null
   cover_url: string | null
   credits: Credit[]
@@ -70,7 +71,7 @@ function ProfileSettings() {
   const sp = useSearchParams()
   const sParam = sp?.get('s') ?? 'edit'
   const sec: Sec = (sParam in PROFILE_SECTIONS ? sParam : 'edit') as Sec
-  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false , profile_color: null, cover_url: null, credits: [], cv_url: null })
+  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false, notify_gigs: true, profile_color: null, cover_url: null, credits: [], cv_url: null })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -105,6 +106,7 @@ function ProfileSettings() {
           show_phone: !!d.profile.show_phone,
           notify_email: d.profile.notify_email !== false,
           notify_sms: !!d.profile.notify_sms,
+          notify_gigs: d.profile.notify_gigs !== false,
           profile_color: d.profile.profile_color ?? null,
           cover_url: d.profile.cover_url ?? null,
           credits: Array.isArray(d.profile.credits) ? d.profile.credits : [],
@@ -244,7 +246,7 @@ function ProfileSettings() {
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...(code ? { phone_code: code } : {}), full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '', credits: form.credits.filter(c => c.title.trim()), cv_url: form.cv_url ?? '' }),
+      body: JSON.stringify({ ...(code ? { phone_code: code } : {}), full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, notify_gigs: form.notify_gigs, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '', credits: form.credits.filter(c => c.title.trim()), cv_url: form.cv_url ?? '' }),
     })
     const data = await res.json()
     if (res.status === 409 && data.needsPhoneCode) {
@@ -645,6 +647,15 @@ function ProfileSettings() {
             <input type="checkbox" id="notify_email" checked={!!form.notify_email} onChange={e => setForm(f => ({ ...f, notify_email: e.target.checked }))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
             <label htmlFor="notify_email" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', cursor: 'pointer' }}>
               Email me about new messages and casting interest
+            </label>
+          </div>
+        )}
+
+        {!isCustomer && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+            <input type="checkbox" id="notify_gigs" checked={!!form.notify_gigs} onChange={e => setForm(f => ({ ...f, notify_gigs: e.target.checked }))} style={{ width: 16, height: 16, marginTop: 2, cursor: 'pointer' }} />
+            <label htmlFor="notify_gigs" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', cursor: 'pointer', lineHeight: 1.5 }}>
+              Gig alerts: tell me when a paid gig matches my roles (app notification, plus email if the box above is on)
             </label>
           </div>
         )}
