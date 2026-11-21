@@ -9,7 +9,7 @@ import { useParams } from 'next/navigation'
 const CHAMP = '#c9b27e'
 const INK = '#0b0b0d'
 type Msg = { sender: 'company' | 'member'; body: string; created_at: string }
-type Applicant = { id: string; isNew: boolean; created_at: string; note: string | null; name: string; avatar_url: string | null; roles: string[]; bio: string; photos: string[]; thread: Msg[] }
+type Applicant = { id: string; isNew: boolean; created_at: string; note: string | null; name: string; avatar_url: string | null; roles: string[]; bio: string; photos: string[]; thread: Msg[]; instagram: string | null; links: { label: string; url: string }[] }
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const dateLabel = (d: string | null) => {
@@ -74,7 +74,7 @@ export default function GigManagePage() {
           {open ? `Live${g.apply_by ? ` until ${dateLabel(g.apply_by)}` : ''}` : g.status === 'filled' ? 'Filled' : g.status === 'pulled' ? 'Paused by Made Kulture' : 'Closed'}
         </div>
         <p style={{ fontSize: 13, color: '#888', lineHeight: 1.6, margin: '14px 0 0' }}>
-          This page is private to you. Keep the link to yourself. Applicants’ contact details aren’t shown and yours aren’t shared with them; everything goes through this page, and we email you when someone applies or replies. If you want to swap numbers with someone, just say so in your message.
+          This page is private to you. Keep the link to yourself. Applicants share their work, Instagram and website with you; their email and phone aren’t shown, and yours aren’t shared with them. Replies go through this page, and we email you when someone applies or replies. If you want to swap numbers with someone, just say so in your message.
         </p>
         {open && (
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -99,8 +99,14 @@ export default function GigManagePage() {
                 </div>
               </div>
               {a.bio && <p style={{ fontSize: 13, color: '#bbb', lineHeight: 1.55, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{a.bio}</p>}
+              {(a.instagram || a.links.length > 0) && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                  {a.instagram && <a href={`https://instagram.com/${a.instagram}`} target="_blank" rel="noopener noreferrer" style={{ ...btn(false), textDecoration: 'none', padding: '7px 12px' }}>@{a.instagram}</a>}
+                  {a.links.map(l => <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer nofollow" style={{ ...btn(false), textDecoration: 'none', padding: '7px 12px' }}>{(l.label || l.url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')).slice(0, 40)} ↗</a>)}
+                </div>
+              )}
               {a.photos.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 6, marginTop: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 6, marginTop: 12 }}>
                   {a.photos.map(u => (
                     <button key={u} type="button" onClick={() => setZoom(u)} style={{ padding: 0, border: 'none', background: '#222', aspectRatio: '4 / 5', borderRadius: 6, overflow: 'hidden', cursor: 'zoom-in' }}>
                       <img src={u} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />

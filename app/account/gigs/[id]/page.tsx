@@ -182,7 +182,7 @@ export default function GigDetailPage() {
             <div style={{ ...card, marginTop: 18 }}>
               <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: muted(0.45), marginBottom: 8 }}>APPLY</div>
               <textarea value={note} onChange={e => setNote(e.target.value)} rows={4} maxLength={1500} placeholder="A few lines on why you’re a fit — relevant work, availability, your rate if it differs." style={input} />
-              <div style={{ fontFamily: 'Inter', fontSize: 12, color: muted(0.45), margin: '8px 0 12px', lineHeight: 1.5 }}>Your directory profile and portfolio go with your note. Your email and phone are not shared.</div>
+              <div style={{ fontFamily: 'Inter', fontSize: 12, color: muted(0.45), margin: '8px 0 12px', lineHeight: 1.5 }}>Your profile, portfolio, Instagram and website go with your note. Your email and phone are not shared.</div>
               <button type="button" disabled={busy} style={btn()} onClick={async () => {
                 if (note.trim().length < 10) { setMsg('Add a short note about why you’re a fit.'); return }
                 if (await post(`/api/gigs/${gig.id}/apply`, { note })) load()

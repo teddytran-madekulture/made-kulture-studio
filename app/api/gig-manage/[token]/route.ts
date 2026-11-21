@@ -2,13 +2,16 @@
 // Possession of the token is the authorization (same model as /manage/<token>
 // for guest bookings); the lookup is BY the token, so there is no id to tamper
 // with. Studio-posted gigs only.
-//   GET   → the gig + every applicant (name, roles, bio, a few portfolio photos,
-//           their note) + each relayed thread. NO member email, phone or IG.
+//   GET   → the gig + every applicant (name, roles, bio, full portfolio minus 18+/hidden,
+//           Instagram + website links, their note) + each relayed thread.
+//           2026-11-21 Teddy's call: applying = choosing to show the company your work,
+//           so IG + website are shared. Email and phone NEVER are.
 //   POST  { applicationId, body } → reply to one applicant (relayed: push + email to them)
 //   PATCH { action: 'filled' | 'closed' }
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
 import { gigDb as db, GIG_SELECT, notifyMemberCompanyReply } from '@/lib/gigs-server'
+import { cleanIgHandle } from '@/lib/directory-listing'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -33,7 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const ids = (apps ?? []).map(a => a.applicant_id)
   const appIds = (apps ?? []).map(a => a.id)
   const [profs, pics, msgs] = await Promise.all([
-    ids.length ? db.from('customer_profiles').select('id, full_name, avatar_url, roles, bio').in('id', ids) : Promise.resolve({ data: [] as any[], error: null }),
+    ids.length ? db.from('customer_profiles').select('id, full_name, avatar_url, roles, bio, instagram, links').in('id', ids) : Promise.resolve({ data: [] as any[], error: null }),
     ids.length ? db.from('portfolio_images').select('user_id, url, sort_order, is_mature, hidden').in('user_id', ids).order('sort_order') : Promise.resolve({ data: [] as any[], error: null }),
     appIds.length ? db.from('gig_messages').select('application_id, sender, body, created_at').in('application_id', appIds).order('created_at') : Promise.resolve({ data: [] as any[], error: null }),
   ])
@@ -43,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   for (const p of pics.data ?? []) {
     if (p.hidden || p.is_mature) continue      // outsiders never see 18+ or hidden work
     const list = (photos[p.user_id] ??= [])
-    if (list.length < 6) list.push(p.url)
+    if (list.length < 30) list.push(p.url)
   }
   const threads: Record<string, any[]> = {}
   for (const m of msgs.data ?? []) (threads[m.application_id] ??= []).push({ sender: m.sender, body: m.body, created_at: m.created_at })
@@ -62,6 +65,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
         id: a.id, isNew: !a.seen_at, created_at: a.created_at, note: a.note,
         name: p?.full_name || 'Member', avatar_url: p?.avatar_url || null, roles: p?.roles ?? [], bio: p?.bio || '',
         photos: photos[a.applicant_id] ?? [], thread: threads[a.id] ?? [],
+        instagram: cleanIgHandle(p?.instagram) || null,
+        links: (Array.isArray(p?.links) ? p.links : [])
+          .filter((l: any) => l && typeof l.url === 'string' && /^https?:\/\//i.test(l.url.trim()))
+          .slice(0, 5).map((l: any) => ({ label: String(l.label || '').slice(0, 40), url: l.url.trim() })),
       }
     }),
   })
