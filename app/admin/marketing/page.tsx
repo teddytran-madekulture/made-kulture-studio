@@ -144,6 +144,8 @@ export default function MarketingPage() {
     load()
   }
 
+  // Native option popups follow the VISITOR's OS theme, not the page: set both colors explicitly.
+  const opt: React.CSSProperties = { background: '#1a1a1d', color: '#eeeeee' }
   const inp: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.line}`, color: C.text, fontFamily: 'Inter, sans-serif', fontSize: 14, padding: '10px 12px', outline: 'none', borderRadius: 6, width: '100%', boxSizing: 'border-box', colorScheme: 'dark' }
   const lbl: React.CSSProperties = { display: 'block', fontFamily: 'Inter, sans-serif', fontSize: 11, color: C.dim, marginBottom: 4, letterSpacing: '0.06em', textTransform: 'uppercase' }
 
@@ -168,7 +170,7 @@ export default function MarketingPage() {
                 <div><span style={lbl}>Campaign name (internal)</span><input style={inp} value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="Holiday sale 2026" /></div>
                 <div><span style={lbl}>Audience</span>
                   <select style={inp} value={f.segment_key} onChange={e => setF({ ...f, segment_key: e.target.value })}>
-                    {SEGMENTS.map(s => <option key={s.key} value={s.key}>{s.label}{counts[s.key] != null ? ` (${counts[s.key]})` : ''}</option>)}
+                    {SEGMENTS.map(s => <option key={s.key} value={s.key} style={opt}>{s.label}{counts[s.key] != null ? ` (${counts[s.key]})` : ''}</option>)}
                   </select>
                 </div>
               </div>
@@ -208,8 +210,8 @@ export default function MarketingPage() {
                   ))}
                   {!template.fullDocument && <div style={{ marginBottom: 4 }}><span style={lbl}>Attach promo code (optional)</span>
                     <select style={inp} value={f.promo_id} onChange={e => setF({ ...f, promo_id: e.target.value })}>
-                      <option value="">None</option>
-                      {promos.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}
+                      <option value="" style={opt}>None</option>
+                      {promos.map(p => <option key={p.id} value={p.id} style={opt}>{p.code}</option>)}
                     </select>
                   </div>}
                 </div>
