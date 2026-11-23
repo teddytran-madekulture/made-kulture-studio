@@ -190,7 +190,7 @@ export const DESIGNS: EmailDesign[] = [
 
   <!-- hero: headline baked into the photo, fades into the page -->
   <tr><td style="padding:0;">
-    <a href="https://madekulture.com/signup?as=creative&amp;next=%2Faccount%2Fgigs"><img src="https://madekulture.com/email/2026-11-gigs/hero.jpg" width="900" alt="Introducing Gigs. Paid creative work, posted where Houston creatives already are." style="display:block;width:100%;max-width:900px;height:auto;border:0;"></a>
+    <a href="https://madekulture.com/signup?as=creative&amp;next=%2Faccount%2Fgigs&amp;utm_source=gigs-email-hero"><img src="https://madekulture.com/email/2026-11-gigs/hero.jpg" width="900" alt="Introducing Gigs. Paid creative work, posted where Houston creatives already are." style="display:block;width:100%;max-width:900px;height:auto;border:0;"></a>
   </td></tr>
 
   <!-- the first gig: its own card, front and center -->
@@ -207,7 +207,7 @@ export const DESIGNS: EmailDesign[] = [
           <td style="width:8px;"></td>
           <td class="chip" style="font-family:'Courier New',monospace;font-size:10.5px;font-weight:700;letter-spacing:2px;color:#181614;background:#f3ece0;padding:8px 10px;white-space:nowrap;">PHOTO + VIDEO</td>
         </tr></table>
-        <a class="gigbtn" href="https://madekulture.com/signup?as=creative&amp;next=%2Faccount%2Fgigs" style="display:inline-block;margin-top:24px;background:#181614;color:#f7f3ed;font-family:'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:17px 24px;">JOIN THE DIRECTORY TO SEE THE GIG &rarr;</a>
+        <a class="gigbtn" href="https://madekulture.com/signup?as=creative&amp;next=%2Faccount%2Fgigs&amp;utm_source=gigs-email-gig" style="display:inline-block;margin-top:24px;background:#181614;color:#f7f3ed;font-family:'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:17px 24px;">JOIN THE DIRECTORY TO SEE THE GIG &rarr;</a>
         <div style="font-family:Inter,Helvetica,Arial,sans-serif;font-size:12.5px;color:#8a8279;margin-top:12px;">Free to join. Company details and applications are for directory members.</div>
       </td></tr>
     </table>
@@ -225,7 +225,7 @@ export const DESIGNS: EmailDesign[] = [
           &#8226;&nbsp; Alerts when one fits your role<br>
           &#8226;&nbsp; Your portfolio goes with every application
         </div>
-        <a href="https://madekulture.com/signup?as=creative&amp;next=%2Faccount%2Fgigs" style="display:inline-block;margin-top:18px;border:1px solid #181614;color:#181614;font-family:'Courier New',monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:13px 17px;">JOIN THE DIRECTORY &rarr;</a>
+        <a href="https://madekulture.com/signup?as=creative&amp;next=%2Faccount%2Fgigs&amp;utm_source=gigs-email-join" style="display:inline-block;margin-top:18px;border:1px solid #181614;color:#181614;font-family:'Courier New',monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:13px 17px;">JOIN THE DIRECTORY &rarr;</a>
       </td>
 
       <td class="cell" width="33%" valign="top" style="padding-right:22px;">
@@ -236,7 +236,7 @@ export const DESIGNS: EmailDesign[] = [
           &#8226;&nbsp; Goes only to matched Houston creatives<br>
           &#8226;&nbsp; Reviewed before it goes live
         </div>
-        <a href="https://madekulture.com/signup?as=brand&amp;next=%2Faccount%2Fgigs%2Fnew" style="display:inline-block;margin-top:18px;border:1px solid #181614;color:#181614;font-family:'Courier New',monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:13px 17px;">POST A ROLE &rarr;</a>
+        <a href="https://madekulture.com/signup?as=brand&amp;next=%2Faccount%2Fgigs%2Fnew&amp;utm_source=gigs-email-brand" style="display:inline-block;margin-top:18px;border:1px solid #181614;color:#181614;font-family:'Courier New',monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:13px 17px;">POST A ROLE &rarr;</a>
       </td>
 
       <td class="cell" width="33%" valign="top">
@@ -247,7 +247,7 @@ export const DESIGNS: EmailDesign[] = [
           &#8226;&nbsp; Post your budget, creatives apply<br>
           &#8226;&nbsp; You pick. No profile needed.
         </div>
-        <a href="https://madekulture.com/signup?next=%2Faccount%2Fhire" style="display:inline-block;margin-top:18px;border:1px solid #181614;color:#181614;font-family:'Courier New',monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:13px 17px;">HIRE SOMEONE &rarr;</a>
+        <a href="https://madekulture.com/signup?next=%2Faccount%2Fhire&amp;utm_source=gigs-email-hire" style="display:inline-block;margin-top:18px;border:1px solid #181614;color:#181614;font-family:'Courier New',monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:13px 17px;">HIRE SOMEONE &rarr;</a>
       </td>
 
     </tr></table>

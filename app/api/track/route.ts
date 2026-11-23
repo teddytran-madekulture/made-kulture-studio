@@ -16,6 +16,7 @@ const service = createService(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 const TYPES = new Set([
   'search', 'filter', 'profile_view', 'portfolio_seen', 'portfolio_open',
   'contact_click', 'casting_view', 'casting_apply', 'casting_list_view',
+  'gig_view',
 ])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_EVENTS = 25

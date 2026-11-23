@@ -24,7 +24,7 @@
 // matched nothing is reported, never shown as success.
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
-import { gigDb as db, GIG_SELECT, sendGigAlerts, notifyPosterDecision, emailCompanyManageLink, gigManageUrl } from '@/lib/gigs-server'
+import { gigDb as db, GIG_SELECT, sendGigAlerts, gigViewStats, notifyPosterDecision, emailCompanyManageLink, gigManageUrl } from '@/lib/gigs-server'
 import { gigExpiry, isRelayedGig } from '@/lib/gigs'
 import { parseGigBody } from '@/lib/gig-input'
 
@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
     posterIds.length ? db.from('customer_profiles').select('id, full_name, account_type').in('id', posterIds) : Promise.resolve({ data: [] as any[], error: null }),
   ])
   if (apps.error || reps.error || profs.error) return NextResponse.json({ error: (apps.error || reps.error || profs.error)!.message }, { status: 500 })
+  // Views (2026-11-23). A failed read shows as "views unavailable", never as 0.
+  let views: Awaited<ReturnType<typeof gigViewStats>> | null = null
+  try { views = await gigViewStats(ids) } catch (e) { console.error('[admin/gigs] view stats failed:', e) }
   const appCount: Record<string, number> = {}
   for (const a of apps.data ?? []) appCount[a.gig_id] = (appCount[a.gig_id] ?? 0) + 1
   const reports: Record<string, { reason: string; note: string | null }[]> = {}
@@ -66,6 +69,7 @@ export async function GET(req: NextRequest) {
       poster_type: g.poster_id ? (pm.get(g.poster_id)?.account_type || null) : null,
       applicants: appCount[g.id] ?? 0,
       reports: reports[g.id] ?? [],
+      views: views ? (views[g.id] ?? { views: 0, viewers: 0, push: 0, email: 0, board: 0 }) : null,
     })),
   })
 }

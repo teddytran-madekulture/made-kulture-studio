@@ -13,6 +13,7 @@ type Row = {
   apply_by: string | null; status: string; decline_reason: string | null; pull_reason: string | null
   alerts_sent_at: string | null; alerts_count: number | null; expires_at: string | null; created_at: string
   applicants: number; reports: { reason: string; note: string | null }[]
+  views: { views: number; viewers: number; push: number; email: number; board: number } | null
 }
 type Filter = 'drafts' | 'pending' | 'live' | 'flagged' | 'all'
 
@@ -225,6 +226,22 @@ export default function AdminGigsPage() {
               {g.reports.length > 0 && (
                 <div style={{ fontSize: 12, color: '#f0a0a0', marginTop: 8 }}>
                   {g.reports.length} open report{g.reports.length === 1 ? '' : 's'}: {g.reports.map(r => GIG_REPORT_LABEL[r.reason] + (r.note ? ` (“${r.note}”)` : '')).join(' · ')}
+                </div>
+              )}
+              {g.status !== 'draft' && g.status !== 'pending' && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                  {([
+                    ['Alerted', g.alerts_sent_at ? String(g.alerts_count ?? 0) : '–'],
+                    ['Viewed by', g.views ? String(g.views.viewers) : 'n/a'],
+                    ['Applied', String(g.applicants)],
+                    ['View → apply', g.views && g.views.viewers ? `${Math.round((Math.min(g.applicants, g.views.viewers) / g.views.viewers) * 100)}%` : '–'],
+                  ] as [string, string][]).map(([k, v]) => (
+                    <div key={k} style={{ background: '#0e0e10', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '8px 12px', minWidth: 88 }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#eee' }}>{v}</div>
+                      <div style={{ fontSize: 10, letterSpacing: '0.08em', color: '#888', textTransform: 'uppercase', marginTop: 2 }}>{k}</div>
+                    </div>
+                  ))}
+                  {g.views && g.views.views > 0 && <div style={{ fontSize: 11, color: '#777', alignSelf: 'center' }}>Opens: {g.views.push} from push · {g.views.email} from email · {g.views.board} from the board</div>}
                 </div>
               )}
               <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>

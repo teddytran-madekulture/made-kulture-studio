@@ -78,7 +78,7 @@ export async function sendGigAlerts(gigId: string): Promise<{ recipients: number
     const body = [gig.company_name, gig.pay, whenLine(gig)].filter(Boolean).join(' · ').slice(0, 160)
     for (let i = 0; i < listed.length; i += 10) {
       const chunk = listed.slice(i, i + 10)
-      const n = await Promise.all(chunk.map((p: any) => sendMemberPush(p.id, { title, body, url: `/account/gigs/${gig.id}`, tag: `gig-${gig.id}` }).catch(() => 0)))
+      const n = await Promise.all(chunk.map((p: any) => sendMemberPush(p.id, { title, body, url: `/account/gigs/${gig.id}?from=push`, tag: `gig-${gig.id}` }).catch(() => 0)))
       out.pushed += n.filter(x => x > 0).length
     }
 
@@ -88,7 +88,7 @@ export async function sendGigAlerts(gigId: string): Promise<{ recipients: number
       const to = users.filter(u => emailIds.has(u.id) && u.email).map(u => String(u.email))
       out.emailed = await sendGigAlertBatch(to, {
         title: gig.title, company: gig.company_name, pay: gig.pay, when: whenLine(gig),
-        location: gig.location || '', roles: gig.roles_needed ?? [], url: gigUrl(gig.id),
+        location: gig.location || '', roles: gig.roles_needed ?? [], url: `${gigUrl(gig.id)}?from=email`,
       })
     }
     await gigDb.from('gigs').update({ alerts_count: out.recipients }).eq('id', gigId)
@@ -97,6 +97,32 @@ export async function sendGigAlerts(gigId: string): Promise<{ recipients: number
     console.error('[gigs] alerts failed:', e)
     return { ...out, error: e?.message || 'alerts failed' }
   }
+}
+
+/**
+ * View counts per gig from community_events (gig_view, written by the member gig
+ * page; never counts the poster). THROWS on a read error so a failed lookup can
+ * never show as "0 views". 2026-11-23.
+ */
+export async function gigViewStats(ids: string[]): Promise<Record<string, { views: number; viewers: number; push: number; email: number; board: number }>> {
+  const out: Record<string, { views: number; viewers: number; push: number; email: number; board: number }> = {}
+  if (!ids.length) return out
+  const seen: Record<string, Set<string>> = {}
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await gigDb.from('community_events').select('user_id, target_id, meta')
+      .eq('type', 'gig_view').in('target_id', ids).order('id').range(from, from + 999)
+    if (error) throw new Error(`gig views: ${error.message}`)
+    for (const e of data ?? []) {
+      const g = out[e.target_id] ??= { views: 0, viewers: 0, push: 0, email: 0, board: 0 }
+      g.views++
+      const src = (e.meta as any)?.src
+      if (src === 'push' || src === 'email' || src === 'board') g[src as 'push' | 'email' | 'board']++
+      ;(seen[e.target_id] ??= new Set()).add(e.user_id)
+    }
+    if (!data || data.length < 1000) break
+  }
+  for (const id of Object.keys(out)) out[id].viewers = seen[id]?.size ?? 0
+  return out
 }
 
 /** Tell a member poster their gig was approved or declined. A CLIENT poster

@@ -10,7 +10,7 @@
 //   PATCH { action: 'filled' | 'closed' }
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
-import { gigDb as db, GIG_SELECT, notifyMemberCompanyReply } from '@/lib/gigs-server'
+import { gigDb as db, GIG_SELECT, notifyMemberCompanyReply, gigViewStats } from '@/lib/gigs-server'
 import { cleanIgHandle } from '@/lib/directory-listing'
 
 export const dynamic = 'force-dynamic'
@@ -53,6 +53,13 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const threads: Record<string, any[]> = {}
   for (const m of msgs.data ?? []) (threads[m.application_id] ??= []).push({ sender: m.sender, body: m.body, created_at: m.created_at })
 
+  // Reach (2026-11-23): how many creatives were alerted / opened it. Non-fatal
+  // here — a company page must still load if the stats read fails; it just
+  // shows no reach line (null), never a fake 0.
+  let reach: { alerted: number; viewers: number } | null = null
+  try { const v = await gigViewStats([g.id]); reach = { alerted: g.alerts_count ?? 0, viewers: v[g.id]?.viewers ?? 0 } }
+  catch (e) { console.error('[gig-manage] view stats failed (non-fatal):', e) }
+
   const unseen = (apps ?? []).filter(a => !a.seen_at).map(a => a.id)
   if (unseen.length) await db.from('gig_applications').update({ seen_at: new Date().toISOString() }).in('id', unseen)
 
@@ -61,6 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
       title: g.title, company_name: g.company_name, pay: g.pay, roles_needed: g.roles_needed ?? [], gig_date: g.gig_date,
       date_note: g.date_note, location: g.location, apply_by: g.apply_by, status: g.status, expires_at: g.expires_at, description: g.description,
     },
+    reach,
     applicants: (apps ?? []).map(a => {
       const p = pm.get(a.applicant_id)
       return {

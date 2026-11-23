@@ -10,6 +10,7 @@
 export type TrackType =
   | 'search' | 'filter' | 'profile_view' | 'portfolio_seen' | 'portfolio_open'
   | 'contact_click' | 'casting_view' | 'casting_apply' | 'casting_list_view'
+  | 'gig_view'   // 2026-11-23: a member opened a gig (meta.src = push | email | board)
 
 type Ev = { type: TrackType; target_id?: string; query?: string; meta?: Record<string, string | number | boolean> }
 

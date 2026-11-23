@@ -4,9 +4,10 @@
 //            and for studio-posted gigs, the private thread with the company.
 //   Poster:  status, applicants (each opens the DM), mark filled / close, edit
 //            while pending or declined.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { track } from '@/lib/track'
 import { gigDateLabel, GIG_STATUS_LABEL, GIG_SAFETY_LINE, GIG_REPORT_LABEL, GIG_REPORT_REASONS, isRelayedGig, type GigStatus } from '@/lib/gigs'
 
 type Gig = {
@@ -40,11 +41,19 @@ export default function GigDetailPage() {
   const [reportNote, setReportNote] = useState('')
   const [justPosted, setJustPosted] = useState(false)
   const [reported, setReported] = useState(false)
+  const viewTracked = useRef(false)
 
   const load = () => fetch(`/api/gigs/${id}`, { cache: 'no-store' }).then(async r => {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setError(d.error || 'Could not load this gig.'); setLoading(false); return }
     setError(''); setGig(d.gig); setPoster(d.poster); setIsPoster(!!d.isPoster)
+    // Count a view once per page load, never the poster's own (2026-11-23).
+    if (!d.isPoster && d.gig?.id && !viewTracked.current) {
+      viewTracked.current = true
+      let src = 'board'
+      try { const f = new URLSearchParams(window.location.search).get('from'); if (f === 'push' || f === 'email') src = f } catch {}
+      track('gig_view', { target_id: d.gig.id, meta: { src } })
+    }
     setApplicants(d.applicants ?? []); setApplication(d.application ?? null); setThread(d.thread ?? [])
     setLoading(false)
   }).catch(() => { setError('Could not load this gig.'); setLoading(false) })

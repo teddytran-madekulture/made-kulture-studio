@@ -20,7 +20,7 @@ const dateLabel = (d: string | null) => {
 
 export default function GigManagePage() {
   const { token } = useParams<{ token: string }>()
-  const [data, setData] = useState<{ gig: any; applicants: Applicant[] } | null>(null)
+  const [data, setData] = useState<{ gig: any; applicants: Applicant[]; reach?: { alerted: number; viewers: number } | null } | null>(null)
   const [error, setError] = useState('')
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
@@ -73,6 +73,16 @@ export default function GigManagePage() {
         <div style={{ fontSize: 13, color: open ? '#7be09a' : '#bbb', marginTop: 8 }}>
           {open ? `Live${g.apply_by ? ` until ${dateLabel(g.apply_by)}` : ''}` : g.status === 'filled' ? 'Filled' : g.status === 'pulled' ? 'Paused by Made Kulture' : 'Closed'}
         </div>
+        {data.reach && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+            {[['Creatives alerted', data.reach.alerted], ['Viewed it', data.reach.viewers], ['Applied', data.applicants.length]].map(([k, v]) => (
+              <div key={k as string} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 14px', minWidth: 110 }}>
+                <div style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 26, color: '#fff', lineHeight: 1 }}>{v as number}</div>
+                <div style={{ fontSize: 11, letterSpacing: '0.08em', color: '#888', marginTop: 4, textTransform: 'uppercase' }}>{k as string}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <p style={{ fontSize: 13, color: '#888', lineHeight: 1.6, margin: '14px 0 0' }}>
           This page is private to you. Keep the link to yourself. Applicants share their work, Instagram and website with you; their email and phone aren’t shown, and yours aren’t shared with them. Replies go through this page, and we email you when someone applies or replies. If you want to swap numbers with someone, just say so in your message.
         </p>
