@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto'
 import { sendBookingConfirmation, sendNewBookingAlert, formatTimeLabel, formatDateLabel, formatGuestLine } from '@/lib/email'
 import { checkAndAlertFlaggedCustomer, checkBannedAndAlert } from '@/lib/flagged-customer'
 import { checkCartAvailability } from '@/lib/equipment-availability'
+import { cleanEquipmentLines } from '@/lib/booking-core'
 import { checkSetWindows, checkBuyoutWindow } from '@/lib/set-availability'
 import { createAcuityBlocks } from '@/lib/acuity-sync'
 import { createBookingPin, createBackDoorPin, doorCodeLinkLine } from '@/lib/igloohome'
@@ -190,6 +191,13 @@ async function sendConfirmationSMS(
 export async function POST(req: NextRequest) {
   try {
     const body: BookingRequest = await req.json()
+    // 2026-11-23 SECURITY: refuse negative / fractional / huge equipment quantities
+    // before anything is priced (see cleanEquipmentLines in lib/booking-core).
+    {
+      const eq = cleanEquipmentLines((body as any).equipment)
+      if ('error' in eq) return NextResponse.json({ error: eq.error }, { status: 400 })
+      body.equipment = eq.lines
+    }
 
     // ── 0. Membership (verified session, not the email field) ──────────────
     //     Logged-in = member rate; everyone else pays the guest surcharge.

@@ -128,11 +128,38 @@ export type ValidateResult =
   | { ok: true; order: PricedOrder }
   | { ok: false; error: string; status: number }
 
+/**
+ * 2026-11-23 SECURITY: equipment lines arrive from the browser. Nothing checked
+ * the QUANTITY, so a hand-made request with quantity -3 subtracted that gear's
+ * price from the booking total ("order -1 items"). Every checkout path cleans
+ * its lines through this one function: a real id, a whole number 1–10, and
+ * duplicates merged. Anything else is REFUSED, never silently "fixed", so a
+ * tampered order fails loudly instead of being charged something unexpected.
+ */
+export function cleanEquipmentLines(raw: unknown): { ok: true; lines: { equipment_id: string; quantity: number }[] } | { ok: false; error: string } {
+  if (raw == null) return { ok: true, lines: [] }
+  if (!Array.isArray(raw) || raw.length > 30) return { ok: false, error: 'That equipment list is not valid.' }
+  const merged: Record<string, number> = {}
+  for (const l of raw as any[]) {
+    const id = typeof l?.equipment_id === 'string' ? l.equipment_id : ''
+    const q = l?.quantity === undefined ? 1 : Number(l.quantity)
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !Number.isInteger(q) || q < 1 || q > 10) {
+      return { ok: false, error: 'That equipment list is not valid.' }
+    }
+    merged[id] = (merged[id] ?? 0) + q
+    if (merged[id] > 10) return { ok: false, error: 'That equipment list is not valid.' }
+  }
+  return { ok: true, lines: Object.entries(merged).map(([equipment_id, quantity]) => ({ equipment_id, quantity })) }
+}
+
 export async function validateAndPriceOrder(
   supabase: SupabaseClient,
   body: BookingCoreInput,
   opts: { isMember?: boolean; allowShortNotice?: boolean; approved?: boolean; payerContacts?: string[]; sharedFloor?: boolean; pricingEmail?: string | null } = {}
 ): Promise<ValidateResult> {
+  const eq = cleanEquipmentLines((body as any).equipment)
+  if ('error' in eq) return { ok: false, error: eq.error, status: 400 }
+  body = { ...body, equipment: eq.lines }
   // 1. Customer pricing overrides — ⚠️ 2026-10-06: looked up by `pricingEmail`,
   //    which callers set from a VERIFIED identity (the session, or an owner-
   //    approved request), never from the typed email. Anyone who knew a comped
