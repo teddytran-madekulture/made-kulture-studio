@@ -219,7 +219,7 @@ export default function AdminGigsPage() {
                 {g.status !== 'draft' && <a href={`/account/gigs/${g.id}`} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>MEMBER VIEW</a>}
                 {g.manage_url && <button type="button" style={btn('ghost')} onClick={() => copy(g.manage_url!)}>COPY COMPANY LINK</button>}
                 {g.manage_url && <a href={g.manage_url} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>OPEN APPLICANTS</a>}
-                {g.posted_by === 'studio' && g.company_email && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'resend_link')}>RE-EMAIL LINK</button>}
+                {g.posted_by === 'studio' && g.company_email && g.status !== 'draft' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'resend_link')}>RE-EMAIL LINK</button>}
                 <button type="button" disabled={busy === g.id} style={btn('danger')} onClick={() => del(g.id)}>DELETE</button>
               </div>
             </div>
