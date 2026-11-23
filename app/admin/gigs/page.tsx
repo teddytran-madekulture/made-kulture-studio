@@ -4,7 +4,7 @@
 // (the report push deep-links here).
 import { useEffect, useMemo, useState } from 'react'
 import { CREATIVE_ROLES } from '@/lib/roles'
-import { gigDateLabel, GIG_STATUS_LABEL, GIG_REPORT_LABEL, centralToday } from '@/lib/gigs'
+import { gigDateLabel, GIG_STATUS_LABEL, GIG_REPORT_LABEL, GIG_PAY_TBD, centralToday } from '@/lib/gigs'
 
 type Row = {
   id: string; is_test?: boolean; posted_by: 'member' | 'studio'; poster_id: string | null; poster_name: string | null; poster_type: string | null
@@ -26,7 +26,7 @@ const input: React.CSSProperties = { width: '100%', background: '#0e0e10', borde
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, letterSpacing: '0.08em', color: '#888', margin: '14px 0 6px' }
 const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
 
-const BLANK = { test: false, company_name: '', company_email: '', title: '', description: '', pay: '', gig_date: '', date_note: '', location: '', at_studio: false, apply_by: '' }
+const BLANK = { test: false, pay_tbd: false, company_name: '', company_email: '', title: '', description: '', pay: '', gig_date: '', date_note: '', location: '', at_studio: false, apply_by: '' }
 
 export default function AdminGigsPage() {
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -39,7 +39,8 @@ export default function AdminGigsPage() {
   const [roles, setRoles] = useState<string[]>([])
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
   const [roleQ, setRoleQ] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)   // the draft open in the form
+  const [editingId, setEditingId] = useState<string | null>(null)   // the gig open in the form
+  const [editingLive, setEditingLive] = useState(false)               // it's already posted: SAVE CHANGES only
 
   const load = () => fetch('/api/admin/gigs', { cache: 'no-store' }).then(async r => {
     const d = await r.json().catch(() => ({}))
@@ -80,8 +81,16 @@ export default function AdminGigsPage() {
     if (!confirm('Delete this gig, its applications and conversations? This cannot be undone.')) return
     setBusy(id); await call('DELETE', { id }); setBusy(null); load()
   }
-  const fields = () => ({ ...form, roles_needed: roles, gig_date: form.gig_date || null, apply_by: form.apply_by || null })
-  const closeForm = () => { setForm({ ...BLANK }); setRoles([]); setRoleQ(''); setEditingId(null); setShowForm(false) }
+  const fields = () => ({ ...form, pay: form.pay_tbd ? '' : form.pay, roles_needed: roles, gig_date: form.gig_date || null, apply_by: form.apply_by || null })
+  const closeForm = () => { setForm({ ...BLANK }); setRoles([]); setRoleQ(''); setEditingId(null); setEditingLive(false); setShowForm(false) }
+  const saveLive = async () => {
+    setBusy('new')
+    const d = await call('PATCH', { id: editingId, action: 'save', ...fields() })
+    setBusy(null)
+    if (!d) return
+    setNote('Changes saved. No new alerts were sent.')
+    closeForm(); load()
+  }
   // SAVE DRAFT: only a title is needed; nothing reaches members or the company.
   const saveDraft = async () => {
     setBusy('new')
@@ -93,11 +102,11 @@ export default function AdminGigsPage() {
   }
   const editDraft = (g: Row) => {
     setForm({
-      test: !!g.is_test, company_name: g.company_name || '', company_email: g.company_email || '', title: g.title || '',
-      description: g.description || '', pay: g.pay || '', gig_date: g.gig_date || '', date_note: g.date_note || '',
+      test: !!g.is_test, pay_tbd: g.pay === GIG_PAY_TBD, company_name: g.company_name || '', company_email: g.company_email || '', title: g.title || '',
+      description: g.description || '', pay: g.pay === GIG_PAY_TBD ? '' : (g.pay || ''), gig_date: g.gig_date || '', date_note: g.date_note || '',
       location: g.location || '', at_studio: !!g.at_studio, apply_by: g.apply_by || '',
     })
-    setRoles(g.roles_needed ?? []); setRoleQ(''); setEditingId(g.id); setShowForm(true); setNote('')
+    setRoles(g.roles_needed ?? []); setRoleQ(''); setEditingId(g.id); setEditingLive(g.status !== 'draft'); setShowForm(true); setNote('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
   const submit = async () => {
@@ -124,12 +133,18 @@ export default function AdminGigsPage() {
 
       {showForm && (
         <div style={{ ...card, marginBottom: 20, borderColor: 'rgba(212,168,67,0.35)' }}>
-          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: '#d4a843', fontWeight: 700 }}>{editingId ? 'EDITING A DRAFT' : 'POST A GIG FOR AN OUTSIDE COMPANY'}</div>
+          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: '#d4a843', fontWeight: 700 }}>{editingId ? (editingLive ? 'EDITING A POSTED GIG' : 'EDITING A DRAFT') : 'POST A GIG FOR AN OUTSIDE COMPANY'}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0 14px' }}>
             <div><label style={lbl}>COMPANY NAME</label><input style={input} value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} /></div>
             <div><label style={lbl}>COMPANY EMAIL — private, gets the applicant link</label><input style={input} type="email" value={form.company_email} onChange={e => setForm({ ...form, company_email: e.target.value })} /></div>
             <div><label style={lbl}>TITLE</label><input style={input} value={form.title} maxLength={120} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
-            <div><label style={lbl}>PAY</label><input style={input} value={form.pay} placeholder="$400 / day" maxLength={80} onChange={e => setForm({ ...form, pay: e.target.value })} /></div>
+            <div>
+              <label style={lbl}>PAY</label>
+              <input style={{ ...input, opacity: form.pay_tbd ? 0.45 : 1 }} disabled={form.pay_tbd} value={form.pay_tbd ? GIG_PAY_TBD : form.pay} placeholder="$400 / day" maxLength={80} onChange={e => setForm({ ...form, pay: e.target.value })} />
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12, color: '#ccc' }}>
+                <input type="checkbox" checked={form.pay_tbd} onChange={e => setForm({ ...form, pay_tbd: e.target.checked })} /> Paid, rate TBD (they confirmed it&apos;s paid)
+              </label>
+            </div>
             <div><label style={lbl}>DATE</label><input style={input} type="date" min={centralToday()} value={form.gig_date} onChange={e => setForm({ ...form, gig_date: e.target.value })} /></div>
             <div><label style={lbl}>OR DATE NOTE</label><input style={input} value={form.date_note} maxLength={80} placeholder="Dec 3–5, flexible…" onChange={e => setForm({ ...form, date_note: e.target.value })} /></div>
             <div><label style={lbl}>LOCATION</label><input style={input} value={form.location} maxLength={120} onChange={e => setForm({ ...form, location: e.target.value })} /></div>
@@ -150,15 +165,21 @@ export default function AdminGigsPage() {
           )}
           <label style={lbl}>DESCRIPTION</label>
           <textarea style={{ ...input, resize: 'vertical', lineHeight: 1.5 }} rows={5} maxLength={3000} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 16, fontSize: 13, color: '#d4a843', lineHeight: 1.5 }}>
+          {!editingLive && <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 16, fontSize: 13, color: '#d4a843', lineHeight: 1.5 }}>
             <input type="checkbox" checked={form.test} onChange={e => setForm({ ...form, test: e.target.checked })} style={{ marginTop: 3 }} />
             <span>Test only, don&apos;t alert members. Hidden from the members&apos; board; open it with MEMBER VIEW. The company link still emails to the address above (use your own).</span>
-          </label>
+          </label>}
+          {editingLive ? (
+            <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+              <button type="button" disabled={busy === 'new'} style={{ ...btn('gold'), padding: '11px 18px' }} onClick={saveLive}>{busy === 'new' ? 'SAVING…' : 'SAVE CHANGES'}</button>
+            </div>
+          ) : <>
           <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
             <button type="button" disabled={busy === 'new'} style={{ ...btn('gold'), padding: '11px 18px' }} onClick={submit}>{busy === 'new' ? 'WORKING…' : form.test ? 'POST TEST GIG' : 'POST + ALERT MEMBERS'}</button>
             <button type="button" disabled={busy === 'new'} style={{ ...btn('ghost'), padding: '11px 18px' }} onClick={saveDraft}>SAVE DRAFT</button>
           </div>
           <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>A draft only needs a title. It stays here under DRAFTS; nothing goes to members or the company until you post it.</div>
+          </>}
         </div>
       )}
 
@@ -212,6 +233,7 @@ export default function AdminGigsPage() {
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {g.status === 'draft' && <button type="button" style={btn('gold')} onClick={() => editDraft(g)}>EDIT</button>}
+                {g.posted_by === 'studio' && (g.status === 'live' || g.status === 'pulled') && <button type="button" style={btn('ghost')} onClick={() => editDraft(g)}>EDIT</button>}
                 {(g.status === 'pending' || g.status === 'declined') && <button type="button" disabled={busy === g.id} style={btn('gold')} onClick={() => act(g.id, 'approve')}>{busy === g.id ? '…' : 'APPROVE + ALERT'}</button>}
                 {g.status === 'pending' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'decline')}>DECLINE</button>}
                 {g.status === 'live' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'pull')}>PULL</button>}

@@ -1,7 +1,7 @@
 // GIGS (migration 185) — the ONE validator for a gig's editable fields, used by
 // the member post route, the poster's edit, and the admin "post for a company"
 // form, so the three can never accept different things.
-import { centralToday, gigExpiry } from '@/lib/gigs'
+import { centralToday, gigExpiry, GIG_PAY_TBD } from '@/lib/gigs'
 
 const isDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -15,13 +15,15 @@ export type GigFields = {
 // opts.draft (2026-11-23): a DRAFT only needs a title, so a half-finished gig
 // can be saved. Pay and roles are checked when it is published, through this
 // same function without the flag — so a draft can never go live unchecked.
-export function parseGigBody(b: any, opts: { draft?: boolean } = {}): { row: GigFields } | { error: string } {
+// opts.allowTbd: ADMIN routes only. pay_tbd: true stores GIG_PAY_TBD as the pay,
+// for a company that confirmed it's paid but hasn't named a rate yet.
+export function parseGigBody(b: any, opts: { draft?: boolean; allowTbd?: boolean } = {}): { row: GigFields } | { error: string } {
   const draft = opts.draft === true
   const title = str(b?.title, 120)
   if (!title) return { error: 'Give the gig a title.' }
-  const pay = str(b?.pay, 80)
+  const pay = opts.allowTbd === true && b?.pay_tbd === true ? GIG_PAY_TBD : str(b?.pay, 80)
   // Paid gigs only: there has to be a number in it.
-  if (!draft && (!pay || !/\d/.test(pay))) return { error: 'Gigs are paid work. Add the rate or budget, like "$400 / day".' }
+  if (!draft && pay !== GIG_PAY_TBD && (!pay || !/\d/.test(pay))) return { error: 'Gigs are paid work. Add the rate or budget, like "$400 / day".' }
   const roles = Array.isArray(b?.roles_needed)
     ? Array.from(new Set(b.roles_needed.map((r: unknown) => String(r).trim()).filter(Boolean))).slice(0, 8) as string[]
     : []

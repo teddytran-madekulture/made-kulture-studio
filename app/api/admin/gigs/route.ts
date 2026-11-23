@@ -11,7 +11,11 @@
 //       pull     → live → pulled (off the board)
 //       restore  → pulled → live, dismisses open reports (alerts only if never sent)
 //       resend_link → re-email a studio-posted gig's manage link to the company
-//       save     → (2026-11-23) update a DRAFT's fields; nothing goes out
+//       save     → (2026-11-23) update a gig's fields; nothing goes out. A DRAFT only
+//                  needs a title; a studio-posted LIVE gig gets the full checks and
+//                  keeps its expiry unless an apply-by date is set (e.g. filling in
+//                  the rate once a company names it). Member-posted gigs can't be edited here.
+//   Every admin path accepts pay_tbd: true → "Paid · Rate TBD" (members still need a number).
 //       publish  → DRAFT → live: full checks, then alerts (unless test) + company link
 //   POST { ..., draft: true } → save as a DRAFT instead: only a title is required,
 //                               no alerts, no company email, invisible to members.
@@ -70,7 +74,7 @@ export async function POST(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
   const draft = b.draft === true
-  const parsed = parseGigBody(b, { draft })
+  const parsed = parseGigBody(b, { draft, allowTbd: true })
   if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
   if (!draft && !parsed.row.company_name) return NextResponse.json({ error: 'Add the company name.' }, { status: 400 })
   const email = companyEmail(b)
@@ -142,20 +146,28 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, alerts })
   }
   if (action === 'save') {
-    // Drafts only: a live gig's text is what members were alerted about.
-    if (g.status !== 'draft') return NextResponse.json({ error: 'Only a draft can be edited here.' }, { status: 409 })
-    const parsed = parseGigBody(b, { draft: true })
+    const isDraft = g.status === 'draft'
+    const editableLive = g.posted_by === 'studio' && ['live', 'pulled'].includes(g.status)
+    if (!isDraft && !editableLive) return NextResponse.json({ error: 'Only drafts and gigs you posted can be edited here.' }, { status: 409 })
+    const parsed = parseGigBody(b, { draft: isDraft, allowTbd: true })
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    if (!isDraft && !parsed.row.company_name) return NextResponse.json({ error: 'Add the company name.' }, { status: 400 })
     const email = companyEmail(b)
     if (email === null) return NextResponse.json({ error: 'That company email doesn’t look right.' }, { status: 400 })
-    const fail = await claim(['draft'], { ...parsed.row, company_email: email || null, is_test: b.test === true })
+    const { expires_at, ...fields } = parsed.row
+    // A live gig keeps its run unless an apply-by date now sets it; a draft's
+    // expiry is recomputed when it is published anyway.
+    const patch: Record<string, unknown> = { ...fields, company_email: email || null }
+    if (isDraft) { patch.is_test = b.test === true; patch.expires_at = expires_at }
+    else if (fields.apply_by) patch.expires_at = expires_at
+    const fail = await claim([g.status], patch)
     if (fail) return NextResponse.json({ error: fail }, { status: 409 })
     return NextResponse.json({ ok: true })
   }
   if (action === 'publish') {
     if (g.status !== 'draft') return NextResponse.json({ error: 'That gig is not a draft.' }, { status: 409 })
     // The form sends its current fields; checked in full, exactly like a direct post.
-    const parsed = parseGigBody(b)
+    const parsed = parseGigBody(b, { allowTbd: true })
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
     if (!parsed.row.company_name) return NextResponse.json({ error: 'Add the company name.' }, { status: 400 })
     const email = companyEmail(b)

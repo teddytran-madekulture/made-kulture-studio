@@ -17,6 +17,10 @@ export const GIG_STATUS_LABEL: Record<GigStatus, string> = {
 /** Who may self-post. Creatives answer gigs; brands and vendors post them. */
 export const GIG_POSTER_TYPES = ['brand', 'vendor'] as const
 
+/** 2026-11-23: what a studio-posted gig shows when the company confirmed it's
+ *  paid but hasn't given a rate. ADMIN ONLY — member posts still need a number. */
+export const GIG_PAY_TBD = 'Paid · Rate TBD'
+
 /** How long a gig stays up when it has no apply-by date. */
 export const GIG_DEFAULT_DAYS = 30
 /** Active (pending + live) gigs one account may have at once. */
