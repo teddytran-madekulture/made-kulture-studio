@@ -8,12 +8,68 @@ import { Resend } from 'resend'
 import { supabaseAdmin } from '@/lib/supabase'
 import { finalizeEmail, getTemplate } from '@/lib/email-templates'
 import { UNSUB_TOKEN } from '@/lib/email-designs'
+import { listAllAuthUsers } from '@/lib/auth-user'
+import { ROLE_CATEGORIES, SERVICES_CATEGORY } from '@/lib/roles'
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 // Keep marketing OFF the transactional sender to protect booking-email deliverability.
 const MARKETING_FROM = process.env.MARKETING_FROM || process.env.EMAIL_FROM || 'Made Kulture <bookings@madekulture.com>'
 
 export type SegmentKey = 'all' | 'members' | 'guests' | 'lapsed' | 'recent'
+  | 'photo_video' | 'creatives' | 'brands_vendors'
+// The ONE list of valid audiences — the POST route validates against this, so a
+// new segment only has to be added here (and labelled in app/admin/marketing).
+export const SEGMENT_KEYS: SegmentKey[] = ['all', 'members', 'guests', 'recent', 'lapsed', 'photo_video', 'creatives', 'brands_vendors']
+
+// ── Profile-based audiences (2026-11-23) ─────────────────────────────────────
+// Built from website ACCOUNTS (customer_profiles + auth.users), not bookings, so
+// they can tell a photographer from someone who booked their graduation photos.
+//   photo_video    — picked a Photo & Video role, or Content Creator / Social
+//                    Media Manager (the people a content gig is for)
+//   creatives      — account type Creative, or picked any creative role
+//   brands_vendors — account type Brand or Vendor
+// ⚠️ Accounts made before migration 039 defaulted to 'creative' without choosing,
+// so 'creatives' includes some early booking-only accounts. photo_video does
+// not have that problem: it needs a role the person actually picked.
+const PROFILE_SEGMENTS = new Set<SegmentKey>(['photo_video', 'creatives', 'brands_vendors'])
+const PHOTO_VIDEO_ROLES = new Set<string>([
+  ...(ROLE_CATEGORIES.find(c => c.label === 'Photo & Video')?.roles ?? []),
+  'Content Creator', 'Social Media Manager',
+])
+const NON_SERVICE_ROLES = new Set<string>(
+  ROLE_CATEGORIES.filter(c => c.label !== SERVICES_CATEGORY).flatMap(c => c.roles),
+)
+
+async function getProfileSegmentRecipients(segment: SegmentKey, supp: Set<string>): Promise<Recipient[]> {
+  const db = supabaseAdmin()
+  const [profiles, users] = await Promise.all([
+    fetchAll((from, to) => db.from('customer_profiles')
+      .select('id, full_name, roles, account_type, underage_blocked_at').order('id').range(from, to)),
+    listAllAuthUsers(db),
+  ])
+  const userById = new Map<string, any>(users.map((u: any) => [u.id, u]))
+  const out: Recipient[] = []
+  for (const p of profiles) {
+    if ((p as any).underage_blocked_at) continue
+    const u = userById.get((p as any).id)
+    // Unconfirmed sign-ups are skipped: bots signed up with stolen emails
+    // (2026-10-05), and a confirmed address is the only proof it's theirs.
+    if (!u || !u.email || !u.email_confirmed_at) continue
+    const roles: string[] = Array.isArray((p as any).roles) ? (p as any).roles : []
+    const type = String((p as any).account_type || '')
+    let keep = false
+    switch (segment) {
+      case 'photo_video':    keep = roles.some(r => PHOTO_VIDEO_ROLES.has(r)); break
+      case 'creatives':      keep = type === 'creative' || roles.some(r => NON_SERVICE_ROLES.has(r)); break
+      case 'brands_vendors': keep = type === 'brand' || type === 'vendor'; break
+    }
+    if (!keep) continue
+    const email = cleanEmail(u.email)
+    if (email && !supp.has(email)) out.push({ email, name: (p as any).full_name ?? null })
+  }
+  const seen = new Set<string>()
+  return out.filter(r => (seen.has(r.email) ? false : (seen.add(r.email), true)))
+}
 export interface Recipient { email: string; name: string | null }
 
 // ── Signed unsubscribe token (email embedded, no plaintext email in the URL) ──
@@ -53,6 +109,10 @@ async function fetchAll(page: (from: number, to: number) => PromiseLike<{ data: 
 // ── Audience segmentation ─────────────────────────────────────────────────────
 export async function getSegmentRecipients(segment: SegmentKey): Promise<Recipient[]> {
   const db = supabaseAdmin()
+  if (PROFILE_SEGMENTS.has(segment)) {
+    const suppressed = await fetchAll((from, to) => db.from('email_suppressions').select('email').order('email').range(from, to))
+    return getProfileSegmentRecipients(segment, new Set(suppressed.map((s: any) => cleanEmail(s.email || ''))))
+  }
   // Supabase returns at most 1,000 rows per request, so page through every table.
   // (Before this, "All customers" silently stopped at ~1,000 of 1,400+.)
   const [customers, bookings, suppressed] = await Promise.all([
@@ -138,7 +198,7 @@ export async function campaignLeftovers(
 
 // Counts for every segment in one pass (for the admin UI).
 export async function getSegmentCounts(): Promise<Record<SegmentKey, number>> {
-  const segs: SegmentKey[] = ['all', 'members', 'guests', 'recent', 'lapsed']
+  const segs: SegmentKey[] = SEGMENT_KEYS
   const counts = {} as Record<SegmentKey, number>
   for (const s of segs) counts[s] = (await getSegmentRecipients(s)).length
   return counts

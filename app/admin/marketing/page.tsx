@@ -35,6 +35,9 @@ const SEGMENTS: { key: string; label: string }[] = [
   { key: 'guests', label: 'Guests (no account)' },
   { key: 'recent', label: 'Recent (booked ≤30 days)' },
   { key: 'lapsed', label: 'Lapsed (no booking 90+ days)' },
+  { key: 'photo_video', label: 'Photo & video creators (by role)' },
+  { key: 'creatives', label: 'All creatives (account type or role)' },
+  { key: 'brands_vendors', label: 'Brands & vendors' },
 ]
 
 export default function MarketingPage() {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getSegmentCounts, campaignLeftovers, type SegmentKey } from '@/lib/marketing'
+import { getSegmentCounts, campaignLeftovers, SEGMENT_KEYS, type SegmentKey } from '@/lib/marketing'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
   try { b = await req.json() } catch { return NextResponse.json({ error: 'Bad request.' }, { status: 400 }) }
   if (!b.name || !b.subject) return NextResponse.json({ error: 'Name and subject are required.' }, { status: 400 })
   if (!b.template_id && !b.body_html) return NextResponse.json({ error: 'Pick a template or provide HTML.' }, { status: 400 })
-  const segment_key = ['all', 'members', 'guests', 'lapsed', 'recent'].includes(b.segment_key) ? b.segment_key : 'all'
+  const segment_key = (SEGMENT_KEYS as string[]).includes(b.segment_key) ? b.segment_key : 'all'
 
   const { data, error } = await supabaseAdmin().from('marketing_campaigns').insert({
     name: b.name, segment_key, subject: b.subject,
