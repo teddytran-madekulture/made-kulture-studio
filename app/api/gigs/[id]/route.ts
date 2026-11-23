@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { sendOwnerPush } from '@/lib/push'
 import { gigDb as db, GIG_SELECT, publicGig } from '@/lib/gigs-server'
-import { isLiveGig } from '@/lib/gigs'
+import { isLiveGig, isRelayedGig } from '@/lib/gigs'
 import { parseGigBody } from '@/lib/gig-input'
 
 export const dynamic = 'force-dynamic'
@@ -64,7 +64,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { data: app } = await db.from('gig_applications')
     .select('id, note, conversation_id, created_at').eq('gig_id', g.id).eq('applicant_id', user.id).maybeSingle()
   let thread: { sender: string; body: string; created_at: string }[] = []
-  if (app && g.posted_by === 'studio') {
+  if (app && isRelayedGig(g)) {
     const { data: msgs, error: mErr } = await db.from('gig_messages').select('sender, body, created_at').eq('application_id', app.id).order('created_at')
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 })
     thread = msgs ?? []

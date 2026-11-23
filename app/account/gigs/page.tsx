@@ -9,7 +9,7 @@ import FinishProfileCard from '@/components/FinishProfileCard'
 import { gigDateLabel, GIG_STATUS_LABEL, GIG_SAFETY_LINE, type GigStatus } from '@/lib/gigs'
 
 type Gig = {
-  id: string; posted_by: 'member' | 'studio'; company_name: string; title: string; roles_needed: string[]; pay: string
+  id: string; posted_by: 'member' | 'studio' | 'client'; company_name: string; title: string; roles_needed: string[]; pay: string
   gig_date: string | null; date_note: string | null; location: string | null; at_studio: boolean; apply_by: string | null
   status: GigStatus; created_at: string; applied?: boolean; applicants?: number; decline_reason?: string | null
 }
@@ -63,7 +63,7 @@ export default function GigsPage() {
   const opt: React.CSSProperties = { background: 'var(--t-surface)', color: 'var(--t-fg)' }
   const H1 = <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>GIGS</h1>
 
-  if (incomplete) return <div>{H1}<div style={{ height: 20 }} /><FinishProfileCard blockers={incomplete} what="Gigs" /></div>
+  if (incomplete) return <div>{H1}<div style={{ height: 20 }} /><FinishProfileCard blockers={incomplete} what="Gigs" /><div style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.55), marginTop: 16, maxWidth: 520, lineHeight: 1.6 }}>Looking to hire someone instead? <Link href="/account/hire" style={{ color: 'var(--t-gold)' }}>Post what you need</Link>, no profile required.</div></div>
   if (optedOut) return (
     <div>{H1}
       <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: 24, maxWidth: 520, marginTop: 16 }}>
@@ -71,6 +71,7 @@ export default function GigsPage() {
           Gigs are for directory members. Turn on directory visibility in your <a href="/account/profile" style={{ color: 'var(--t-gold)' }}>profile</a> to see paid work and get alerts.
         </p>
       </div>
+      <div style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.55), marginTop: 16, maxWidth: 520, lineHeight: 1.6 }}>Looking to hire someone instead? <Link href="/account/hire" style={{ color: 'var(--t-gold)' }}>Post what you need</Link>, no profile required.</div>
     </div>
   )
 

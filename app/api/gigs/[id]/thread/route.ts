@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { gigDb as db, GIG_SELECT, notifyCompanyMemberReply } from '@/lib/gigs-server'
+import { isRelayedGig } from '@/lib/gigs'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: g, error } = await db.from('gigs').select(GIG_SELECT).eq('id', params.id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!g || g.posted_by !== 'studio') return NextResponse.json({ error: 'Gig not found.' }, { status: 404 })
+  if (!g || !isRelayedGig(g)) return NextResponse.json({ error: 'Gig not found.' }, { status: 404 })
   const { data: app } = await db.from('gig_applications').select('id').eq('gig_id', g.id).eq('applicant_id', user.id).maybeSingle()
   if (!app) return NextResponse.json({ error: 'Apply first.' }, { status: 403 })
 

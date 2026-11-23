@@ -18,7 +18,7 @@ export const fetchCache = 'force-no-store'
 
 async function gigFor(token: string) {
   if (!/^[0-9a-f-]{36}$/i.test(token)) return null
-  const { data, error } = await db.from('gigs').select(GIG_SELECT).eq('manage_token', token).eq('posted_by', 'studio').maybeSingle()
+  const { data, error } = await db.from('gigs').select(GIG_SELECT).eq('manage_token', token).in('posted_by', ['studio', 'client']).maybeSingle()
   if (error) throw new Error(error.message)
   // A draft's link is never handed out (no email, no COPY LINK), but refuse it anyway.
   if (data && data.status === 'draft') return null

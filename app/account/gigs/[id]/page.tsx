@@ -7,10 +7,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { gigDateLabel, GIG_STATUS_LABEL, GIG_SAFETY_LINE, GIG_REPORT_LABEL, GIG_REPORT_REASONS, type GigStatus } from '@/lib/gigs'
+import { gigDateLabel, GIG_STATUS_LABEL, GIG_SAFETY_LINE, GIG_REPORT_LABEL, GIG_REPORT_REASONS, isRelayedGig, type GigStatus } from '@/lib/gigs'
 
 type Gig = {
-  id: string; posted_by: 'member' | 'studio'; company_name: string; title: string; description: string | null
+  id: string; posted_by: 'member' | 'studio' | 'client'; company_name: string; title: string; description: string | null
   roles_needed: string[]; pay: string; gig_date: string | null; date_note: string | null; location: string | null
   at_studio: boolean; apply_by: string | null; status: GigStatus; expires_at: string | null; decline_reason?: string | null
 }
@@ -192,7 +192,7 @@ export default function GigDetailPage() {
             <div style={{ fontFamily: 'Inter', fontSize: 14, color: muted(0.5), marginTop: 18 }}>This gig is no longer taking applications.</div>
           )}
 
-          {application && gig.posted_by === 'studio' && (
+          {application && isRelayedGig(gig) && (
             <div id="thread" style={{ marginTop: 22 }}>
               <h2 style={{ fontFamily: 'Inter', fontSize: 12, letterSpacing: '0.1em', color: muted(0.45), margin: '0 0 10px' }}>CONVERSATION WITH {gig.company_name.toUpperCase()}</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

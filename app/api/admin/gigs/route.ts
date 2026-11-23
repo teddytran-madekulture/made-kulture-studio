@@ -25,7 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 import { gigDb as db, GIG_SELECT, sendGigAlerts, notifyPosterDecision, emailCompanyManageLink, gigManageUrl } from '@/lib/gigs-server'
-import { gigExpiry } from '@/lib/gigs'
+import { gigExpiry, isRelayedGig } from '@/lib/gigs'
 import { parseGigBody } from '@/lib/gig-input'
 
 export const dynamic = 'force-dynamic'
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     gigs: list.map(g => ({
       ...g,
-      manage_url: g.posted_by === 'studio' && g.status !== 'draft' ? gigManageUrl(g.manage_token) : null,
+      manage_url: isRelayedGig(g) && g.status !== 'draft' ? gigManageUrl(g.manage_token) : null,
       manage_token: undefined,
       poster_name: g.poster_id ? (pm.get(g.poster_id)?.full_name || '(member)') : null,
       poster_type: g.poster_id ? (pm.get(g.poster_id)?.account_type || null) : null,
@@ -123,7 +123,9 @@ export async function PATCH(req: NextRequest) {
     if (fail) return NextResponse.json({ error: fail }, { status: 409 })
     const alerts = await sendGigAlerts(id)
     await notifyPosterDecision(g as any, 'approved')
-    return NextResponse.json({ ok: true, alerts })
+    // A customer has no member gig page: their applicants live on the manage link.
+    const linkEmailed = g.posted_by === 'client' ? await emailCompanyManageLink(g as any) : undefined
+    return NextResponse.json({ ok: true, alerts, linkEmailed })
   }
   if (action === 'decline') {
     const reason = String(b.reason || '').trim().slice(0, 300)
@@ -187,7 +189,7 @@ export async function PATCH(req: NextRequest) {
   }
   if (action === 'resend_link') {
     if (g.status === 'draft') return NextResponse.json({ error: 'Publish the gig first.' }, { status: 409 })
-    if (g.posted_by !== 'studio' || !g.company_email) return NextResponse.json({ error: 'This gig has no company email.' }, { status: 400 })
+    if (!isRelayedGig(g) || !g.company_email) return NextResponse.json({ error: 'This gig has no company email.' }, { status: 400 })
     const ok = await emailCompanyManageLink(g as any)
     return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: 'The email did not send. Copy the link instead.' }, { status: 502 })
   }

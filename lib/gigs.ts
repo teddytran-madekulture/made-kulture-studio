@@ -21,6 +21,21 @@ export const GIG_POSTER_TYPES = ['brand', 'vendor'] as const
  *  paid but hasn't given a rate. ADMIN ONLY — member posts still need a number. */
 export const GIG_PAY_TBD = 'Paid · Rate TBD'
 
+/** Who posted it. 'client' (2026-11-23) = a studio customer via /account/hire. */
+export type GigPostedBy = 'member' | 'studio' | 'client'
+/** Studio- and client-posted gigs talk through the private manage link + email
+ *  relay (gig_messages); only member-posted gigs open a directory DM. */
+export function isRelayedGig(g: { posted_by: string }): boolean {
+  return g.posted_by === 'studio' || g.posted_by === 'client'
+}
+/** How a client gig names its poster in public: first name only. */
+export function clientPosterName(fullName: string | null | undefined): string {
+  const first = String(fullName || '').trim().split(/\s+/)[0]
+  return first ? `${first} · Studio client` : 'Studio client'
+}
+/** Active (pending + live) gigs one customer may have at once. */
+export const CLIENT_GIG_ACTIVE_CAP = 3
+
 /** How long a gig stays up when it has no apply-by date. */
 export const GIG_DEFAULT_DAYS = 30
 /** Active (pending + live) gigs one account may have at once. */

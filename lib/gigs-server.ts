@@ -12,7 +12,7 @@ import { profileBlockers } from '@/lib/directory-listing'
 import { sendMemberPush } from '@/lib/member-push'
 import { sendOwnerPush } from '@/lib/push'
 import { sendSimpleEmail, sendGigAlertBatch } from '@/lib/email'
-import { gigDateLabel } from '@/lib/gigs'
+import { gigDateLabel, isRelayedGig } from '@/lib/gigs'
 
 export const gigDb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -41,7 +41,8 @@ function whenLine(g: Pick<GigRow, 'gig_date' | 'date_note'>): string {
  * APPROVE (or approve + restore) can't alert everyone twice.
  * Recipients = listed directory members whose roles overlap the gig's, with
  * notify_gigs on, minus the poster. Push to all of them; email to those who
- * also have notify_email on.
+ * also have notify_email on. A CLIENT gig (customer-posted) also skips anyone
+ * who turned off gig_alerts_clients ("brands and companies only").
  */
 export async function sendGigAlerts(gigId: string): Promise<{ recipients: number; pushed: number; emailed: number; error?: string }> {
   const out = { recipients: 0, pushed: 0, emailed: 0 } as { recipients: number; pushed: number; emailed: number; error?: string }
@@ -57,11 +58,12 @@ export async function sendGigAlerts(gigId: string): Promise<{ recipients: number
     if (!wanted.size) return out
 
     const { data: profs, error: pErr } = await selectAll(() => gigDb.from('customer_profiles')
-      .select('id, full_name, roles, bio, instagram, links, account_type, directory_opt_in, vendor_terms_accepted_at, notify_email, notify_gigs')
+      .select('id, full_name, roles, bio, instagram, links, account_type, directory_opt_in, vendor_terms_accepted_at, notify_email, notify_gigs, gig_alerts_clients')
       .eq('directory_opt_in', true).order('id'))
     if (pErr) return { ...out, error: pErr.message }
     const matches = (profs ?? []).filter((p: any) =>
       p.id !== gig.poster_id && p.notify_gigs !== false &&
+      !(gig.posted_by === 'client' && p.gig_alerts_clients === false) &&
       (p.roles ?? []).some((r: string) => wanted.has(String(r).toLowerCase())))
     if (!matches.length) { await gigDb.from('gigs').update({ alerts_count: 0 }).eq('id', gigId); return out }
 
@@ -97,22 +99,26 @@ export async function sendGigAlerts(gigId: string): Promise<{ recipients: number
   }
 }
 
-/** Tell a member poster their gig was approved or declined. */
+/** Tell a member poster their gig was approved or declined. A CLIENT poster
+ *  can't open the members' gig page, so their links go to /account/hire. */
 export async function notifyPosterDecision(gig: GigRow, decision: 'approved' | 'declined', reason?: string | null) {
   if (!gig.poster_id) return
   try {
     const approved = decision === 'approved'
+    const client = gig.posted_by === 'client'
+    const link = client ? `${APP_URL}/account/hire` : gigUrl(gig.id)
     await sendMemberPush(gig.poster_id, {
       title: approved ? 'Your gig is live' : 'Your gig was not approved',
       body: approved ? gig.title : `${gig.title}${reason ? ` · ${reason}` : ''}`.slice(0, 160),
-      url: `/account/gigs/${gig.id}`, tag: `gig-${gig.id}`,
+      url: client ? '/account/hire' : `/account/gigs/${gig.id}`, tag: `gig-${gig.id}`,
     })
     const [{ data: prof }, { data: au }] = await Promise.all([
       gigDb.from('customer_profiles').select('notify_email').eq('id', gig.poster_id).maybeSingle(),
       gigDb.auth.admin.getUserById(gig.poster_id),
     ])
     const to = au?.user?.email
-    if (!to || prof?.notify_email === false) return
+    // A client hears "approved" through the manage-link email instead (see admin approve).
+    if (!to || prof?.notify_email === false || (client && approved)) return
     await sendSimpleEmail({
       to, label: approved ? 'gig_approved' : 'gig_declined',
       subject: approved ? `Your gig is live: ${gig.title}` : `Your gig wasn't approved: ${gig.title}`,
@@ -120,7 +126,7 @@ export async function notifyPosterDecision(gig: GigRow, decision: 'approved' | '
       paragraphs: approved
         ? [`<strong style="color:#fff;">${escHtml(gig.title)}</strong> is now on Gigs, and members whose roles match have been notified.`, 'Applications show up on the gig page and in your messages.']
         : [`<strong style="color:#fff;">${escHtml(gig.title)}</strong> wasn’t approved for Gigs.`, ...(reason ? [`Reason: ${escHtml(reason)}`] : []), 'You can edit the details and post it again, or reply to this email with any questions.'],
-      ctaText: 'View gig', ctaUrl: gigUrl(gig.id),
+      ctaText: client ? 'Your posts' : 'View gig', ctaUrl: link,
     })
   } catch (e) { console.error('[gigs] poster notice failed (non-fatal):', e) }
 }
@@ -174,8 +180,8 @@ export async function notifyNewApplicant(gig: GigRow, applicantName: string, not
         ctaText: 'See applicant', ctaUrl: gigManageUrl(gig.manage_token),
       })
     }
-    // Teddy sees studio-posted applications too — he's the connector.
-    if (gig.posted_by === 'studio') {
+    // Teddy sees studio- and client-posted applications too — he's the connector.
+    if (isRelayedGig(gig)) {
       await sendOwnerPush({ title: `Gig applicant: ${gig.title}`, body: `${applicantName} · ${gig.company_name}`, url: '/admin/gigs', tag: `gig-app-${gig.id}` })
     }
   } catch (e) { console.error('[gigs] applicant notice failed (non-fatal):', e) }

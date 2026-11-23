@@ -20,6 +20,8 @@ const ITEMS: Item[] = [
   { href: '/account/directory', label: 'Directory', icon: 'search' },
   // 2026-11-21: paid work for the community (migration 185).
   { href: '/account/gigs', label: 'Gigs', icon: 'cast' },
+  // 2026-11-23: any customer posts a paid gig for a creative (migration 188).
+  { href: '/account/hire', label: 'Hire a Creative', icon: 'star' },
   { href: '/account/messages', label: 'Messages', icon: 'msg' },
   { href: '/account/me', label: 'Profile', icon: 'user' },
 ]

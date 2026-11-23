@@ -7,7 +7,7 @@ import { CREATIVE_ROLES } from '@/lib/roles'
 import { gigDateLabel, GIG_STATUS_LABEL, GIG_REPORT_LABEL, GIG_PAY_TBD, centralToday } from '@/lib/gigs'
 
 type Row = {
-  id: string; is_test?: boolean; posted_by: 'member' | 'studio'; poster_id: string | null; poster_name: string | null; poster_type: string | null
+  id: string; is_test?: boolean; posted_by: 'member' | 'studio' | 'client'; poster_id: string | null; poster_name: string | null; poster_type: string | null
   company_name: string; company_email: string | null; manage_url: string | null; title: string; description: string | null
   roles_needed: string[]; pay: string; gig_date: string | null; date_note: string | null; location: string | null; at_studio: boolean
   apply_by: string | null; status: string; decline_reason: string | null; pull_reason: string | null
@@ -73,7 +73,7 @@ export default function AdminGigsPage() {
     if (action === 'decline') { reason = prompt('Why are you declining it? The poster sees this.') || ''; if (!reason.trim()) return }
     setBusy(id)
     const d = await call('PATCH', { id, action, reason })
-    if (d?.alerts) setNote(`Live. Alerted ${d.alerts.recipients} matching member${d.alerts.recipients === 1 ? '' : 's'} (${d.alerts.pushed} by push, ${d.alerts.emailed} by email).${d.alerts.error ? ` Alert problem: ${d.alerts.error}` : ''}`)
+    if (d?.alerts) setNote(`${d.linkEmailed === true ? 'Live, and the client got their applicant link by email. ' : d.linkEmailed === false ? 'Live, but the client link email did NOT send. Use COPY COMPANY LINK. ' : 'Live. '}Alerted ${d.alerts.recipients} matching member${d.alerts.recipients === 1 ? '' : 's'} (${d.alerts.pushed} by push, ${d.alerts.emailed} by email).${d.alerts.error ? ` Alert problem: ${d.alerts.error}` : ''}`)
     else if (d && action === 'resend_link') setNote('Link emailed to the company.')
     setBusy(null); load()
   }
@@ -205,10 +205,11 @@ export default function AdminGigsPage() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{g.title}</div>
                   <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                    {g.company_name} · {g.posted_by === 'studio' ? 'posted by you' : `${g.poster_name} (${g.poster_type})`} · submitted {fmt(g.created_at)}
+                    {g.company_name} · {g.posted_by === 'studio' ? 'posted by you' : g.posted_by === 'client' ? `${g.poster_name} (studio client, no directory profile)` : `${g.poster_name} (${g.poster_type})`} · submitted {fmt(g.created_at)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  {g.posted_by === 'client' && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', borderRadius: 4, background: 'rgba(120,170,255,0.15)', color: '#9cc0ff' }}>CLIENT</span>}
                   {g.is_test && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', borderRadius: 4, background: 'rgba(212,168,67,0.2)', color: '#d4a843' }}>TEST</span>}
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.08)', color: g.status === 'live' ? '#7be09a' : g.status === 'pending' ? '#d4a843' : '#ccc', textTransform: 'uppercase' }}>{expired && g.status === 'live' ? 'Expired' : GIG_STATUS_LABEL[g.status as keyof typeof GIG_STATUS_LABEL]}</span>
                   {g.pay && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'rgba(60,255,120,0.12)', color: '#7be09a' }}>{g.pay}</span>}
@@ -229,7 +230,7 @@ export default function AdminGigsPage() {
               <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
                 {g.applicants} applicant{g.applicants === 1 ? '' : 's'}
                 {g.alerts_sent_at ? ` · alerted ${g.alerts_count ?? 0} member${g.alerts_count === 1 ? '' : 's'} ${fmt(g.alerts_sent_at)}` : ''}
-                {g.posted_by === 'studio' && ` · company email: ${g.company_email || 'none'}`}
+                {g.posted_by !== 'member' && ` · ${g.posted_by === 'client' ? 'client' : 'company'} email: ${g.company_email || 'none'}`}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {g.status === 'draft' && <button type="button" style={btn('gold')} onClick={() => editDraft(g)}>EDIT</button>}
@@ -241,7 +242,7 @@ export default function AdminGigsPage() {
                 {g.status !== 'draft' && <a href={`/account/gigs/${g.id}`} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>MEMBER VIEW</a>}
                 {g.manage_url && <button type="button" style={btn('ghost')} onClick={() => copy(g.manage_url!)}>COPY COMPANY LINK</button>}
                 {g.manage_url && <a href={g.manage_url} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>OPEN APPLICANTS</a>}
-                {g.posted_by === 'studio' && g.company_email && g.status !== 'draft' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'resend_link')}>RE-EMAIL LINK</button>}
+                {g.posted_by !== 'member' && g.company_email && g.status !== 'draft' && g.status !== 'pending' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'resend_link')}>RE-EMAIL LINK</button>}
                 <button type="button" disabled={busy === g.id} style={btn('danger')} onClick={() => del(g.id)}>DELETE</button>
               </div>
             </div>
