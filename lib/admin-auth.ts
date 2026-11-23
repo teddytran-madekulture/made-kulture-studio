@@ -95,6 +95,14 @@ export function verifyAdminToken(token: string): boolean {
   }
 }
 
+/** The session id inside a VALID admin token (for cancelling it at logout), else null. */
+export function adminSessionId(token: string | undefined): string | null {
+  if (!token || !verifyAdminToken(token)) return null
+  return token.split('.')[0] || null
+}
+
+// ⚠️ 2026-11-23 (migration 190): a cancelled session never reaches this function —
+// middleware.ts strips a revoked admin/staff cookie from the request first.
 export function isAdminAuthed(req: NextRequest): boolean {
   // (a) Legacy shared-password admin cookie (unchanged — backward compatible).
   const token = req.cookies.get('admin_auth')?.value

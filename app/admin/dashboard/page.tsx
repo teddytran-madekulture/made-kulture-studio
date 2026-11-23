@@ -1570,6 +1570,13 @@ export default function AdminDashboard() {
     await fetch('/api/admin/auth', { method: 'DELETE' })
     router.push('/admin')
   }
+  // 2026-11-23: cancels every admin session on the server (lost phone, shared computer).
+  const handleLogoutAll = async () => {
+    if (!window.confirm('Sign out of the admin on EVERY device (phone, tablet, this computer)? You will need to log in again.')) return
+    const r = await fetch('/api/admin/auth?all=1', { method: 'DELETE' })
+    if (!r.ok) { const d = await r.json().catch(() => ({})); window.alert(d.error || 'That did not work. Try again.'); return }
+    router.push('/admin')
+  }
 
   // Resend the booking confirmation. One email, no side effects — the route
   // deliberately avoids finalizeBooking so it can't mint a second door code.
@@ -2335,6 +2342,7 @@ export default function AdminDashboard() {
           }}>
             LOG OUT
           </button>
+          <button onClick={handleLogoutAll} style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.3)', textDecoration: 'underline' }}>Sign out all devices</button>
         </div>
       </div>
 

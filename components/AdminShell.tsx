@@ -59,6 +59,13 @@ function SidebarInner() {
   // Open by default when you're ON a settings page, so the highlighted item is visible.
   const [settingsOpen, setSettingsOpen] = useState(on('/admin/funding') || on('/admin/stack'))
   const logout = async () => { await fetch('/api/admin/auth', { method: 'DELETE' }); router.push('/admin') }
+  // 2026-11-23: cancels every admin session on the server (lost phone, shared computer).
+  const logoutAll = async () => {
+    if (!window.confirm('Sign out of the admin on EVERY device (phone, tablet, this computer)? You will need to log in again.')) return
+    const r = await fetch('/api/admin/auth?all=1', { method: 'DELETE' })
+    if (!r.ok) { const d = await r.json().catch(() => ({})); window.alert(d.error || 'That did not work. Try again.'); return }
+    router.push('/admin')
+  }
   const D = '/admin/dashboard?view='
 
   return (
@@ -148,6 +155,7 @@ function SidebarInner() {
         <a href="/desk" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px', fontFamily: 'Inter, sans-serif', fontSize: 11, textAlign: 'center', textDecoration: 'none', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)' }}>FRONT DESK →</a>
         <a href="/staff" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px', fontFamily: 'Inter, sans-serif', fontSize: 11, textAlign: 'center', textDecoration: 'none', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)' }}>STAFF →</a>
         <button onClick={logout} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', padding: '9px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.35)' }}>LOG OUT</button>
+        <button onClick={logoutAll} style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.3)', textDecoration: 'underline' }}>Sign out all devices</button>
       </div>
     </>
   )
