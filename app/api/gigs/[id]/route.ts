@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { sendOwnerPush } from '@/lib/push'
+import { isAdminAuthed } from '@/lib/admin-auth'
 import { gigDb as db, GIG_SELECT, publicGig } from '@/lib/gigs-server'
 import { isLiveGig, isRelayedGig } from '@/lib/gigs'
 import { parseGigBody } from '@/lib/gig-input'
@@ -15,7 +16,7 @@ import { parseGigBody } from '@/lib/gig-input'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { data: { user } } = await createClient().auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to see gigs.' }, { status: 401 })
   const me = await memberAccess(db, user.id)
@@ -25,7 +26,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { data: g, error } = await db.from('gigs').select(GIG_SELECT).eq('id', params.id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const isPoster = !!g && g.poster_id === user.id
-  if (!g || (!isPoster && !isLiveGig(g))) {
+  // PREVIEW (2026-11-23): the admin cookie may open a draft or any status, so
+  // Teddy sees a gig exactly as members will before it goes out. Applying is
+  // still refused by /apply for anything that isn't live.
+  const adminPreview = !!g && !isLiveGig(g) && isAdminAuthed(req)
+  if (!g || (!isPoster && !adminPreview && !isLiveGig(g))) {
     // An applicant can still open a gig that has since closed, to read their thread.
     const { data: mine } = g ? await db.from('gig_applications').select('id').eq('gig_id', g.id).eq('applicant_id', user.id).maybeSingle() : { data: null }
     if (!g || !mine) return NextResponse.json({ error: 'This gig is no longer up.' }, { status: 404 })
@@ -37,7 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (p) poster = { id: p.id, name: p.full_name || g.company_name, avatar_url: p.avatar_url }
   }
 
-  const base = { gig: { ...publicGig(g), ...(isPoster ? { decline_reason: g.decline_reason } : {}) }, poster, isPoster }
+  const base = { gig: { ...publicGig(g), ...(isPoster ? { decline_reason: g.decline_reason } : {}) }, poster, isPoster, preview: adminPreview }
 
   if (isPoster) {
     const { data: apps, error: aErr } = await db.from('gig_applications')

@@ -14,6 +14,7 @@ type Gig = {
   id: string; posted_by: 'member' | 'studio' | 'client'; company_name: string; title: string; description: string | null
   roles_needed: string[]; pay: string; gig_date: string | null; date_note: string | null; location: string | null
   at_studio: boolean; apply_by: string | null; status: GigStatus; expires_at: string | null; decline_reason?: string | null
+  cover_url?: string | null
 }
 type Applicant = { id: string; applicant_id: string; note: string | null; conversation_id: string | null; created_at: string; isNew: boolean; name: string; avatar_url: string | null; roles: string[] }
 type Msg = { sender: 'company' | 'member'; body: string; created_at: string }
@@ -25,6 +26,7 @@ const fmtTime = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZon
 export default function GigDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [gig, setGig] = useState<Gig | null>(null)
+  const [preview, setPreview] = useState(false)   // admin previewing a draft / not-live gig
   const [poster, setPoster] = useState<{ id: string; name: string; avatar_url: string | null } | null>(null)
   const [isPoster, setIsPoster] = useState(false)
   const [applicants, setApplicants] = useState<Applicant[]>([])
@@ -46,9 +48,9 @@ export default function GigDetailPage() {
   const load = () => fetch(`/api/gigs/${id}`, { cache: 'no-store' }).then(async r => {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setError(d.error || 'Could not load this gig.'); setLoading(false); return }
-    setError(''); setGig(d.gig); setPoster(d.poster); setIsPoster(!!d.isPoster)
+    setError(''); setGig(d.gig); setPoster(d.poster); setIsPoster(!!d.isPoster); setPreview(!!d.preview)
     // Count a view once per page load, never the poster's own (2026-11-23).
-    if (!d.isPoster && d.gig?.id && !viewTracked.current) {
+    if (!d.isPoster && !d.preview && d.gig?.id && !viewTracked.current) {
       viewTracked.current = true
       let src = 'board'
       try { const f = new URLSearchParams(window.location.search).get('from'); if (f === 'push' || f === 'email') src = f } catch {}
@@ -108,6 +110,15 @@ export default function GigDetailPage() {
         </div>
       ))}
 
+      {preview && (
+        <div style={{ ...card, marginTop: 14, borderColor: 'rgba(var(--t-gold-rgb), 0.45)' }}>
+          <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', fontWeight: 700, letterSpacing: '0.06em' }}>ADMIN PREVIEW · {GIG_STATUS_LABEL[gig.status].toUpperCase()}</div>
+          <div style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.6), marginTop: 4 }}>This is how members will see it once it&apos;s live. Only you can open it right now.</div>
+        </div>
+      )}
+      {gig.cover_url && (
+        <img src={gig.cover_url} alt="" style={{ display: 'block', width: '100%', aspectRatio: '16 / 10', objectFit: 'cover', borderRadius: 10, marginTop: 16, background: 'var(--t-surface)' }} />
+      )}
       <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '16px 0 6px', lineHeight: 1.1 }}>{gig.title}</h1>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         {poster ? (

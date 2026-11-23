@@ -32,6 +32,16 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 60   // approve sends the member alerts inline
 
+// Cover image (migration 189): only a URL our own upload route produced.
+// undefined = not sent (leave as is), null = clear it.
+function coverUrl(b: any): string | null | undefined {
+  if (!('cover_url' in (b ?? {}))) return undefined
+  const v = typeof b.cover_url === 'string' ? b.cover_url.trim() : ''
+  if (!v) return null
+  const base = `${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')}/storage/v1/object/public/site/gigs/`
+  return v.startsWith(base) && v.length < 400 ? v : null
+}
+
 // '' = none given, null = given but malformed.
 function companyEmail(b: any): string | null {
   const email = typeof b?.company_email === 'string' ? b.company_email.trim().toLowerCase().slice(0, 200) : ''
@@ -89,14 +99,14 @@ export async function POST(req: NextRequest) {
   if (draft) {
     const { data: d, error: dErr } = await db.from('gigs').insert({
       ...parsed.row, posted_by: 'studio', poster_id: null, company_email: email || null,
-      status: 'draft', is_test: test,
+      status: 'draft', is_test: test, cover_url: coverUrl(b) ?? null,
     }).select('id').single()
     if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 })
     return NextResponse.json({ id: d.id, draft: true })
   }
   const { data: g, error } = await db.from('gigs').insert({
     ...parsed.row, posted_by: 'studio', poster_id: null, company_email: email || null,
-    status: 'live', approved_at: now, terms_accepted_at: now, is_test: test,
+    status: 'live', approved_at: now, terms_accepted_at: now, is_test: test, cover_url: coverUrl(b) ?? null,
   }).select(GIG_SELECT).single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -164,6 +174,8 @@ export async function PATCH(req: NextRequest) {
     // A live gig keeps its run unless an apply-by date now sets it; a draft's
     // expiry is recomputed when it is published anyway.
     const patch: Record<string, unknown> = { ...fields, company_email: email || null }
+    const cover = coverUrl(b)
+    if (cover !== undefined) patch.cover_url = cover
     if (isDraft) { patch.is_test = b.test === true; patch.expires_at = expires_at }
     else if (fields.apply_by) patch.expires_at = expires_at
     const fail = await claim([g.status], patch)
@@ -183,6 +195,7 @@ export async function PATCH(req: NextRequest) {
     const fail = await claim(['draft'], {
       ...parsed.row, company_email: email || null, is_test: test,
       status: 'live', approved_at: now, terms_accepted_at: now,
+      ...(coverUrl(b) !== undefined ? { cover_url: coverUrl(b) } : {}),
     })
     if (fail) return NextResponse.json({ error: fail }, { status: 409 })
     const { data: live, error: lErr } = await db.from('gigs').select(GIG_SELECT).eq('id', id).single()

@@ -67,6 +67,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     gig: {
       title: g.title, company_name: g.company_name, pay: g.pay, roles_needed: g.roles_needed ?? [], gig_date: g.gig_date,
       date_note: g.date_note, location: g.location, apply_by: g.apply_by, status: g.status, expires_at: g.expires_at, description: g.description,
+      cover_url: g.cover_url ?? null,
     },
     reach,
     applicants: (apps ?? []).map(a => {

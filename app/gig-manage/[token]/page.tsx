@@ -68,6 +68,7 @@ export default function GigManagePage() {
     <div style={wrap}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
         <div style={{ letterSpacing: '0.2em', fontSize: 12, color: CHAMP, fontWeight: 700 }}>MADE KULTURE · GIGS</div>
+        {g.cover_url && <img src={g.cover_url} alt="" style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 10, margin: '14px 0 4px' }} />}
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: '10px 0 4px', lineHeight: 1.1 }}>{g.title}</h1>
         <div style={{ fontSize: 13, color: '#999' }}>{[g.company_name, g.pay, dateLabel(g.gig_date), g.date_note, g.location].filter(Boolean).join(' · ')}</div>
         <div style={{ fontSize: 13, color: open ? '#7be09a' : '#bbb', marginTop: 8 }}>

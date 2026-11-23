@@ -12,6 +12,7 @@ type Gig = {
   id: string; posted_by: 'member' | 'studio' | 'client'; company_name: string; title: string; roles_needed: string[]; pay: string
   gig_date: string | null; date_note: string | null; location: string | null; at_studio: boolean; apply_by: string | null
   status: GigStatus; created_at: string; applied?: boolean; applicants?: number; decline_reason?: string | null
+  cover_url?: string | null
 }
 
 const muted = (a: number) => `rgba(var(--t-fg-rgb), calc(${a} * var(--t-a)))`
@@ -113,7 +114,9 @@ export default function GigsPage() {
           {items.map(g => {
             const when = [gigDateLabel(g.gig_date), g.date_note].filter(Boolean).join(' · ')
             return (
-              <Link key={g.id} href={`/account/gigs/${g.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: `1px solid ${muted(0.08)}`, borderRadius: 8, padding: '16px 18px' }}>
+              <Link key={g.id} href={`/account/gigs/${g.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', background: 'var(--t-surface)', border: `1px solid ${muted(0.08)}`, borderRadius: 8, padding: g.cover_url ? 0 : '16px 18px', overflow: 'hidden' }}>
+                {g.cover_url && <img src={g.cover_url} alt="" loading="lazy" style={{ display: 'block', width: '100%', aspectRatio: '16 / 7', objectFit: 'cover' }} />}
+                <div style={{ padding: g.cover_url ? '14px 18px 16px' : 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: 'var(--t-fg)' }}>{g.title}</div>
@@ -131,6 +134,7 @@ export default function GigsPage() {
                   {g.roles_needed.map(r => <span key={r} style={{ fontFamily: 'Inter', fontSize: 10, color: muted(0.6), border: `1px solid ${muted(0.12)}`, borderRadius: 4, padding: '3px 7px' }}>{r}</span>)}
                   {g.at_studio && <span style={{ fontFamily: 'Inter', fontSize: 10, color: 'var(--t-gold)', border: '1px solid rgba(var(--t-gold-rgb), 0.35)', borderRadius: 4, padding: '3px 7px' }}>AT MADE KULTURE</span>}
                   {mine && typeof g.applicants === 'number' && <span style={{ fontFamily: 'Inter', fontSize: 11, color: muted(0.5), marginLeft: 'auto' }}>{g.applicants} applicant{g.applicants === 1 ? '' : 's'}</span>}
+                </div>
                 </div>
               </Link>
             )

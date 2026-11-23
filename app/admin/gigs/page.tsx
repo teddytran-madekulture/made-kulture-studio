@@ -14,6 +14,7 @@ type Row = {
   alerts_sent_at: string | null; alerts_count: number | null; expires_at: string | null; created_at: string
   applicants: number; reports: { reason: string; note: string | null }[]
   views: { views: number; viewers: number; push: number; email: number; board: number } | null
+  cover_url?: string | null
 }
 type Filter = 'drafts' | 'pending' | 'live' | 'flagged' | 'all'
 
@@ -27,7 +28,21 @@ const input: React.CSSProperties = { width: '100%', background: '#0e0e10', borde
 const lbl: React.CSSProperties = { display: 'block', fontSize: 11, letterSpacing: '0.08em', color: '#888', margin: '14px 0 6px' }
 const fmt = (iso: string | null) => iso ? new Date(iso).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
 
-const BLANK = { test: false, pay_tbd: false, company_name: '', company_email: '', title: '', description: '', pay: '', gig_date: '', date_note: '', location: '', at_studio: false, apply_by: '' }
+const BLANK = { test: false, pay_tbd: false, cover_url: '', company_name: '', company_email: '', title: '', description: '', pay: '', gig_date: '', date_note: '', location: '', at_studio: false, apply_by: '' }
+
+// Shrink a photo in the browser before upload: a function request body caps at
+// 4.5 MB, and a cover never needs more than 2000px. Always re-encoded as JPEG.
+async function shrinkImage(file: File, max = 2000): Promise<Blob> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url })
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
+    const c = document.createElement('canvas')
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k)
+    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+    return await new Promise<Blob>((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('encode failed'))), 'image/jpeg', 0.86))
+  } finally { URL.revokeObjectURL(url) }
+}
 
 export default function AdminGigsPage() {
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -42,6 +57,7 @@ export default function AdminGigsPage() {
   const [roleQ, setRoleQ] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)   // the gig open in the form
   const [editingLive, setEditingLive] = useState(false)               // it's already posted: SAVE CHANGES only
+  const [uploading, setUploading] = useState(false)
 
   const load = () => fetch('/api/admin/gigs', { cache: 'no-store' }).then(async r => {
     const d = await r.json().catch(() => ({}))
@@ -84,6 +100,19 @@ export default function AdminGigsPage() {
   }
   const fields = () => ({ ...form, pay: form.pay_tbd ? '' : form.pay, roles_needed: roles, gig_date: form.gig_date || null, apply_by: form.apply_by || null })
   const closeForm = () => { setForm({ ...BLANK }); setRoles([]); setRoleQ(''); setEditingId(null); setEditingLive(false); setShowForm(false) }
+  const uploadCover = async (file: File | undefined) => {
+    if (!file) return
+    setUploading(true); setNote('')
+    try {
+      const blob = await shrinkImage(file)
+      const fd = new FormData(); fd.append('file', new File([blob], 'cover.jpg', { type: 'image/jpeg' }))
+      const r = await fetch('/api/admin/gigs/upload', { method: 'POST', body: fd })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.url) { setNote(d.error || 'The image did not upload.'); return }
+      setForm(f => ({ ...f, cover_url: d.url }))
+    } catch { setNote('Could not read that image. Try a JPG or PNG.') }
+    finally { setUploading(false) }
+  }
   const saveLive = async () => {
     setBusy('new')
     const d = await call('PATCH', { id: editingId, action: 'save', ...fields() })
@@ -103,7 +132,7 @@ export default function AdminGigsPage() {
   }
   const editDraft = (g: Row) => {
     setForm({
-      test: !!g.is_test, pay_tbd: g.pay === GIG_PAY_TBD, company_name: g.company_name || '', company_email: g.company_email || '', title: g.title || '',
+      test: !!g.is_test, pay_tbd: g.pay === GIG_PAY_TBD, cover_url: g.cover_url || '', company_name: g.company_name || '', company_email: g.company_email || '', title: g.title || '',
       description: g.description || '', pay: g.pay === GIG_PAY_TBD ? '' : (g.pay || ''), gig_date: g.gig_date || '', date_note: g.date_note || '',
       location: g.location || '', at_studio: !!g.at_studio, apply_by: g.apply_by || '',
     })
@@ -154,6 +183,18 @@ export default function AdminGigsPage() {
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: 13, color: '#ccc' }}>
             <input type="checkbox" checked={form.at_studio} onChange={e => setForm({ ...form, at_studio: e.target.checked })} /> Shooting at Made Kulture
           </label>
+          <label style={lbl}>COVER IMAGE (optional — shows on the gig, the board and the company page)</label>
+          {form.cover_url ? (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <img src={form.cover_url} alt="" style={{ width: 220, aspectRatio: '16 / 10', objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)' }} />
+              <button type="button" style={btn('ghost')} onClick={() => setForm({ ...form, cover_url: '' })}>REMOVE</button>
+            </div>
+          ) : (
+            <label style={{ ...btn('ghost'), display: 'inline-block', opacity: uploading ? 0.6 : 1 }}>
+              {uploading ? 'UPLOADING…' : '+ ADD A PHOTO'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} disabled={uploading} onChange={e => { uploadCover(e.target.files?.[0]); e.target.value = '' }} />
+            </label>
+          )}
           <label style={lbl}>ROLES NEEDED</label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
             {roles.map(r => <button key={r} type="button" onClick={() => setRoles(roles.filter(x => x !== r))} style={{ ...btn('light'), padding: '5px 10px' }}>{r} ×</button>)}
@@ -202,6 +243,7 @@ export default function AdminGigsPage() {
           const expired = g.expires_at && new Date(g.expires_at) < new Date()
           return (
             <div key={g.id} style={{ ...card, borderColor: g.status === 'pending' ? 'rgba(212,168,67,0.4)' : g.reports.length ? 'rgba(240,160,160,0.35)' : 'rgba(255,255,255,0.08)' }}>
+              {g.cover_url && <img src={g.cover_url} alt="" style={{ display: 'block', width: 260, maxWidth: '100%', aspectRatio: '16 / 10', objectFit: 'cover', borderRadius: 6, marginBottom: 12 }} />}
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{g.title}</div>
@@ -256,6 +298,7 @@ export default function AdminGigsPage() {
                 {g.status === 'pending' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'decline')}>DECLINE</button>}
                 {g.status === 'live' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'pull')}>PULL</button>}
                 {g.status === 'pulled' && <button type="button" disabled={busy === g.id} style={btn('light')} onClick={() => act(g.id, 'restore')}>RESTORE</button>}
+                {(g.status === 'draft' || g.status === 'pending') && <a href={`/account/gigs/${g.id}`} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>PREVIEW</a>}
                 {g.status !== 'draft' && <a href={`/account/gigs/${g.id}`} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>MEMBER VIEW</a>}
                 {g.manage_url && <button type="button" style={btn('ghost')} onClick={() => copy(g.manage_url!)}>COPY COMPANY LINK</button>}
                 {g.manage_url && <a href={g.manage_url} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>OPEN APPLICANTS</a>}

@@ -248,7 +248,7 @@ export async function notifyCompanyMemberReply(gig: GigRow, memberName: string, 
   } catch (e) { console.error('[gigs] company reply notice failed (non-fatal):', e) }
 }
 
-export const GIG_SELECT = 'id, is_test, posted_by, poster_id, company_name, company_email, manage_token, title, description, roles_needed, pay, gig_date, date_note, location, at_studio, apply_by, status, decline_reason, pull_reason, approved_at, alerts_sent_at, alerts_count, expires_at, created_at, updated_at'
+export const GIG_SELECT = 'id, is_test, posted_by, poster_id, company_name, company_email, manage_token, title, description, roles_needed, pay, gig_date, date_note, location, at_studio, apply_by, cover_url, status, decline_reason, pull_reason, approved_at, alerts_sent_at, alerts_count, expires_at, created_at, updated_at'
 
 /** What a MEMBER may see of a gig. Never the company email or manage token. */
 export function publicGig(g: any) {
@@ -257,5 +257,6 @@ export function publicGig(g: any) {
     title: g.title, description: g.description, roles_needed: g.roles_needed ?? [], pay: g.pay,
     gig_date: g.gig_date, date_note: g.date_note, location: g.location, at_studio: !!g.at_studio,
     apply_by: g.apply_by, status: g.status, expires_at: g.expires_at, created_at: g.created_at,
+    cover_url: g.cover_url ?? null,
   }
 }
