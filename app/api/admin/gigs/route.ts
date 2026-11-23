@@ -11,6 +11,10 @@
 //       pull     → live → pulled (off the board)
 //       restore  → pulled → live, dismisses open reports (alerts only if never sent)
 //       resend_link → re-email a studio-posted gig's manage link to the company
+//       save     → (2026-11-23) update a DRAFT's fields; nothing goes out
+//       publish  → DRAFT → live: full checks, then alerts (unless test) + company link
+//   POST { ..., draft: true } → save as a DRAFT instead: only a title is required,
+//                               no alerts, no company email, invisible to members.
 //   DELETE { id } → remove the gig, its applications and threads
 // Writes are CLAIMS (.eq on the expected status + .select()): a write that
 // matched nothing is reported, never shown as success.
@@ -23,6 +27,13 @@ import { parseGigBody } from '@/lib/gig-input'
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 60   // approve sends the member alerts inline
+
+// '' = none given, null = given but malformed.
+function companyEmail(b: any): string | null {
+  const email = typeof b?.company_email === 'string' ? b.company_email.trim().toLowerCase().slice(0, 200) : ''
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return null
+  return email
+}
 
 export async function GET(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -45,7 +56,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     gigs: list.map(g => ({
       ...g,
-      manage_url: g.posted_by === 'studio' ? gigManageUrl(g.manage_token) : null,
+      manage_url: g.posted_by === 'studio' && g.status !== 'draft' ? gigManageUrl(g.manage_token) : null,
       manage_token: undefined,
       poster_name: g.poster_id ? (pm.get(g.poster_id)?.full_name || '(member)') : null,
       poster_type: g.poster_id ? (pm.get(g.poster_id)?.account_type || null) : null,
@@ -58,14 +69,23 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!isAdminAuthed(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
-  const parsed = parseGigBody(b)
+  const draft = b.draft === true
+  const parsed = parseGigBody(b, { draft })
   if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
-  if (!parsed.row.company_name) return NextResponse.json({ error: 'Add the company name.' }, { status: 400 })
-  const email = typeof b.company_email === 'string' ? b.company_email.trim().toLowerCase().slice(0, 200) : ''
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return NextResponse.json({ error: 'That company email doesn’t look right.' }, { status: 400 })
+  if (!draft && !parsed.row.company_name) return NextResponse.json({ error: 'Add the company name.' }, { status: 400 })
+  const email = companyEmail(b)
+  if (email === null) return NextResponse.json({ error: 'That company email doesn’t look right.' }, { status: 400 })
 
   const now = new Date().toISOString()
   const test = b.test === true
+  if (draft) {
+    const { data: d, error: dErr } = await db.from('gigs').insert({
+      ...parsed.row, posted_by: 'studio', poster_id: null, company_email: email || null,
+      status: 'draft', is_test: test,
+    }).select('id').single()
+    if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 })
+    return NextResponse.json({ id: d.id, draft: true })
+  }
   const { data: g, error } = await db.from('gigs').insert({
     ...parsed.row, posted_by: 'studio', poster_id: null, company_email: email || null,
     status: 'live', approved_at: now, terms_accepted_at: now, is_test: test,
@@ -121,7 +141,40 @@ export async function PATCH(req: NextRequest) {
     const alerts = await sendGigAlerts(id)   // no-op if they already went out
     return NextResponse.json({ ok: true, alerts })
   }
+  if (action === 'save') {
+    // Drafts only: a live gig's text is what members were alerted about.
+    if (g.status !== 'draft') return NextResponse.json({ error: 'Only a draft can be edited here.' }, { status: 409 })
+    const parsed = parseGigBody(b, { draft: true })
+    if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    const email = companyEmail(b)
+    if (email === null) return NextResponse.json({ error: 'That company email doesn’t look right.' }, { status: 400 })
+    const fail = await claim(['draft'], { ...parsed.row, company_email: email || null, is_test: b.test === true })
+    if (fail) return NextResponse.json({ error: fail }, { status: 409 })
+    return NextResponse.json({ ok: true })
+  }
+  if (action === 'publish') {
+    if (g.status !== 'draft') return NextResponse.json({ error: 'That gig is not a draft.' }, { status: 409 })
+    // The form sends its current fields; checked in full, exactly like a direct post.
+    const parsed = parseGigBody(b)
+    if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    if (!parsed.row.company_name) return NextResponse.json({ error: 'Add the company name.' }, { status: 400 })
+    const email = companyEmail(b)
+    if (email === null) return NextResponse.json({ error: 'That company email doesn’t look right.' }, { status: 400 })
+    const test = b.test === true
+    // expires_at comes from parseGigBody, so the 30 days run from publishing, not from the draft.
+    const fail = await claim(['draft'], {
+      ...parsed.row, company_email: email || null, is_test: test,
+      status: 'live', approved_at: now, terms_accepted_at: now,
+    })
+    if (fail) return NextResponse.json({ error: fail }, { status: 409 })
+    const { data: live, error: lErr } = await db.from('gigs').select(GIG_SELECT).eq('id', id).single()
+    if (lErr) return NextResponse.json({ error: `Published, but could not reload it: ${lErr.message}` }, { status: 500 })
+    const alerts = test ? { recipients: 0, pushed: 0, emailed: 0 } : await sendGigAlerts(id)
+    const linkEmailed = email ? await emailCompanyManageLink(live as any) : false
+    return NextResponse.json({ ok: true, alerts, linkEmailed, manage_url: gigManageUrl(live.manage_token) })
+  }
   if (action === 'resend_link') {
+    if (g.status === 'draft') return NextResponse.json({ error: 'Publish the gig first.' }, { status: 409 })
     if (g.posted_by !== 'studio' || !g.company_email) return NextResponse.json({ error: 'This gig has no company email.' }, { status: 400 })
     const ok = await emailCompanyManageLink(g as any)
     return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: 'The email did not send. Copy the link instead.' }, { status: 502 })

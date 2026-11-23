@@ -23,6 +23,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const { data: c } = await service.from('castings').select('*').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Casting not found.' }, { status: 404 })
+  // A draft is the author's alone until it is posted.
+  if (c.status === 'draft' && c.author_id !== user.id) return NextResponse.json({ error: 'Casting not found.' }, { status: 404 })
 
   const { data: author } = await service
     .from('customer_profiles').select('id, full_name, avatar_url').eq('id', c.author_id).maybeSingle()
@@ -80,17 +82,32 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: c } = await service.from('castings').select('author_id').eq('id', params.id).maybeSingle()
+  const { data: c } = await service.from('castings').select('author_id, status').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (c.author_id !== user.id) return NextResponse.json({ error: 'Not your casting.' }, { status: 403 })
 
   const b = await req.json().catch(() => ({}))
+  // DRAFTS (2026-11-23): posting one is the ONLY way out of 'draft' — { publish: true }.
+  // It counts toward the 3-active cap and starts the 30 days from now. A draft can't
+  // be closed, reopened or renewed; those are stripped below.
+  const isDraft = c.status === 'draft'
+  const publishing = isDraft && b.publish === true
+  if (publishing) {
+    const { count: activeCount, error: cErr } = await service
+      .from('castings').select('id', { count: 'exact', head: true })
+      .eq('author_id', user.id).eq('status', 'open').gt('expires_at', new Date().toISOString())
+    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+    if ((activeCount ?? 0) >= 3) {
+      return NextResponse.json({ error: 'You can have up to 3 active castings at once. Close or let one expire before posting this one.' }, { status: 400 })
+    }
+  }
+  if (isDraft && typeof b.title === 'string' && !b.title.trim()) return NextResponse.json({ error: 'A title is required.' }, { status: 400 })
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (typeof b.title === 'string') patch.title = b.title.trim().slice(0, 120)
   if (typeof b.description === 'string') patch.description = b.description.slice(0, 2000)
   if (['paid', 'unpaid', 'tfp'].includes(b.compensation_type)) patch.compensation_type = b.compensation_type
   if (Array.isArray(b.roles_needed)) patch.roles_needed = b.roles_needed.map((r: unknown) => String(r)).filter(Boolean).slice(0, 12)
-  if (['open', 'closed'].includes(b.status)) patch.status = b.status
+  if (!isDraft && ['open', 'closed'].includes(b.status)) patch.status = b.status
   if (['none', 'set', 'buyout'].includes(b.plan_mode)) patch.plan_mode = b.plan_mode
   if ('set_slug' in b) patch.set_slug = b.set_slug ? String(b.set_slug) : null
   if ('hours' in b) patch.hours = b.hours != null ? Number(b.hours) : null
@@ -108,14 +125,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     patch.mood_board = b.mood_board.filter((x: { url?: unknown }) => x && x.url).map((x: { url: unknown; mature?: unknown }) => ({ url: String(x.url), mature: !!x.mature })).slice(0, 6)
   }
   // Renew: back on the board for another 30 days (also reopens if it was closed).
-  if (b.renew === true) {
+  if (b.renew === true && !isDraft) {
     patch.expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     patch.status = 'open'
   }
   if ('pinned_message_id' in b) patch.pinned_message_id = b.pinned_message_id || null
+  if (publishing) {
+    patch.status = 'open'
+    patch.expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  }
 
-  const { error } = await service.from('castings').update(patch).eq('id', params.id)
+  // A publish is a CLAIM on the draft, so a double tap can't post it twice.
+  let upd = service.from('castings').update(patch).eq('id', params.id)
+  if (publishing) upd = upd.eq('status', 'draft')
+  const { data: done, error } = await upd.select('id')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!done?.length) return NextResponse.json({ error: 'That casting changed — reload and try again.' }, { status: 409 })
   return NextResponse.json({ ok: true })
 }
 

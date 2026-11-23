@@ -2,9 +2,10 @@
 // both the API routes and the client pages. Server-only work (alerts, emails,
 // pushes) lives in lib/gigs-server.ts.
 
-export type GigStatus = 'pending' | 'live' | 'declined' | 'pulled' | 'filled' | 'closed'
+export type GigStatus = 'draft' | 'pending' | 'live' | 'declined' | 'pulled' | 'filled' | 'closed'
 
 export const GIG_STATUS_LABEL: Record<GigStatus, string> = {
+  draft: 'Draft',
   pending: 'Waiting for approval',
   live: 'Live',
   declined: 'Declined',

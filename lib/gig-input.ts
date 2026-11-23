@@ -12,16 +12,20 @@ export type GigFields = {
   apply_by: string | null; expires_at: string
 }
 
-export function parseGigBody(b: any): { row: GigFields } | { error: string } {
+// opts.draft (2026-11-23): a DRAFT only needs a title, so a half-finished gig
+// can be saved. Pay and roles are checked when it is published, through this
+// same function without the flag — so a draft can never go live unchecked.
+export function parseGigBody(b: any, opts: { draft?: boolean } = {}): { row: GigFields } | { error: string } {
+  const draft = opts.draft === true
   const title = str(b?.title, 120)
   if (!title) return { error: 'Give the gig a title.' }
   const pay = str(b?.pay, 80)
   // Paid gigs only: there has to be a number in it.
-  if (!pay || !/\d/.test(pay)) return { error: 'Gigs are paid work. Add the rate or budget, like "$400 / day".' }
+  if (!draft && (!pay || !/\d/.test(pay))) return { error: 'Gigs are paid work. Add the rate or budget, like "$400 / day".' }
   const roles = Array.isArray(b?.roles_needed)
     ? Array.from(new Set(b.roles_needed.map((r: unknown) => String(r).trim()).filter(Boolean))).slice(0, 8) as string[]
     : []
-  if (!roles.length) return { error: 'Pick at least one role you are hiring for.' }
+  if (!draft && !roles.length) return { error: 'Pick at least one role you are hiring for.' }
   const today = centralToday()
   const gig_date = isDate(b?.gig_date) ? b.gig_date : null
   const apply_by = isDate(b?.apply_by) ? b.apply_by : null

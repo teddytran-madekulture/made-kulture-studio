@@ -153,6 +153,7 @@ export default function CastingsPage() {
                     <div style={{ fontFamily: 'Inter', fontSize: 16, fontWeight: 600, color: 'var(--t-fg)' }}>{c.title}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {c.status === 'draft' && <span style={{ background: 'rgba(var(--t-gold-rgb), 0.15)', color: 'var(--t-gold)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>DRAFT</span>}
                     {c.expires_at && new Date(c.expires_at) < new Date() && <span style={{ background: 'rgba(255,120,120,0.12)', color: 'var(--t-err)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>EXPIRED</span>}
                     {c.mature && <span style={{ background: 'rgba(var(--t-gold-rgb), 0.15)', color: 'var(--t-gold)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>18+</span>}
                     <span style={{ background: cc.bg, color: cc.fg, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 4 }}>{COMP_LABEL[c.compensation_type]}</span>

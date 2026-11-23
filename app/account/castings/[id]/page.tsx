@@ -109,6 +109,14 @@ export default function CastingDetailPage() {
     const res = await fetch(`/api/castings/${id}`, { method: 'DELETE' })
     if (res.ok) router.push('/account/castings'); else setBusy(false)
   }
+  const publish = async () => {
+    setBusy(true)
+    const res = await fetch(`/api/castings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ publish: true }) })
+    const d = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok) { window.alert(d.error ?? 'Could not post it.'); return }
+    load()
+  }
   const renew = async () => {
     setBusy(true)
     await fetch(`/api/castings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ renew: true }) })
@@ -203,6 +211,11 @@ export default function CastingDetailPage() {
           <span style={{ background: cc.bg, color: cc.fg, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 9px', borderRadius: 4 }}>{cc.label}</span>
         </div>
       </div>
+      {casting.status === 'draft' && (
+        <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', background: 'rgba(var(--t-gold-rgb), 0.08)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 6, padding: '10px 12px', margin: '4px 0 12px', lineHeight: 1.5 }}>
+          DRAFT. Only you can see this. It&apos;s not on the board yet.
+        </div>
+      )}
       {(casting.status === 'closed' || expired) && (
         <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'var(--t-err)', marginBottom: 8 }}>
           {expired ? 'This casting has expired — renew it to put it back on the board.' : 'This casting is closed.'}
@@ -283,10 +296,12 @@ export default function CastingDetailPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
           {bookHref && <Link href={bookHref} style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', textDecoration: 'none', borderRadius: 6, padding: '10px 16px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600 }}>Book this →</Link>}
           <Link href={`/account/castings/new?id=${id}`} style={{ background: 'transparent', border: '1px solid rgba(var(--t-fg-rgb), calc(0.2 * var(--t-a)))', color: 'rgba(var(--t-fg-rgb), calc(0.8 * var(--t-a)))', borderRadius: 4, padding: '6px 12px', fontFamily: 'Inter', fontSize: 11, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Edit</Link>
-          {casting.status === 'open'
-            ? smallBtn('Close casting', () => setStatus('closed'))
-            : smallBtn('Reopen', () => setStatus('open'))}
-          {expired && smallBtn('Renew (30 days)', renew)}
+          {casting.status === 'draft'
+            ? smallBtn('Post casting', publish)
+            : casting.status === 'open'
+              ? smallBtn('Close casting', () => setStatus('closed'))
+              : smallBtn('Reopen', () => setStatus('open'))}
+          {expired && casting.status !== 'draft' && smallBtn('Renew (30 days)', renew)}
           {smallBtn('Delete', del, true)}
         </div>
       )}

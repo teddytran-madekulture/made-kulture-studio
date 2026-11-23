@@ -100,7 +100,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ castings })
 }
 
-// POST /api/castings — create a casting.
+// POST /api/castings — create a casting. { draft: true } (2026-11-23) saves it as
+// a DRAFT instead: only the author can see it, it is not on the board, has no
+// expiry and does not count toward the 3-active cap until it is posted.
 export async function POST(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -108,15 +110,19 @@ export async function POST(req: NextRequest) {
   const me = await memberAccess(service, user.id)
   if (!me.listed) return notListedResponse(me, 'post castings')
 
-  // Cap active castings per member (open + not expired).
-  const { count: activeCount } = await service
-    .from('castings').select('id', { count: 'exact', head: true })
-    .eq('author_id', user.id).eq('status', 'open').gt('expires_at', new Date().toISOString())
-  if ((activeCount ?? 0) >= 3) {
-    return NextResponse.json({ error: 'You can have up to 3 active castings at once. Close or let one expire before posting another.' }, { status: 400 })
+  const b = await req.json().catch(() => ({}))
+  const draft = b.draft === true
+
+  // Cap active castings per member (open + not expired). Drafts don't count.
+  if (!draft) {
+    const { count: activeCount } = await service
+      .from('castings').select('id', { count: 'exact', head: true })
+      .eq('author_id', user.id).eq('status', 'open').gt('expires_at', new Date().toISOString())
+    if ((activeCount ?? 0) >= 3) {
+      return NextResponse.json({ error: 'You can have up to 3 active castings at once. Close or let one expire before posting another.' }, { status: 400 })
+    }
   }
 
-  const b = await req.json().catch(() => ({}))
   const title = String(b.title ?? '').trim().slice(0, 120)
   if (!title) return NextResponse.json({ error: 'A title is required.' }, { status: 400 })
 
@@ -145,9 +151,9 @@ export async function POST(req: NextRequest) {
     shoot_date: b.shoot_date || null,
     start_hour: b.start_hour != null ? Number(b.start_hour) : null,
     estimated_cost: b.estimated_cost != null ? Number(b.estimated_cost) : null,
-    status: 'open',
+    status: draft ? 'draft' : 'open',
     mature: !!b.mature,
-    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    expires_at: draft ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
   }
 
   const { data, error } = await service.from('castings').insert(row).select('id').single()

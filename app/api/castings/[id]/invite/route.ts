@@ -21,9 +21,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { toUserId } = await req.json().catch(() => ({}))
   if (!toUserId || toUserId === user.id) return NextResponse.json({ error: 'Invalid member.' }, { status: 400 })
 
-  const { data: c } = await service.from('castings').select('author_id, title').eq('id', params.id).maybeSingle()
+  const { data: c } = await service.from('castings').select('author_id, title, status').eq('id', params.id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'Casting not found.' }, { status: 404 })
   if (c.author_id !== user.id) return NextResponse.json({ error: 'Only the author can invite.' }, { status: 403 })
+  // The invitee couldn't open a draft, so the invite would lead nowhere.
+  if (c.status === 'draft') return NextResponse.json({ error: 'Post the casting before inviting people.' }, { status: 409 })
 
   if (!(await memberAccess(service, toUserId)).listed) return NextResponse.json({ error: 'Member not found.' }, { status: 404 })
 

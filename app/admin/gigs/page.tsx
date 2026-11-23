@@ -14,7 +14,7 @@ type Row = {
   alerts_sent_at: string | null; alerts_count: number | null; expires_at: string | null; created_at: string
   applicants: number; reports: { reason: string; note: string | null }[]
 }
-type Filter = 'pending' | 'live' | 'flagged' | 'all'
+type Filter = 'drafts' | 'pending' | 'live' | 'flagged' | 'all'
 
 const card: React.CSSProperties = { background: '#141416', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 16 }
 const btn = (tone: 'light' | 'ghost' | 'danger' | 'gold'): React.CSSProperties => ({
@@ -39,6 +39,7 @@ export default function AdminGigsPage() {
   const [roles, setRoles] = useState<string[]>([])
   const [roleOptions, setRoleOptions] = useState<string[]>([...CREATIVE_ROLES])
   const [roleQ, setRoleQ] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)   // the draft open in the form
 
   const load = () => fetch('/api/admin/gigs', { cache: 'no-store' }).then(async r => {
     const d = await r.json().catch(() => ({}))
@@ -54,10 +55,10 @@ export default function AdminGigsPage() {
 
   const counts = useMemo(() => {
     const r = rows ?? []
-    return { pending: r.filter(g => g.status === 'pending').length, live: r.filter(g => g.status === 'live').length, flagged: r.filter(g => g.status === 'pulled' || g.reports.length > 0).length, all: r.length }
+    return { drafts: r.filter(g => g.status === 'draft').length, pending: r.filter(g => g.status === 'pending').length, live: r.filter(g => g.status === 'live').length, flagged: r.filter(g => g.status === 'pulled' || g.reports.length > 0).length, all: r.length }
   }, [rows])
   const shown = useMemo(() => (rows ?? []).filter(g =>
-    filter === 'all' ? true : filter === 'flagged' ? (g.status === 'pulled' || g.reports.length > 0) : g.status === filter), [rows, filter])
+    filter === 'all' ? true : filter === 'drafts' ? g.status === 'draft' : filter === 'flagged' ? (g.status === 'pulled' || g.reports.length > 0) : g.status === filter), [rows, filter])
 
   const call = async (method: string, body: any) => {
     setNote('')
@@ -79,13 +80,33 @@ export default function AdminGigsPage() {
     if (!confirm('Delete this gig, its applications and conversations? This cannot be undone.')) return
     setBusy(id); await call('DELETE', { id }); setBusy(null); load()
   }
+  const fields = () => ({ ...form, roles_needed: roles, gig_date: form.gig_date || null, apply_by: form.apply_by || null })
+  const closeForm = () => { setForm({ ...BLANK }); setRoles([]); setRoleQ(''); setEditingId(null); setShowForm(false) }
+  // SAVE DRAFT: only a title is needed; nothing reaches members or the company.
+  const saveDraft = async () => {
+    setBusy('new')
+    const d = editingId ? await call('PATCH', { id: editingId, action: 'save', ...fields() }) : await call('POST', { ...fields(), draft: true })
+    setBusy(null)
+    if (!d) return
+    setNote('Draft saved. Nothing was sent. It is under DRAFTS; open it with EDIT to finish and post it.')
+    closeForm(); setFilter('drafts'); load()
+  }
+  const editDraft = (g: Row) => {
+    setForm({
+      test: !!g.is_test, company_name: g.company_name || '', company_email: g.company_email || '', title: g.title || '',
+      description: g.description || '', pay: g.pay || '', gig_date: g.gig_date || '', date_note: g.date_note || '',
+      location: g.location || '', at_studio: !!g.at_studio, apply_by: g.apply_by || '',
+    })
+    setRoles(g.roles_needed ?? []); setRoleQ(''); setEditingId(g.id); setShowForm(true); setNote('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   const submit = async () => {
     setBusy('new')
-    const d = await call('POST', { ...form, roles_needed: roles, gig_date: form.gig_date || null, apply_by: form.apply_by || null })
+    const d = editingId ? await call('PATCH', { id: editingId, action: 'publish', ...fields() }) : await call('POST', fields())
     setBusy(null)
     if (!d) return
     setNote(`Posted${form.test ? ' as a TEST: no members were alerted and it is hidden from the board. Open it with MEMBER VIEW to apply from your member account.' : `. Alerted ${d.alerts?.recipients ?? 0} matching members.`}${form.company_email ? (d.linkEmailed ? ' The company got its private link by email.' : ' The company email did NOT send — copy the link from the gig below.') : ' No company email given — copy the private link from the gig below and send it to them.'}`)
-    setForm({ ...BLANK }); setRoles([]); setShowForm(false); setFilter('live'); load()
+    closeForm(); setFilter('live'); load()
   }
   const copy = (text: string) => { navigator.clipboard?.writeText(text).then(() => setNote('Private link copied.')).catch(() => setNote(text)) }
 
@@ -95,7 +116,7 @@ export default function AdminGigsPage() {
     <div style={{ padding: '24px 20px', maxWidth: 1100, fontFamily: 'Inter, sans-serif', color: '#eee' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 32, margin: 0, letterSpacing: '0.02em' }}>GIGS</h1>
-        <button type="button" style={btn('gold')} onClick={() => setShowForm(s => !s)}>{showForm ? 'CANCEL' : '+ POST FOR A COMPANY'}</button>
+        <button type="button" style={btn('gold')} onClick={() => (showForm ? closeForm() : setShowForm(true))}>{showForm ? 'CANCEL' : '+ POST FOR A COMPANY'}</button>
       </div>
       <p style={{ color: '#999', fontSize: 13, margin: '6px 0 18px', lineHeight: 1.5 }}>
         Paid work for the directory. Gigs from Brand and Vendor accounts wait here until you approve them; approving puts them live and alerts every listed member whose roles match (push, plus email if they have it on). Gigs you post for an outside company go live right away, and the company gets a private link to see applicants and reply. Three member reports pull a gig until you look at it.
@@ -103,7 +124,7 @@ export default function AdminGigsPage() {
 
       {showForm && (
         <div style={{ ...card, marginBottom: 20, borderColor: 'rgba(212,168,67,0.35)' }}>
-          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: '#d4a843', fontWeight: 700 }}>POST A GIG FOR AN OUTSIDE COMPANY</div>
+          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: '#d4a843', fontWeight: 700 }}>{editingId ? 'EDITING A DRAFT' : 'POST A GIG FOR AN OUTSIDE COMPANY'}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0 14px' }}>
             <div><label style={lbl}>COMPANY NAME</label><input style={input} value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} /></div>
             <div><label style={lbl}>COMPANY EMAIL — private, gets the applicant link</label><input style={input} type="email" value={form.company_email} onChange={e => setForm({ ...form, company_email: e.target.value })} /></div>
@@ -133,12 +154,16 @@ export default function AdminGigsPage() {
             <input type="checkbox" checked={form.test} onChange={e => setForm({ ...form, test: e.target.checked })} style={{ marginTop: 3 }} />
             <span>Test only, don&apos;t alert members. Hidden from the members&apos; board; open it with MEMBER VIEW. The company link still emails to the address above (use your own).</span>
           </label>
-          <button type="button" disabled={busy === 'new'} style={{ ...btn('gold'), marginTop: 14, padding: '11px 18px' }} onClick={submit}>{busy === 'new' ? 'POSTING…' : form.test ? 'POST TEST GIG' : 'POST + ALERT MEMBERS'}</button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button type="button" disabled={busy === 'new'} style={{ ...btn('gold'), padding: '11px 18px' }} onClick={submit}>{busy === 'new' ? 'WORKING…' : form.test ? 'POST TEST GIG' : 'POST + ALERT MEMBERS'}</button>
+            <button type="button" disabled={busy === 'new'} style={{ ...btn('ghost'), padding: '11px 18px' }} onClick={saveDraft}>SAVE DRAFT</button>
+          </div>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>A draft only needs a title. It stays here under DRAFTS; nothing goes to members or the company until you post it.</div>
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {(['pending', 'live', 'flagged', 'all'] as const).map(f => (
+        {(['drafts', 'pending', 'live', 'flagged', 'all'] as const).map(f => (
           <button key={f} type="button" onClick={() => setFilter(f)} style={{ ...btn(filter === f ? 'light' : 'ghost'), fontSize: 12 }}>
             {f.toUpperCase()} ({counts[f]})
           </button>
@@ -165,7 +190,7 @@ export default function AdminGigsPage() {
                 <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   {g.is_test && <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', borderRadius: 4, background: 'rgba(212,168,67,0.2)', color: '#d4a843' }}>TEST</span>}
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.08)', color: g.status === 'live' ? '#7be09a' : g.status === 'pending' ? '#d4a843' : '#ccc', textTransform: 'uppercase' }}>{expired && g.status === 'live' ? 'Expired' : GIG_STATUS_LABEL[g.status as keyof typeof GIG_STATUS_LABEL]}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'rgba(60,255,120,0.12)', color: '#7be09a' }}>{g.pay}</span>
+                  {g.pay && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'rgba(60,255,120,0.12)', color: '#7be09a' }}>{g.pay}</span>}
                 </div>
               </div>
               <div style={{ fontSize: 13, color: '#bbb', marginTop: 10, lineHeight: 1.6 }}>
@@ -186,11 +211,12 @@ export default function AdminGigsPage() {
                 {g.posted_by === 'studio' && ` · company email: ${g.company_email || 'none'}`}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                {g.status === 'draft' && <button type="button" style={btn('gold')} onClick={() => editDraft(g)}>EDIT</button>}
                 {(g.status === 'pending' || g.status === 'declined') && <button type="button" disabled={busy === g.id} style={btn('gold')} onClick={() => act(g.id, 'approve')}>{busy === g.id ? '…' : 'APPROVE + ALERT'}</button>}
                 {g.status === 'pending' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'decline')}>DECLINE</button>}
                 {g.status === 'live' && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'pull')}>PULL</button>}
                 {g.status === 'pulled' && <button type="button" disabled={busy === g.id} style={btn('light')} onClick={() => act(g.id, 'restore')}>RESTORE</button>}
-                <a href={`/account/gigs/${g.id}`} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>MEMBER VIEW</a>
+                {g.status !== 'draft' && <a href={`/account/gigs/${g.id}`} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>MEMBER VIEW</a>}
                 {g.manage_url && <button type="button" style={btn('ghost')} onClick={() => copy(g.manage_url!)}>COPY COMPANY LINK</button>}
                 {g.manage_url && <a href={g.manage_url} target="_blank" rel="noreferrer" style={{ ...btn('ghost'), textDecoration: 'none' }}>OPEN APPLICANTS</a>}
                 {g.posted_by === 'studio' && g.company_email && <button type="button" disabled={busy === g.id} style={btn('ghost')} onClick={() => act(g.id, 'resend_link')}>RE-EMAIL LINK</button>}

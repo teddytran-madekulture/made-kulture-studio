@@ -35,6 +35,7 @@ export default function NewCastingPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [editId, setEditId] = useState<string | null>(null) // set when editing an existing casting
+  const [isDraft, setIsDraft] = useState(false)             // editing a casting that hasn't been posted yet
 
   // Edit mode: ?id=<castingId> pre-fills the form with the casting's current values.
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function NewCastingPage() {
       if (!r.ok || !d.casting) { setError(d.error ?? 'Could not load casting.'); return }
       if (!d.isAuthor) { router.replace(`/account/castings/${id}`); return }
       const c = d.casting
+      setIsDraft(c.status === 'draft')
       setTitle(c.title ?? '')
       setDescription(c.description ?? '')
       setComp(['paid', 'unpaid', 'tfp'].includes(c.compensation_type) ? c.compensation_type : 'tfp')
@@ -104,7 +106,9 @@ export default function NewCastingPage() {
   const removeGear = (id: string) => setCart(prev => prev.filter(l => l.id !== id))
   const resetPlan = () => { setMode('none'); setSetSlug(''); setHours(''); setGuests(''); setCart([]); setShootDate(''); setStartHour('') }
 
-  const submit = async () => {
+  // mode: 'post' = put it on the board (new, or posting a draft) · 'draft' = save
+  // without posting · 'save' = save changes to an already-posted casting.
+  const submit = async (as: 'post' | 'draft' | 'save' = editId ? (isDraft ? 'post' : 'save') : 'post') => {
     if (!title.trim()) { setError('Give your casting a title.'); return }
     setSaving(true); setError('')
     const payload = {
@@ -117,6 +121,8 @@ export default function NewCastingPage() {
       shoot_date: shootDate || null,
       start_hour: startHour ? Number(startHour) : null,
       estimated_cost: estimate.total,
+      ...(!editId && as === 'draft' ? { draft: true } : {}),
+      ...(editId && isDraft && as === 'post' ? { publish: true } : {}),
     }
     const res = await fetch(editId ? `/api/castings/${editId}` : '/api/castings', {
       method: editId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
@@ -127,6 +133,7 @@ export default function NewCastingPage() {
     if (res.ok) router.push(`/account/castings/${editId ?? d.id}`)
     else setError(d.error ?? 'Could not save.')
   }
+  const draftMode = !editId || isDraft   // the casting isn't on the board yet
 
   const input: React.CSSProperties = { width: '100%', background: 'var(--t-surface)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.12 * var(--t-a)))', borderRadius: 6, padding: '12px 14px', fontFamily: 'Inter', fontSize: 14, color: 'var(--t-fg)', outline: 'none', boxSizing: 'border-box' }
   const label: React.CSSProperties = { display: 'block', fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '20px 0 8px' }
@@ -151,7 +158,7 @@ export default function NewCastingPage() {
   return (
     <div style={{ maxWidth: 560 }}>
       <Link href="/account/castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', textDecoration: 'none' }}>← Castings</Link>
-      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '8px 0 4px' }}>{editId ? 'EDIT CASTING' : 'POST A CASTING'}</h1>
+      <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 34, margin: '8px 0 4px' }}>{editId ? (isDraft ? 'EDIT DRAFT' : 'EDIT CASTING') : 'POST A CASTING'}</h1>
       <p style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))', margin: '0 0 8px' }}>Describe the shoot, who you need, and optionally plan the studio time to see an estimate.</p>
 
       {error && <div style={{ background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.2)', borderRadius: 6, padding: '10px 14px', fontFamily: 'Inter', fontSize: 13, color: 'var(--t-err)', marginTop: 16 }}>{error}</div>}
@@ -265,9 +272,21 @@ export default function NewCastingPage() {
         </div>
       )}
 
-      <button onClick={submit} disabled={saving} style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', opacity: saving ? 0.6 : 1, marginTop: 24 }}>
-        {saving ? (editId ? 'SAVING…' : 'POSTING…') : (editId ? 'SAVE CHANGES' : 'POST CASTING')}
-      </button>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 24 }}>
+        <button onClick={() => submit()} disabled={saving} style={{ background: 'var(--t-fg)', color: 'var(--t-on-fg)', border: 'none', borderRadius: 6, padding: '14px 32px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+          {saving ? 'SAVING…' : draftMode ? 'POST CASTING' : 'SAVE CHANGES'}
+        </button>
+        {draftMode && (
+          <button onClick={() => submit('draft')} disabled={saving} style={{ background: 'transparent', color: 'var(--t-fg)', border: '1px solid rgba(var(--t-fg-rgb), calc(0.25 * var(--t-a)))', borderRadius: 6, padding: '13px 24px', fontFamily: 'Inter', fontSize: 13, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {editId ? 'SAVE DRAFT' : 'SAVE AS DRAFT'}
+          </button>
+        )}
+      </div>
+      {draftMode && (
+        <div style={{ fontFamily: 'Inter', fontSize: 12, color: 'rgba(var(--t-fg-rgb), calc(0.4 * var(--t-a)))', marginTop: 10, lineHeight: 1.5 }}>
+          A draft is only visible to you. It&apos;s not on the board and doesn&apos;t count toward your 3 active castings until you post it.
+        </div>
+      )}
     </div>
   )
 }
