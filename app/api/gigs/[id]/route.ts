@@ -4,6 +4,8 @@
 //   PATCH → the poster: { action: 'close' | 'filled' } or { action: 'edit', ...fields }.
 //           An edit is only allowed while pending or declined, and sends it
 //           back to pending — an approved gig can't be quietly rewritten.
+import { markGigThreadRead } from '@/lib/gig-threads'
+import { syncMemberBadge } from '@/lib/member-push'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
@@ -73,6 +75,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const { data: msgs, error: mErr } = await db.from('gig_messages').select('sender, body, created_at').eq('application_id', app.id).order('created_at')
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 })
     thread = msgs ?? []
+    // Opening the gig page = reading the thread (migration 192). Clears the
+    // Messages row dot and the badge. Never blocks the page on a failure.
+    try { if (await markGigThreadRead(app.id)) await syncMemberBadge(user.id) }
+    catch (e) { console.error('[gigs] mark thread read failed:', (e as Error).message) }
   }
   return NextResponse.json({ ...base, application: app ?? null, thread })
 }

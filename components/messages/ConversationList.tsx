@@ -12,6 +12,8 @@ export type Conv = {
   last: { body: string; fromMe: boolean; at: string } | null
   unread: number
 }
+// A company's reply on a gig I applied to. The thread lives on the gig page.
+type GigThread = { gigId: string; title: string; company: string; last: { body: string; fromMe: boolean; at: string }; unread: number }
 
 const muted = (a: number) => `rgba(var(--t-fg-rgb), calc(${a} * var(--t-a)))`
 
@@ -29,12 +31,14 @@ const preview = (body: string) => body.startsWith('REQUEST: ') ? `Request · ${b
 
 export default function ConversationList({ selectedId, pane = false }: { selectedId?: string | null; pane?: boolean }) {
   const [convs, setConvs] = useState<Conv[]>([])
+  const [gigs, setGigs] = useState<GigThread[]>([])
+  const [gigsFailed, setGigsFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     const load = () => fetch('/api/messages/conversations', { cache: 'no-store' })
-      .then(async r => { if (!r.ok) throw new Error(); const d = await r.json(); setConvs(d.conversations ?? []); setFailed(false) })
+      .then(async r => { if (!r.ok) throw new Error(); const d = await r.json(); setConvs(d.conversations ?? []); setGigs(d.gigThreads ?? []); setGigsFailed(!!d.gigThreadsFailed); setFailed(false) })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false))
     load()
@@ -45,7 +49,7 @@ export default function ConversationList({ selectedId, pane = false }: { selecte
   if (loading) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: muted(0.4), padding: pane ? 18 : 0 }}>Loading…</div>
   // A failed read must never look like an empty inbox.
   if (failed && convs.length === 0) return <div style={{ fontFamily: 'Inter', fontSize: 14, color: 'var(--t-err)', padding: pane ? 18 : 0 }}>Could not load messages. Refresh to try again.</div>
-  if (convs.length === 0) return (
+  if (convs.length === 0 && gigs.length === 0 && !gigsFailed) return (
     <div style={{ fontFamily: 'Inter', fontSize: 14, color: muted(0.45), lineHeight: 1.6, padding: pane ? 18 : 0 }}>
       No messages yet. Open a member from the <Link href="/account/directory" style={{ color: 'var(--t-gold)' }}>directory</Link> and hit Message to start a conversation.
     </div>
@@ -53,6 +57,31 @@ export default function ConversationList({ selectedId, pane = false }: { selecte
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: pane ? 0 : 6 }}>
+      {gigsFailed && <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-err)', padding: pane ? '10px 16px' : '4px 2px' }}>Could not load gig replies. Refresh to try again.</div>}
+      {gigs.map(g => (
+        <Link key={`gig-${g.gigId}`} href={`/account/gigs/${g.gigId}#thread`}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: 'inherit',
+            padding: pane ? '12px 16px' : '12px 14px',
+            background: !pane ? (g.unread ? 'rgba(var(--t-gold-rgb), 0.06)' : 'var(--t-surface)') : 'transparent',
+            border: pane ? 'none' : `1px solid ${muted(0.08)}`, borderRadius: pane ? 0 : 8,
+            borderLeft: pane ? '3px solid transparent' : undefined,
+          }}>
+          <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'var(--t-surface-hi)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontFamily: 'Inter', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--t-gold)' }}>GIG</span>
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ fontFamily: 'Inter', fontSize: 14, fontWeight: g.unread ? 700 : 600, color: 'var(--t-fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.company} · {g.title}</span>
+              <span style={{ fontFamily: 'Inter', fontSize: 11, color: muted(0.4), flexShrink: 0 }}>{when(g.last.at)}</span>
+            </div>
+            <div style={{ fontFamily: 'Inter', fontSize: 13, color: g.unread ? muted(0.85) : muted(0.45), fontWeight: g.unread ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
+              {`${g.last.fromMe ? 'You: ' : ''}${g.last.body.replace(/\s+/g, ' ')}`}
+            </div>
+          </div>
+          {g.unread > 0 && <span aria-label={`${g.unread} unread`} style={{ flexShrink: 0, width: 9, height: 9, borderRadius: 5, background: 'var(--t-gold)' }} />}
+        </Link>
+      ))}
       {convs.map(c => {
         const on = c.id === selectedId
         return (

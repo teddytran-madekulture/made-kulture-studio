@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createService } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { blockedIds } from '@/lib/blocks'
+import { gigThreadRows, type GigThreadRow } from '@/lib/gig-threads'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -63,5 +64,13 @@ export async function GET() {
     })
   }
 
-  return NextResponse.json({ conversations, totalUnread })
+  // Company replies on gigs I applied to (2026-11-23). They live on the gig
+  // page, so each row links there. A failed read is reported, never shown as none.
+  let gigThreads: GigThreadRow[] = []
+  let gigThreadsFailed = false
+  try { gigThreads = await gigThreadRows(user.id) }
+  catch (e) { gigThreadsFailed = true; console.error('[messages/conversations] gig threads', (e as Error).message) }
+  totalUnread += gigThreads.reduce((n, r) => n + r.unread, 0)
+
+  return NextResponse.json({ conversations, gigThreads, gigThreadsFailed, totalUnread })
 }

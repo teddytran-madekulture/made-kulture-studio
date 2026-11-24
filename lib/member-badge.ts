@@ -4,10 +4,12 @@
 // same functions so the icon can never say 3 while the app shows 2.
 //
 // Counted: unread messages (listing requests ARE messages, so they're in
-// here) + new applicants on castings I posted. Only things with a "seen"
+// here) + new applicants on castings I posted + unread company replies on
+// gigs I applied to (they show as rows in Messages). Only things with a "seen"
 // state belong here; anything without one would pin the icon at a number
 // nobody can clear.
 import { createClient } from '@supabase/supabase-js'
+import { unreadGigReplyCount } from '@/lib/gig-threads'
 
 const service = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -49,6 +51,8 @@ export async function unseenApplicantCount(userId: string): Promise<number> {
 /** The app-icon number. THROWS on a lookup error — callers must NOT turn a
  *  failed count into 0, which would wipe a real badge. */
 export async function memberBadgeCount(userId: string): Promise<number> {
-  const [m, a] = await Promise.all([unreadMessageCount(userId), unseenApplicantCount(userId)])
-  return m + a
+  // + company replies on gigs I applied to (2026-11-23, migration 192): seen
+  // state = gig_applications.member_read_at, stamped when I open the gig page.
+  const [m, a, g] = await Promise.all([unreadMessageCount(userId), unseenApplicantCount(userId), unreadGigReplyCount(userId)])
+  return m + a + g
 }

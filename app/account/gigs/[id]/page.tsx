@@ -58,6 +58,8 @@ export default function GigDetailPage() {
       track('gig_view', { target_id: d.gig.id, meta: { src } })
     }
     setApplicants(d.applicants ?? []); setApplication(d.application ?? null); setThread(d.thread ?? [])
+    // The server just marked this thread read: refresh the Messages row + badges.
+    if ((d.thread ?? []).length) { window.dispatchEvent(new Event('mk-messages-changed')); window.dispatchEvent(new Event('mk-badges')) }
     setLoading(false)
   }).catch(() => { setError('Could not load this gig.'); setLoading(false) })
 
