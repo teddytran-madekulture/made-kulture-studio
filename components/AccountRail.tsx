@@ -68,6 +68,24 @@ export default function AccountRail() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [moreOpen, setMoreOpen] = useState(false)
   const [myId, setMyId] = useState<string | null>(null)
+  // 2026-11-23: Gigs vs Hire a Creative by account type. Customers (just booking)
+  // get Hire a Creative; creatives, brands and vendors get Gigs. Neither shows
+  // until the type is known, so the menu never flashes the wrong one. Both PAGES
+  // stay open to every account by direct link — this only decides the menu.
+  const [acctType, setAcctType] = useState<string | null>(null)
+  useEffect(() => {
+    try { const c = sessionStorage.getItem('mk-acct-type'); if (c) setAcctType(c) } catch {}
+    fetch('/api/account/profile', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(d => {
+      if (!d?.profile) return
+      // No type on file reads as a customer (the signup default).
+      const t = typeof d.profile.account_type === 'string' && d.profile.account_type ? d.profile.account_type : 'customer'
+      if (t) { setAcctType(t); try { sessionStorage.setItem('mk-acct-type', t) } catch {} }
+    }).catch(() => {})
+  }, [pathname === '/account/profile'])   // re-read after a visit to Settings, where the type can change
+  const navItems = ITEMS.filter(it =>
+    it.href === '/account/gigs' ? (acctType !== null && acctType !== 'customer')
+    : it.href === '/account/hire' ? acctType === 'customer'
+    : true)
   useEffect(() => {
     createClient().auth.getSession().then(({ data }) => setMyId(data.session?.user.id ?? null)).catch(() => {})
   }, [])
@@ -200,7 +218,7 @@ export default function AccountRail() {
         <Link href="/" className="ar-logo" title="Made Kulture home"><span className="mk">MK</span><span className="full">MADE KULTURE</span></Link>
         <Link href="/" className="ar-it ar-home" title="Made Kulture home"><Icon name="site" /><span className="lbl">Made Kulture home</span></Link>
         <nav className="ar-nav">
-          {ITEMS.map(it => (
+          {navItems.map(it => (
             <Link key={it.href} href={it.href} className={`ar-it${isActive(it.href) ? ' on' : ''}`} title={it.label}>
               <Icon name={it.icon} active={isActive(it.href)} />
               {badge(it.href) && <span className="ar-dot">{badgeText(it.href)}</span>}
@@ -248,7 +266,7 @@ export default function AccountRail() {
         <>
           <div className="am-scrim" onClick={() => setMoreOpen(false)} />
           <div className="am-sheet">
-            {[...ITEMS.filter(i => !MOBILE_BAR.includes(i.href)), SUPPORT, SETTINGS].map(it => (
+            {[...navItems.filter(i => !MOBILE_BAR.includes(i.href)), SUPPORT, SETTINGS].map(it => (
               <Link key={it.href} href={it.href} className={`ar-it${isActive(it.href) ? ' on' : ''}`}><Icon name={it.icon} /><span>{it.label}</span></Link>
             ))}
             <Link href="/" className="ar-it"><Icon name="site" /><span>Made Kulture home</span></Link>
