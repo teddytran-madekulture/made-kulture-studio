@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "target": "ES2020",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "types": [
+      "node",
+      "react"
+    ],
+    "incremental": false
+  },
+  "files": [
+    "lib/nomad-checkout.ts",
+    "app/api/account/nomad/checkout-photo/route.ts",
+    "app/api/account/nomad/route.ts",
+    "app/api/admin/nomad/members/route.ts",
+    "app/admin/nomad/NomadOps.tsx",
+    "app/account/nomad/page.tsx",
+    "app/api/cron/nomad/route.ts"
+  ]
+}

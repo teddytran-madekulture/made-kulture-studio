@@ -1,0 +1,2 @@
+{ "extends": "./tsconfig.json", "compilerOptions": { "noEmit": true, "incremental": false },
+  "files": ["app/terms/page.tsx", "app/plus/page.tsx", "next-env.d.ts"] }

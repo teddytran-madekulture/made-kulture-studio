@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "files": [
+    "lib/nomad.ts",
+    "app/api/account/nomad/route.ts",
+    "app/api/cron/nomad/route.ts",
+    "app/api/admin/nomad/members/route.ts",
+    "app/api/admin/nomad/route.ts",
+    "app/admin/nomad/page.tsx",
+    "app/admin/nomad/NomadOps.tsx",
+    "app/account/nomad/page.tsx",
+    "app/api/webhooks/square/route.ts",
+    "lib/igloohome.ts",
+    "next-env.d.ts",
+    "components/AdminShell.tsx"
+  ]
+}

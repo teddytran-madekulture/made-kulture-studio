@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.check.json",
+  "files": [
+    "lib/gigs.ts", "lib/gig-input.ts", "lib/gigs-server.ts", "lib/email.ts",
+    "app/api/gigs/route.ts", "app/api/gigs/[id]/route.ts", "app/api/gigs/[id]/apply/route.ts",
+    "app/api/gigs/[id]/thread/route.ts", "app/api/gigs/[id]/report/route.ts",
+    "app/api/admin/gigs/route.ts", "app/api/gig-manage/[token]/route.ts",
+    "app/account/gigs/page.tsx", "app/account/gigs/new/page.tsx", "app/account/gigs/[id]/page.tsx",
+    "app/admin/gigs/page.tsx", "app/gig-manage/[token]/page.tsx", "app/gig-manage/layout.tsx",
+    "app/account/profile/page.tsx", "app/api/account/profile/route.ts", "components/AccountRail.tsx", "components/AdminShell.tsx"
+  ]
+}

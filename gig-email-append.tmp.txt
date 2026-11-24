@@ -1,0 +1,41 @@
+
+// ─── Gigs (migration 185, 2026-11-21) ─────────────────────────────────────────
+// "New paid gig" alert to every matching member, through Resend BATCH (100 per
+// call) so a gig that matches 200 photographers doesn't send 200 sequential
+// requests from one serverless function. One bad address rejects a whole batch
+// (see lib/marketing.ts cleanEmail), so addresses are screened first.
+// Returns how many were ACCEPTED by Resend. Never throws.
+export async function sendGigAlertBatch(recipients: string[], gig: {
+  title: string; company: string; pay: string; when: string; location: string; roles: string[]; url: string
+}): Promise<number> {
+  if (!process.env.RESEND_API_KEY || !recipients.length) return 0
+  const ok = Array.from(new Set(recipients.map(e => String(e).trim().toLowerCase())))
+    .filter(e => /^[^\s@<>(),;:"\[\]\\]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(e) && !/@(?:[^@]*\.)?(example\.(com|net|org)|test|invalid|localhost)$/i.test(e))
+  const row = (label: string, value: string) => value
+    ? `<tr><td style="padding:6px 0;border-bottom:1px solid #2a2a2a;"><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">${label}</span><br/><span style="font-size:15px;color:#fff;">${esc(value)}</span></td></tr>`
+    : ''
+  const body = `
+    <p style="margin:0 0 6px;font-size:11px;color:${ACCENT_COLOR};letter-spacing:0.15em;text-transform:uppercase;font-weight:700;">New paid gig</p>
+    <h1 style="margin:0 0 18px;font-size:22px;font-weight:700;color:#fff;">${esc(gig.title)}</h1>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#111;border-radius:6px;padding:16px 22px;margin-bottom:22px;">
+      ${row('Company', gig.company)}${row('Pay', gig.pay)}${row('When', gig.when)}${row('Where', gig.location)}${row('Looking for', gig.roles.join(', '))}
+    </table>
+    ${NOTIF_BUTTON(gig.url, 'See the gig')}
+    <p style="margin:0 0 14px;font-size:12px;color:#888;">Made Kulture never asks you to pay to apply. Never send money, ID or bank details to get a gig.</p>
+    <p style="margin:0;font-size:12px;color:#666;">You got this because your directory roles match. Turn gig alerts off in your <a href="${APP_URL}/account/profile?s=privacy" style="color:${ACCENT_COLOR};text-decoration:none;">settings</a>.</p>
+  `
+  const html = layout(body)
+  const subject = `New paid gig: ${gig.title}`
+  let sent = 0
+  for (let i = 0; i < ok.length; i += 100) {
+    if (i > 0) await new Promise(r => setTimeout(r, 600))
+    const chunk = ok.slice(i, i + 100)
+    try {
+      const { error } = await getResend().batch.send(chunk.map(to => ({ from: FROM_EMAIL, reply_to: REPLY_TO, to, subject, html })) as any)
+      if (error) { console.error('[email] gig_alert batch FAILED:', JSON.stringify(error)); continue }
+      sent += chunk.length
+    } catch (e) { console.error('[email] gig_alert batch threw:', e) }
+  }
+  console.log(`[email] gig_alert sent ${sent}/${ok.length}`)
+  return sent
+}

@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "target": "ES2020",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "types": [
+      "node",
+      "react"
+    ],
+    "incremental": false
+  },
+  "files": [
+    "lib/gig-input.ts",
+    "lib/gigs.ts",
+    "app/api/admin/gigs/route.ts",
+    "app/admin/gigs/page.tsx",
+    "app/api/gig-manage/[token]/route.ts",
+    "app/api/castings/route.ts",
+    "app/api/castings/[id]/route.ts",
+    "app/api/castings/[id]/invite/route.ts",
+    "app/account/castings/new/page.tsx",
+    "app/account/castings/[id]/page.tsx",
+    "app/account/castings/page.tsx"
+  ]
+}

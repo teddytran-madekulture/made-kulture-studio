@@ -1,0 +1,1 @@
+{"extends":"./tsconfig.json","compilerOptions":{"noEmit":true,"incremental":false},"files":["lib/email.ts","app/api/cron/reminders/route.ts","next-env.d.ts"]}

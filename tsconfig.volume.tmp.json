@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "target": "ES2020",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "types": [
+      "node",
+      "react"
+    ],
+    "incremental": false
+  },
+  "files": [
+    "app/api/jukebox/state/route.ts",
+    "app/api/admin/jukebox/route.ts",
+    "app/api/admin/jukebox/control/route.ts",
+    "app/api/kiosk/jukebox/route.ts",
+    "lib/jukebox-volume.ts",
+    "components/jukebox/useJukeboxPlayer.ts",
+    "app/kiosk/page.tsx",
+    "app/admin/jukebox/page.tsx",
+    "app/kiosk/host/page.tsx",
+    "app/api/jukebox/volume-ack/route.ts"
+  ]
+}
