@@ -248,7 +248,7 @@ export default function AdminGigsPage() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{g.title}</div>
                   <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                    {g.company_name} · {g.posted_by === 'studio' ? 'posted by you' : g.posted_by === 'client' ? `${g.poster_name} (studio client, no directory profile)` : `${g.poster_name} (${g.poster_type})`} · submitted {fmt(g.created_at)}
+                    {g.company_name} · {g.posted_by === 'studio' ? `posted by you${g.poster_id ? ` · linked to ${g.poster_name}’s account` : ''}` : g.posted_by === 'client' ? `${g.poster_name} (studio client, no directory profile)` : `${g.poster_name} (${g.poster_type})`} · submitted {fmt(g.created_at)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>

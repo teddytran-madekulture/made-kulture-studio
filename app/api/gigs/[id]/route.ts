@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { sendOwnerPush } from '@/lib/push'
 import { isAdminAuthed } from '@/lib/admin-auth'
-import { gigDb as db, GIG_SELECT, publicGig } from '@/lib/gigs-server'
+import { gigDb as db, GIG_SELECT, publicGig, gigManageUrl } from '@/lib/gigs-server'
 import { isLiveGig, isRelayedGig } from '@/lib/gigs'
 import { parseGigBody } from '@/lib/gig-input'
 
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (p) poster = { id: p.id, name: p.full_name || g.company_name, avatar_url: p.avatar_url }
   }
 
-  const base = { gig: { ...publicGig(g), ...(isPoster ? { decline_reason: g.decline_reason } : {}) }, poster, isPoster, preview: adminPreview }
+  const base = { gig: { ...publicGig(g), ...(isPoster ? { decline_reason: g.decline_reason } : {}) }, poster, isPoster, preview: adminPreview, manage_url: isPoster && isRelayedGig(g) ? gigManageUrl(g.manage_token) : null }
 
   if (isPoster) {
     const { data: apps, error: aErr } = await db.from('gig_applications')

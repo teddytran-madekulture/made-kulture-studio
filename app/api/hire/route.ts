@@ -23,8 +23,9 @@ export async function GET() {
   const { data: { user } } = await createClient().auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to see your posts.' }, { status: 401 })
   const { data: rows, error } = await db.from('gigs')
-    .select('id, title, pay, roles_needed, gig_date, date_note, location, status, decline_reason, expires_at, created_at, manage_token')
-    .eq('poster_id', user.id).eq('posted_by', 'client').order('created_at', { ascending: false }).limit(50)
+    .select('id, posted_by, company_name, title, pay, roles_needed, gig_date, date_note, location, status, decline_reason, expires_at, created_at, manage_token')
+    // 'studio' = a company gig Teddy posted that is LINKED to this account (2026-11-23).
+    .eq('poster_id', user.id).in('posted_by', ['client', 'studio']).neq('status', 'draft').order('created_at', { ascending: false }).limit(50)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const ids = (rows ?? []).map(r => r.id)
   const counts: Record<string, number> = {}

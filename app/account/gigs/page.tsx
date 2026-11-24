@@ -22,6 +22,11 @@ export default function GigsPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [optedOut, setOptedOut] = useState(false)
+  // 2026-11-23: gigs on MY account that run through the private applicant page
+  // (a company gig linked to this account, or one I posted via Hire a Creative).
+  // Shown even when this account isn't listed in the directory.
+  const [linked, setLinked] = useState<{ id: string; title: string; status: GigStatus; applicants: number; manage_url: string | null; expires_at: string | null }[]>([])
+  useEffect(() => { fetch('/api/hire', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(d => { if (d?.gigs) setLinked(d.gigs) }).catch(() => {}) }, [])
   const [incomplete, setIncomplete] = useState<string[] | null>(null)
   const [canPost, setCanPost] = useState(false)
   const [role, setRole] = useState('')
@@ -64,9 +69,29 @@ export default function GigsPage() {
   const opt: React.CSSProperties = { background: 'var(--t-surface)', color: 'var(--t-fg)' }
   const H1 = <h1 style={{ fontFamily: 'Anton, "Bebas Neue", sans-serif', fontSize: 36, margin: 0 }}>GIGS</h1>
 
-  if (incomplete) return <div>{H1}<div style={{ height: 20 }} /><FinishProfileCard blockers={incomplete} what="Gigs" /><div style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.55), marginTop: 16, maxWidth: 520, lineHeight: 1.6 }}>Looking to hire someone instead? <Link href="/account/hire" style={{ color: 'var(--t-gold)' }}>Post what you need</Link>, no profile required.</div></div>
+  const mineBlock = linked.length > 0 && (
+    <div style={{ margin: '16px 0 22px', maxWidth: 620 }}>
+      <div style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.1em', color: muted(0.45), marginBottom: 8 }}>YOUR LISTINGS</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {linked.map(g => {
+          const expired = g.status === 'live' && !!g.expires_at && new Date(g.expires_at) < new Date()
+          return (
+            <div key={g.id} style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: 'var(--t-fg)' }}>{g.title}</div>
+                <div style={{ fontFamily: 'Inter', fontSize: 12, color: muted(0.5), marginTop: 3 }}>{expired ? 'Expired' : g.status === 'pending' ? 'In review' : GIG_STATUS_LABEL[g.status]} · {g.applicants} applicant{g.applicants === 1 ? '' : 's'}</div>
+              </div>
+              {g.manage_url && <a href={g.manage_url} style={{ fontFamily: 'Inter', fontSize: 12, fontWeight: 700, color: 'var(--t-on-fg)', background: 'var(--t-fg)', borderRadius: 6, padding: '9px 13px', textDecoration: 'none', whiteSpace: 'nowrap' }}>SEE APPLICANTS →</a>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  if (incomplete) return <div>{H1}{mineBlock}<div style={{ height: 20 }} /><FinishProfileCard blockers={incomplete} what="Gigs" /><div style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.55), marginTop: 16, maxWidth: 520, lineHeight: 1.6 }}>Looking to hire someone instead? <Link href="/account/hire" style={{ color: 'var(--t-gold)' }}>Post what you need</Link>, no profile required.</div></div>
   if (optedOut) return (
-    <div>{H1}
+    <div>{H1}{mineBlock}
       <div style={{ background: 'var(--t-surface)', border: '1px solid rgba(var(--t-gold-rgb), 0.3)', borderRadius: 8, padding: 24, maxWidth: 520, marginTop: 16 }}>
         <p style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.6), lineHeight: 1.6, margin: 0 }}>
           Gigs are for directory members. Turn on directory visibility in your <a href="/account/profile" style={{ color: 'var(--t-gold)' }}>profile</a> to see paid work and get alerts.

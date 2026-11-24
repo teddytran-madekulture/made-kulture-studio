@@ -24,7 +24,7 @@
 // matched nothing is reported, never shown as success.
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
-import { gigDb as db, GIG_SELECT, sendGigAlerts, gigViewStats, notifyPosterDecision, emailCompanyManageLink, gigManageUrl } from '@/lib/gigs-server'
+import { gigDb as db, GIG_SELECT, sendGigAlerts, gigViewStats, linkGigToExistingAccount, notifyPosterDecision, emailCompanyManageLink, gigManageUrl } from '@/lib/gigs-server'
 import { gigExpiry, isRelayedGig } from '@/lib/gigs'
 import { parseGigBody } from '@/lib/gig-input'
 
@@ -112,7 +112,9 @@ export async function POST(req: NextRequest) {
 
   const alerts = test ? { recipients: 0, pushed: 0, emailed: 0 } : await sendGigAlerts(g.id)
   const linkEmailed = email ? await emailCompanyManageLink(g as any) : false
-  return NextResponse.json({ id: g.id, alerts, linkEmailed, manage_url: gigManageUrl(g.manage_token) })
+  // The company already has an account under this email? Put the gig in it now.
+  const linked = await linkGigToExistingAccount(g as any)
+  return NextResponse.json({ id: g.id, alerts, linkEmailed, linked, manage_url: gigManageUrl(g.manage_token) })
 }
 
 export async function PATCH(req: NextRequest) {
@@ -202,7 +204,8 @@ export async function PATCH(req: NextRequest) {
     if (lErr) return NextResponse.json({ error: `Published, but could not reload it: ${lErr.message}` }, { status: 500 })
     const alerts = test ? { recipients: 0, pushed: 0, emailed: 0 } : await sendGigAlerts(id)
     const linkEmailed = email ? await emailCompanyManageLink(live as any) : false
-    return NextResponse.json({ ok: true, alerts, linkEmailed, manage_url: gigManageUrl(live.manage_token) })
+    const linked = await linkGigToExistingAccount(live as any)
+    return NextResponse.json({ ok: true, alerts, linkEmailed, linked, manage_url: gigManageUrl(live.manage_token) })
   }
   if (action === 'resend_link') {
     if (g.status === 'draft') return NextResponse.json({ error: 'Publish the gig first.' }, { status: 409 })

@@ -26,6 +26,7 @@ const fmtTime = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZon
 export default function GigDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [gig, setGig] = useState<Gig | null>(null)
+  const [manageUrl, setManageUrl] = useState<string | null>(null)   // my linked company gig: applicants live there
   const [preview, setPreview] = useState(false)   // admin previewing a draft / not-live gig
   const [poster, setPoster] = useState<{ id: string; name: string; avatar_url: string | null } | null>(null)
   const [isPoster, setIsPoster] = useState(false)
@@ -48,7 +49,7 @@ export default function GigDetailPage() {
   const load = () => fetch(`/api/gigs/${id}`, { cache: 'no-store' }).then(async r => {
     const d = await r.json().catch(() => ({}))
     if (!r.ok) { setError(d.error || 'Could not load this gig.'); setLoading(false); return }
-    setError(''); setGig(d.gig); setPoster(d.poster); setIsPoster(!!d.isPoster); setPreview(!!d.preview)
+    setError(''); setGig(d.gig); setPoster(d.poster); setIsPoster(!!d.isPoster); setPreview(!!d.preview); setManageUrl(d.manage_url ?? null)
     // Count a view once per page load, never the poster's own (2026-11-23).
     if (!d.isPoster && !d.preview && d.gig?.id && !viewTracked.current) {
       viewTracked.current = true
@@ -115,6 +116,9 @@ export default function GigDetailPage() {
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: 'var(--t-gold)', fontWeight: 700, letterSpacing: '0.06em' }}>ADMIN PREVIEW · {GIG_STATUS_LABEL[gig.status].toUpperCase()}</div>
           <div style={{ fontFamily: 'Inter', fontSize: 13, color: muted(0.6), marginTop: 4 }}>This is how members will see it once it&apos;s live. Only you can open it right now.</div>
         </div>
+      )}
+      {manageUrl && (
+        <a href={manageUrl} style={{ display: 'block', textAlign: 'center', marginTop: 14, background: 'var(--t-fg)', color: 'var(--t-on-fg)', borderRadius: 6, padding: '13px', fontFamily: 'Inter', fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textDecoration: 'none' }}>SEE APPLICANTS &amp; REPLY →</a>
       )}
       {gig.cover_url && (
         <img src={gig.cover_url} alt="" style={{ display: 'block', width: '100%', aspectRatio: '16 / 10', objectFit: 'cover', borderRadius: 10, marginTop: 16, background: 'var(--t-surface)' }} />

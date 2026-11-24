@@ -20,7 +20,7 @@ const dateLabel = (d: string | null) => {
 
 export default function GigManagePage() {
   const { token } = useParams<{ token: string }>()
-  const [data, setData] = useState<{ gig: any; applicants: Applicant[]; reach?: { alerted: number; viewers: number } | null } | null>(null)
+  const [data, setData] = useState<{ gig: any; applicants: Applicant[]; reach?: { alerted: number; viewers: number } | null; account?: 'linked' | 'signed_in' | 'none' } | null>(null)
   const [error, setError] = useState('')
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
@@ -45,6 +45,14 @@ export default function GigManagePage() {
     setBusy(null)
     if (!r.ok) { setNote(d.error || 'That did not send.'); return }
     setDrafts(prev => ({ ...prev, [applicationId]: '' })); load()
+  }
+  const claim = async () => {
+    setBusy('claim'); setNote('')
+    const r = await fetch(`/api/gig-manage/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'claim' }) })
+    const d = await r.json().catch(() => ({}))
+    setBusy(null)
+    if (!r.ok) { setNote(d.error || 'That did not work.'); return }
+    load()
   }
   const close = async (action: 'filled' | 'closed') => {
     if (!confirm(action === 'filled' ? 'Mark this gig filled? It comes off the board.' : 'Close this gig? It comes off the board.')) return
@@ -87,6 +95,26 @@ export default function GigManagePage() {
         <p style={{ fontSize: 13, color: '#888', lineHeight: 1.6, margin: '14px 0 0' }}>
           This page is private to you. Keep the link to yourself. Applicants share their work, Instagram and website with you; their email and phone aren’t shown, and yours aren’t shared with them. Replies go through this page, and we email you when someone applies or replies. If you want to swap numbers with someone, just say so in your message.
         </p>
+        {data.account === 'linked' && (
+          <div style={{ fontSize: 13, color: '#7be09a', marginTop: 14 }}>Linked to your Made Kulture account. New applicants and replies come to your phone in the app; if the app can’t reach you, we email you.</div>
+        )}
+        {data.account === 'signed_in' && (
+          <div style={{ ...card, marginTop: 16 }}>
+            <div style={{ fontSize: 14, color: '#eee', fontWeight: 600 }}>Get these on your phone instead of email</div>
+            <div style={{ fontSize: 13, color: '#999', lineHeight: 1.55, margin: '6px 0 12px' }}>Link this gig to the account you’re signed in to. It shows up under Gigs in your account, and new applicants and replies arrive as app notifications.</div>
+            <button type="button" disabled={busy === 'claim'} style={btn()} onClick={claim}>{busy === 'claim' ? 'LINKING…' : 'LINK TO MY ACCOUNT'}</button>
+          </div>
+        )}
+        {data.account === 'none' && (
+          <div style={{ ...card, marginTop: 16 }}>
+            <div style={{ fontSize: 14, color: '#eee', fontWeight: 600 }}>Too many emails? Get these in the app</div>
+            <div style={{ fontSize: 13, color: '#999', lineHeight: 1.55, margin: '6px 0 12px' }}>Create a free Made Kulture account (or sign in) and this gig moves into it: applicants and replies arrive as app notifications instead of emails. Use the email address this link was sent to and it connects by itself.</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <a href={`/signup?as=brand&next=${encodeURIComponent(`/gig-manage/${token}`)}`} style={{ ...btn(), textDecoration: 'none' }}>CREATE AN ACCOUNT</a>
+              <a href={`/login?next=${encodeURIComponent(`/gig-manage/${token}`)}`} style={{ ...btn(false), textDecoration: 'none' }}>SIGN IN</a>
+            </div>
+          </div>
+        )}
         {open && (
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
             <button type="button" disabled={busy === 'close'} style={btn()} onClick={() => close('filled')}>MARK FILLED</button>

@@ -10,6 +10,7 @@
 //   PATCH { action: 'filled' | 'closed' }
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rate-limit'
+import { createClient } from '@/lib/supabase/server'
 import { gigDb as db, GIG_SELECT, notifyMemberCompanyReply, gigViewStats } from '@/lib/gigs-server'
 import { cleanIgHandle } from '@/lib/directory-listing'
 
@@ -53,6 +54,13 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const threads: Record<string, any[]> = {}
   for (const m of msgs.data ?? []) (threads[m.application_id] ??= []).push({ sender: m.sender, body: m.body, created_at: m.created_at })
 
+  // Linked account (2026-11-23): 'linked' = notices go to an account's phone;
+  // 'signed_in' = the visitor has an account and can link it; 'none' = neither.
+  let account: 'linked' | 'signed_in' | 'none' = g.poster_id ? 'linked' : 'none'
+  if (!g.poster_id && g.posted_by === 'studio') {
+    try { const { data: { user } } = await createClient().auth.getUser(); if (user) account = 'signed_in' } catch {}
+  }
+
   // Reach (2026-11-23): how many creatives were alerted / opened it. Non-fatal
   // here — a company page must still load if the stats read fails; it just
   // shows no reach line (null), never a fake 0.
@@ -70,6 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
       cover_url: g.cover_url ?? null,
     },
     reach,
+    account,
     applicants: (apps ?? []).map(a => {
       const p = pm.get(a.applicant_id)
       return {
@@ -92,6 +101,19 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   try { g = await gigFor(params.token) } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
   if (!g) return NextResponse.json({ error: 'This link isn’t valid.' }, { status: 404 })
   const b = await req.json().catch(() => ({}))
+  // LINK THIS GIG TO MY ACCOUNT (2026-11-23). Holding the private link already
+  // gives full control of the gig, so link + a signed-in account is enough.
+  // A CLAIM on poster_id IS NULL: it can't take a gig that is already linked.
+  if (b.action === 'claim') {
+    const { data: { user } } = await createClient().auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Sign in first.' }, { status: 401 })
+    if (g.posted_by !== 'studio') return NextResponse.json({ error: 'This gig is already on an account.' }, { status: 409 })
+    const { data: upd, error: cErr } = await db.from('gigs').update({ poster_id: user.id, updated_at: new Date().toISOString() })
+      .eq('id', g.id).is('poster_id', null).select('id')
+    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+    if (!upd?.length) return NextResponse.json({ error: 'This gig is already linked to an account.' }, { status: 409 })
+    return NextResponse.json({ ok: true })
+  }
   const body = String(b.body ?? '').trim().slice(0, 2000)
   if (!body) return NextResponse.json({ error: 'Write a message first.' }, { status: 400 })
   const { data: app } = await db.from('gig_applications').select('id, applicant_id').eq('id', String(b.applicationId || '')).eq('gig_id', g.id).maybeSingle()

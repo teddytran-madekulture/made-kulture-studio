@@ -7,6 +7,7 @@ import { cleanIgHandle } from '@/lib/directory-listing'
 import { phone10, sendPhoneCode, checkPhoneCode } from '@/lib/phone-verify'
 import { cleanBirthDate, isUnderAge, UNDERAGE_MESSAGE } from '@/lib/birth-date'
 import { sendOwnerPush } from '@/lib/push'
+import { linkGigsByEmail } from '@/lib/gigs-server'
 
 // Service role client — needed to read the customers table (RLS restricts to service_role only)
 const serviceSupabase = createServiceClient(
@@ -26,6 +27,13 @@ export async function GET() {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // 2026-11-23: a company gig Teddy posted for this account's CONFIRMED email
+  // attaches to the account the first time it loads (see linkGigsByEmail).
+  // Non-fatal: the profile must load even if this fails.
+  if (user.email && user.email_confirmed_at) {
+    try { await linkGigsByEmail(user.id, user.email) } catch (e) { console.error('[profile] gig link failed (non-fatal):', e) }
+  }
 
   // Fetch custom pricing overrides using service role (customers table is service_role only)
   const { data: custData } = await serviceSupabase

@@ -7,7 +7,7 @@
 // anything that goes to a member. Both sides talk through the site.
 import { createClient } from '@supabase/supabase-js'
 import { selectAll } from '@/lib/select-all'
-import { listAllAuthUsers } from '@/lib/auth-user'
+import { listAllAuthUsers, findAuthUserIdByEmail } from '@/lib/auth-user'
 import { profileBlockers } from '@/lib/directory-listing'
 import { sendMemberPush } from '@/lib/member-push'
 import { sendOwnerPush } from '@/lib/push'
@@ -176,6 +176,58 @@ export async function emailCompanyManageLink(gig: GigRow): Promise<boolean> {
   } catch (e) { console.error('[gigs] company link email failed:', e); return false }
 }
 
+// ── LINKED ACCOUNTS (2026-11-23) ─────────────────────────────────────────────
+// A company gig Teddy posts lives on a private link, with every notice going
+// to company_email. If the company has (or later makes) a Made Kulture account,
+// the gig is LINKED to it: gigs.poster_id = that account. It then shows in
+// their account, and notices go to their phone as a push instead of an email.
+// Client gigs (Hire a Creative) are linked from the start (poster_id = customer).
+// No new column: a relayed gig with a poster_id IS a linked gig.
+
+/**
+ * Push a notice about a relayed gig to its linked account. True when at least
+ * one device took it — the caller then SKIPS the email. With no linked account,
+ * or no device registered, it returns false and the email goes out as before,
+ * so a notice is never silently dropped.
+ */
+async function reachedInApp(gig: GigRow, title: string, body: string, tag: string): Promise<boolean> {
+  if (!isRelayedGig(gig) || !gig.poster_id) return false
+  try {
+    return (await sendMemberPush(gig.poster_id, { title, body: body.slice(0, 160), url: `/gig-manage/${gig.manage_token}`, tag })) > 0
+  } catch (e) { console.error('[gigs] linked-account push failed, falling back to email:', e); return false }
+}
+
+/**
+ * Link every unlinked studio-posted gig whose company_email is this account's
+ * CONFIRMED email. Called when the account loads (profile GET). The caller must
+ * pass a confirmed address only: an unconfirmed signup proves nothing about who
+ * owns the inbox (bots signed up with other people's emails, 2026-10-05).
+ * Returns how many gigs were linked. Throws on a database error.
+ */
+export async function linkGigsByEmail(userId: string, confirmedEmail: string): Promise<number> {
+  const email = confirmedEmail.trim().toLowerCase()
+  if (!email) return 0
+  const { data, error } = await gigDb.from('gigs').update({ poster_id: userId })
+    .eq('posted_by', 'studio').is('poster_id', null).neq('status', 'draft').eq('company_email', email).select('id')
+  if (error) throw new Error(error.message)
+  return data?.length ?? 0
+}
+
+/** A gig just went live for company_email: if a confirmed account already has that email, link it now. Non-fatal. */
+export async function linkGigToExistingAccount(gig: { id: string; company_email: string | null }): Promise<boolean> {
+  if (!gig.company_email) return false
+  try {
+    const uid = await findAuthUserIdByEmail(gigDb, gig.company_email)
+    if (!uid) return false
+    const { data: au } = await gigDb.auth.admin.getUserById(uid)
+    if (!au?.user?.email_confirmed_at) return false
+    const { data, error } = await gigDb.from('gigs').update({ poster_id: uid })
+      .eq('id', gig.id).eq('posted_by', 'studio').is('poster_id', null).select('id')
+    if (error) throw new Error(error.message)
+    return !!data?.length
+  } catch (e) { console.error('[gigs] link to existing account failed (non-fatal):', e); return false }
+}
+
 /** Someone applied: tell whoever posted the gig. */
 export async function notifyNewApplicant(gig: GigRow, applicantName: string, note: string, conversationId: string | null) {
   try {
@@ -198,6 +250,8 @@ export async function notifyNewApplicant(gig: GigRow, applicantName: string, not
           ctaUrl: conversationId ? `${APP_URL}/account/messages/${conversationId}` : `${gigUrl(gig.id)}#applicants`,
         })
       }
+    } else if (await reachedInApp(gig, `New applicant: ${gig.title}`, `${applicantName}${note ? ` · ${note.slice(0, 80)}` : ''}`, `gig-app-${gig.id}`)) {
+      // linked account got it on their phone — no email
     } else if (gig.company_email) {
       await sendSimpleEmail({
         to: gig.company_email, label: 'gig_company_applicant', subject: `New applicant for ${gig.title}`,
@@ -237,8 +291,9 @@ export async function notifyMemberCompanyReply(gig: GigRow, applicantId: string,
 
 /** Member replied on a studio-posted gig: tell the company. */
 export async function notifyCompanyMemberReply(gig: GigRow, memberName: string, body: string) {
-  if (!gig.company_email) return
   try {
+    if (await reachedInApp(gig, `${memberName} replied`, body, `gig-reply-${gig.id}`)) return
+    if (!gig.company_email) return
     await sendSimpleEmail({
       to: gig.company_email, label: 'gig_member_reply', subject: `${memberName} replied about ${gig.title}`,
       heading: `${memberName} replied`,
