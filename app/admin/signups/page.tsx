@@ -128,7 +128,7 @@ export default function AdminSignupsPage() {
                 )}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' }}>
                 {s.provider === 'google' ? pill('rgba(66,133,244,0.15)', '#8ab4f8', 'GOOGLE') : pill('rgba(255,255,255,0.08)', 'rgba(255,255,255,0.6)', 'EMAIL')}
                 {s.inDirectory && pill('rgba(212,168,67,0.15)', '#e6c07a', 'DIRECTORY')}
                 {!s.onboarded && pill('rgba(255,150,60,0.15)', '#ffb066', 'NEEDS SETUP')}
