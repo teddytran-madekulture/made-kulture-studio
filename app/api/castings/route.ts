@@ -3,6 +3,7 @@ import { createClient as createService } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { notifyOwnerNewCasting } from '@/lib/casting-owner-alert'
+import { sendCastingAlerts } from '@/lib/casting-alerts'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -159,6 +160,10 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await service.from('castings').insert(row).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!draft) await notifyOwnerNewCasting(service, data.id)
+  if (!draft) {
+    await notifyOwnerNewCasting(service, data.id)
+    const sent = await sendCastingAlerts(service, data.id)
+    if (sent.error) console.error('[castings] alerts:', data.id, sent.error)
+  }
   return NextResponse.json({ id: data.id })
 }

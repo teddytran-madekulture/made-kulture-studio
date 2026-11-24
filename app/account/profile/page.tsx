@@ -37,6 +37,7 @@ interface Profile {
   notify_email: boolean
   notify_sms: boolean
   notify_gigs: boolean
+  notify_castings: boolean
   gig_alerts_clients: boolean
   profile_color: string | null
   cover_url: string | null
@@ -72,7 +73,7 @@ function ProfileSettings() {
   const sp = useSearchParams()
   const sParam = sp?.get('s') ?? 'edit'
   const sec: Sec = (sParam in PROFILE_SECTIONS ? sParam : 'edit') as Sec
-  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false, notify_gigs: true, gig_alerts_clients: true, profile_color: null, cover_url: null, credits: [], cv_url: null })
+  const [form, setForm]     = useState<Profile>({ id: '', account_type: 'creative', full_name: '', email: '', phone: '', instagram: '', sms_opt_in: false, roles: [], directory_opt_in: false, avatar_url: null, bio: '', links: [], video_url: '', show_email: false, show_phone: false, notify_email: true, notify_sms: false, notify_gigs: true, notify_castings: true, gig_alerts_clients: true, profile_color: null, cover_url: null, credits: [], cv_url: null })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -108,6 +109,7 @@ function ProfileSettings() {
           notify_email: d.profile.notify_email !== false,
           notify_sms: !!d.profile.notify_sms,
           notify_gigs: d.profile.notify_gigs !== false,
+          notify_castings: d.profile.notify_castings !== false,
           gig_alerts_clients: d.profile.gig_alerts_clients !== false,
           profile_color: d.profile.profile_color ?? null,
           cover_url: d.profile.cover_url ?? null,
@@ -248,7 +250,7 @@ function ProfileSettings() {
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...(code ? { phone_code: code } : {}), full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, notify_gigs: form.notify_gigs, gig_alerts_clients: form.gig_alerts_clients, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '', credits: form.credits.filter(c => c.title.trim()), cv_url: form.cv_url ?? '' }),
+      body: JSON.stringify({ ...(code ? { phone_code: code } : {}), full_name: form.full_name, phone: form.phone, instagram: form.instagram, sms_opt_in: form.sms_opt_in, roles: form.roles, directory_opt_in: form.directory_opt_in, avatar_url: form.avatar_url, bio: form.bio, links: form.links.filter(l => l.url.trim()), video_url: form.video_url, show_email: form.show_email, show_phone: form.show_phone, account_type: form.account_type, notify_email: form.notify_email, notify_sms: form.notify_sms, notify_gigs: form.notify_gigs, notify_castings: form.notify_castings, gig_alerts_clients: form.gig_alerts_clients, profile_color: form.profile_color ?? '', cover_url: form.cover_url ?? '', credits: form.credits.filter(c => c.title.trim()), cv_url: form.cv_url ?? '' }),
     })
     const data = await res.json()
     if (res.status === 409 && data.needsPhoneCode) {
@@ -667,6 +669,15 @@ function ProfileSettings() {
             <input type="checkbox" id="gig_alerts_clients" checked={!!form.gig_alerts_clients} onChange={e => setForm(f => ({ ...f, gig_alerts_clients: e.target.checked }))} style={{ width: 16, height: 16, marginTop: 2, cursor: 'pointer' }} />
             <label htmlFor="gig_alerts_clients" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', cursor: 'pointer', lineHeight: 1.5 }}>
               Include gigs from studio clients (birthdays, family photos, personal shoots). Turn this off to only hear about gigs from brands and companies.
+            </label>
+          </div>
+        )}
+
+        {!isCustomer && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+            <input type="checkbox" id="notify_castings" checked={!!form.notify_castings} onChange={e => setForm(f => ({ ...f, notify_castings: e.target.checked }))} style={{ width: 16, height: 16, marginTop: 2, cursor: 'pointer' }} />
+            <label htmlFor="notify_castings" style={{ fontFamily: 'Inter', fontSize: 13, color: 'rgba(var(--t-fg-rgb), calc(0.5 * var(--t-a)))', cursor: 'pointer', lineHeight: 1.5 }}>
+              Casting alerts: tell me when a new casting matches my roles (app notification only)
             </label>
           </div>
         )}

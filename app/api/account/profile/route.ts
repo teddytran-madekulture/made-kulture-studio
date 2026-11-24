@@ -159,6 +159,8 @@ export async function PUT(req: NextRequest) {
   if (typeof body.notify_email === 'boolean') patch.notify_email = body.notify_email
   if (typeof body.notify_sms === 'boolean') patch.notify_sms = body.notify_sms
   if (typeof body.notify_gigs === 'boolean') patch.notify_gigs = body.notify_gigs
+  // 2026-11-23 (migration 191): app notification when a casting matches the member's roles.
+  if (typeof body.notify_castings === 'boolean') patch.notify_castings = body.notify_castings
   // 2026-11-23 (migration 188): false = gig alerts from brands/companies only, none from studio clients.
   if (typeof body.gig_alerts_clients === 'boolean') patch.gig_alerts_clients = body.gig_alerts_clients
   // Credits + CV (migration 123).

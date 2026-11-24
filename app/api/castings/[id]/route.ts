@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { memberAccess, notListedResponse } from '@/lib/directory-access'
 import { syncMemberBadge } from '@/lib/member-push'
 import { notifyOwnerNewCasting } from '@/lib/casting-owner-alert'
+import { sendCastingAlerts } from '@/lib/casting-alerts'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -142,7 +143,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { data: done, error } = await upd.select('id')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!done?.length) return NextResponse.json({ error: 'That casting changed — reload and try again.' }, { status: 409 })
-  if (publishing) await notifyOwnerNewCasting(service, params.id)
+  if (publishing) {
+    await notifyOwnerNewCasting(service, params.id)
+    const sent = await sendCastingAlerts(service, params.id)
+    if (sent.error) console.error('[castings] alerts:', params.id, sent.error)
+  }
   return NextResponse.json({ ok: true })
 }
 
