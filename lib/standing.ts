@@ -106,7 +106,8 @@ export function computeStanding(
   config: StandingConfig = DEFAULT_STANDING_CONFIG,
   now: Date = new Date(),
 ): Standing {
-  const today = now.toISOString().slice(0, 10)
+  // Houston's date, not UTC's (2026-11-24): points used to drop off at 6 PM Central.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(now)
   let points = 0, activeCount = 0
   let nextDropOff: string | null = null
   for (const i of incidents) {

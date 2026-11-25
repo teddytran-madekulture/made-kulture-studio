@@ -22,7 +22,7 @@ function getSquare() {
 }
 
 function addYear(fromIso: string): string { const d = new Date(fromIso); d.setFullYear(d.getFullYear() + 1); return d.toISOString() }
-function fmtDate(iso: string) { return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) }
+function fmtDate(iso: string) { return new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'long', day: 'numeric', year: 'numeric' }) }
 
 // GET /api/cron/plus-renew  (daily, Bearer CRON_SECRET; scheduled via pg_cron)
 // 1. Reminder ~N days before expiry.

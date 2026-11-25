@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }).eq('id', booking.id)
 
     if (booking.customer_id) {
-      const dateLabel = new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      const dateLabel = new Date(booking.start_time).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' })
       await supabase.from('customer_notes').insert({
         customer_id: booking.customer_id,
         tag:         'note',

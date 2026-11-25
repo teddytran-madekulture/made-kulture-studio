@@ -179,7 +179,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const customer   = booking.customers as any
     const setLabel   = (booking.sets as any)?.name || 'the full studio'
-    const dateLabel  = new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    const dateLabel  = new Date(booking.start_time).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' })
     const owed       = Math.abs(q.delta)
     const owedCents  = Math.round(owed * 100)
     const appUrl     = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')

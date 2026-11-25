@@ -134,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // future bookings — appropriate for someone who brought undeclared people,
     // NOT for a group that legitimately grew for an hour and paid the fee.
     if (booking.customer_id) {
-      const dateLabel = new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      const dateLabel = new Date(booking.start_time).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' })
       await supabase.from('customer_notes').insert({
         customer_id: booking.customer_id,
         tag:         isFee ? 'note' : 'warning',
