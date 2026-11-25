@@ -519,6 +519,34 @@ async function autoLogGap(supabase: any, conversationId: string, history: JuneTu
   }
 }
 
+// 2026-11-25: when Anthropic refuses June for billing (credit balance empty),
+// visitors only see a generic "something hiccuped" — so tell Teddy. At most one
+// push an hour, tracked in studio_settings (serverless memory is per-instance).
+// Never throws: the visitor's fallback reply must still go out.
+async function alertBillingOnce(supabase: any): Promise<void> {
+  try {
+    const KEY = 'june_billing_alert_at'
+    const { data } = await supabase.from('studio_settings').select('value').eq('key', KEY).maybeSingle()
+    const last = Date.parse(String(data?.value ?? ''))
+    if (Number.isFinite(last) && Date.now() - last < 3_600_000) return
+    const now = new Date().toISOString()
+    const { error } = data
+      ? await supabase.from('studio_settings').update({ value: now }).eq('key', KEY)
+      : await supabase.from('studio_settings').insert({ key: KEY, value: now })
+    if (error) console.error('[june] billing alert stamp failed (sending anyway):', error.message)
+    const { sendOwnerPush } = await import('@/lib/push')
+    await sendOwnerPush({
+      title: 'June is offline: API credit is empty',
+      body: 'Anthropic refused her request for billing. Visitors are getting an error. Top up at platform.claude.com > Billing.',
+      url: '/admin/inbox',
+      tag: 'june-billing',
+      requireInteraction: true,
+    })
+  } catch (e) {
+    console.error('[june] billing alert failed (non-fatal):', e)
+  }
+}
+
 export async function runJune(opts: {
   supabase: any
   conversationId: string
@@ -588,7 +616,11 @@ export async function runJune(opts: {
         messages,
       }),
     })
-    if (!res.ok) throw new Error(`June API error: ${res.status} ${await res.text()}`)
+    if (!res.ok) {
+      const detail = await res.text()
+      if (/credit balance|billing|insufficient|payment required/i.test(detail)) await alertBillingOnce(opts.supabase)
+      throw new Error(`June API error: ${res.status} ${detail}`)
+    }
     const data: any = await res.json()
     await recordAiUsage({
       feature: opts.page?.startsWith('email:') ? 'june_email' : opts.page?.startsWith('kiosk') ? 'june_kiosk' : 'june_web',
