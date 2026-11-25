@@ -21,7 +21,7 @@ const API_VERSION = '2023-06-01'
 // Deliberately not the Haiku that answers customers. This job is judgement —
 // "is that a durable fact or a one-off?" — and it runs a handful of times a day,
 // not on every inbound email, so the cost difference is noise.
-const MODEL = process.env.JUNE_COACH_MODEL || 'claude-sonnet-5-5'  // 2026-11-25: Sonnet 4.5 retires Nov 30
+const MODEL = process.env.JUNE_COACH_MODEL || 'claude-opus-5-5'  // 2026-11-25: Sonnet 4.5 retires Nov 30; Opus — not live, quality matters
 
 export interface KbEntryLite {
   id: string

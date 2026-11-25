@@ -20,7 +20,11 @@ const API_VERSION = '2023-06-01'
 // 2026-11-25: Sonnet 5.5, not Haiku — Haiku ignored her own rules (bullet walls,
 // date math). New env name on purpose, so an old JUNE_MODEL=haiku in Vercel can't
 // silently keep her on the weak model. JUNE_MODEL still drives polish + vision-test.
-const MODEL = process.env.JUNE_CHAT_MODEL || 'claude-sonnet-5-5'
+const CHAT_MODEL = process.env.JUNE_CHAT_MODEL || 'claude-sonnet-5-5'
+// Email isn't live, so it gets the strongest model; a visitor watching the chat
+// dots gets the faster one.
+const EMAIL_MODEL = process.env.JUNE_EMAIL_MODEL || 'claude-opus-5-5'
+const modelFor = (page?: string | null) => (page?.startsWith('email:') ? EMAIL_MODEL : CHAT_MODEL)
 const MAX_TOOL_ROUNDS = 5
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://made-kulture-studio.vercel.app').replace(/\/$/, '')
 
@@ -554,7 +558,7 @@ export async function runJune(opts: {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: MODEL,
+        model: modelFor(opts.page),
         max_tokens: 700,
         system,
         tools: TOOLS,
@@ -565,7 +569,7 @@ export async function runJune(opts: {
     const data: any = await res.json()
     await recordAiUsage({
       feature: opts.page?.startsWith('email:') ? 'june_email' : opts.page?.startsWith('kiosk') ? 'june_kiosk' : 'june_web',
-      model: MODEL, usage: data.usage, conversationId: opts.conversationId,
+      model: modelFor(opts.page), usage: data.usage, conversationId: opts.conversationId,
     })
 
     if (data.stop_reason === 'tool_use') {

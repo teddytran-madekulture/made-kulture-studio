@@ -18,7 +18,7 @@ import { recordAiUsage } from '@/lib/ai-usage'
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
 // Judgement work, runs once a week — same model as the coach.
-const MODEL = process.env.JUNE_COACH_MODEL || 'claude-sonnet-5-5'  // 2026-11-25: Sonnet 4.5 retires Nov 30
+const MODEL = process.env.JUNE_COACH_MODEL || 'claude-opus-5-5'  // 2026-11-25: Sonnet 4.5 retires Nov 30; Opus — not live, quality matters
 const MAX_QUESTIONS = 150
 
 const RESPOND = {
