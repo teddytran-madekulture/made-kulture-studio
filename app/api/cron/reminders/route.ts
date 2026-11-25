@@ -41,8 +41,12 @@ export async function GET(req: NextRequest) {
 
   // Query a generous UTC superset of Houston's tomorrow (covers CST & CDT),
   // then keep only rows whose Houston-local date is exactly tomorrow.
-  const windowStart = `${tomorrowStr}T00:00:00-07:00`
-  const windowEnd   = `${tomorrowStr}T23:59:59+01:00`
+  // 2026-11-24 FIX: these offsets were the wrong way round. -07:00 on the START
+  // pushed it LATER (07:00 UTC) and +01:00 on the END pulled it EARLIER (22:59 UTC),
+  // so every booking starting after ~5 PM Central (6 PM in summer) was left out.
+  // The Houston day runs ~05:00-06:00 UTC to the same next day; this window covers it.
+  const windowStart = `${tomorrowStr}T00:00:00+00:00`
+  const windowEnd   = `${tomorrowStr}T23:59:59-07:00`
 
   const { data: rawBookings, error } = await supabase
     .from('bookings')
