@@ -57,7 +57,7 @@ Monday–Sunday, 9:00 AM – 10:00 PM. Bookings outside these hours may be avail
 
 - Nudity: Not permitted during shared bookings unless your party is the only booking in the studio at that time.
 - Audio recording: The studio is not soundproofed and sits near the I-45 freeway. A full-warehouse buyout is recommended for audio work.
-- Special effects (fog, haze, smoke bombs, etc.): Not permitted during shared bookings; available for full-warehouse buyouts or solo bookings only, and must be pre-approved.
+- Fog and haze: For full-warehouse buyouts, because fog drifts into other sets and disrupts other bookings. On a single-set booking they are allowed only with the studio's written approval in advance, and only when no one else is in the studio during your session. Approval is case by case and never guaranteed.
 - Drones and other unmanned aircraft: Not permitted. Flying indoors around people, sets, and lighting carries a real risk of injury and damage.
 - Messy concepts (paint, fake blood, glitter, excessive oils, waxes, smoke bombs, and similar materials) are not allowed in the studio. If your production requires something messy, or anything outside how the studio normally operates, you must request a concept review in writing before booking. Reviews are decided case by case, approval is never guaranteed, and an approved concept requires a refundable cleaning deposit and protection of floors and surfaces as directed.
 - Children are welcome but count toward the guest limit; shared-studio conditions may not be suitable for young children.
