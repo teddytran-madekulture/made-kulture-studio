@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import JuneQuestions from '@/components/admin/JuneQuestions'
+import JuneCostStrip from '@/components/admin/JuneCostStrip'
 import { enablePush, pushStatus } from '@/components/AdminPwa'
 import JuneCoach, { runLearn } from '@/components/JuneCoach'
 
@@ -735,6 +736,7 @@ export default function AdminInboxPage() {
           </div>
         </div>
 
+        <JuneCostStrip />
         {tab === 'tours' && (
           <div style={{ maxWidth: 760 }}>
             {tours.length === 0 && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>No tour requests yet. They'll appear here (and buzz your phone) as they come in.</div>}

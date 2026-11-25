@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthed } from '@/lib/admin-auth'
 
+import { recordAiUsage } from '@/lib/ai-usage'
+
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
 const MODEL = process.env.JUNE_MODEL || 'claude-haiku-4-5-20251001'
@@ -63,6 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const d = await r.json()
+    await recordAiUsage({ feature: 'polish', model: MODEL, usage: d?.usage })
     const out = (d?.content ?? [])
       .filter((b: any) => b?.type === 'text')
       .map((b: any) => b.text)

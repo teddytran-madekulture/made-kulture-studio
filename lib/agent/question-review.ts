@@ -13,10 +13,12 @@
 
 import { sanitizeGroups } from './question-review-core'
 
+import { recordAiUsage } from '@/lib/ai-usage'
+
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
 // Judgement work, runs once a week — same model as the coach.
-const MODEL = process.env.JUNE_COACH_MODEL || 'claude-sonnet-4-5-20250929'
+const MODEL = process.env.JUNE_COACH_MODEL || 'claude-sonnet-5-5'  // 2026-11-25: Sonnet 4.5 retires Nov 30
 const MAX_QUESTIONS = 150
 
 const RESPOND = {
@@ -156,6 +158,7 @@ export async function runQuestionReview(supabase: any): Promise<ReviewResult> {
   })
   if (!res.ok) return { ok: false, ...empty, questions: questions.length, error: `Review API error: ${res.status} ${(await res.text()).slice(0, 300)}` }
   const data: any = await res.json()
+  await recordAiUsage({ feature: 'june_question_review', model: MODEL, usage: data.usage })
   const block = (data.content ?? []).find((b: any) => b.type === 'tool_use' && b.name === 'respond')
   const rawGroups: any[] = Array.isArray(block?.input?.groups) ? block.input.groups : []
 

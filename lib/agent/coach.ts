@@ -14,12 +14,14 @@
 // That matters: June's one real guardrail is that she states only what's in the
 // KB, so anything that can write to the KB without a human is a hole in it.
 
+import { recordAiUsage } from '@/lib/ai-usage'
+
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
 // Deliberately not the Haiku that answers customers. This job is judgement —
 // "is that a durable fact or a one-off?" — and it runs a handful of times a day,
 // not on every inbound email, so the cost difference is noise.
-const MODEL = process.env.JUNE_COACH_MODEL || 'claude-sonnet-4-5-20250929'
+const MODEL = process.env.JUNE_COACH_MODEL || 'claude-sonnet-5-5'  // 2026-11-25: Sonnet 4.5 retires Nov 30
 
 export interface KbEntryLite {
   id: string
@@ -175,6 +177,7 @@ export async function runCoach(opts: {
   if (!res.ok) throw new Error(`Coach API error: ${res.status} ${await res.text()}`)
 
   const data: any = await res.json()
+  await recordAiUsage({ feature: 'june_coach', model: MODEL, usage: data.usage })
   const block = (data.content ?? []).find((b: any) => b.type === 'tool_use' && b.name === 'respond')
   if (!block) throw new Error('Coach returned no structured response')
 
