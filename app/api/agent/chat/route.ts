@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
 
   // Find or create the conversation.
   let convo: any = null
+  let isNewConvo = false
   const token = typeof body?.token === 'string' && body.token.length >= 16 ? body.token : null
   if (token) {
     const { data } = await supabase.from('agent_conversations').select('*').eq('token', token).single()
@@ -132,6 +133,7 @@ export async function POST(req: NextRequest) {
       .select('*').single()
     if (error || !data) return NextResponse.json({ error: 'Could not start chat' }, { status: 500 })
     convo = data
+    isNewConvo = true
   } else if (authUserId && !convo.auth_user_id) {
     await supabase.from('agent_conversations')
       .update({ auth_user_id: authUserId, visitor_name: visitorName, visitor_email: visitorEmail })
@@ -146,6 +148,27 @@ export async function POST(req: NextRequest) {
   // Store the user message.
   await supabase.from('agent_messages').insert({ conversation_id: convo.id, role: 'user', content: message })
   await supabase.from('agent_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', convo.id)
+
+  // 2026-11-25: one push per NEW website/kiosk chat, so Teddy can watch every
+  // conversation June has. Before this, only escalations pushed, and a chat June
+  // got wrong without escalating (Cassandra, 11/24) sat unseen in the inbox.
+  // Fires once, on the first message only (follow-ups don't re-buzz). Non-fatal:
+  // a push problem must never break the visitor's chat.
+  if (isNewConvo) {
+    try {
+      const { sendOwnerPush } = await import('@/lib/push')
+      const where = isKiosk ? `kiosk${kioskSetName ? ` · ${kioskSetName}` : ''}` : 'website'
+      const who = convo.visitor_name || visitorName || 'Visitor'
+      await sendOwnerPush({
+        title: `June chat · ${where}`,
+        body: `${who}: ${message.replace(/\s+/g, ' ').slice(0, 120)}`,
+        url: '/admin/inbox',
+        tag: `june-chat-${convo.id}`,
+      })
+    } catch (e) {
+      console.error('[agent/chat] new-chat push failed (non-fatal):', e)
+    }
+  }
 
   // Teddy has the wheel → queue only.
   if (convo.human_takeover) {
