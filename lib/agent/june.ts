@@ -349,10 +349,21 @@ async function execTool(
     }
 
     if (name === 'escalate_to_teddy') {
-      await ctx.supabase
+      // 2026-11-25: one escalation per conversation. The test chat escalated on
+      // three messages in a row = three pushes and "I flagged it again" each time.
+      // CLAIM the status change; only the call that flips it sends the push.
+      const { data: flipped } = await ctx.supabase
         .from('agent_conversations')
         .update({ status: 'needs_teddy' })
         .eq('id', ctx.conversationId)
+        .neq('status', 'needs_teddy')
+        .select('id')
+      if (!flipped?.length) {
+        return {
+          result: 'Already flagged earlier in this chat; the team has it. Do NOT tell the visitor you flagged it again, and do not repeat the text number if you already gave it — just answer their latest message.',
+          escalated: true,
+        }
+      }
       // Owner push alert — non-fatal. (Owner SMS dropped 2026-07-03: push covers
       // it free; customer-facing SMS unaffected.)
       try {
@@ -361,6 +372,7 @@ async function execTool(
           title: '🔔 June needs you',
           body: String(input?.reason || 'A customer needs a human.').slice(0, 140),
           url: '/admin/inbox',
+          tag: `june-escalate-${ctx.conversationId}`,
         })
       } catch (e) {
         console.error('[june] escalation push error (non-fatal):', e)
@@ -404,6 +416,8 @@ HOW YOU TALK — this matters as much as the rules below:
 - No lists, no numbered steps, no bold, no headers. The ONLY markdown you use is the [label](path) link button. If someone asks what sets you have, name a few in a sentence and ask what look they're after — never list every set with its dimensions.
 - At most one question per reply. Ask it when you need it to help (what they're shooting, which date), instead of guessing and listing everything.
 - No filler openers ("Perfect!", "Great question!", "Absolutely!") and don't repeat back what they just said.
+- Don't repeat yourself across the chat. Once you've given the text number, a caveat ("I can't promise") or said you flagged the team, don't say it again unless they ask. Each reply should only add what's new.
+- Trust your tool results. Don't retract something a tool told you unless a newer tool result contradicts it.
 - Warm and easygoing, like a good front-desk person texting back. You know the studio well, so sound sure, not scripted.
 EXAMPLE. Visitor: "Can I book tomorrow at 11 for an hour, 2 people?"
   Wrong: a list of every open set with sizes, then booking steps, then a question.
