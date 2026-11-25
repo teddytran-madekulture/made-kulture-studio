@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendBookingReminder, formatTimeLabel, formatDateLabel } from '@/lib/email'
-import { sendSMS } from '@/lib/sms'
+import { sendSMSResult } from '@/lib/sms'
+import { sendOwnerPush } from '@/lib/push'
 import { reminderText } from '@/lib/reminder-text'
 import { confirmTextAtBooking } from '@/lib/booking-times'
 
@@ -72,13 +73,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  if (!bookings || bookings.length === 0) {
-    return NextResponse.json({ sent: 0, message: 'No bookings tomorrow' })
-  }
+  // No early return on an empty list: an empty result is exactly what a broken
+  // window looks like, so the cross-check below must still run.
 
   let sent = 0
   let texted = 0
   const errors: string[] = []
+  // 2026-11-24 SELF-CHECK: who did NOT get reached, and why. Evening bookings
+  // went months without a reminder and nothing said so; this is what says so.
+  const missed: { name: string; when: string; why: string }[] = []
+  const whenOf = (b: any) => `${(Array.isArray(b.sets) ? b.sets[0] : b.sets)?.name ?? 'Full studio'} ${formatTimeLabel(centralHourDecimal(b.start_time))}`
 
   for (const booking of bookings) {
     const customer = Array.isArray(booking.customers) ? booking.customers[0] : booking.customers
@@ -103,11 +107,17 @@ export async function GET(req: NextRequest) {
         name: customer?.name, setName: set?.name, startISO: booking.start_time, endISO: booking.end_time,
         checkInToken: (booking as any).check_in_token,
       })
-      try { await sendSMS(phone, msg); texted++ }
+      let ok = false
+      try { const r = await sendSMSResult(phone, msg); ok = r.ok; if (!r.ok) console.error(`Reminder text failed for booking ${booking.id}:`, r.error) }
       catch (err) { console.error(`Reminder text failed for booking ${booking.id}:`, err) }
+      if (ok) texted++
+      else missed.push({ name: customer?.name ?? 'Guest', when: whenOf(booking), why: 'text failed' })
     }
 
-    if (!customer?.email || !customer?.name) continue
+    if (!customer?.email || !customer?.name) {
+      if (!phone) missed.push({ name: customer?.name ?? 'Guest', when: whenOf(booking), why: 'no phone or email on file' })
+      continue
+    }
 
     try {
       await sendBookingReminder({
@@ -126,13 +136,46 @@ export async function GET(req: NextRequest) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`Reminder failed for booking ${booking.id}:`, msg)
       errors.push(`${booking.id}: ${msg}`)
+      if (!phone || textedAtBooking) missed.push({ name: customer.name, when: whenOf(booking), why: 'email failed' })
     }
+  }
+
+  // Cross-check with a query that shares NOTHING with the one above: every
+  // confirmed booking starting in the next 48 hours, filtered to tomorrow in
+  // Houston time. If the main query's window is ever wrong again, the two lists
+  // disagree and this says who was left out.
+  const seen = new Set(bookings.map((b: any) => b.id))
+  const { data: check, error: checkErr } = await supabase
+    .from('bookings').select('id, start_time, sets ( name ), customers ( name )')
+    .eq('status', 'confirmed')
+    .gte('start_time', new Date().toISOString())
+    .lte('start_time', new Date(Date.now() + 48 * 3600_000).toISOString())
+  if (checkErr) console.error('[reminders] cross-check failed:', checkErr.message)
+  for (const b of (check ?? []).filter((x: any) => centralDateStr(x.start_time) === tomorrowStr && !seen.has(x.id))) {
+    const c = Array.isArray((b as any).customers) ? (b as any).customers[0] : (b as any).customers
+    missed.push({ name: c?.name ?? 'Guest', when: whenOf(b), why: 'left out of the reminder run' })
+  }
+
+  if (missed.length || checkErr) {
+    const lines = missed.slice(0, 6).map(m => `${m.name} (${m.when}): ${m.why}`)
+    if (missed.length > 6) lines.push(`+${missed.length - 6} more`)
+    if (checkErr) lines.push('The cross-check itself failed, so the list may be incomplete.')
+    try {
+      await sendOwnerPush({
+        title: `Reminders: ${missed.length} for tomorrow not sent`,
+        body: lines.join('\n').slice(0, 400),
+        url: '/admin/dashboard',
+        tag: `reminders-${tomorrowStr}`,
+        requireInteraction: true,
+      })
+    } catch (e) { console.error('[reminders] owner push failed:', e) }
   }
 
   return NextResponse.json({
     sent,
     texted,
     total: bookings.length,
+    missed: missed.length ? missed : undefined,
     errors: errors.length > 0 ? errors : undefined,
     date: tomorrowStr,
   })

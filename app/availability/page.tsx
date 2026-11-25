@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import NavAuthLink from '@/components/NavAuthLink'
 import SiteNav from '@/components/SiteNav'
 import { useIsMobile } from '@/lib/use-is-mobile'
-import { shortNoticeActive, shortNoticeViewActive, todayDateStr } from '@/lib/short-notice'
+import { shortNoticeActive, shortNoticeViewActive, todayDateStr, chiPlusDays } from '@/lib/short-notice'
 import ArrowUpRight from '@/components/ArrowUpRight'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -56,9 +56,7 @@ const CODES: Record<string, string> = {
 const HOURS = Array.from({ length: 13 }, (_, i) => 9 + i)
 
 function minDate() {
-  const d = new Date()
-  d.setDate(d.getDate() + 2) // 48hr advance booking
-  return d.toISOString().split('T')[0]
+  return chiPlusDays(2) // 48hr advance booking, in Houston time (2026-11-24)
 }
 
 function formatDateLabel(dateStr: string) {

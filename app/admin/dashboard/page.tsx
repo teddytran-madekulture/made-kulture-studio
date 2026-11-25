@@ -20,6 +20,7 @@ import { bookingHourToISO } from '@/lib/booking-times'
 import { RATE_BY_NAME, guestSurchargePerHourOf, guestFeePerHourOf, effectiveHourlyRate } from '@/lib/guest-rate'
 import ArrowUpRight from '@/components/ArrowUpRight'
 import BalancesBadge from '@/components/BalancesBadge'
+import { chiPlusDays } from '@/lib/short-notice'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -478,9 +479,7 @@ function fmtDuration(startIso: string, endIso: string): string {
 }
 
 function tomorrow() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().split('T')[0]
+  return chiPlusDays(1) // Houston time (2026-11-24)
 }
 
 function cardLabel(c: SquareCard) {

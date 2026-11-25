@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import { chiPlusDays } from '@/lib/short-notice'
 
 function fmt12(h: number) {
   const hr = Math.floor(h), mn = h % 1 ? '30' : '00'
@@ -10,7 +11,7 @@ function fmt12(h: number) {
 function fmtDate(d: string) {
   return new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
-function plusDays(n: number) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0] }
+function plusDays(n: number) { return chiPlusDays(n) } // Houston time (2026-11-24)
 
 interface Req {
   customer_name: string; customer_email: string

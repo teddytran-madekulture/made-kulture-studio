@@ -7,7 +7,7 @@ import NavAuthLink from '@/components/NavAuthLink'
 import { useIsMobile } from '@/lib/use-is-mobile'
 import DatePicker from '@/components/DatePicker'
 import StudioConditions from '@/components/StudioConditions'
-import { shortNoticeActive, plusActive, todayDateStr, chiTodayStr, chiNowDecimal } from '@/lib/short-notice'
+import { shortNoticeActive, plusActive, todayDateStr, chiTodayStr, chiNowDecimal, chiPlusDays } from '@/lib/short-notice'
 import { googleCalUrl, STUDIO_ADDRESS } from '@/lib/calendar'
 import { bookingHourToISO } from '@/lib/booking-times'
 import { AppPromoCard } from '@/components/AppLinks'
@@ -83,10 +83,9 @@ function fmt12(h: number) {
 }
 
 function today() {
-  const d = new Date()
-  // Require 48hr advance booking
-  d.setDate(d.getDate() + 2)
-  return d.toISOString().split('T')[0]
+  // Require 48hr advance booking: two calendar days out, in HOUSTON time
+  // (2026-11-24; this was the browser's UTC date, a day ahead every evening).
+  return chiPlusDays(2)
 }
 
 import { VISIT_GAP_GRACE_HOURS } from '@/lib/booking-times'

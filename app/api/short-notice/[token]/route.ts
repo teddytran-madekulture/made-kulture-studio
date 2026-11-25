@@ -13,6 +13,7 @@ import {
   validateAndPriceOrder, insertBookingRows, finalizeBooking, fmt12,
   SLUG_TO_NAME, type BookingCoreInput,
 } from '@/lib/booking-core'
+import { chiPlusDays } from '@/lib/short-notice'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,10 +67,10 @@ interface ShortNoticeRow {
   requested_at?: string | null
 }
 
-// today + N days as YYYY-MM-DD (UTC — matches shortNoticeActive's date compare).
+// today + N days as YYYY-MM-DD, Houston time — matches shortNoticeActive's
+// date compare, which moved to Houston time with it (2026-11-24).
 function datePlusDays(n: number): string {
-  const d = new Date(); d.setDate(d.getDate() + n)
-  return d.toISOString().split('T')[0]
+  return chiPlusDays(n)
 }
 
 // Read the studio-configured grant length in minutes (default 60).

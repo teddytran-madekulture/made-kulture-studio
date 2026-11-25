@@ -2,8 +2,16 @@
 // inside the studio's 48-hour advance window. Optionally expires on a date, after
 // which the normal 48-hour rule applies again.
 
+// 2026-11-24: Houston's date, not UTC's. This was toISOString() (UTC), so from
+// 6 PM Central (7 PM in summer) every page that used it thought it was already
+// tomorrow: evening visitors couldn't pick the first date they were allowed.
 export function todayDateStr(): string {
-  return new Date().toISOString().split('T')[0]
+  return chiTodayStr()
+}
+
+// Houston's date N days from today, as YYYY-MM-DD.
+export function chiPlusDays(n: number): string {
+  return new Date(Date.parse(`${chiTodayStr()}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)
 }
 
 // Current date in the studio's timezone (Houston), as YYYY-MM-DD.
