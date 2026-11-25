@@ -129,12 +129,20 @@ export default function BookingsPage() {
   }
 
   const now = new Date()
-  const upcoming = bookings.filter(b => new Date(b.start_time) > now && b.status !== 'cancelled')
-  const past     = bookings.filter(b => new Date(b.start_time) <= now || b.status === 'cancelled')
+  // 2026-11-24: a session that has STARTED but not ended (plus the hour after,
+  // which is how long the check-in page keeps the code) stays in Upcoming with
+  // its CHECK IN · DOOR CODE button. It used to jump to Past the second the
+  // start time passed, taking the button with it, so a guest who arrived on
+  // time and opened her account could not get her code.
+  const LIVE_AFTER_END_MS = 60 * 60 * 1000
+  const isLiveNow = (b: Booking) => b.status !== 'cancelled' && new Date(b.start_time) <= now && now.getTime() <= new Date(b.end_time).getTime() + LIVE_AFTER_END_MS
+  const upcoming = bookings.filter(b => (new Date(b.start_time) > now && b.status !== 'cancelled') || isLiveNow(b))
+  const past     = bookings.filter(b => !upcoming.includes(b))
 
   const Card = ({ b }: { b: Booking }) => {
     const isUpcoming = new Date(b.start_time) > now && b.status !== 'cancelled'
     const isCancelled = b.status === 'cancelled'
+    const isLive = isLiveNow(b)
     const hoursUntil = (new Date(b.start_time).getTime() - now.getTime()) / (1000 * 60 * 60)
     const canReschedule = isUpcoming && hoursUntil > 48
     // A pending_payment row is a hold with no money behind it — the server
@@ -176,8 +184,8 @@ export default function BookingsPage() {
             <span style={{
               fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.08em', fontWeight: 600,
               padding: '4px 10px', borderRadius: 20,
-              background: isCancelled ? 'rgba(255,60,60,0.1)' : isUpcoming ? 'rgba(60,255,120,0.1)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))',
-              color: isCancelled ? 'var(--t-err)' : isUpcoming ? 'var(--t-ok)' : 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))',
+              background: isCancelled ? 'rgba(255,60,60,0.1)' : (isUpcoming || isLive) ? 'rgba(60,255,120,0.1)' : 'rgba(var(--t-fg-rgb), calc(0.05 * var(--t-a)))',
+              color: isCancelled ? 'var(--t-err)' : (isUpcoming || isLive) ? 'var(--t-ok)' : 'rgba(var(--t-fg-rgb), calc(0.35 * var(--t-a)))',
             }}>
               {b.status?.toUpperCase()}
             </span>
@@ -218,7 +226,7 @@ export default function BookingsPage() {
                 Inside 48 hours — text (832) 408-1631 and we’ll change it for you.
               </span>
             )}
-            {isUpcoming && !isCancelled && b.check_in_token && (
+            {(isUpcoming || isLive) && !isCancelled && b.check_in_token && (
               <a href={`/checkin/${b.check_in_token}`}
                 title="Your door code appears when you check in at the studio, at your booked start time"
                 style={{ fontFamily: 'Inter', fontSize: 11, letterSpacing: '0.06em', color: 'var(--t-gold)', textDecoration: 'none', border: '1px solid rgba(var(--t-gold-rgb), 0.5)', borderRadius: 4, padding: '6px 12px', whiteSpace: 'nowrap' }}>

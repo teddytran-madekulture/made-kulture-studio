@@ -371,7 +371,7 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
       {kind === 'equipment' && (
         <div style={{ paddingBottom: 80 }}>
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 28 }}>
             <div>
               <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 4 }}>EQUIPMENT</div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
@@ -519,7 +519,7 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {items.map(e => (
                       <div key={e.id} style={{
-                        background: '#0d0d0d', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 20,
+                        background: '#0d0d0d', padding: isMobile ? '14px 16px' : '16px 24px', display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 20, flexWrap: 'wrap',
                         opacity: e.is_available ? 1 : 0.5,
                       }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -536,7 +536,7 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
                             ${e.rate} · {e.quantity} owned · <span style={{ color: e.in_use_now > 0 ? '#d4a843' : 'rgba(255,255,255,0.4)' }}>{e.in_use_now} in use now</span> · {e.available_now} free
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                           <button onClick={() => toggleEquipAvailable(e)} disabled={equipBusyId === e.id} style={{
                             background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', padding: '7px 14px', cursor: 'pointer',
                             fontFamily: 'Inter, sans-serif', fontSize: 10, letterSpacing: '0.1em',
@@ -569,13 +569,13 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
 
       {kind === 'props' && (
         <div style={{ paddingBottom: 80 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
-            <div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
               <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, letterSpacing: '0.05em', marginBottom: 4 }}>PROPS</div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>A browse-only directory of studio props. Hidden props don&apos;t show on the public /props page.</div>
             </div>
             {propEditId === null && (
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                 <a href="/admin/props/new" style={{ background: '#d4a843', border: 'none', padding: '10px 18px', cursor: 'pointer', textDecoration: 'none', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>+ ADD BY PHOTO</a>
                 <button onClick={startNewProp} style={{ background: '#fff', border: 'none', padding: '10px 18px', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: '#080808' }}>+ NEW PROP</button>
               </div>
@@ -712,12 +712,12 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>{filtered.length} of {propsList.length}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'rgba(255,255,255,0.05)' }}>
                   {filtered.map(p => (
-                    <div key={p.id} style={{ background: '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div key={p.id} style={{ background: '#0d0d0d', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                       <div style={{ width: 48, height: 48, flexShrink: 0, background: '#141414', overflow: 'hidden' }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: '1 1 160px', minWidth: 0 }}>
                         <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, color: p.is_active ? '#fff' : 'rgba(255,255,255,0.4)' }}>
                           {p.name}
                           {!p.is_active && <span style={{ marginLeft: 8, fontSize: 9, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.2)', padding: '1px 6px' }}>HIDDEN</span>}
@@ -725,9 +725,11 @@ export default function CatalogManager({ kind }: { kind: 'equipment' | 'props' }
                         </div>
                         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{p.category || '—'}{p.tags && p.tags.length ? <span style={{ color: 'rgba(255,255,255,0.25)' }}> · {(p.tags as string[]).slice(0, 5).join(', ')}</span> : null}</div>
                       </div>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: isMobile ? 62 : 0 }}>
                       <button disabled={propBusyId === p.id} onClick={() => patchProp(p, { is_active: !p.is_active })} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.55)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>{p.is_active ? 'HIDE' : 'SHOW'}</button>
                       <button onClick={() => startEditProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>EDIT</button>
                       <button disabled={propBusyId === p.id} onClick={() => deleteProp(p)} style={{ background: 'transparent', border: '1px solid rgba(255,100,100,0.35)', color: '#ff6b6b', padding: '5px 10px', cursor: 'pointer', fontSize: 10, letterSpacing: '0.1em' }}>DELETE</button>
+                      </div>
                     </div>
                   ))}
                 </div>
