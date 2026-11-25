@@ -12,6 +12,7 @@
 //  - Books nothing directly; links people into the real booking flow.
 
 import { looksLikePunt } from './question-review-core'
+import { chiTodayStr, minAdvanceDateStr } from '@/lib/short-notice'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
@@ -33,7 +34,7 @@ const TOOLS = [
   },
   {
     name: 'check_availability',
-    description: 'Check which hours are already booked for a date (all sets, or one set). Returns booked time ranges; anything else within 9am-10pm is open. Date format YYYY-MM-DD.',
+    description: 'The ONLY source of truth for a specific date. Returns date_info (the real weekday, whether the date can be booked online under the 48-hour rule, and any holiday or studio closure by name) plus the unavailable hours per set; anything else within 9am-10pm is open. Call it before saying anything about a date. Date format YYYY-MM-DD.',
     input_schema: {
       type: 'object',
       properties: {
@@ -190,10 +191,60 @@ async function execTool(
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { result: 'Invalid date — need YYYY-MM-DD.' }
       const url = new URL(`${APP_URL}/api/availability`)
       url.searchParams.set('date', date)
-      const data = await fetch(url.toString()).then(r => r.json())
-      let payload = data
-      if (input?.set_slug && Array.isArray(data?.sets)) {
-        payload = data.sets.find((s: any) => s.slug === input.set_slug) ?? data
+      const data = await fetch(url.toString(), { cache: 'no-store' }).then(r => r.json())
+
+      // 2026-11-25: June told two customers (Landre 11/17, Cassandra 11/24) that
+      // Wed Nov 25 was Thanksgiving, and walked Cassandra through booking a date
+      // inside the 48-hour window that the site then refused. She was doing the
+      // date math herself. Now this tool hands her the answers: the real weekday,
+      // whether the date is bookable online (same rule as checkout), and closures
+      // by their PUBLIC label only. Owner time-off blocks have no public label and
+      // are folded into "unavailable" with no reason, so a private note never leaks.
+      const hr = (h: number) => {
+        const H = Math.floor(h), m = Math.round((h - H) * 60)
+        const ap = H >= 12 && H < 24 ? 'PM' : 'AM'
+        const h12 = H % 12 === 0 ? 12 : H % 12
+        return `${h12}${m ? ':' + String(m).padStart(2, '0') : ''} ${ap}`
+      }
+      const range = (r: any) => (r.start <= 0 && r.end >= 24) ? 'all day' : `${hr(r.start)}-${hr(r.end)}`
+      const dayName = (d: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${d}T12:00:00Z`))
+
+      const today = chiTodayStr()
+      const minDate = minAdvanceDateStr()
+      const closures: any[] = Array.isArray(data?.closures) ? data.closures : []
+      const named = closures.filter(c => c?.label)
+      const unnamedSome = closures.filter(c => !c?.label && Array.isArray(c?.setIds) && c.setIds.length)
+      const whole: any[] = Array.isArray(data?.fullStudioSlots) ? data.fullStudioSlots : []
+
+      const date_info = {
+        date,
+        day: dayName(date),
+        today: dayName(today),
+        is_past: date < today,
+        bookable_online: date >= minDate,
+        earliest_date_bookable_online: dayName(minDate),
+        closed: named.map(c => ({ label: c.label, hours: range(c), applies_to: c.setIds ? 'some sets' : 'whole studio' })),
+        note: date < today
+          ? 'This date is in the past.'
+          : date < minDate
+            ? 'INSIDE THE 48-HOUR WINDOW: the website will NOT let anyone book this date online. Tell the visitor this first. Do not walk them through booking it.'
+            : 'Bookable online, subject to the open hours below.',
+      }
+
+      const sets: Record<string, any> = data?.sets && typeof data.sets === 'object' ? data.sets : {}
+      const wanted = input?.set_slug ? String(input.set_slug) : null
+      const setsOut: Record<string, any> = {}
+      for (const [slug, v] of Object.entries(sets)) {
+        if (wanted && slug !== wanted) continue
+        const booked = Array.isArray((v as any)?.bookedSlots) ? (v as any).bookedSlots : []
+        setsOut[slug] = { name: (v as any)?.name, unavailable: [...whole, ...booked].map(range) }
+      }
+
+      const payload = {
+        date_info,
+        sets: setsOut,
+        whole_studio_unavailable: whole.map(range),
+        some_sets_also_unavailable: unnamedSome.map(range),
       }
       return { result: JSON.stringify(payload).slice(0, 4000) }
     }
@@ -353,6 +404,9 @@ HARD RULES (never break these):
 7. Stay on topic: Made Kulture studio business only. Politely decline anything else.
 8. NEVER mention the owner by name to visitors. Say "the team" or "we" — e.g. "the team will confirm by text", never "Teddy will confirm".
 9. KNOWLEDGE GAPS: whenever a question isn't answered (fully or partly) by your KNOWLEDGE section or your tools, call log_knowledge_gap with the question BEFORE you reply. It's silent — never tell the visitor. Don't log greetings, off-topic chatter, or things your tools answered.
+10. DATES AND HOLIDAYS: Never work out a weekday or a holiday date yourself — you get them wrong. Before you say ANYTHING about a specific date (that it's open, closed, a holiday, or which weekday it is), call check_availability and use its date_info. Only say the studio is closed or that a day is a holiday when date_info.closed lists it, and use that exact label. Hours listed as unavailable with no reason are simply not available — never guess or invent a reason. If a visitor corrects you about a date, call the tool again and answer from it; never just flip to agreeing.
+11. 48-HOUR WINDOW: If date_info.bookable_online is false, the website will refuse that date. Say so plainly in your FIRST reply about it, before suggesting any sets or steps, and never walk anyone through booking a date inside the window. Tell them the earliest date they can book online (date_info.earliest_date_bookable_online), and that for a short-notice session they can text (832) 408-1631 — the team decides case by case, never promise it. If they want that session, use escalate_to_teddy so the team sees it right away.
+12. When someone says the site won't let them book, check the date with check_availability before troubleshooting buttons or errors — the 48-hour window is the most common reason.
 
 BOOKING WALK-THROUGH: The Book page flow is: choose Shared Set or Full Studio → pick set(s), date, and hours → add equipment if wanted → guest count → pay online. Bookings run in 30-minute increments with a 1-hour minimum, and need 48h notice; the site enforces it. Short-notice requests exist for logged-in members (subject to approval).
 
